@@ -48,12 +48,23 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
 }
 
 async function aiRequest<T>(path: string, body: unknown): Promise<T> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
   const res = await fetch(`${AI_BASE}/ai${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json;charset=UTF-8' },
+    headers: {
+      'Content-Type': 'application/json;charset=UTF-8',
+      ...(token ? { Authorization: token } : {}),
+    },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new ApiError(res.status, `AI service error ${res.status}`);
+  if (!res.ok) {
+    if (res.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      if (typeof window !== 'undefined') window.location.href = '/login';
+    }
+    throw new ApiError(res.status, `AI service error ${res.status}`);
+  }
   const data = await res.json();
   if (!data.success) throw new ApiError(500, data.detail || 'AI error');
   return data as T;
@@ -67,11 +78,21 @@ async function sseRequest(
   onError: (error: string) => void,
 ): Promise<void> {
   try {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     const res = await fetch(`${AI_BASE}/ai${path}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json;charset=UTF-8' },
+      headers: {
+        'Content-Type': 'application/json;charset=UTF-8',
+        ...(token ? { Authorization: token } : {}),
+      },
       body: JSON.stringify(body),
     });
+    if (res.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      if (typeof window !== 'undefined') window.location.href = '/login';
+      return;
+    }
     if (!res.ok) { onError(`HTTP ${res.status}`); return; }
 
     const reader = res.body?.getReader();
