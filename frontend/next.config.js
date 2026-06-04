@@ -9,18 +9,14 @@ const nextConfig = {
       },
     ],
   },
-  // 代理 API 请求到后端 (可通过 BACKEND_URL 环境变量覆盖)
+  // 代理 /api 请求到 Java 后端 (可通过 BACKEND_URL 环境变量覆盖)
+  // 注：AI 服务通过前端直连 NEXT_PUBLIC_AI_SERVICE_URL，不经过此代理
   async rewrites() {
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:8080';
-    const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
     return [
       {
         source: '/api/:path*',
         destination: `${backendUrl}/api/:path*`,
-      },
-      {
-        source: '/ai/:path*',
-        destination: `${aiServiceUrl}/ai/:path*`,
       },
     ];
   },

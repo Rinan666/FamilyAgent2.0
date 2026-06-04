@@ -1,19 +1,39 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import type { Question } from '@/types';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import type { Question, AbilityProfile, KnowledgePoint } from '@/types';
 import { Send, Loader2, FileText } from 'lucide-react';
 import { useChat } from '@/hooks/useChat';
 import { useChatStore } from '@/stores/chatStore';
-import { tutorApi, questionApi } from '@/lib/api';
+import { useAuthStore } from '@/stores/authStore';
+import { tutorApi, questionApi, assessmentApi } from '@/lib/api';
 import MathRenderer from '@/components/tutor/MathRenderer';
 
 export default function TutorPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [profiles, setProfiles] = useState<AbilityProfile[]>([]);
+  const [kpNames, setKpNames] = useState<Record<number, string>>({});
   const [input, setInput] = useState('');
   const [mode, setMode] = useState<'tutor' | 'test'>('tutor');
 
-  const { messages, isStreaming, currentQuestion, askQuestion, sendMessage } = useChat();
+  const userId = useAuthStore((s) => s.user?.id);
+
+  // Build mastery lookup: kpId → mastery level (Chinese label)
+  const masteryMap = useMemo(() => {
+    const map: Record<number, string> = {};
+    for (const p of profiles) {
+      if (p.masteryProbability < 0.30) map[p.kpId] = '弱';
+      else if (p.masteryProbability < 0.60) map[p.kpId] = '中';
+      else if (p.masteryProbability < 0.85) map[p.kpId] = '强';
+      else map[p.kpId] = '精通';
+    }
+    return map;
+  }, [profiles]);
+
+  const { messages, isStreaming, currentQuestion, askQuestion, sendMessage } = useChat({
+    getMastery: (kpId) => masteryMap[kpId] || '中',
+    getKnowledgePoint: (kpId) => kpNames[kpId] || '',
+  });
   const addMessage = useChatStore((s) => s.addMessage);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -23,8 +43,9 @@ export default function TutorPage() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Load questions on mount
+  // Load questions + profiles + knowledge tree on mount
   useEffect(() => {
+    // Load questions
     questionApi.listQuestions({ page: 1, size: 20 })
       .then((data) => setQuestions(data?.items || []))
       .catch((err: unknown) => {
@@ -44,7 +65,31 @@ export default function TutorPage() {
           },
         ]);
       });
-  }, []);
+
+    // Load ability profiles (for personalized mastery level)
+    if (userId) {
+      assessmentApi.getProfiles(userId)
+        .then((data) => setProfiles(data || []))
+        .catch((err: unknown) => { console.log('Profiles not loaded:', err); });
+    }
+
+    // Load knowledge tree (for KP names)
+    questionApi.getKnowledgeTree()
+      .then((tree) => {
+        const names: Record<number, string> = {};
+        const flatten = (nodes: KnowledgePoint[]) => {
+          for (const n of nodes) {
+            names[n.id] = n.name;
+            if ((n as unknown as { children?: KnowledgePoint[] }).children) {
+              flatten((n as unknown as { children: KnowledgePoint[] }).children);
+            }
+          }
+        };
+        flatten(tree || []);
+        setKpNames(names);
+      })
+      .catch((err: unknown) => { console.log('KP names not loaded:', err); });
+  }, [userId]);
 
   // Start tutoring a question
   const startTutor = (question: Question, firstMsg?: string) => {

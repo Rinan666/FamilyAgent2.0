@@ -1,5 +1,8 @@
 /**
  * 家教聊天 Hook
+ *
+ * @param getMastery - 根据知识点ID获取掌握等级（可选，默认返回'中'）
+ * @param getKnowledgePoint - 根据知识点ID获取知识点名称（可选，默认返回空）
  */
 'use client';
 
@@ -8,7 +11,14 @@ import { useChatStore } from '@/stores/chatStore';
 import { tutorApi } from '@/lib/api';
 import type { Question } from '@/types';
 
-export function useChat() {
+interface UseChatOptions {
+  /** 根据 kpId 获取学生对该知识点的掌握等级 */
+  getMastery?: (kpId: number) => string;
+  /** 根据 kpId 获取知识点名称 */
+  getKnowledgePoint?: (kpId: number) => string;
+}
+
+export function useChat(options: UseChatOptions = {}) {
   const {
     messages,
     isStreaming,
@@ -20,6 +30,29 @@ export function useChat() {
     reset,
   } = useChatStore();
 
+  const { getMastery = () => '中', getKnowledgePoint = () => '' } = options;
+
+  const makeBody = useCallback(
+    (question: Question, studentMessage: string) => {
+      const history = messages
+        .filter((m) => m.role !== 'system')
+        .map((m) => ({ role: m.role, content: m.content }));
+
+      return {
+        questionContent: question.content.stem,
+        answer: question.answer.value,
+        steps: question.answer.steps?.join('\n') || '',
+        studentMessage,
+        history,
+        subject: question.subject,
+        grade: question.grade,
+        knowledgePoint: getKnowledgePoint(question.kpId),
+        masteryLevel: getMastery(question.kpId),
+      };
+    },
+    [messages, getMastery, getKnowledgePoint],
+  );
+
   /**
    * 发送讲题请求
    */
@@ -29,38 +62,20 @@ export function useChat() {
 
       setCurrentQuestion(question);
       addMessage('user', studentMessage);
-      addMessage('assistant', ''); // 占位，流式填充
+      addMessage('assistant', '');
       setStreaming(true);
 
-      const history = messages
-        .filter((m) => m.role !== 'system')
-        .map((m) => ({ role: m.role, content: m.content }));
-
       tutorApi.explainStream(
-        {
-          questionContent: question.content.stem,
-          answer: question.answer.value,
-          steps: question.answer.steps?.join('\n') || '',
-          studentMessage,
-          history,
-          subject: question.subject,
-          grade: question.grade,
-          knowledgePoint: '',
-          masteryLevel: '中',
-        },
-        (chunk) => {
-          appendToLastMessage(chunk);
-        },
-        () => {
-          setStreaming(false);
-        },
+        makeBody(question, studentMessage),
+        (chunk) => appendToLastMessage(chunk),
+        () => setStreaming(false),
         (error) => {
           appendToLastMessage(`\n\n[错误] ${error}`);
           setStreaming(false);
         },
       );
     },
-    [messages, isStreaming, addMessage, appendToLastMessage, setStreaming, setCurrentQuestion],
+    [isStreaming, makeBody, addMessage, appendToLastMessage, setStreaming, setCurrentQuestion],
   );
 
   /**
@@ -74,35 +89,17 @@ export function useChat() {
       addMessage('assistant', '');
       setStreaming(true);
 
-      const history = messages
-        .filter((m) => m.role !== 'system')
-        .map((m) => ({ role: m.role, content: m.content }));
-
       tutorApi.explainStream(
-        {
-          questionContent: currentQuestion.content.stem,
-          answer: currentQuestion.answer.value,
-          steps: currentQuestion.answer.steps?.join('\n') || '',
-          studentMessage: message,
-          history,
-          subject: currentQuestion.subject,
-          grade: currentQuestion.grade,
-          knowledgePoint: '',
-          masteryLevel: '中',
-        },
-        (chunk) => {
-          appendToLastMessage(chunk);
-        },
-        () => {
-          setStreaming(false);
-        },
+        makeBody(currentQuestion, message),
+        (chunk) => appendToLastMessage(chunk),
+        () => setStreaming(false),
         (error) => {
           appendToLastMessage(`\n\n[错误] ${error}`);
           setStreaming(false);
         },
       );
     },
-    [messages, isStreaming, currentQuestion, addMessage, appendToLastMessage, setStreaming],
+    [isStreaming, currentQuestion, makeBody, addMessage, appendToLastMessage, setStreaming],
   );
 
   return {

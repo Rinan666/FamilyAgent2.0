@@ -4,6 +4,7 @@
 from typing import AsyncIterator, Optional
 
 from app.agents.base import BaseAgent
+from app.llm.client import llm_client
 from app.llm.prompts import tutor as tutor_prompts
 
 
@@ -85,7 +86,6 @@ class TutorAgent(BaseAgent):
                 {"role": "user", "content": student_message},
             ]
 
-        from app.llm.client import llm_client
         return await llm_client.chat(messages, temperature=0.7)
 
     async def explain_stream(
@@ -123,7 +123,6 @@ class TutorAgent(BaseAgent):
                 {"role": "user", "content": student_message},
             ]
 
-        from app.llm.client import llm_client
         async for chunk in llm_client.chat_stream(messages, temperature=0.7):
             yield chunk
 

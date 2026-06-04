@@ -5,17 +5,22 @@ import json
 import logging
 from typing import Optional
 
+from app.agents.base import BaseAgent
+from app.llm.client import llm_client
 from app.llm.prompts import generator as generator_prompts
 from app.llm.schemas import GENERATE_QUESTIONS_SCHEMA
 
 logger = logging.getLogger("familyagent.ai.generator")
 
 
-class GeneratorAgent:
+class GeneratorAgent(BaseAgent):
     """出题Agent"""
 
     def __init__(self):
-        self.name = "GeneratorAgent"
+        super().__init__(
+            name="GeneratorAgent",
+            system_prompt="你是一位经验丰富的题目设计专家。",
+        )
 
     async def generate(
         self,
@@ -42,26 +47,21 @@ class GeneratorAgent:
         Returns:
             list[dict]: 题目列表
         """
-        from app.llm.client import llm_client
-
         user_message = generator_prompts.SYSTEM_PROMPT.format(
             subject=subject,
             grade=grade,
             knowledge_point=knowledge_point,
             question_type=question_type,
             difficulty=difficulty,
-            count=min(count, 10),  # 一次最多10道
+            count=min(count, 10),
             additional_requirements=additional_requirements,
         )
 
-        messages = [
-            {"role": "system", "content": "你是一位经验丰富的题目设计专家。"},
-            {"role": "user", "content": user_message},
-        ]
-
+        # 使用结构化输出（JSON Schema），基类 run() 不支持 response_format
+        messages = self._build_messages(user_message)
         result = await llm_client.chat(
             messages,
-            temperature=0.8,  # 较高温度增加题目多样性
+            temperature=0.8,
             max_tokens=8192,
             response_format=GENERATE_QUESTIONS_SCHEMA,
         )
@@ -86,16 +86,14 @@ class GeneratorAgent:
 
         改变数字或条件，但考察同一知识点
         """
-        from app.llm.client import llm_client
-
         prompt = generator_prompts.VARIATION_PROMPT.format(
             original_question=original_question,
             original_difficulty=original_difficulty,
             target_difficulty=target_difficulty,
         )
 
-        result = await llm_client.chat(
-            [{"role": "user", "content": prompt}],
+        result = await self.run(
+            user_message=prompt,
             temperature=0.7,
             max_tokens=4096,
         )
