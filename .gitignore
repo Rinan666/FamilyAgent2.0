@@ -52,6 +52,9 @@ Desktop.ini
 .env.*.local
 *.env
 
+# --- Runtime ---
+.service-pids.txt
+
 # --- Docker ---
 docker-compose.override.yml
 

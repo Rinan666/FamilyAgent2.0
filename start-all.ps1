@@ -12,21 +12,26 @@ Write-Host "    FamilyAgent One-Click Start" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
+# ── PID file for stop-all to close windows ──
+$PidFile = Join-Path $Root ".service-pids.txt"
+"" | Set-Content $PidFile -Force
+
 # ── Helper: kill old process on a port, then start fresh ──
 function Start-ServiceOnPort($port, $title, $workDir, $command) {
-    $line = netstat -ano 2>$null | Select-String ":$port .*LISTENING"
-    if ($line) {
-        $pidStr = ($line -split '\s+')[-1]
-        try {
-            $proc = Get-Process -Id ([int]$pidStr) -ErrorAction SilentlyContinue
-            if ($proc) {
-                Stop-Process -Id ([int]$pidStr) -Force -ErrorAction SilentlyContinue
-                Write-Host "       [OK] Killed old $($proc.ProcessName) (PID $pidStr) on port $port" -ForegroundColor DarkYellow
-                Start-Sleep 1
-            }
-        } catch {}
+    # Kill any old process on this port (use netstat for reliable PID lookup)
+    $pids = netstat -ano 2>$null | Select-String ":$port .*LISTENING" | ForEach-Object {
+        ($_ -split '\s+')[-1]
+    } | Where-Object { $_ -match '^\d+$' } | Sort-Object -Unique
+    foreach ($pidStr in $pids) {
+        $p = Get-Process -Id ([int]$pidStr) -ErrorAction SilentlyContinue
+        if ($p) {
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+            Write-Host "       [OK] Killed old $($p.ProcessName) (PID $($p.Id)) on port $port" -ForegroundColor DarkYellow
+        }
     }
-    Start-Process cmd -ArgumentList "/k", "title $title && cd /d `"$workDir`" && $command"
+    if ($pids) { Start-Sleep 1 }
+    $newProc = Start-Process cmd -ArgumentList "/k", "title $title && cd /d `"$workDir`" && $command" -PassThru
+    Add-Content $PidFile $newProc.Id
 }
 
 # ── 0. Check prerequisites ──
@@ -73,7 +78,7 @@ if ($dockerOk) {
 # ── 2. AI Service (port 8000) ──
 Write-Host ""
 Write-Host "[2/4] Starting AI Service (port 8000)..." -ForegroundColor Yellow
-Start-ServiceOnPort 8000 "AI-Service" "$Root\ai-service" "echo AI Service http://localhost:8000 && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+Start-ServiceOnPort 8000 "AI-Service" "$Root\ai-service" "echo AI Service http://localhost:8000 && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
 Write-Host "       AI Service window opened" -ForegroundColor Green
 
 # ── 3. Backend (port 8080) ──

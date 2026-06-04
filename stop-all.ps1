@@ -1,6 +1,7 @@
 # FamilyAgent One-Click Stop
 $ErrorActionPreference = "Continue"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$PidFile = Join-Path $Root ".service-pids.txt"
 
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan
@@ -8,43 +9,79 @@ Write-Host "    FamilyAgent - Stop All Services" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
-# ── Helper: kill process listening on a port ──
-function Stop-ProcessOnPort($port) {
-    $line = netstat -ano 2>$null | Select-String ":$port .*LISTENING"
-    if ($line) {
-        $pidStr = ($line -split '\s+')[-1]
-        try {
-            $proc = Get-Process -Id ([int]$pidStr) -ErrorAction SilentlyContinue
-            if ($proc) {
-                $name = $proc.ProcessName
-                Stop-Process -Id ([int]$pidStr) -Force -ErrorAction SilentlyContinue
-                Write-Host "       Killed $name (PID $pidStr) on port $port" -ForegroundColor Green
-                return $true
-            }
-        } catch {}
+# ── 1. Close cmd windows FIRST (triggers Ctrl+C, cascades to children) ──
+Write-Host "Closing service windows..." -ForegroundColor Yellow
+if (Test-Path $PidFile) {
+    Get-Content $PidFile | ForEach-Object {
+        $procId = [int]$_.Trim()
+        $p = Get-Process -Id $procId -ErrorAction SilentlyContinue
+        if ($p -and $p.ProcessName -eq "cmd") {
+            Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
+        }
     }
-    return $false
+    Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
+}
+# Fallback: close by title
+foreach ($title in @("*AI-Service*", "*Backend*", "*Frontend*")) {
+    Get-Process cmd -ErrorAction SilentlyContinue | Where-Object {
+        $_.MainWindowTitle -like $title
+    } | Stop-Process -Force -ErrorAction SilentlyContinue
+}
+Start-Sleep 2
+Write-Host "       Windows closed" -ForegroundColor Green
+
+# ── 2. Kill ALL python/node/java on project ports + process-name fallback ──
+Write-Host "Cleaning up remaining processes..." -ForegroundColor Yellow
+
+$ports = @(3000, 8000, 8080)
+$labels = @("Frontend", "AI-Service", "Backend")
+$killed = @{}
+
+# a) netstat-based (works for most cases)
+for ($i = 0; $i -lt $ports.Length; $i++) {
+    $port = $ports[$i]
+    $label = $labels[$i]
+    $procIds = netstat -ano 2>$null | Select-String ":$port " | ForEach-Object {
+        ($_ -split '\s+')[-1]
+    } | Where-Object { $_ -match '^\d+$' } | Sort-Object -Unique
+
+    foreach ($procIdStr in $procIds) {
+        $procId = [int]$procIdStr
+        if ($killed[$procId]) { continue }
+        $killed[$procId] = $true
+        $p = Get-Process -Id $procId -ErrorAction SilentlyContinue
+        if ($p) {
+            Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
+            Write-Host "       Killed $($p.ProcessName) (PID $procId) — $label" -ForegroundColor DarkYellow
+        }
+    }
 }
 
-# ── 1. Kill processes on project ports ──
-Write-Host "Stopping application services..." -ForegroundColor Yellow
-
-$stopped = @()
-if (Stop-ProcessOnPort 3000) { $stopped += "Frontend" }
-if (Stop-ProcessOnPort 8000) { $stopped += "AI-Service" }
-if (Stop-ProcessOnPort 8080) { $stopped += "Backend" }
-
-if ($stopped.Count -gt 0) {
-    Write-Host "       Stopped: $($stopped -join ', ')" -ForegroundColor Green
-} else {
-    Write-Host "       No application processes found on project ports" -ForegroundColor Gray
+# b) Process-name brute-force (handles uvicorn child processes that inherit sockets)
+# Only kills processes related to FamilyAgent project
+$projectKeywords = @("familyagent", "FamilyAgent", "uvicorn", "app.main", "next", "spring-boot", "\\ai-service", "\\frontend", "\\backend")
+foreach ($procName in @("python", "node", "java")) {
+    Get-Process -Name $procName -ErrorAction SilentlyContinue | ForEach-Object {
+        if ($killed[$_.Id]) { continue }
+        $cmdLine = (Get-CimInstance Win32_Process -Filter "ProcessId = $($_.Id)" -ErrorAction SilentlyContinue).CommandLine
+        $isOurs = $false
+        foreach ($kw in $projectKeywords) {
+            if ($cmdLine -like "*$kw*") { $isOurs = $true; break }
+        }
+        if ($isOurs) {
+            $killed[$_.Id] = $true
+            Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+            Write-Host "       Killed $procName (PID $($_.Id))" -ForegroundColor DarkYellow
+        }
+    }
 }
+Start-Sleep 0.5
 
-# ── 2. Stop Docker containers ──
+# ── 3. Stop Docker ──
 Write-Host ""
 Write-Host "Stopping infrastructure..." -ForegroundColor Yellow
 $env:Path += ";C:\Program Files\Docker\Docker\resources\bin"
-$dockerOut = (& docker compose -f "$Root\docker-compose.yml" down 2>&1) -join "`n"
+(& docker compose -f "$Root\docker-compose.yml" down 2>&1) | Out-Null
 if ($LASTEXITCODE -eq 0) {
     Write-Host "       Infrastructure stopped (PostgreSQL, Redis, RabbitMQ, MinIO)" -ForegroundColor Green
 } else {
