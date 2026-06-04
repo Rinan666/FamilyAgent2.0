@@ -1,6 +1,7 @@
 package com.familyagent.module.user.service;
 
 import cn.dev33.satoken.stp.StpUtil;
+import cn.hutool.crypto.SecureUtil;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.user.dto.LoginRequest;
@@ -19,8 +20,8 @@ import java.time.LocalDateTime;
 /**
  * 用户服务
  * <p>
- * 密码使用 BCrypt 加密（加盐 + 自适应密钥拉伸），
- * 替代之前的裸 SHA-256。
+ * 密码使用 BCrypt 加密（加盐 + 自适应密钥拉伸）。
+ * 旧版 SHA-256 密码在登录时自动迁移到 BCrypt。
  */
 @Slf4j
 @Service
@@ -29,6 +30,19 @@ public class UserService {
 
     private final UserRepository userRepository;
     private static final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+
+    /**
+     * 验证密码：先 BCrypt，失败则尝试 SHA-256 迁移
+     */
+    private boolean passwordMatches(String rawPassword, String storedHash) {
+        // BCrypt hash 以 $2a$ 开头
+        if (storedHash.startsWith("$2a$")) {
+            return encoder.matches(rawPassword, storedHash);
+        }
+        // 旧版 SHA-256：验证后自动升级
+        String sha256 = SecureUtil.sha256(rawPassword);
+        return sha256.equals(storedHash);
+    }
 
     @Transactional
     public User register(RegisterRequest request) {
@@ -60,8 +74,14 @@ public class UserService {
             throw new BusinessException(ErrorCode.ACCOUNT_DISABLED);
         }
 
-        if (!encoder.matches(request.getPassword(), user.getPasswordHash())) {
+        if (!passwordMatches(request.getPassword(), user.getPasswordHash())) {
             throw new BusinessException(ErrorCode.PASSWORD_ERROR);
+        }
+
+        // 旧 SHA-256 hash 自动升级为 BCrypt
+        if (!user.getPasswordHash().startsWith("$2a$")) {
+            user.setPasswordHash(encoder.encode(request.getPassword()));
+            log.info("密码已升级为BCrypt: username={}", user.getUsername());
         }
 
         // Sa-Token 登录
