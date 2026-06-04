@@ -57,7 +57,7 @@ async def _call_backend_verify(token: str) -> Optional[dict]:
                     return data["data"]
             if resp.status_code == 401:
                 # Token 确实无效
-                logger.warning(f"Token 验证失败: status=401")
+                logger.warning("Token 验证失败: status=401")
                 return None
             # 其它错误（500等）→ 认为是后端问题，不拦截
             logger.warning(f"Token 验证后端异常: status={resp.status_code}, 放行")
