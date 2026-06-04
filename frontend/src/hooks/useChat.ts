@@ -16,6 +16,9 @@ interface UseChatOptions {
   getMastery?: (kpId: number) => string;
   /** 根据 kpId 获取知识点名称 */
   getKnowledgePoint?: (kpId: number) => string;
+  /** 讲题风格：引导式或快速答案式 */
+  teachingStyle?: 'guided' | 'direct';
+  getTeachingStyle?: () => 'guided' | 'direct';
 }
 
 export function useChat(options: UseChatOptions = {}) {
@@ -30,7 +33,12 @@ export function useChat(options: UseChatOptions = {}) {
     reset,
   } = useChatStore();
 
-  const { getMastery = () => '中', getKnowledgePoint = () => '' } = options;
+  const {
+    getMastery = () => '中',
+    getKnowledgePoint = () => '',
+    teachingStyle = 'guided',
+    getTeachingStyle,
+  } = options;
 
   const makeBody = useCallback(
     (question: Question, studentMessage: string) => {
@@ -48,9 +56,10 @@ export function useChat(options: UseChatOptions = {}) {
         grade: question.grade,
         knowledgePoint: getKnowledgePoint(question.kpId),
         masteryLevel: getMastery(question.kpId),
+        teachingStyle: getTeachingStyle?.() || teachingStyle,
       };
     },
-    [messages, getMastery, getKnowledgePoint],
+    [messages, getMastery, getKnowledgePoint, getTeachingStyle, teachingStyle],
   );
 
   /**

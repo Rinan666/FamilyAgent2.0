@@ -12,9 +12,9 @@ import type {
   ApiResult,
   LoginRequest, LoginResponse, RegisterRequest,
   User, Family, FamilyMember,
-  Question, KnowledgePoint,
+  Question, KnowledgePoint, QuestionAnswer, QuestionContent,
   AbilityProfile, TestRecord,
-  ChatSession, GradeResult, PageResult,
+  ChatSession, GradeResult, PageResult, SubmitTestRequest, CreateQuestionRequest,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
@@ -45,6 +45,68 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
     throw new ApiError(data.code, data.message);
   }
   return data.data as T;
+}
+
+function parseJsonField<T>(value: unknown, fallback: T): T {
+  if (value == null) return fallback;
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return fallback;
+    }
+  }
+  if (typeof value === 'object') {
+    const wrapped = value as { value?: unknown };
+    if (typeof wrapped.value === 'string') {
+      try {
+        return JSON.parse(wrapped.value) as T;
+      } catch {
+        return fallback;
+      }
+    }
+    return value as T;
+  }
+  return fallback;
+}
+
+function normalizeQuestion(raw: Question): Question {
+  const content = parseJsonField<QuestionContent>(raw.content, { stem: '' });
+  const answer = parseJsonField<QuestionAnswer>(raw.answer, { value: '', steps: [] });
+  const tags = normalizeTags((raw as Question & { tags?: unknown }).tags);
+
+  return {
+    ...raw,
+    content: {
+      stem: content.stem || String(raw.content ?? ''),
+      options: Array.isArray(content.options) ? content.options : undefined,
+      figures: Array.isArray(content.figures) ? content.figures : undefined,
+    },
+    answer: {
+      value: answer.value || '',
+      steps: Array.isArray(answer.steps) ? answer.steps : [],
+      explanation: answer.explanation,
+    },
+    tags,
+  };
+}
+
+function normalizeTags(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map(String).map((tag) => tag.trim()).filter(Boolean);
+  }
+  if (typeof value === 'string') {
+    return value
+      .replace(/^\{|\}$/g, '')
+      .split(',')
+      .map((tag) => tag.trim().replace(/^"|"$/g, ''))
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function normalizeQuestions(questions: Question[] | undefined | null): Question[] {
+  return (questions || []).map(normalizeQuestion);
 }
 
 async function aiRequest<T>(path: string, body: unknown): Promise<T> {
@@ -147,27 +209,40 @@ export const questionApi = {
   getKnowledgeTree: () => request<KnowledgePoint[]>('/questions/knowledge-points/tree'),
   getChildren: (parentId: number) => request<KnowledgePoint[]>(`/questions/knowledge-points/${parentId}/children`),
   getKnowledgePoint: (id: number) => request<KnowledgePoint>(`/questions/knowledge-points/${id}`),
-  getQuestion: (id: number) => request<Question>(`/questions/${id}`),
-  listQuestions: (params: { page?: number; size?: number; subject?: string; kpId?: number; difficulty?: number }) => {
+  getQuestion: (id: number) => request<Question>(`/questions/${id}`).then(normalizeQuestion),
+  listQuestions: async (params: {
+    page?: number; size?: number; subject?: string; kpId?: number;
+    difficulty?: number; type?: string; tag?: string;
+  }) => {
     const sp = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => { if (v !== undefined) sp.set(k, String(v)); });
-    return request<PageResult<Question>>(`/questions?${sp}`);
+    const page = await request<PageResult<Question>>(`/questions?${sp}`);
+    return { ...page, items: normalizeQuestions(page.items) };
   },
-  selectForTest: (params: { kpId?: number; subject?: string; difficulty?: number; type?: string; limit?: number }) =>
-    request<Question[]>('/questions/select', { method: 'POST', body: JSON.stringify(params) }),
-  adaptiveSelect: (userId: number, limit = 5) =>
-    request<Question[]>(`/questions/adaptive-select?userId=${userId}&limit=${limit}`, { method: 'POST' }),
-  getWrongQuestions: (userId: number, limit = 10) =>
-    request<Question[]>(`/questions/wrong?userId=${userId}&limit=${limit}`),
+  createQuestion: (data: CreateQuestionRequest) =>
+    request<Question>('/questions', { method: 'POST', body: JSON.stringify(data) }).then(normalizeQuestion),
+  batchCreateQuestions: (data: CreateQuestionRequest[]) =>
+    request<Question[]>('/questions/batch', { method: 'POST', body: JSON.stringify(data) }).then(normalizeQuestions),
+  selectForTest: (params: { kpId?: number; subject?: string; difficulty?: number; type?: string; limit?: number }) => {
+    const sp = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => { if (v !== undefined) sp.set(k, String(v)); });
+    return request<Question[]>(`/questions/select?${sp}`, { method: 'POST' }).then(normalizeQuestions);
+  },
+  adaptiveSelect: (_userId?: number, limit = 5) =>
+    request<Question[]>(`/questions/adaptive-select/me?limit=${limit}`, { method: 'POST' }).then(normalizeQuestions),
+  getWrongQuestions: (_userId?: number, limit = 10) =>
+    request<Question[]>(`/questions/wrong/me?limit=${limit}`).then(normalizeQuestions),
 };
 
 // ============================================
 // 评估
 // ============================================
 export const assessmentApi = {
-  getProfiles: (userId: number) => request<AbilityProfile[]>(`/assessment/profiles/${userId}`),
-  getZPD: (userId: number) => request<AbilityProfile[]>(`/assessment/zpd/${userId}`),
-  getHistory: (userId: number, limit = 20) => request<TestRecord[]>(`/assessment/history/${userId}?limit=${limit}`),
+  getProfiles: (_userId?: number) => request<AbilityProfile[]>('/assessment/profiles/me'),
+  getZPD: (_userId?: number) => request<AbilityProfile[]>('/assessment/zpd/me'),
+  getHistory: (_userId?: number, limit = 20) => request<TestRecord[]>(`/assessment/history/me?limit=${limit}`),
+  submitTest: (data: SubmitTestRequest) =>
+    request<TestRecord>('/assessment/tests', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // ============================================
@@ -175,8 +250,8 @@ export const assessmentApi = {
 // ============================================
 export const sessionApi = {
   getSession: (id: number) => request<ChatSession>(`/sessions/${id}`),
-  getUserSessions: (userId: number, limit = 20) => request<ChatSession[]>(`/sessions/user/${userId}?limit=${limit}`),
-  getActiveSessions: (userId: number) => request<ChatSession[]>(`/sessions/active/${userId}`),
+  getUserSessions: (_userId?: number, limit = 20) => request<ChatSession[]>(`/sessions/user/me?limit=${limit}`),
+  getActiveSessions: (_userId?: number) => request<ChatSession[]>('/sessions/active/me'),
 };
 
 // ============================================
@@ -186,7 +261,7 @@ export const tutorApi = {
   explainStream: (
     body: { questionContent: string; answer: string; steps: string; studentMessage: string;
             history?: { role: string; content: string }[]; grade?: string; subject?: string;
-            knowledgePoint?: string; masteryLevel?: string; },
+            knowledgePoint?: string; masteryLevel?: string; teachingStyle?: 'guided' | 'direct'; },
     onChunk: (chunk: string) => void, onDone: () => void, onError: (error: string) => void,
   ) => sseRequest('/tutor/explain', {
     question_content: body.questionContent,
@@ -198,6 +273,7 @@ export const tutorApi = {
     subject: body.subject || '数学',
     knowledge_point: body.knowledgePoint || '',
     mastery_level: body.masteryLevel || '中',
+    teaching_style: body.teachingStyle || 'guided',
   }, onChunk, onDone, onError),
 
   grade: (body: { questionContent: string; answer: string; steps: string;
@@ -220,7 +296,7 @@ export const tutorApi = {
       question_type: body.questionType || 'CALCULATION',
       difficulty: body.difficulty || 3,
       count: body.count || 5,
-    }),
+    }).then((result) => ({ ...result, questions: normalizeQuestions(result.questions) })),
 
   mathVerify: (expression?: string, expected?: string, studentAnswer?: string) => {
     const params = new URLSearchParams();

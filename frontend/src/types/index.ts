@@ -72,6 +72,7 @@ export interface KnowledgePoint {
 
 export interface Question {
   id: number;
+  familyId?: number;
   kpId: number;
   subject: string;
   grade: string;
@@ -81,6 +82,7 @@ export interface Question {
   answer: QuestionAnswer;
   tags?: string[];
   source?: string;
+  visibility?: string;
   usageCount?: number;
   correctRate?: number;
 }
@@ -97,21 +99,36 @@ export interface QuestionAnswer {
   explanation?: string;
 }
 
+export interface CreateQuestionRequest {
+  kpId?: number;
+  subject: string;
+  grade?: string;
+  type: Question['type'];
+  difficulty: number;
+  content: QuestionContent;
+  answer: QuestionAnswer;
+  tags?: string[];
+  source?: string;
+}
+
 // --- 评估 ---
 export interface AbilityProfile {
   id: number;
   userId: number;
+  familyId?: number;
   kpId: number;
   masteryProbability: number;
   totalAttempts: number;
   correctAttempts: number;
   consecutiveCorrect: number;
+  visibility?: string;
   lastAttemptAt?: string;
 }
 
 export interface TestRecord {
   id: number;
   userId: number;
+  familyId?: number;
   questionIds: number[];
   answers: Record<string, string>;
   scores: Record<string, number>;
@@ -120,7 +137,25 @@ export interface TestRecord {
   totalTime?: number;
   status: string;
   source?: string;
+  visibility?: string;
   createdAt: string;
+}
+
+export interface SubmitTestQuestionResult {
+  questionId: number;
+  kpId: number;
+  answer: string;
+  score: number;
+  correct: boolean;
+  timeSpent?: number;
+}
+
+export interface SubmitTestRequest {
+  userId?: number;
+  familyId?: number;
+  results: SubmitTestQuestionResult[];
+  totalTime?: number;
+  source?: string;
 }
 
 // --- 家教 ---
@@ -134,12 +169,14 @@ export interface ChatMessage {
 export interface ChatSession {
   id: number;
   userId: number;
+  familyId?: number;
   questionId?: number;
   subject?: string;
   knowledgePointId?: number;
   messages: ChatMessage[];
   summary?: string;
   status: 'ACTIVE' | 'ENDED';
+  visibility?: string;
   startedAt: string;
   endedAt?: string;
 }

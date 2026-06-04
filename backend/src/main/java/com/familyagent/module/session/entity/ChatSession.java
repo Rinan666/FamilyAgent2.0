@@ -17,6 +17,7 @@ public class ChatSession {
     private Long id;
 
     private Long userId;
+    private Long familyId;
     private Long questionId;
     private String subject;
     private Long knowledgePointId;
@@ -26,6 +27,15 @@ public class ChatSession {
 
     private String summary;
     private String status;
+    private String visibility;
+
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private Object permissionScope;
+
+    private String source;
+
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private Object metadata;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime startedAt;

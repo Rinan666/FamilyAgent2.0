@@ -27,9 +27,15 @@ class TutorAgent(BaseAgent):
         knowledge_point: str = "未知",
         mastery_level: str = "中",
         common_errors: str = "无历史数据",
+        teaching_style: str = "guided",
     ) -> str:
         """构建讲题上下文"""
-        return self.system_prompt.format(
+        style_instruction = (
+            tutor_prompts.DIRECT_STYLE_INSTRUCTION
+            if teaching_style == "direct"
+            else tutor_prompts.GUIDED_STYLE_INSTRUCTION
+        )
+        context = self.system_prompt.format(
             grade=grade,
             subject=subject,
             knowledge_point=knowledge_point,
@@ -38,7 +44,13 @@ class TutorAgent(BaseAgent):
             question_content=question_content,
             answer=answer,
             steps=steps,
+            teaching_style_instruction=style_instruction,
         )
+        if teaching_style == "direct":
+            context += tutor_prompts.DIRECT_STYLE_OVERRIDE
+        else:
+            context += tutor_prompts.GUIDED_STYLE_OVERRIDE
+        return context
 
     async def explain(
         self,
@@ -52,6 +64,7 @@ class TutorAgent(BaseAgent):
         knowledge_point: str = "未知",
         mastery_level: str = "中",
         common_errors: str = "无历史数据",
+        teaching_style: str = "guided",
     ) -> str:
         """
         讲题（非流式）
@@ -68,20 +81,27 @@ class TutorAgent(BaseAgent):
             mastery_level: 掌握程度
             common_errors: 常见错误类型
         """
-        # 首次对话：设置完整的系统prompt
-        if not history:
-            context = self._build_context(
-                question_content, answer, steps,
-                grade, subject, knowledge_point,
-                mastery_level, common_errors,
-            )
+        context = self._build_context(
+            question_content, answer, steps,
+            grade, subject, knowledge_point,
+            mastery_level, common_errors, teaching_style,
+        )
+
+        # 每次请求都携带完整题目上下文，避免历史对话续聊时丢失题目和讲题风格。
+        if teaching_style == "direct":
+            messages = [
+                {"role": "system", "content": context},
+                {"role": "system", "content": tutor_prompts.DIRECT_STYLE_OVERRIDE},
+                {"role": "user", "content": student_message},
+            ]
+        elif not history:
             messages = [
                 {"role": "system", "content": context},
                 {"role": "user", "content": student_message},
             ]
         else:
             messages = [
-                {"role": "system", "content": self.system_prompt},
+                {"role": "system", "content": context},
                 *history,
                 {"role": "user", "content": student_message},
             ]
@@ -100,25 +120,33 @@ class TutorAgent(BaseAgent):
         knowledge_point: str = "未知",
         mastery_level: str = "中",
         common_errors: str = "无历史数据",
+        teaching_style: str = "guided",
     ) -> AsyncIterator[str]:
         """
         讲题（流式输出）
 
         使用SSE推送，前端实现打字机效果
         """
-        if not history:
-            context = self._build_context(
-                question_content, answer, steps,
-                grade, subject, knowledge_point,
-                mastery_level, common_errors,
-            )
+        context = self._build_context(
+            question_content, answer, steps,
+            grade, subject, knowledge_point,
+            mastery_level, common_errors, teaching_style,
+        )
+
+        if teaching_style == "direct":
+            messages = [
+                {"role": "system", "content": context},
+                {"role": "system", "content": tutor_prompts.DIRECT_STYLE_OVERRIDE},
+                {"role": "user", "content": student_message},
+            ]
+        elif not history:
             messages = [
                 {"role": "system", "content": context},
                 {"role": "user", "content": student_message},
             ]
         else:
             messages = [
-                {"role": "system", "content": self.system_prompt},
+                {"role": "system", "content": context},
                 *history,
                 {"role": "user", "content": student_message},
             ]

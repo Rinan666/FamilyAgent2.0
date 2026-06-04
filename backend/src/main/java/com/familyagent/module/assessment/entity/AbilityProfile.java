@@ -1,8 +1,7 @@
 package com.familyagent.module.assessment.entity;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.*;
+import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -18,6 +17,7 @@ public class AbilityProfile {
     private Long id;
 
     private Long userId;
+    private Long familyId;
     private Long kpId;
     private Double masteryProbability;
     private Integer totalAttempts;
@@ -25,5 +25,10 @@ public class AbilityProfile {
     private Integer consecutiveCorrect;
     private LocalDateTime lastAttemptAt;
     private LocalDateTime lastCorrectAt;
+    private String visibility;
+
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private Object permissionScope;
+
     private LocalDateTime updatedAt;
 }

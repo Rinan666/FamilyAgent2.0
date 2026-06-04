@@ -3,18 +3,24 @@ package com.familyagent.module.assessment.service;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.infra.ai.AIServiceClient;
+import com.familyagent.module.assessment.dto.SubmitTestRequest;
 import com.familyagent.module.assessment.entity.AbilityProfile;
 import com.familyagent.module.assessment.entity.TestRecord;
 import com.familyagent.module.assessment.repository.AbilityProfileRepository;
 import com.familyagent.module.assessment.repository.TestRecordRepository;
+import com.familyagent.module.family.service.FamilyService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.IntStream;
 import java.util.stream.Collectors;
 
 /**
@@ -31,6 +37,8 @@ public class AssessmentService {
     private final TestRecordRepository testRecordRepository;
     private final AbilityProfileRepository abilityProfileRepository;
     private final AIServiceClient aiServiceClient;
+    private final ObjectMapper objectMapper;
+    private final FamilyService familyService;
 
     /**
      * 获取用户学力档案
@@ -72,7 +80,87 @@ public class AssessmentService {
      * 保存测试记录
      */
     public TestRecord saveTestRecord(TestRecord record) {
-        testRecordRepository.insert(record);
+        insertTestRecord(record);
+        return record;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void insertTestRecord(TestRecord record) {
+        List<Long> questionIds = (List<Long>) record.getQuestionIds();
+        List<Integer> timeSpent = (List<Integer>) record.getTimeSpent();
+        try {
+            String answersJson = objectMapper.writeValueAsString(record.getAnswers());
+            String scoresJson = objectMapper.writeValueAsString(record.getScores());
+            String permissionScopeJson = objectMapper.writeValueAsString(
+                    record.getPermissionScope() == null ? Map.of() : record.getPermissionScope());
+            testRecordRepository.insertSubmitted(record, questionIds, answersJson, scoresJson, permissionScopeJson, timeSpent);
+        } catch (JsonProcessingException e) {
+            log.error("Serialize test record failed: userId={}", record.getUserId(), e);
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "测试记录数据格式不正确");
+        }
+    }
+
+    /**
+     * 保存一次独立测试结果，并按题目结果更新 BKT 学力档案。
+     */
+    @Transactional
+    public TestRecord submitTest(SubmitTestRequest request) {
+        if (request.getResults() == null || request.getResults().isEmpty()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "测试结果不能为空");
+        }
+        if (request.getFamilyId() != null) {
+            familyService.checkMembership(request.getFamilyId());
+        }
+
+        List<Long> questionIds = request.getResults().stream()
+                .map(SubmitTestRequest.TestQuestionResult::getQuestionId)
+                .toList();
+
+        Map<String, String> answers = request.getResults().stream()
+                .collect(Collectors.toMap(
+                        r -> String.valueOf(r.getQuestionId()),
+                        r -> r.getAnswer() == null ? "" : r.getAnswer(),
+                        (a, b) -> b
+                ));
+
+        Map<String, Double> scores = request.getResults().stream()
+                .collect(Collectors.toMap(
+                        r -> String.valueOf(r.getQuestionId()),
+                        r -> r.getScore() == null ? 0.0 : r.getScore(),
+                        (a, b) -> b
+                ));
+
+        List<Integer> timeSpent = request.getResults().stream()
+                .map(r -> r.getTimeSpent() == null ? 0 : r.getTimeSpent())
+                .toList();
+
+        double totalScore = request.getResults().stream()
+                .mapToDouble(r -> r.getScore() == null ? 0.0 : r.getScore())
+                .average()
+                .orElse(0.0);
+
+        TestRecord record = new TestRecord();
+        record.setUserId(request.getUserId());
+        record.setFamilyId(request.getFamilyId());
+        record.setQuestionIds(questionIds);
+        record.setAnswers(answers);
+        record.setScores(scores);
+        record.setTimeSpent(timeSpent);
+        record.setTotalScore(totalScore);
+        record.setTotalTime(request.getTotalTime());
+        record.setStatus("COMPLETED");
+        record.setSource(request.getSource() == null ? "GENERATED_TEST" : request.getSource());
+        record.setVisibility("PRIVATE");
+        record.setPermissionScope(Map.of());
+        insertTestRecord(record);
+
+        IntStream.range(0, request.getResults().size()).forEach(i -> {
+            SubmitTestRequest.TestQuestionResult result = request.getResults().get(i);
+            boolean correct = Boolean.TRUE.equals(result.getCorrect())
+                    || (result.getScore() != null && result.getScore() >= 60.0);
+            updateProfile(request.getUserId(), result.getKpId(), correct);
+        });
+
         return record;
     }
 
@@ -97,6 +185,8 @@ public class AssessmentService {
             profile.setTotalAttempts(0);
             profile.setCorrectAttempts(0);
             profile.setConsecutiveCorrect(0);
+            profile.setVisibility("PRIVATE");
+            profile.setPermissionScope(Map.of());
         }
 
         // 计算距上次答题天数

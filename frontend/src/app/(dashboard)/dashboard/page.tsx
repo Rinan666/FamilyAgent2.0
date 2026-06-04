@@ -6,7 +6,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { familyApi, questionApi } from '@/lib/api';
 import {
   GraduationCap, BarChart3, Users, BookOpen, ArrowRight,
-  TrendingUp, Layers, Clock,
+  Layers, Clock, ClipboardList,
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -34,10 +34,11 @@ export default function DashboardPage() {
 
   const quickLinks = [
     { href: '/dashboard/tutor', label: '开始学习', icon: '📝', color: 'bg-blue-50 text-blue-700 hover:bg-blue-100' },
+    { href: '/dashboard/test', label: '生成测试', icon: '🧾', color: 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100' },
     { href: '/dashboard/notebook', label: '错题本', icon: '📒', color: 'bg-red-50 text-red-700 hover:bg-red-100' },
+    { href: '/dashboard/knowledge', label: '题库资源', icon: '📚', color: 'bg-orange-50 text-orange-700 hover:bg-orange-100' },
     { href: '/dashboard/assessment', label: '查看评估', icon: '📊', color: 'bg-green-50 text-green-700 hover:bg-green-100' },
     { href: '/dashboard/family', label: '管理家族', icon: '👨‍👩‍👧‍👦', color: 'bg-purple-50 text-purple-700 hover:bg-purple-100' },
-    { href: '/dashboard/knowledge', label: '知识库', icon: '📚', color: 'bg-orange-50 text-orange-700 hover:bg-orange-100' },
   ];
 
   return (
@@ -80,7 +81,7 @@ export default function DashboardPage() {
       {/* 快速操作 */}
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
         <h3 className="font-semibold text-gray-900 mb-3 text-sm">快速开始</h3>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           {quickLinks.map((link) => (
             <Link key={link.href} href={link.href}
               className={`p-3 rounded-lg text-sm text-center transition-colors ${link.color}`}>
@@ -99,8 +100,9 @@ export default function DashboardPage() {
           <div className="space-y-2">
             {[
               { icon: GraduationCap, title: 'AI家教', desc: '苏格拉底式讲题 · 自适应学习', href: '/dashboard/tutor', color: 'bg-blue-500' },
+              { icon: ClipboardList, title: '测试生成', desc: '按范围 · 难度 · 数量生成测试', href: '/dashboard/test', color: 'bg-indigo-500' },
               { icon: BarChart3, title: '学力评估', desc: '知识图谱 · 掌握概率可视化', href: '/dashboard/assessment', color: 'bg-green-500' },
-              { icon: BookOpen, title: '知识库', desc: '家族智慧沉淀与传承', href: '/dashboard/knowledge', color: 'bg-orange-500' },
+              { icon: BookOpen, title: '题库/知识库', desc: '测试题源 · 多学科与家族经验资源', href: '/dashboard/knowledge', color: 'bg-orange-500' },
             ].map((f) => (
               <Link key={f.href} href={f.href}
                 className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors group">

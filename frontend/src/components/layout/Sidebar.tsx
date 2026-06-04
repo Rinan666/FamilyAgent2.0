@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
   GraduationCap,
+  ClipboardList,
   BarChart3,
   Users,
   BookOpen,
@@ -16,10 +17,11 @@ import {
 const navItems = [
   { href: '/dashboard', label: '首页', icon: LayoutDashboard },
   { href: '/dashboard/tutor', label: 'AI家教', icon: GraduationCap },
+  { href: '/dashboard/test', label: '测试生成', icon: ClipboardList },
   { href: '/dashboard/notebook', label: '错题本', icon: BookX },
   { href: '/dashboard/assessment', label: '学力评估', icon: BarChart3 },
   { href: '/dashboard/family', label: '家族空间', icon: Users },
-  { href: '/dashboard/knowledge', label: '知识库', icon: BookOpen },
+  { href: '/dashboard/knowledge', label: '题库/知识库', icon: BookOpen },
   { href: '/dashboard/settings', label: '设置', icon: Settings },
 ];
 

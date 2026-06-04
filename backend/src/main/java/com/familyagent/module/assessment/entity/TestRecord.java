@@ -33,6 +33,10 @@ public class TestRecord {
     private Integer totalTime;
     private String status;
     private String source;
+    private String visibility;
+
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private Object permissionScope;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

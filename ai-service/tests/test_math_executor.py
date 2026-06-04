@@ -65,6 +65,22 @@ class TestMathSandbox:
         )
         assert result["is_correct"]
 
+    def test_variable_assignment_equivalence(self):
+        result = self.sandbox.verify_answer(
+            question_expr="2*x + 5 = 13",
+            student_answer="4",
+            expected_answer="x = 4",
+        )
+        assert result["is_correct"]
+
+    def test_answer_prefix_equivalence(self):
+        result = self.sandbox.verify_answer(
+            question_expr="2*x + 5 = 13",
+            student_answer="答案：x = 4",
+            expected_answer="x = 4",
+        )
+        assert result["is_correct"]
+
     def test_invalid_expression(self):
         """无效表达式处理"""
         result = self.sandbox.evaluate("import os; os.system('ls')")

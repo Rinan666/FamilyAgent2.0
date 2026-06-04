@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { assessmentApi, questionApi } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { masteryColor, masteryLevel } from '@/lib/utils';
@@ -18,15 +18,7 @@ export default function AssessmentPage() {
 
   const userId = useAuthStore((s) => s.user?.id);
 
-  useEffect(() => {
-    if (userId) {
-      loadAll();
-    } else {
-      setLoading(false);
-    }
-  }, [userId]);
-
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
     setLoading(true);
     try {
       const [profileData, treeData] = await Promise.all([
@@ -51,7 +43,15 @@ export default function AssessmentPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
+
+  useEffect(() => {
+    if (userId) {
+      loadAll();
+    } else {
+      setLoading(false);
+    }
+  }, [userId, loadAll]);
 
   // Radar chart data
   const radarData = profiles.map((p) => ({

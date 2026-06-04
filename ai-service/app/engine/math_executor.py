@@ -4,6 +4,7 @@
 确保数学题答案的正确性，避免LLM幻觉
 """
 import logging
+import re
 from typing import Optional
 
 import sympy
@@ -57,6 +58,53 @@ class MathSandbox:
         except Exception as e:
             logger.warning(f"表达式解析失败: '{expr_str}' -> {e}")
             return None
+
+    def _normalize_answer_text(self, answer: str) -> str:
+        """Normalize common final-answer forms before symbolic parsing."""
+        text = (answer or "").strip().lower()
+        replacements = {
+            " ": "",
+            "\n": "",
+            "\t": "",
+            "，": ",",
+            "。": "",
+            "；": ";",
+            "：": ":",
+            ":": "",
+            "（": "(",
+            "）": ")",
+            "＝": "=",
+            "×": "*",
+            "÷": "/",
+            "答案": "",
+            "解": "",
+        }
+        for source, target in replacements.items():
+            text = text.replace(source, target)
+        text = re.sub(r"^(x|y|z|k|a|b|c|m|n)=", "", text)
+        return text
+
+    def _answer_candidates(self, answer: str) -> list[str]:
+        """Generate candidate expressions from forms like 'x = 4' and '答案：4'."""
+        raw = (answer or "").strip()
+        if not raw:
+            return []
+
+        candidates = {raw, self._normalize_answer_text(raw)}
+        for part in re.split(r"[,;，；\n]", raw):
+            part = part.strip()
+            if part:
+                candidates.add(part)
+                candidates.add(self._normalize_answer_text(part))
+
+        for candidate in list(candidates):
+            if "=" in candidate and "==" not in candidate:
+                left, right = candidate.split("=", 1)
+                if re.fullmatch(r"\s*[a-zA-Z]\s*", left):
+                    candidates.add(right.strip())
+                    candidates.add(self._normalize_answer_text(right))
+
+        return [candidate for candidate in candidates if candidate]
 
     def evaluate(self, expr_str: str) -> dict:
         """
@@ -129,35 +177,53 @@ class MathSandbox:
                 "difference": float,
             }
         """
-        student = self.parse_expression(student_answer)
-        expected = self.parse_expression(expected_answer)
-
-        if student is None or expected is None:
-            # 退化为字符串比较
+        if self._normalize_answer_text(student_answer) == self._normalize_answer_text(expected_answer):
             return {
-                "is_correct": student_answer.strip() == expected_answer.strip(),
-                "method": "string_compare",
+                "is_correct": True,
+                "method": "normalized_string_compare",
             }
 
-        try:
-            student_val = float(student.evalf())
-            expected_val = float(expected.evalf())
-            diff = abs(student_val - expected_val)
+        student_candidates = self._answer_candidates(student_answer)
+        expected_candidates = self._answer_candidates(expected_answer)
 
-            return {
-                "is_correct": diff < 1e-9,  # 浮点精度容差
-                "student_numeric": student_val,
-                "expected_numeric": expected_val,
-                "difference": diff,
-                "method": "sympy",
-            }
-        except Exception as e:
-            logger.warning(f"答案验证失败: {e}")
-            return {
-                "is_correct": False,
-                "error": str(e),
-                "method": "error",
-            }
+        for student_text in student_candidates:
+            for expected_text in expected_candidates:
+                if self._normalize_answer_text(student_text) == self._normalize_answer_text(expected_text):
+                    return {
+                        "is_correct": True,
+                        "method": "normalized_string_compare",
+                    }
+
+                student = self.parse_expression(student_text)
+                expected = self.parse_expression(expected_text)
+                if student is None or expected is None:
+                    continue
+
+                try:
+                    if simplify(student - expected) == 0:
+                        return {
+                            "is_correct": True,
+                            "method": "sympy",
+                        }
+
+                    student_val = float(student.evalf())
+                    expected_val = float(expected.evalf())
+                    diff = abs(student_val - expected_val)
+                    if diff < 1e-9:
+                        return {
+                            "is_correct": True,
+                            "student_numeric": student_val,
+                            "expected_numeric": expected_val,
+                            "difference": diff,
+                            "method": "sympy_numeric",
+                        }
+                except Exception as e:
+                    logger.debug(f"跳过答案候选验证 {student_text} vs {expected_text}: {e}")
+
+        return {
+            "is_correct": False,
+            "method": "math_or_string_compare",
+        }
 
     def verify_steps(
         self,

@@ -3,14 +3,19 @@ package com.familyagent.module.question.service;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
+import com.familyagent.module.question.dto.CreateQuestionRequest;
 import com.familyagent.module.question.entity.KnowledgePoint;
 import com.familyagent.module.question.entity.Question;
 import com.familyagent.module.question.repository.KnowledgePointRepository;
 import com.familyagent.module.question.repository.QuestionRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -23,6 +28,7 @@ public class QuestionService {
 
     private final QuestionRepository questionRepository;
     private final KnowledgePointRepository kpRepository;
+    private final ObjectMapper objectMapper;
 
     // ========== 知识点 ==========
 
@@ -56,14 +62,24 @@ public class QuestionService {
         return question;
     }
 
-    public Page<Question> listQuestions(int page, int size, String subject, Long kpId, Integer difficulty) {
+    public Page<Question> listQuestions(
+            int page,
+            int size,
+            String subject,
+            Long kpId,
+            Integer difficulty,
+            String type,
+            String tag) {
         Page<Question> pageParam = new Page<>(page, size);
         return questionRepository.selectPage(pageParam,
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Question>()
                         .eq(Question::getStatus, "ACTIVE")
+                        .and(q -> q.eq(Question::getVisibility, "PUBLIC").or().isNull(Question::getFamilyId))
                         .eq(subject != null, Question::getSubject, subject)
                         .eq(kpId != null, Question::getKpId, kpId)
                         .eq(difficulty != null, Question::getDifficulty, difficulty)
+                        .eq(type != null && !type.isBlank(), Question::getType, type)
+                        .apply(tag != null && !tag.isBlank(), "{0} = ANY(tags)", tag)
                         .orderByDesc(Question::getCreatedAt));
     }
 
@@ -97,7 +113,24 @@ public class QuestionService {
      * 保存题目（AI生成后入库）
      */
     public Question saveQuestion(Question question) {
-        questionRepository.insert(question);
+        insertQuestion(question, parseTags(question.getTags()));
+        return question;
+    }
+
+    public Question createQuestion(CreateQuestionRequest request) {
+        Question question = new Question();
+        question.setKpId(request.getKpId());
+        question.setSubject(request.getSubject());
+        question.setGrade(request.getGrade());
+        question.setType(request.getType());
+        question.setDifficulty(request.getDifficulty());
+        question.setContent(request.getContent());
+        question.setAnswer(request.getAnswer());
+        question.setTags(toTagArray(safeTags(request.getTags())));
+        question.setSource(request.getSource() == null || request.getSource().isBlank() ? "MANUAL" : request.getSource());
+        question.setStatus("ACTIVE");
+        question.setVisibility("PUBLIC");
+        insertQuestion(question, safeTags(request.getTags()));
         return question;
     }
 
@@ -106,7 +139,64 @@ public class QuestionService {
      */
     public void batchSaveQuestions(List<Question> questions) {
         for (Question q : questions) {
-            questionRepository.insert(q);
+            insertQuestion(q, parseTags(q.getTags()));
         }
+    }
+
+    public List<Question> batchCreateQuestions(List<CreateQuestionRequest> requests) {
+        List<Question> questions = new ArrayList<>();
+        for (CreateQuestionRequest request : requests) {
+            questions.add(createQuestion(request));
+        }
+        return questions;
+    }
+
+    private void insertQuestion(Question question, List<String> tags) {
+        try {
+            String contentJson = objectMapper.writeValueAsString(question.getContent());
+            String answerJson = objectMapper.writeValueAsString(question.getAnswer());
+            String permissionScopeJson = objectMapper.writeValueAsString(
+                    question.getPermissionScope() == null ? java.util.Map.of() : question.getPermissionScope());
+            questionRepository.insertQuestion(question, contentJson, answerJson, permissionScopeJson, tags);
+        } catch (JsonProcessingException e) {
+            log.error("Serialize question failed: subject={}, type={}", question.getSubject(), question.getType(), e);
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "题目数据格式不正确");
+        }
+    }
+
+    private List<String> safeTags(List<String> tags) {
+        if (tags == null) {
+            return List.of();
+        }
+        return tags.stream()
+                .filter(tag -> tag != null && !tag.isBlank())
+                .map(String::trim)
+                .distinct()
+                .toList();
+    }
+
+    private List<String> parseTags(String tags) {
+        if (tags == null || tags.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(tags.split(","))
+                .map(String::trim)
+                .filter(tag -> !tag.isBlank())
+                .toList();
+    }
+
+    private List<String> parseTags(String[] tags) {
+        if (tags == null || tags.length == 0) {
+            return List.of();
+        }
+        return Arrays.stream(tags)
+                .filter(tag -> tag != null && !tag.isBlank())
+                .map(String::trim)
+                .distinct()
+                .toList();
+    }
+
+    private String[] toTagArray(List<String> tags) {
+        return tags.toArray(String[]::new);
     }
 }

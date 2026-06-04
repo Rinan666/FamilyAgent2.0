@@ -2,6 +2,7 @@ package com.familyagent.module.question.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
+import com.familyagent.common.handler.StringArrayTypeHandler;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -16,6 +17,7 @@ public class Question {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    private Long familyId;
     private Long kpId;
     private String subject;
     private String grade;
@@ -28,11 +30,17 @@ public class Question {
     @TableField(typeHandler = JacksonTypeHandler.class)
     private Object answer;
 
-    private String tags;
+    @TableField(typeHandler = StringArrayTypeHandler.class)
+    private String[] tags;
     private String source;
     private Integer usageCount;
     private Double correctRate;
     private String status;
+    private String visibility;
+
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private Object permissionScope;
+
     private Long createdBy;
     private Long reviewedBy;
 
