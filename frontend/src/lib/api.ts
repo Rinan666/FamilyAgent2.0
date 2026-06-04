@@ -1,8 +1,12 @@
 /**
  * API 客户端
  *
- * - Java 业务 API 通过 Next.js 代理 (/api/* → :8080)
- * - Python AI API 直连 localhost:8000（避免Next.js代理POST body丢失）
+ * - Java 业务 API 通过 Next.js 代理 (/api/* → backend)
+ * - Python AI API 直连 AI 服务（避免 Next.js 代理 POST body 丢失）
+ *
+ * 环境变量：
+ *   NEXT_PUBLIC_API_URL — 后端地址 (默认 /api)
+ *   NEXT_PUBLIC_AI_SERVICE_URL — AI 服务地址 (默认 http://localhost:8000)
  */
 import type {
   ApiResult,
@@ -13,8 +17,8 @@ import type {
   ChatSession, GradeResult, PageResult,
 } from '@/types';
 
-const API_BASE = '/api';
-const AI_BASE = 'http://localhost:8000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
+const AI_BASE = process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:8000';
 
 // ============================================
 class ApiError extends Error {

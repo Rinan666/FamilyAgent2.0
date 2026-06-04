@@ -1,43 +1,21 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
-import type { Question, ChatMessage } from '@/types';
-import { Send, Loader2, FileText, CheckCircle, XCircle } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import type { Question } from '@/types';
+import { Send, Loader2, FileText } from 'lucide-react';
+import { useChat } from '@/hooks/useChat';
+import { useChatStore } from '@/stores/chatStore';
+import { tutorApi, questionApi } from '@/lib/api';
 
-// ============================================
-// API configuration
-// ============================================
-const AI_BASE = 'http://localhost:8000'; // Direct to Python (bypasses Next.js proxy POST issue)
-
-function getAuthHeaders(): Record<string, string> {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-  return token
-    ? { 'Content-Type': 'application/json;charset=UTF-8', Authorization: token }
-    : { 'Content-Type': 'application/json;charset=UTF-8' };
-}
-
-async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(`${path}`, { headers: getAuthHeaders() });
-  if (!res.ok) throw new Error(`API ${res.status}`);
-  const data = await res.json();
-  if (data.code !== 200) throw new Error(data.message || 'Unknown error');
-  return data.data as T;
-}
-
-// ============================================
-// Main Component
-// ============================================
 export default function TutorPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
-  const [isStreaming, setIsStreaming] = useState(false);
   const [mode, setMode] = useState<'tutor' | 'test'>('tutor');
-  const [studentAnswers, setStudentAnswers] = useState<Record<number, string>>({});
+
+  const { messages, isStreaming, currentQuestion, askQuestion, sendMessage } = useChat();
+  const addMessage = useChatStore((s) => s.addMessage);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const abortRef = useRef<AbortController | null>(null);
 
   // Auto-scroll
   useEffect(() => {
@@ -46,326 +24,113 @@ export default function TutorPage() {
 
   // Load questions on mount
   useEffect(() => {
-    loadQuestions();
+    questionApi.listQuestions({ page: 1, size: 20 })
+      .then((data) => setQuestions(data?.items || []))
+      .catch((err: unknown) => {
+        console.log('Failed to load questions, using demo data:', err);
+        setQuestions([
+          {
+            id: -1, kpId: 6, subject: 'math', grade: 'grade7',
+            type: 'CALCULATION', difficulty: 2,
+            content: { stem: '解方程：2x + 5 = 13' },
+            answer: { value: 'x = 4', steps: ['移项：2x = 8', 'x = 4'] },
+          },
+          {
+            id: -2, kpId: 7, subject: 'math', grade: 'grade7',
+            type: 'CHOICE', difficulty: 2,
+            content: { stem: '不等式 2x - 3 > 5 的解集是？', options: ['x > 4', 'x < 4', 'x > 1', 'x < 1'] },
+            answer: { value: 'x > 4', steps: ['移项：2x > 8', 'x > 4'] },
+          },
+        ]);
+      });
   }, []);
 
-  const loadQuestions = async () => {
-    try {
-      const data = await apiGet<{ items: Question[] }>(
-        '/api/questions?page=1&size=20',
-      );
-      if (data?.items?.length) {
-        setQuestions(data.items);
-      }
-    } catch (err) {
-      console.log('Failed to load questions, using demo data:', err);
-      // Fallback demo questions
-      setQuestions([
-        {
-          id: 0, kpId: 6, subject: 'math', grade: 'grade7',
-          type: 'CALCULATION', difficulty: 2,
-          content: { stem: '解方程：2x + 5 = 13' },
-          answer: { value: 'x = 4', steps: ['移项：2x = 8', 'x = 4'] },
-        },
-        {
-          id: 0, kpId: 7, subject: 'math', grade: 'grade7',
-          type: 'CHOICE', difficulty: 2,
-          content: { stem: '不等式 2x - 3 > 5 的解集是？', options: ['x > 4', 'x < 4', 'x > 1', 'x < 1'] },
-          answer: { value: 'x > 4', steps: ['移项：2x > 8', 'x > 4'] },
-        },
-      ]);
-    }
-  };
-
-  // ============ Tutor Mode: SSE streaming ============
-  const startTutor = useCallback(async (question: Question, firstMsg?: string) => {
-    if (isStreaming) return;
-
-    const userMsg = firstMsg || '老师好，这道题我不会，请帮我讲解一下';
-    setCurrentQuestion(question);
+  // Start tutoring a question
+  const startTutor = (question: Question, firstMsg?: string) => {
     setMode('tutor');
+    const msg = firstMsg || '老师好，这道题我不会，请帮我讲解一下';
+    askQuestion(question, msg);
+  };
 
-    const newMsg: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: userMsg,
-      timestamp: new Date().toISOString(),
-    };
-    const aiMsg: ChatMessage = {
-      id: (Date.now() + 1).toString(),
-      role: 'assistant',
-      content: '',
-      timestamp: new Date().toISOString(),
-    };
-
-    setMessages((prev) => [...prev, newMsg, aiMsg]);
-    setIsStreaming(true);
-
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    try {
-      const token = localStorage.getItem('token') || '';
-      const res = await fetch(`${AI_BASE}/ai/tutor/explain`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json;charset=UTF-8',
-          ...(token ? { Authorization: token } : {}),
-        },
-        body: JSON.stringify({
-          question_content: question.content.stem,
-          answer: question.answer.value,
-          steps: (question.answer.steps || []).join('\n'),
-          student_message: userMsg,
-          grade: question.grade === 'grade7' ? '初一' : '初中',
-          subject: question.subject === 'math' ? '数学' : question.subject,
-          knowledge_point: '',
-          mastery_level: '中',
-        }),
-        signal: controller.signal,
-      });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error('No response stream');
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let fullContent = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const parsed = JSON.parse(line.slice(6));
-              if (parsed.done) {
-                // Streaming complete
-                break;
-              }
-              if (parsed.error) {
-                fullContent += `\n\n[错误] ${parsed.error}`;
-                break;
-              }
-              if (parsed.content) {
-                fullContent += parsed.content;
-                setMessages((prev) => {
-                  const updated = [...prev];
-                  const last = updated[updated.length - 1];
-                  if (last?.role === 'assistant') {
-                    updated[updated.length - 1] = {
-                      ...last,
-                      content: fullContent,
-                    };
-                  }
-                  return updated;
-                });
-              }
-            } catch {
-              // Non-JSON line, skip
-            }
-          }
-        }
-      }
-    } catch (err: unknown) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-      setMessages((prev) => {
-        const updated = [...prev];
-        const last = updated[updated.length - 1];
-        if (last?.role === 'assistant') {
-          updated[updated.length - 1] = {
-            ...last,
-            content: last.content + `\n\n⚠️ 连接中断: ${errorMsg}`,
-          };
-        }
-        return updated;
-      });
-    } finally {
-      setIsStreaming(false);
-    }
-  }, [isStreaming]);
-
-  // ============ Test Mode: grading ============
+  // Submit answer in test mode
   const submitAnswer = async (question: Question, studentAnswer: string) => {
-    if (!studentAnswer.trim()) return;
+    if (!studentAnswer.trim() || !currentQuestion) return;
+
+    addMessage('user', `我的答案：${studentAnswer}`);
 
     try {
-      const res = await fetch(`${AI_BASE}/ai/tutor/grade`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json;charset=UTF-8' },
-        body: JSON.stringify({
-          question_content: question.content.stem,
-          answer: question.answer.value,
-          steps: (question.answer.steps || []).join('\n'),
-          student_answer: studentAnswer,
-          subject: '数学',
-          grade: '初中',
-        }),
+      // Python returns snake_case; the aiRequest wrapper unwraps { success, data }
+      // eslint-disable-next-line
+      const raw: any = await tutorApi.grade({
+        questionContent: question.content.stem,
+        answer: question.answer.value,
+        steps: (question.answer.steps || []).join('\n'),
+        studentAnswer,
+        subject: '数学',
+        grade: '初中',
       });
 
-      const data = await res.json();
-      const result = data.data || data;
+      const result = raw?.data || raw;
+      if (!result) throw new Error('No result');
+      if (!result) throw new Error('No result');
 
-      const feedbackParts: string[] = [];
-      if (result.overall_score !== undefined) {
-        feedbackParts.push(`📊 得分：${result.overall_score}/100 ${result.is_correct ? '✅' : '❌'}`);
-      }
-      if (result.step_grades) {
-        for (const sg of result.step_grades) {
-          const icon = sg.is_correct ? '✅' : '❌';
-          feedbackParts.push(`${icon} ${sg.step_name}: ${sg.score}/${sg.max_score} — ${sg.feedback}`);
-        }
-      }
-      if (result.error_analysis) {
-        const ea = result.error_analysis;
-        if (ea.primary_error_type && ea.primary_error_type !== '无' && ea.primary_error_type !== 'None') {
-          feedbackParts.push(`🔍 错误类型：${ea.primary_error_type}`);
-        }
-        if (ea.knowledge_gaps?.length) {
-          feedbackParts.push(`📝 知识漏洞：${ea.knowledge_gaps.join('、')}`);
-        }
-        if (ea.suggestion) {
-          feedbackParts.push(`💡 建议：${ea.suggestion}`);
-        }
-      }
-      if (result.overall_feedback) {
-        feedbackParts.push(`\n${result.overall_feedback}`);
-      }
+      const parts: string[] = [];
+      const score = result.overall_score ?? result.overallScore;
+      const correct = result.is_correct ?? result.isCorrect;
+      const stepGrades = result.step_grades ?? result.stepGrades ?? [];
+      const errorAnalysis = result.error_analysis ?? result.errorAnalysis;
+      const overallFeedback = result.overall_feedback ?? result.overallFeedback;
 
-      const feedbackMsg: ChatMessage = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: feedbackParts.join('\n'),
-        timestamp: new Date().toISOString(),
-      };
+      if (score !== undefined) {
+        parts.push(`📊 得分：${score}/100 ${correct ? '✅' : '❌'}`);
+      }
+      for (const sg of stepGrades) {
+        const icon = (sg.is_correct ?? sg.isCorrect) ? '✅' : '❌';
+        const name = sg.step_name ?? sg.stepName;
+        const scoreVal = sg.score;
+        const maxVal = sg.max_score ?? sg.maxScore;
+        const fb = sg.feedback;
+        parts.push(`${icon} ${name}: ${scoreVal}/${maxVal} — ${fb}`);
+      }
+      if (errorAnalysis) {
+        const errType = errorAnalysis.primary_error_type ?? errorAnalysis.primaryErrorType;
+        if (errType && errType !== '无' && errType !== 'None') {
+          parts.push(`🔍 错误类型：${errType}`);
+        }
+        const gaps = errorAnalysis.knowledge_gaps ?? errorAnalysis.knowledgeGaps;
+        if (gaps?.length) parts.push(`📝 知识漏洞：${gaps.join('、')}`);
+        if (errorAnalysis.suggestion) parts.push(`💡 建议：${errorAnalysis.suggestion}`);
+      }
+      if (overallFeedback) parts.push(`\n${overallFeedback}`);
 
-      setMessages((prev) => [...prev, feedbackMsg]);
+      addMessage('assistant', parts.join('\n'));
     } catch (err) {
-      console.error('Grade error:', err);
+      addMessage('assistant', `⚠️ 批改失败: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
-  // ============ Send message in active chat ============
+  // Send message (handles tutor continuation + test submission)
   const handleSend = () => {
     if (!input.trim() || isStreaming) return;
-
-    if (!currentQuestion) {
-      // No question selected, treat input as a free-form question
-      const freeQuestion: Question = {
-        id: 0, kpId: 0, subject: 'math', grade: 'grade7',
-        type: 'CALCULATION', difficulty: 3,
-        content: { stem: input.trim() },
-        answer: { value: '', steps: [] },
-      };
-      setInput('');
-      startTutor(freeQuestion, `请帮我解答这个问题`);
-      return;
-    }
-
     const msg = input.trim();
     setInput('');
 
-    if (mode === 'test') {
-      // In test mode, this is an answer submission
-      const answerMsg: ChatMessage = {
-        id: Date.now().toString(),
-        role: 'user',
-        content: `我的答案：${msg}`,
-        timestamp: new Date().toISOString(),
+    if (!currentQuestion) {
+      // Free-form question
+      const freeQ: Question = {
+        id: -Date.now(), kpId: 0, subject: 'math', grade: 'grade7',
+        type: 'CALCULATION', difficulty: 3,
+        content: { stem: msg },
+        answer: { value: '', steps: [] },
       };
-      setMessages((prev) => [...prev, answerMsg]);
+      startTutor(freeQ, '请帮我解答这个问题');
+      return;
+    }
+
+    if (mode === 'test') {
       submitAnswer(currentQuestion, msg);
     } else {
-      // In tutor mode, continue the conversation
-      const userMsg: ChatMessage = {
-        id: Date.now().toString(),
-        role: 'user',
-        content: msg,
-        timestamp: new Date().toISOString(),
-      };
-      const aiMsg: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: '',
-        timestamp: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, userMsg, aiMsg]);
-      setIsStreaming(true);
-
-      // Continue conversation with SSE
-      const token = localStorage.getItem('token') || '';
-      fetch(`${AI_BASE}/ai/tutor/explain`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json;charset=UTF-8',
-          ...(token ? { Authorization: token } : {}),
-        },
-        body: JSON.stringify({
-          question_content: currentQuestion.content.stem,
-          answer: currentQuestion.answer.value,
-          steps: (currentQuestion.answer.steps || []).join('\n'),
-          student_message: msg,
-          history: messages
-            .filter((m) => m.content.length > 0)
-            .map((m) => ({ role: m.role, content: m.content })),
-          grade: '初中',
-          subject: '数学',
-          knowledge_point: '',
-          mastery_level: '中',
-        }),
-        signal: abortRef.current?.signal,
-      })
-        .then(async (res) => {
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const reader = res.body?.getReader();
-          if (!reader) throw new Error('No stream');
-          const decoder = new TextDecoder();
-          let buffer = '';
-          let full = '';
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                try {
-                  const p = JSON.parse(line.slice(6));
-                  if (p.done) break;
-                  if (p.content) {
-                    full += p.content;
-                    setMessages((prev) => {
-                      const u = [...prev];
-                      const l = u[u.length - 1];
-                      if (l?.role === 'assistant') u[u.length - 1] = { ...l, content: full };
-                      return u;
-                    });
-                  }
-                } catch { /* skip */ }
-              }
-            }
-          }
-        })
-        .catch((err) => {
-          if (err instanceof DOMException && err.name === 'AbortError') return;
-          setMessages((prev) => {
-            const u = [...prev];
-            const l = u[u.length - 1];
-            if (l?.role === 'assistant') u[u.length - 1] = { ...l, content: l.content + `\n\n⚠️ ${err}` };
-            return u;
-          });
-        })
-        .finally(() => setIsStreaming(false));
+      sendMessage(msg);
     }
   };
 
@@ -377,10 +142,7 @@ export default function TutorPage() {
   };
 
   const clearChat = () => {
-    abortRef.current?.abort();
-    setMessages([]);
-    setCurrentQuestion(null);
-    setIsStreaming(false);
+    useChatStore.getState().reset();
     setMode('tutor');
   };
 
@@ -412,13 +174,9 @@ export default function TutorPage() {
           {questions.map((q, i) => (
             <div
               key={q.id || i}
-              onClick={() => {
-                setCurrentQuestion(q);
-                setMode('tutor');
-                startTutor(q);
-              }}
+              onClick={() => startTutor(q)}
               className={`p-3 rounded-lg border cursor-pointer transition-all text-sm ${
-                currentQuestion?.id === q.id && currentQuestion?.content?.stem === q.content.stem
+                currentQuestion?.content?.stem === q.content.stem
                   ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-200'
                   : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
               }`}
@@ -442,9 +200,7 @@ export default function TutorPage() {
 
           {/* Freeform input */}
           <div className="pt-2 border-t border-gray-100">
-            <p className="text-xs text-gray-400 mb-1">
-              或直接输入题目：
-            </p>
+            <p className="text-xs text-gray-400 mb-1">或直接输入题目：</p>
             <textarea
               placeholder="粘贴或输入题目..."
               rows={2}
@@ -460,8 +216,6 @@ export default function TutorPage() {
                       content: { stem: val },
                       answer: { value: '', steps: [] },
                     };
-                    setCurrentQuestion(freeQ);
-                    setMode('tutor');
                     (e.target as HTMLTextAreaElement).value = '';
                     startTutor(freeQ);
                   }
@@ -479,9 +233,7 @@ export default function TutorPage() {
               <button
                 onClick={() => setMode('tutor')}
                 className={`px-3 py-1 text-xs rounded-md transition-colors ${
-                  mode === 'tutor'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-600 hover:bg-gray-200'
+                  mode === 'tutor' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 🧑‍🏫 讲题模式
@@ -489,9 +241,7 @@ export default function TutorPage() {
               <button
                 onClick={() => setMode('test')}
                 className={`px-3 py-1 text-xs rounded-md transition-colors ${
-                  mode === 'test'
-                    ? 'bg-green-600 text-white'
-                    : 'text-gray-600 hover:bg-gray-200'
+                  mode === 'test' ? 'bg-green-600 text-white' : 'text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 📝 测试模式
@@ -546,10 +296,7 @@ export default function TutorPage() {
           {/* Input */}
           <div className="border-t border-gray-200 p-3">
             <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSend();
-              }}
+              onSubmit={(e) => { e.preventDefault(); handleSend(); }}
               className="flex gap-2"
             >
               <input

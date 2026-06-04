@@ -1,5 +1,8 @@
 package com.familyagent.module.assessment.service;
 
+import com.familyagent.common.exception.BusinessException;
+import com.familyagent.common.response.ErrorCode;
+import com.familyagent.infra.ai.AIServiceClient;
 import com.familyagent.module.assessment.entity.AbilityProfile;
 import com.familyagent.module.assessment.entity.TestRecord;
 import com.familyagent.module.assessment.repository.AbilityProfileRepository;
@@ -8,12 +11,17 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
  * 评估服务
+ * <p>
+ * BKT知识追踪由Python AI服务统一计算，Java负责数据持久化。
+ * Python是BKT算法的唯一权威来源。
  */
 @Slf4j
 @Service
@@ -22,6 +30,7 @@ public class AssessmentService {
 
     private final TestRecordRepository testRecordRepository;
     private final AbilityProfileRepository abilityProfileRepository;
+    private final AIServiceClient aiServiceClient;
 
     /**
      * 获取用户学力档案
@@ -68,13 +77,19 @@ public class AssessmentService {
     }
 
     /**
-     * 更新学力档案（答题后的BKT更新）
+     * 更新学力档案 — 答题后调用Python BKT引擎更新掌握概率
+     * <p>
+     * 计算逻辑由Python AI服务的 /ai/assessment/bkt/update 端点提供，
+     * Java侧只负责：
+     * 1. 计算 days_since_last（距上次答题天数）
+     * 2. 调用Python BKT服务
+     * 3. 持久化结果到数据库
      */
+    @SuppressWarnings("unchecked")
     public void updateProfile(Long userId, Long kpId, boolean isCorrect) {
         AbilityProfile profile = abilityProfileRepository.findByUserAndKp(userId, kpId);
 
         if (profile == null) {
-            // 初始化档案
             profile = new AbilityProfile();
             profile.setUserId(userId);
             profile.setKpId(kpId);
@@ -84,42 +99,57 @@ public class AssessmentService {
             profile.setConsecutiveCorrect(0);
         }
 
-        // BKT 简化更新
-        double priorMastery = profile.getMasteryProbability();
-        double pLearn = 0.15;
-        double pGuess = 0.20;
-        double pSlip = 0.10;
-        double pForget = 0.03;
-
-        double posterior;
-        if (isCorrect) {
-            double numerator = priorMastery * (1 - pSlip);
-            double denominator = numerator + (1 - priorMastery) * pGuess;
-            posterior = numerator / denominator;
-        } else {
-            double numerator = priorMastery * pSlip;
-            double denominator = numerator + (1 - priorMastery) * (1 - pGuess);
-            posterior = numerator / denominator;
+        // 计算距上次答题天数
+        LocalDateTime now = LocalDateTime.now();
+        int daysSinceLast = 0;
+        if (profile.getLastAttemptAt() != null) {
+            daysSinceLast = (int) ChronoUnit.DAYS.between(profile.getLastAttemptAt(), now);
         }
 
-        posterior *= (1 - pForget);
-        posterior = Math.min(0.99, Math.max(0.01, posterior));
+        double priorMastery = profile.getMasteryProbability();
 
-        profile.setMasteryProbability(posterior);
+        try {
+            // 调用Python BKT引擎（权威计算）
+            Map<String, Object> bktResult = aiServiceClient.updateBKT(
+                    priorMastery, isCorrect, daysSinceLast);
+
+            double posterior = ((Number) bktResult.get("posterior_mastery")).doubleValue();
+            String masteryLevel = (String) bktResult.get("mastery_level");
+            boolean fallback = bktResult.getOrDefault("fallback", Boolean.FALSE).equals(Boolean.TRUE);
+
+            profile.setMasteryProbability(posterior);
+
+            if (fallback) {
+                log.warn("BKT使用降级计算: userId={}, kpId={}, correct={}, posterior={}",
+                        userId, kpId, isCorrect, String.format("%.3f", posterior));
+            } else {
+                log.debug("BKT更新: userId={}, kpId={}, correct={}, prior={}, posterior={}, level={}",
+                        userId, kpId, isCorrect,
+                        String.format("%.3f", priorMastery),
+                        String.format("%.3f", posterior),
+                        masteryLevel);
+            }
+        } catch (Exception e) {
+            log.error("BKT服务不可用, 跳过本次更新: userId={}, kpId={}", userId, kpId, e);
+            throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "学力评估服务暂不可用");
+        }
+
+        // 更新统计数据（Java侧负责）
         profile.setTotalAttempts(profile.getTotalAttempts() + 1);
+        profile.setLastAttemptAt(now);
         if (isCorrect) {
             profile.setCorrectAttempts(profile.getCorrectAttempts() + 1);
             profile.setConsecutiveCorrect(profile.getConsecutiveCorrect() + 1);
+            profile.setLastCorrectAt(now);
         } else {
             profile.setConsecutiveCorrect(0);
         }
 
+        // 持久化
         if (profile.getId() == null) {
             abilityProfileRepository.insert(profile);
         } else {
             abilityProfileRepository.updateById(profile);
         }
-        log.debug("学力更新: userId={}, kpId={}, correct={}, mastery={}",
-                userId, kpId, isCorrect, String.format("%.3f", posterior));
     }
 }

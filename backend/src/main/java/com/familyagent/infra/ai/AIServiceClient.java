@@ -128,6 +128,42 @@ public class AIServiceClient {
     }
 
     /**
+     * BKT知识追踪更新 — 调用Python BKT引擎
+     * Python是BKT算法的唯一权威来源
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> updateBKT(double priorMastery, boolean isCorrect, int daysSinceLast) {
+        try {
+            Map<String, Object> request = Map.of(
+                "prior_mastery", priorMastery,
+                "is_correct", isCorrect,
+                "days_since_last", daysSinceLast
+            );
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+
+            ResponseEntity<Map> response = restTemplate.postForEntity(
+                    baseUrl + "/ai/assessment/bkt/update", entity, Map.class);
+            return response.getBody();
+        } catch (Exception e) {
+            log.error("BKT更新失败, 降级为简单更新", e);
+            // 降级：简单地根据正确/错误调整 (fallback when AI service is down)
+            double posterior = isCorrect
+                ? Math.min(0.99, priorMastery + 0.1)
+                : Math.max(0.01, priorMastery - 0.1);
+            return Map.of(
+                "success", true,
+                "prior_mastery", priorMastery,
+                "posterior_mastery", posterior,
+                "mastery_level", posterior < 0.3 ? "弱" : posterior < 0.6 ? "中" : posterior < 0.85 ? "强" : "精通",
+                "delta", posterior - priorMastery,
+                "fallback", true
+            );
+        }
+    }
+
+    /**
      * 健康检查
      */
     @SuppressWarnings("unchecked")
