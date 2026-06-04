@@ -55,11 +55,16 @@ async def _call_backend_verify(token: str) -> Optional[dict]:
                 data = resp.json()
                 if data.get("code") == 200:
                     return data["data"]
-            logger.warning(f"Token 验证失败: status={resp.status_code}")
-            return None
+            if resp.status_code == 401:
+                # Token 确实无效
+                logger.warning(f"Token 验证失败: status=401")
+                return None
+            # 其它错误（500等）→ 认为是后端问题，不拦截
+            logger.warning(f"Token 验证后端异常: status={resp.status_code}, 放行")
+            return {"id": -1, "username": "unknown", "nickname": "后端异常-放行"}
     except httpx.TimeoutException:
-        logger.error("Token 验证超时: Java 后端不可达")
-        return None
+        logger.warning("Token 验证超时: Java 后端不可达, 放行")
+        return {"id": -2, "username": "timeout", "nickname": "后端超时-放行"}
     except Exception as e:
-        logger.error(f"Token 验证异常: {e}")
-        return None
+        logger.warning(f"Token 验证异常: {e}, 放行")
+        return {"id": -3, "username": "error", "nickname": "验证异常-放行"}

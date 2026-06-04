@@ -58,11 +58,7 @@ async function aiRequest<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    if (res.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      if (typeof window !== 'undefined') window.location.href = '/login';
-    }
+    // 401 from AI is likely a transient auth issue (backend unreachable) — don't kill session
     throw new ApiError(res.status, `AI service error ${res.status}`);
   }
   const data = await res.json();
@@ -88,9 +84,7 @@ async function sseRequest(
       body: JSON.stringify(body),
     });
     if (res.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      if (typeof window !== 'undefined') window.location.href = '/login';
+      onError('AI服务认证失败，请尝试刷新页面后重试');
       return;
     }
     if (!res.ok) { onError(`HTTP ${res.status}`); return; }
