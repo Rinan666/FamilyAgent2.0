@@ -44,7 +44,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 注册路由
+# 注册路由（tutor/assessment 路由内通过 Depends(verify_token) 鉴权）
 app.include_router(tutor.router, prefix="/ai/tutor", tags=["家教"])
 app.include_router(assessment.router, prefix="/ai/assessment", tags=["评估"])
 app.include_router(health.router, prefix="/ai", tags=["健康"])

@@ -6,6 +6,7 @@ import { Send, Loader2, FileText } from 'lucide-react';
 import { useChat } from '@/hooks/useChat';
 import { useChatStore } from '@/stores/chatStore';
 import { tutorApi, questionApi } from '@/lib/api';
+import MathRenderer from '@/components/tutor/MathRenderer';
 
 export default function TutorPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -280,7 +281,7 @@ export default function TutorPage() {
                         : 'bg-gray-100 text-gray-900 rounded-bl-md'
                     } ${msg.role === 'assistant' && !msg.content ? 'animate-pulse' : ''}`}
                   >
-                    {msg.content || (msg.role === 'assistant' ? '思考中...' : '')}
+                    {msg.content ? <MathRenderer content={msg.content} /> : (msg.role === 'assistant' ? '思考中...' : '')}
                   </div>
                   {msg.role === 'user' && (
                     <div className="w-7 h-7 bg-gray-300 text-gray-600 rounded-full flex items-center justify-center text-xs font-medium shrink-0">

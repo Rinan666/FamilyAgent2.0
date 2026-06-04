@@ -27,7 +27,6 @@ public class UserController {
     @PostMapping("/register")
     public Result<User> register(@Valid @RequestBody RegisterRequest request) {
         User user = userService.register(request);
-        user.setPasswordHash(null); // 不返回密码
         return Result.success(user);
     }
 
@@ -42,7 +41,6 @@ public class UserController {
     @GetMapping("/me")
     public Result<User> getCurrentUser() {
         User user = userService.getCurrentUser();
-        user.setPasswordHash(null);
         return Result.success(user);
     }
 
@@ -50,7 +48,6 @@ public class UserController {
     @GetMapping("/{id}")
     public Result<User> getUserById(@PathVariable Long id) {
         User user = userService.getById(id);
-        user.setPasswordHash(null);
         return Result.success(user);
     }
 }

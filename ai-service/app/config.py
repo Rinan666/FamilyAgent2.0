@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # AI 服务
     ai_service_port: int = 8000
 
+    # Java 后端（Token 验证用）
+    backend_url: str = "http://localhost:8080"
+
     # LLM
     claude_api_key: Optional[str] = None
     deepseek_api_key: Optional[str] = None

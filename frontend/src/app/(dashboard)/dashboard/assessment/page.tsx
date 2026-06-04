@@ -1,99 +1,92 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { assessmentApi } from '@/lib/api';
+import { assessmentApi, questionApi } from '@/lib/api';
+import { useAuthStore } from '@/stores/authStore';
 import { masteryColor, masteryLevel } from '@/lib/utils';
 import type { AbilityProfile, KnowledgePoint } from '@/types';
 import {
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar,
-  ResponsiveContainer,
-  Tooltip,
+  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  Radar, ResponsiveContainer, Tooltip,
 } from 'recharts';
 import { TrendingUp, Target, Zap, AlertTriangle } from 'lucide-react';
 
 export default function AssessmentPage() {
   const [profiles, setProfiles] = useState<AbilityProfile[]>([]);
+  const [kpNames, setKpNames] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
-  const [selectedSubject, setSelectedSubject] = useState('math');
+
+  const userId = useAuthStore((s) => s.user?.id);
 
   useEffect(() => {
-    loadProfiles();
-  }, []);
+    if (userId) {
+      loadAll();
+    } else {
+      setLoading(false);
+    }
+  }, [userId]);
 
-  const loadProfiles = async () => {
+  const loadAll = async () => {
     setLoading(true);
     try {
-      const data = await assessmentApi.getProfiles(1);
-      setProfiles(data);
+      const [profileData, treeData] = await Promise.all([
+        assessmentApi.getProfiles(userId!),
+        questionApi.getKnowledgeTree(),
+      ]);
+      setProfiles(profileData || []);
+      // Build kpNames from knowledge tree (flatten tree)
+      const names: Record<number, string> = {};
+      const flattenTree = (nodes: KnowledgePoint[]) => {
+        for (const n of nodes) {
+          names[n.id] = n.name;
+          if ((n as unknown as { children?: KnowledgePoint[] }).children) {
+            flattenTree((n as unknown as { children: KnowledgePoint[] }).children);
+          }
+        }
+      };
+      flattenTree(treeData || []);
+      setKpNames(names);
     } catch (err) {
-      console.error('加载学力数据失败', err);
+      console.error('Failed to load assessment data', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // 模拟知识点名称映射（实际从API获取）
-  const kpNames: Record<number, string> = {
-    2: '有理数', 3: '整式加减', 4: '整式乘除',
-    6: '一元一次方程', 7: '一元一次不等式', 8: '二元一次方程组',
-    10: '线段与角', 11: '三角形', 12: '四边形',
-    14: '坐标系', 15: '一次函数',
-  };
-
-  // 雷达图数据
+  // Radar chart data
   const radarData = profiles.map((p) => ({
     subject: kpNames[p.kpId] || `KP-${p.kpId}`,
     value: Math.round(p.masteryProbability * 100),
     fullMark: 100,
   }));
 
-  // 统计
+  // Statistics
   const mastered = profiles.filter((p) => p.masteryProbability >= 0.85).length;
   const weak = profiles.filter((p) => p.masteryProbability < 0.4).length;
-  const avgMastery =
-    profiles.length > 0
-      ? Math.round(
-          (profiles.reduce((sum, p) => sum + p.masteryProbability, 0) /
-            profiles.length) *
-            100,
-        )
-      : 0;
+  const zpd = profiles.filter((p) => p.masteryProbability >= 0.3 && p.masteryProbability <= 0.7).length;
+  const avgMastery = profiles.length > 0
+    ? Math.round((profiles.reduce((sum, p) => sum + p.masteryProbability, 0) / profiles.length) * 100)
+    : 0;
 
   const stats = [
-    {
-      label: '平均掌握度',
-      value: `${avgMastery}%`,
-      icon: TrendingUp,
-      color: 'text-blue-600 bg-blue-50',
-    },
-    {
-      label: '已掌握',
-      value: `${mastered}个`,
-      icon: Zap,
-      color: 'text-green-600 bg-green-50',
-    },
-    {
-      label: '需要加强',
-      value: `${weak}个`,
-      icon: AlertTriangle,
-      color: 'text-orange-600 bg-orange-50',
-    },
-    {
-      label: '最近发展区',
-      value: `${profiles.filter((p) => p.masteryProbability >= 0.3 && p.masteryProbability <= 0.7).length}个`,
-      icon: Target,
-      color: 'text-purple-600 bg-purple-50',
-    },
+    { label: '平均掌握度', value: `${avgMastery}%`, icon: TrendingUp, color: 'text-blue-600 bg-blue-50' },
+    { label: '已掌握', value: `${mastered}个`, icon: Zap, color: 'text-green-600 bg-green-50' },
+    { label: '需要加强', value: `${weak}个`, icon: AlertTriangle, color: 'text-orange-600 bg-orange-50' },
+    { label: '最近发展区', value: `${zpd}个`, icon: Target, color: 'text-purple-600 bg-purple-50' },
   ];
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 text-gray-500">
         加载中...
+      </div>
+    );
+  }
+
+  if (!userId) {
+    return (
+      <div className="flex items-center justify-center h-64 text-gray-400">
+        请先登录以查看学力评估
       </div>
     );
   }
@@ -105,7 +98,7 @@ export default function AssessmentPage() {
         <p className="text-sm text-gray-500">知识图谱 + 掌握概率可视化</p>
       </div>
 
-      {/* 统计卡片 */}
+      {/* Stats cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         {stats.map((stat) => {
           const Icon = stat.icon;
@@ -124,7 +117,7 @@ export default function AssessmentPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* 雷达图 */}
+        {/* Radar chart */}
         <div className="md:col-span-1 bg-white rounded-xl border border-gray-200 p-6">
           <h3 className="font-semibold text-gray-900 mb-4">能力雷达图</h3>
           {radarData.length > 0 ? (
@@ -133,13 +126,7 @@ export default function AssessmentPage() {
                 <PolarGrid />
                 <PolarAngleAxis dataKey="subject" tick={{ fontSize: 12 }} />
                 <PolarRadiusAxis angle={30} domain={[0, 100]} />
-                <Radar
-                  name="掌握度"
-                  dataKey="value"
-                  stroke="#3b82f6"
-                  fill="#3b82f6"
-                  fillOpacity={0.2}
-                />
+                <Radar name="掌握度" dataKey="value" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.2} />
                 <Tooltip />
               </RadarChart>
             </ResponsiveContainer>
@@ -150,7 +137,7 @@ export default function AssessmentPage() {
           )}
         </div>
 
-        {/* 知识点列表 */}
+        {/* Knowledge point detail list */}
         <div className="md:col-span-2 bg-white rounded-xl border border-gray-200 p-6">
           <h3 className="font-semibold text-gray-900 mb-4">知识点掌握详情</h3>
           {profiles.length === 0 ? (
@@ -161,14 +148,11 @@ export default function AssessmentPage() {
           ) : (
             <div className="space-y-2">
               {profiles.map((profile) => (
-                <div
-                  key={profile.kpId}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                >
+                <div key={profile.kpId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-gray-900">
-                        {kpNames[profile.kpId] || `知识点-${profile.kpId}`}
+                        {kpNames[profile.kpId] || `知识点${profile.kpId}`}
                       </span>
                       <span className={`text-xs ${masteryColor(profile.masteryProbability)}`}>
                         {masteryLevel(profile.masteryProbability)}
@@ -180,20 +164,16 @@ export default function AssessmentPage() {
                     </div>
                   </div>
                   <div className="ml-4">
-                    {/* 进度条 */}
                     <div className="w-32 bg-gray-200 rounded-full h-2">
                       <div
                         className="h-2 rounded-full transition-all"
                         style={{
                           width: `${Math.round(profile.masteryProbability * 100)}%`,
                           backgroundColor:
-                            profile.masteryProbability < 0.3
-                              ? '#ef4444'
-                              : profile.masteryProbability < 0.6
-                                ? '#eab308'
-                                : profile.masteryProbability < 0.85
-                                  ? '#3b82f6'
-                                  : '#22c55e',
+                            profile.masteryProbability < 0.3 ? '#ef4444'
+                            : profile.masteryProbability < 0.6 ? '#eab308'
+                            : profile.masteryProbability < 0.85 ? '#3b82f6'
+                            : '#22c55e',
                         }}
                       />
                     </div>

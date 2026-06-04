@@ -5,18 +5,19 @@ import json
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.agents.tutor_agent import tutor_agent
 from app.agents.grader_agent import grader_agent
 from app.agents.generator_agent import generator_agent
+from app.middleware.auth import verify_token
 from app.utils.sanitizer import sanitize_text
 
 logger = logging.getLogger("familyagent.ai.api.tutor")
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_token)])
 
 
 # ============================================
@@ -216,30 +217,3 @@ async def generate_variation(
     except Exception as e:
         logger.error(f"变式题生成错误: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/math/verify")
-@router.post("/math/verify")
-async def verify_math(
-    expression: str = "",
-    expected: str = "",
-    student_answer: str = "",
-):
-    """
-    数学验证（使用sympy，不依赖LLM）
-    """
-    from app.engine.math_executor import math_sandbox
-
-    if expression:
-        result = math_sandbox.evaluate(expression)
-        return {"success": True, "data": result}
-
-    if expected and student_answer:
-        result = math_sandbox.verify_answer(
-            question_expr="",  # 不需要题目的表达式
-            student_answer=student_answer,
-            expected_answer=expected,
-        )
-        return {"success": True, "data": result}
-
-    return {"success": False, "error": "请提供 expression 或 expected+student_answer"}

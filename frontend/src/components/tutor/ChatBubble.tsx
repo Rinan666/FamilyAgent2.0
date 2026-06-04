@@ -2,6 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import type { ChatMessage } from '@/types';
+import MathRenderer from './MathRenderer';
 
 interface ChatBubbleProps {
   message: ChatMessage;
@@ -36,7 +37,7 @@ export default function ChatBubble({ message, isStreaming }: ChatBubbleProps) {
         )}
       >
         <div className="whitespace-pre-wrap break-words">
-          {message.content || (isStreaming ? '' : '...')}
+          {message.content ? <MathRenderer content={message.content} /> : (isStreaming ? '' : '...')}
         </div>
       </div>
 

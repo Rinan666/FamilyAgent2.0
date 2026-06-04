@@ -1,7 +1,6 @@
 package com.familyagent.module.user.service;
 
 import cn.dev33.satoken.stp.StpUtil;
-import cn.hutool.crypto.SecureUtil;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.user.dto.LoginRequest;
@@ -11,6 +10,7 @@ import com.familyagent.module.user.entity.User;
 import com.familyagent.module.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +18,9 @@ import java.time.LocalDateTime;
 
 /**
  * 用户服务
+ * <p>
+ * 密码使用 BCrypt 加密（加盐 + 自适应密钥拉伸），
+ * 替代之前的裸 SHA-256。
  */
 @Slf4j
 @Service
@@ -25,6 +28,7 @@ import java.time.LocalDateTime;
 public class UserService {
 
     private final UserRepository userRepository;
+    private static final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
     @Transactional
     public User register(RegisterRequest request) {
@@ -35,7 +39,7 @@ public class UserService {
 
         User user = new User();
         user.setUsername(request.getUsername());
-        user.setPasswordHash(SecureUtil.sha256(request.getPassword()));
+        user.setPasswordHash(encoder.encode(request.getPassword()));
         user.setNickname(request.getNickname() != null ? request.getNickname() : request.getUsername());
         user.setEmail(request.getEmail());
         user.setRole("USER");
@@ -56,8 +60,7 @@ public class UserService {
             throw new BusinessException(ErrorCode.ACCOUNT_DISABLED);
         }
 
-        String passwordHash = SecureUtil.sha256(request.getPassword());
-        if (!passwordHash.equals(user.getPasswordHash())) {
+        if (!encoder.matches(request.getPassword(), user.getPasswordHash())) {
             throw new BusinessException(ErrorCode.PASSWORD_ERROR);
         }
 
