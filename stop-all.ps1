@@ -81,9 +81,9 @@ Start-Sleep 0.5
 Write-Host ""
 Write-Host "Stopping infrastructure..." -ForegroundColor Yellow
 $env:Path += ";C:\Program Files\Docker\Docker\resources\bin"
-(& docker compose -f "$Root\docker-compose.yml" down 2>&1) | Out-Null
+(& docker compose -f "$Root\docker-compose.yml" stop 2>&1) | Out-Null
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "       Infrastructure stopped (PostgreSQL, Redis, RabbitMQ, MinIO)" -ForegroundColor Green
+    Write-Host "       Infrastructure stopped but containers kept (PostgreSQL, Redis, RabbitMQ, MinIO)" -ForegroundColor Green
 } else {
     Write-Host "       [WARN] docker compose failed or Docker not running" -ForegroundColor DarkYellow
 }

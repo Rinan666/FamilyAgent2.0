@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 ## Project: FamilyAgent (家族教育Agent)
 

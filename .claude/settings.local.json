@@ -80,7 +80,9 @@
       "Bash(where.exe uvicorn *)",
       "Bash(where.exe mvn.cmd)",
       "Bash(powershell *)",
-      "Bash(cd *)"
+      "Bash(cd *)",
+      "Bash(npx tsc *)",
+      "Bash(npx eslint *)"
     ]
   }
 }

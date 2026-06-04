@@ -10,11 +10,13 @@ import {
   Users,
   BookOpen,
   Settings,
+  BookX,
 } from 'lucide-react';
 
 const navItems = [
   { href: '/dashboard', label: '首页', icon: LayoutDashboard },
   { href: '/dashboard/tutor', label: 'AI家教', icon: GraduationCap },
+  { href: '/dashboard/notebook', label: '错题本', icon: BookX },
   { href: '/dashboard/assessment', label: '学力评估', icon: BarChart3 },
   { href: '/dashboard/family', label: '家族空间', icon: Users },
   { href: '/dashboard/knowledge', label: '知识库', icon: BookOpen },

@@ -34,6 +34,7 @@ export default function DashboardPage() {
 
   const quickLinks = [
     { href: '/dashboard/tutor', label: '开始学习', icon: '📝', color: 'bg-blue-50 text-blue-700 hover:bg-blue-100' },
+    { href: '/dashboard/notebook', label: '错题本', icon: '📒', color: 'bg-red-50 text-red-700 hover:bg-red-100' },
     { href: '/dashboard/assessment', label: '查看评估', icon: '📊', color: 'bg-green-50 text-green-700 hover:bg-green-100' },
     { href: '/dashboard/family', label: '管理家族', icon: '👨‍👩‍👧‍👦', color: 'bg-purple-50 text-purple-700 hover:bg-purple-100' },
     { href: '/dashboard/knowledge', label: '知识库', icon: '📚', color: 'bg-orange-50 text-orange-700 hover:bg-orange-100' },
@@ -79,7 +80,7 @@ export default function DashboardPage() {
       {/* 快速操作 */}
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
         <h3 className="font-semibold text-gray-900 mb-3 text-sm">快速开始</h3>
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {quickLinks.map((link) => (
             <Link key={link.href} href={link.href}
               className={`p-3 rounded-lg text-sm text-center transition-colors ${link.color}`}>

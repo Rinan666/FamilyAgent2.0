@@ -119,6 +119,7 @@ export interface TestRecord {
   totalScore: number;
   totalTime?: number;
   status: string;
+  source?: string;
   createdAt: string;
 }
 
