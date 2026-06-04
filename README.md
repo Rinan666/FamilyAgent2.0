@@ -2,9 +2,9 @@
 
 > AI驱动的家族教育与管理平台 — 家教、成长、传承
 
-## 项目简介
+现实痛点是：孩子长大后认为自己没有受到良好教育、父母没有时间或没有能力或没有金钱教育孩子、家族知识传承容易遗失或无法被良好继承、人们害怕写的日记被人看到或不擅长写日记或觉得写日记太麻烦而对自己的成长和变化了解甚少但后来想深入了解自己的时候没有资料参考。家教是代替传统的家教老师的功能，也能代替传统父母的功能。个性化成长是每个家族成员可以写快捷日记，还有家族知识库。镜像Agent是根据日记而随家族成员成长的Agent，模拟成员的精神体。
 
-家族教育Agent是一个以AI Agent为核心的教育平台，围绕三大核心能力构建：
+## 三大核心能力
 
 - **AI家教 (Tutor)**：苏格拉底式智能讲题、自适应抽题、步骤级批改、学力评估
 - **个性化成长 (Growth)**：语音快捷日记、家族知识库、成长仪表盘
@@ -24,39 +24,30 @@
 
 ## 快速开始
 
-### 前置要求
+**一键启动（Windows）：**
+双击项目根目录下的 `start-all.bat`
 
-- Java 21+
-- Python 3.12+
-- Node.js 20+
-- Docker & Docker Compose
-- Maven 3.9+
+**手动启动：**
 
 ### 1. 启动基础设施
-
 ```bash
 docker-compose up -d
 ```
 
-### 2. 启动后端服务
+### 2. 启动 AI 服务
+```bash
+cd ai-service
+pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --port 8000
+```
 
+### 3. 启动后端
 ```bash
 cd backend
 mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
-### 3. 启动AI服务
-
-```bash
-cd ai-service
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-```
-
 ### 4. 启动前端
-
 ```bash
 cd frontend
 npm install
