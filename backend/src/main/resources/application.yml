@@ -1,0 +1,64 @@
+# ============================================
+# FamilyAgent Backend - 主配置
+# ============================================
+
+server:
+  port: 8080
+
+spring:
+  application:
+    name: family-agent-backend
+  profiles:
+    active: ${APP_ENV:dev}
+
+  # JSON 序列化
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+
+  # 文件上传
+  servlet:
+    multipart:
+      max-file-size: ${UPLOAD_MAX_SIZE_MB:10}MB
+      max-request-size: 20MB
+
+# MyBatis-Plus
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+
+# Sa-Token 权限认证
+sa-token:
+  token-name: Authorization
+  timeout: 86400
+  active-timeout: 1800
+  is-concurrent: true
+  is-share: true
+  token-style: tik
+  is-log: false
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# SpringDoc
+springdoc:
+  swagger-ui:
+    path: /docs
+  api-docs:
+    path: /v3/api-docs

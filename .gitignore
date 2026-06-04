@@ -1,0 +1,74 @@
+# ============================================
+# FamilyAgent .gitignore
+# ============================================
+
+# --- Java / Maven ---
+target/
+!.mvn/wrapper/maven-wrapper.jar
+*.class
+*.jar
+*.war
+.gradle/
+build/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+.venv/
+venv/
+env/
+*.egg
+
+# --- Node / Next.js ---
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+.next
+
+# --- IDE ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.iml
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# --- Environment ---
+.env
+.env.local
+.env.*.local
+*.env
+
+# --- Docker ---
+docker-compose.override.yml
+
+# --- Logs ---
+logs/
+*.log
+
+# --- Uploads ---
+uploads/
+storage/
+
+# --- AI ---
+*.gguf
+models/
+checkpoints/
+
+# --- Coverage ---
+coverage/
+.nyc_output/
+jacoco.exec

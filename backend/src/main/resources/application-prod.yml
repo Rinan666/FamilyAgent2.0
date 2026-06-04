@@ -1,0 +1,56 @@
+# ============================================
+# FamilyAgent Backend - 生产环境配置
+# 实际值通过环境变量注入
+# ============================================
+
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 50
+      minimum-idle: 10
+      idle-timeout: 300000
+      connection-timeout: 20000
+
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+      database: 0
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT}
+    username: ${RABBITMQ_USER}
+    password: ${RABBITMQ_PASSWORD}
+
+logging:
+  level:
+    com.familyagent: INFO
+    org.springframework: WARN
+  file:
+    path: /var/log/familyagent
+
+ai-service:
+  base-url: ${AI_SERVICE_URL}
+  timeout: ${AI_SERVICE_TIMEOUT:60}
+
+minio:
+  endpoint: ${MINIO_ENDPOINT}
+  access-key: ${MINIO_ACCESS_KEY}
+  secret-key: ${MINIO_SECRET_KEY}
+  bucket-name: familyagent
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
