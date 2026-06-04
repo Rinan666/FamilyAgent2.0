@@ -83,7 +83,6 @@ class LLMClient:
         props = schema.get("properties", {})
         for name, prop in props.items():
             ptype = prop.get("type", "string")
-            desc = prop.get("description", "")
             if ptype == "array":
                 items = prop.get("items", {}).get("properties", {})
                 sub_fields = ", ".join(items.keys()) if items else "object"

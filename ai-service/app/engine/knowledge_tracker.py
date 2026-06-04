@@ -4,7 +4,6 @@
 基于答题历史，动态更新学生对每个知识点的掌握概率
 """
 import logging
-from typing import Optional
 
 logger = logging.getLogger("familyagent.ai.tracker")
 

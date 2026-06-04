@@ -4,17 +4,15 @@
 确保数学题答案的正确性，避免LLM幻觉
 """
 import logging
-from typing import Optional, Union
+from typing import Optional
 
 import sympy
-from sympy import symbols, Eq, solve, simplify, expand, factor, diff, integrate, limit
+from sympy import symbols, solve, simplify
 from sympy.parsing.sympy_parser import (
     parse_expr,
     standard_transformations,
     implicit_multiplication_application,
 )
-
-from app.config import settings
 
 logger = logging.getLogger("familyagent.ai.math")
 

@@ -1,8 +1,6 @@
 """
 批改Agent — 步骤级评分与错误分析
 """
-from typing import Optional
-
 from app.agents.base import BaseAgent
 from app.llm.prompts import grader as grader_prompts
 from app.llm.schemas import GRADE_RESULT_SCHEMA
