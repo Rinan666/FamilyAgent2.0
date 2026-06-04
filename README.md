@@ -38,7 +38,7 @@ docker-compose up -d
 ```bash
 cd ai-service
 pip install -r requirements.txt
-python -m uvicorn app.main:app --reload --port 8000
+python -m uvicorn app.main:app --port 8000
 ```
 
 ### 3. 启动后端
