@@ -70,7 +70,7 @@ FamilyAgent/
 ├── ai-service/       Python FastAPI AI 服务 (14 files, 18 tests)
 ├── frontend/         Next.js 前端 (17 files, 0 tests)
 ├── scripts/          开发脚本 & 种子数据
-├── docs/             文档 (进度报告、PRD)
+├── docs/             文档（商业计划、项目计划、最新目标、架构接口、长期规划）
 ├── start-all.bat     一键启动 (入口)
 ├── start-all.ps1     一键启动 (逻辑)
 ├── stop-all.bat      一键停止 (入口)

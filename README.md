@@ -14,9 +14,9 @@
 
 | 层 | 技术 |
 |----|------|
-| 前端 | Next.js 14 + TypeScript + shadcn/ui + Tailwind CSS |
-| 后端 | Java 21 + Spring Boot 3.3 + MyBatis-Plus |
-| AI服务 | Python 3.12 + FastAPI + LiteLLM |
+| 前端 | Next.js 16 + React 19 + TypeScript + shadcn/ui + Tailwind CSS |
+| 后端 | Java 17 + Spring Boot 3.3 + MyBatis-Plus + Sa-Token |
+| AI服务 | Python 3.12 + FastAPI + LiteLLM + sympy |
 | 数据库 | PostgreSQL 16 + pgvector |
 | 缓存 | Redis 7 |
 | 消息队列 | RabbitMQ 3.13 |
@@ -70,8 +70,13 @@ FamilyAgent/
 
 ## 文档
 
-- [商业计划书](商业计划书.md)
-- [项目开发计划书](项目开发计划书.md)
+当前只保留 5 个主文档：
+
+- [最新推进目标](docs/NEXT.md)
+- [商业计划](docs/商业计划.md)
+- [项目计划](docs/项目计划.md)
+- [系统架构与接口契约](docs/系统架构与接口契约.md)
+- [长期规划](docs/长期规划.md)
 
 ## 环境变量
 
