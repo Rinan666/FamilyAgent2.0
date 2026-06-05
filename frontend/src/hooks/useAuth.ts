@@ -1,5 +1,5 @@
 /**
- * 认证 Hook
+ * Authentication hook.
  */
 'use client';
 
@@ -14,24 +14,38 @@ export function useAuth(requireAuth: boolean = true) {
     useAuthStore();
 
   useEffect(() => {
-    if (isAuthenticated && !user) {
-      // 有token但没用户信息，拉取
-      setLoading(true);
-      userApi
-        .getMe()
-        .then((u) => {
-          setUser(u);
-        })
-        .catch(() => {
-          logout();
-          if (requireAuth) router.push('/login');
-        })
-        .finally(() => setLoading(false));
+    if (!isAuthenticated) {
+      setLoading(false);
+      if (requireAuth) router.push('/login');
+      return;
     }
 
-    if (!isAuthenticated && requireAuth) {
-      router.push('/login');
+    if (user) {
+      setLoading(false);
+      return;
     }
+
+    let cancelled = false;
+    setLoading(true);
+
+    userApi
+      .getMe()
+      .then((u) => {
+        if (!cancelled) setUser(u);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          logout();
+          if (requireAuth) router.push('/login');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [isAuthenticated, user, requireAuth, router, setUser, setLoading, logout]);
 
   return {

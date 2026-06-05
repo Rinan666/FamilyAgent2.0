@@ -5,13 +5,34 @@ import { useRouter } from 'next/navigation';
 import { questionApi, assessmentApi } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { difficultyLabel, masteryColor, masteryLevel, formatDate } from '@/lib/utils';
-import type { Question, AbilityProfile, TestRecord, KnowledgePoint } from '@/types';
+import type { Question, AbilityProfile, TestRecord, KnowledgePoint, TestRecordDetail } from '@/types';
 import {
   BookX, Target, Clock, ChevronDown, ChevronUp,
   ArrowRight, FileText, AlertTriangle, CheckCircle2,
 } from 'lucide-react';
 
 type Tab = 'wrong' | 'history';
+
+function safeScore(value: unknown): number {
+  const score = Number(value);
+  return Number.isFinite(score) ? score : 0;
+}
+
+function scoreLabel(value: unknown): string {
+  return `${Math.round(safeScore(value))}`;
+}
+
+function flattenKnowledgePoints(nodes: KnowledgePoint[]): KnowledgePoint[] {
+  const result: KnowledgePoint[] = [];
+  const walk = (items: KnowledgePoint[]) => {
+    for (const item of items) {
+      result.push(item);
+      if (item.children?.length) walk(item.children);
+    }
+  };
+  walk(nodes);
+  return result;
+}
 
 export default function NotebookPage() {
   const router = useRouter();
@@ -20,12 +41,16 @@ export default function NotebookPage() {
   const [wrongQuestions, setWrongQuestions] = useState<Question[]>([]);
   const [profiles, setProfiles] = useState<AbilityProfile[]>([]);
   const [testHistory, setTestHistory] = useState<TestRecord[]>([]);
+  const [recordDetails, setRecordDetails] = useState<Record<number, TestRecordDetail>>({});
+  const [loadingRecordIds, setLoadingRecordIds] = useState<Set<number>>(new Set());
+  const [recordDetailErrors, setRecordDetailErrors] = useState<Record<number, string>>({});
   const [kpNames, setKpNames] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
 
   // UI state
   const [activeTab, setActiveTab] = useState<Tab>('wrong');
   const [expandedAnswers, setExpandedAnswers] = useState<Set<number>>(new Set());
+  const [expandedRecords, setExpandedRecords] = useState<Set<number>>(new Set());
   const [filterDifficulty, setFilterDifficulty] = useState<number | null>(null);
   const [filterKpId, setFilterKpId] = useState<number | null>(null);
 
@@ -34,28 +59,27 @@ export default function NotebookPage() {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [wrongData, profileData, historyData, treeData] = await Promise.all([
+      const [wrongData, profileData, historyData] = await Promise.all([
         questionApi.getWrongQuestions(userId!, 50),
         assessmentApi.getProfiles(userId!),
         assessmentApi.getHistory(userId!, 30),
-        questionApi.getKnowledgeTree(),
       ]);
       setWrongQuestions(wrongData || []);
       setProfiles(profileData || []);
       setTestHistory(historyData || []);
+      setRecordDetails({});
+      setLoadingRecordIds(new Set());
+      setRecordDetailErrors({});
 
-      // Flatten knowledge tree
-      const names: Record<number, string> = {};
-      const flattenTree = (nodes: KnowledgePoint[]) => {
-        for (const n of nodes) {
-          names[n.id] = n.name;
-          if ((n as unknown as { children?: KnowledgePoint[] }).children) {
-            flattenTree((n as unknown as { children: KnowledgePoint[] }).children);
+      void questionApi.getKnowledgeTree()
+        .then((treeData) => {
+          const names: Record<number, string> = {};
+          for (const kp of flattenKnowledgePoints(treeData || [])) {
+            names[kp.id] = kp.name;
           }
-        }
-      };
-      flattenTree(treeData || []);
-      setKpNames(names);
+          setKpNames(names);
+        })
+        .catch(() => setKpNames({}));
     } catch (err) {
       console.error('Failed to load notebook data', err);
     } finally {
@@ -85,7 +109,7 @@ export default function NotebookPage() {
     const avgScore =
       testHistory.length > 0
         ? Math.round(
-            testHistory.reduce((sum, t) => sum + (t.totalScore || 0), 0) / testHistory.length,
+            testHistory.reduce((sum, t) => sum + safeScore(t.totalScore), 0) / testHistory.length,
           )
         : 0;
 
@@ -106,11 +130,27 @@ export default function NotebookPage() {
     const kpSet = new Map<number, string>();
     for (const q of wrongQuestions) {
       if (!kpSet.has(q.kpId)) {
-        kpSet.set(q.kpId, kpNames[q.kpId] || `知识点${q.kpId}`);
+        kpSet.set(q.kpId, kpNames[q.kpId] || '知识点名称加载中');
       }
     }
     return Array.from(kpSet.entries()).map(([id, name]) => ({ id, name }));
   }, [wrongQuestions, kpNames]);
+
+  const latestWrongAnswerByQuestionId = useMemo(() => {
+    const latest: Record<number, { answer: string; score: number; recordId: number }> = {};
+    for (const record of testHistory) {
+      for (const questionId of record.questionIds || []) {
+        const score = safeScore(record.scores?.[String(questionId)]);
+        if (score >= 60 || latest[questionId]) continue;
+        latest[questionId] = {
+          answer: String(record.answers?.[String(questionId)] ?? ''),
+          score,
+          recordId: record.id,
+        };
+      }
+    }
+    return latest;
+  }, [testHistory]);
 
   // Toggle answer visibility
   const toggleAnswer = (id: number) => {
@@ -120,6 +160,44 @@ export default function NotebookPage() {
       else next.add(id);
       return next;
     });
+  };
+
+  const loadRecordDetail = useCallback(async (id: number) => {
+    if (recordDetails[id] || loadingRecordIds.has(id)) return;
+
+    setLoadingRecordIds((prev) => new Set(prev).add(id));
+    setRecordDetailErrors((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+
+    try {
+      const detail = await assessmentApi.getTestDetail(id);
+      setRecordDetails((prev) => ({ ...prev, [id]: detail }));
+    } catch (err) {
+      console.error('Failed to load test record detail', err);
+      setRecordDetailErrors((prev) => ({ ...prev, [id]: '题目详情加载失败，请稍后重试' }));
+    } finally {
+      setLoadingRecordIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  }, [loadingRecordIds, recordDetails]);
+
+  const toggleRecord = (id: number) => {
+    const willOpen = !expandedRecords.has(id);
+    setExpandedRecords((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    if (willOpen) {
+      void loadRecordDetail(id);
+    }
   };
 
   // Navigate to tutor page
@@ -150,7 +228,7 @@ export default function NotebookPage() {
       </div>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         {[
           {
             label: '错题数量',
@@ -286,6 +364,7 @@ export default function NotebookPage() {
                 const answer = q.answer;
                 const isExpanded = expandedAnswers.has(q.id);
                 const profile = profiles.find((p) => p.kpId === q.kpId);
+                const latestWrong = latestWrongAnswerByQuestionId[q.id];
 
                 return (
                   <div
@@ -314,6 +393,11 @@ export default function NotebookPage() {
                           {kpNames[q.kpId]}
                         </span>
                       )}
+                      {!kpNames[q.kpId] && (
+                        <span className="text-xs px-2 py-0.5 bg-purple-50 text-purple-500 rounded">
+                          知识点名称加载中
+                        </span>
+                      )}
                       {profile && (
                         <span className={`text-xs ${masteryColor(profile.masteryProbability)}`}>
                           掌握度: {masteryLevel(profile.masteryProbability)} (
@@ -335,6 +419,18 @@ export default function NotebookPage() {
                             {String.fromCharCode(65 + i)}. {opt}
                           </div>
                         ))}
+                      </div>
+                    )}
+
+                    {latestWrong && (
+                      <div className="mt-3 rounded-lg border border-red-100 bg-red-50 p-3">
+                        <p className="text-xs font-medium text-red-700">最近错误答案</p>
+                        <p className="mt-1 whitespace-pre-wrap text-sm text-gray-900">
+                          {latestWrong.answer || '未作答'}
+                        </p>
+                        <p className="mt-1 text-xs text-red-600">
+                          测试记录 #{testHistory.findIndex((item) => item.id === latestWrong.recordId) + 1 || latestWrong.recordId} · {scoreLabel(latestWrong.score)} 分
+                        </p>
                       </div>
                     )}
 
@@ -414,18 +510,23 @@ export default function NotebookPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {testHistory.map((record) => {
+              {testHistory.map((record, recordIndex) => {
                 const questionCount = record.questionIds?.length || 0;
+                const isExpanded = expandedRecords.has(record.id);
+                const recordDetail = recordDetails[record.id];
+                const isLoadingDetail = loadingRecordIds.has(record.id);
+                const detailError = recordDetailErrors[record.id];
+                const totalScore = safeScore(record.totalScore);
                 const scoreColor =
-                  (record.totalScore || 0) >= 80
+                  totalScore >= 80
                     ? 'text-green-600'
-                    : (record.totalScore || 0) >= 60
+                    : totalScore >= 60
                       ? 'text-yellow-600'
                       : 'text-red-600';
                 const scoreBg =
-                  (record.totalScore || 0) >= 80
+                  totalScore >= 80
                     ? 'bg-green-50'
-                    : (record.totalScore || 0) >= 60
+                    : totalScore >= 60
                       ? 'bg-yellow-50'
                       : 'bg-red-50';
 
@@ -441,7 +542,7 @@ export default function NotebookPage() {
                           className={`w-16 h-16 rounded-xl flex flex-col items-center justify-center ${scoreBg}`}
                         >
                           <span className={`text-xl font-bold ${scoreColor}`}>
-                            {record.totalScore ?? '-'}
+                            {scoreLabel(totalScore)}
                           </span>
                           <span className="text-[10px] text-gray-400">分</span>
                         </div>
@@ -449,7 +550,7 @@ export default function NotebookPage() {
                         <div>
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-sm font-medium text-gray-900">
-                              测试记录 #{record.id}
+                              测试记录 #{recordIndex + 1}
                             </span>
                             <span
                               className={`text-xs px-1.5 py-0.5 rounded ${
@@ -477,21 +578,21 @@ export default function NotebookPage() {
                       </div>
 
                       {/* Score bar */}
-                      <div className="hidden md:flex items-center gap-3">
+                      <div className="hidden items-center gap-3 lg:flex">
                         <div className="w-32">
                           <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
                             <span>正确率</span>
-                            <span>{Math.round(record.totalScore || 0)}%</span>
+                            <span>{scoreLabel(totalScore)}%</span>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-2">
                             <div
                               className="h-2 rounded-full transition-all"
                               style={{
-                                width: `${Math.round(record.totalScore || 0)}%`,
+                                width: `${Math.max(0, Math.min(100, Math.round(totalScore)))}%`,
                                 backgroundColor:
-                                  (record.totalScore || 0) >= 80
+                                  totalScore >= 80
                                     ? '#22c55e'
-                                    : (record.totalScore || 0) >= 60
+                                    : totalScore >= 60
                                       ? '#eab308'
                                       : '#ef4444',
                               }}
@@ -502,11 +603,119 @@ export default function NotebookPage() {
                     </div>
 
                     {/* Question IDs */}
-                    {record.questionIds && record.questionIds.length > 0 && (
+                    {record.id && (
                       <div className="mt-3 pt-3 border-t border-gray-100">
-                        <p className="text-xs text-gray-400 mb-2">
-                          涉及题目 ID：{record.questionIds.join(', ')}
-                        </p>
+                        <button
+                          onClick={() => toggleRecord(record.id)}
+                          className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
+                        >
+                          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          {isExpanded ? '收起题目详情' : '查看题目详情'}
+                        </button>
+
+                        {isExpanded && (
+                          <div className="mt-3 space-y-3">
+                            {isLoadingDetail && (
+                              <div className="rounded-lg border border-gray-100 bg-gray-50 p-3 text-xs text-gray-400">
+                                正在加载题目详情...
+                              </div>
+                            )}
+
+                            {detailError && !isLoadingDetail && (
+                              <div className="rounded-lg border border-red-100 bg-red-50 p-3 text-xs text-red-600">
+                                {detailError}
+                              </div>
+                            )}
+
+                            {!isLoadingDetail && !detailError && recordDetail?.items.map((item, index) => {
+                              const question = item.question;
+                              const studentAnswer = item.studentAnswer || '';
+                              const score = safeScore(item.score);
+                              const correctAnswer =
+                                question?.answer?.value ||
+                                (typeof item.correctAnswer === 'object' && item.correctAnswer && 'value' in item.correctAnswer
+                                  ? String((item.correctAnswer as { value?: unknown }).value ?? '')
+                                  : String(item.correctAnswer ?? ''));
+
+                              return (
+                                <div key={`${record.id}-${item.questionId}`} className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                                  <div className="mb-2 flex items-center justify-between gap-3">
+                                    <span className="text-xs font-medium text-gray-600">第 {index + 1} 题</span>
+                                    <span className={`rounded px-2 py-0.5 text-xs ${
+                                      item.correct ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                                    }`}
+                                    >
+                                      {scoreLabel(score)} 分
+                                    </span>
+                                  </div>
+                                  {question ? (
+                                    <>
+                                      <p className="whitespace-pre-wrap text-sm text-gray-900">{question.content.stem}</p>
+                                      {question.content.options?.length ? (
+                                        <div className="mt-2 grid grid-cols-2 gap-1 text-xs text-gray-500">
+                                          {question.content.options.map((option, optionIndex) => (
+                                            <span key={optionIndex}>{String.fromCharCode(65 + optionIndex)}. {option}</span>
+                                          ))}
+                                        </div>
+                                      ) : null}
+                                        <div className="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-2">
+                                        <div className="rounded border border-red-100 bg-red-50 p-2">
+                                          <p className="text-xs font-medium text-red-700">学生答案</p>
+                                          <p className="mt-1 whitespace-pre-wrap text-sm text-gray-900">
+                                            {studentAnswer || '未作答'}
+                                          </p>
+                                        </div>
+                                        <div className="rounded border border-green-100 bg-green-50 p-2">
+                                          <p className="text-xs font-medium text-green-700">参考答案</p>
+                                          <p className="mt-1 whitespace-pre-wrap text-sm text-gray-900">
+                                            {correctAnswer || '暂无参考答案'}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      {(item.errorType || item.feedback || item.parentExplanation || item.nextSuggestion) && (
+                                        <div className="mt-3 rounded-lg border border-blue-100 bg-white p-3">
+                                          <div className="mb-2 flex flex-wrap items-center gap-2">
+                                            <p className="text-xs font-medium text-blue-700">教学诊断</p>
+                                            {item.errorType && item.errorType !== '无' && (
+                                              <span className="rounded bg-red-50 px-2 py-0.5 text-xs text-red-700">
+                                                {item.errorType}
+                                              </span>
+                                            )}
+                                          </div>
+                                          {item.feedback && (
+                                            <p className="text-xs text-gray-600">{item.feedback}</p>
+                                          )}
+                                          <div className="mt-2 grid grid-cols-1 gap-2 lg:grid-cols-2">
+                                            {item.parentExplanation && (
+                                              <div className="rounded border border-blue-50 bg-blue-50 p-2">
+                                                <p className="text-xs font-medium text-blue-700">给家长看的解释</p>
+                                                <p className="mt-1 text-xs text-gray-600">{item.parentExplanation}</p>
+                                              </div>
+                                            )}
+                                            {item.nextSuggestion && (
+                                              <div className="rounded border border-purple-50 bg-purple-50 p-2">
+                                                <p className="text-xs font-medium text-purple-700">下一步建议</p>
+                                                <p className="mt-1 text-xs text-gray-600">{item.nextSuggestion}</p>
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <p className="text-xs text-gray-400">题目 #{item.questionId} 详情暂不可用</p>
+                                  )}
+                                </div>
+                              );
+                            })}
+
+                            {!isLoadingDetail && !detailError && recordDetail && recordDetail.items.length === 0 && (
+                              <div className="rounded-lg border border-gray-100 bg-gray-50 p-3 text-xs text-gray-400">
+                                这条记录暂无题目详情
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

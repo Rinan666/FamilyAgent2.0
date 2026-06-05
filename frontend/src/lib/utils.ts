@@ -76,6 +76,20 @@ export function difficultyLabel(difficulty: number): string {
 }
 
 /**
+ * 学科编码 → 中文名称
+ */
+export function subjectLabel(subject?: string): string {
+  const labels: Record<string, string> = {
+    math: '数学',
+    chinese: '语文',
+    english: '英语',
+    science: '科学',
+    family_wisdom: '家族传承',
+  };
+  return subject ? labels[subject] || subject : '未标注学科';
+}
+
+/**
  * 生成唯一ID
  */
 export function generateId(): string {

@@ -8,8 +8,8 @@
 
 import { useCallback } from 'react';
 import { useChatStore } from '@/stores/chatStore';
-import { tutorApi } from '@/lib/api';
-import type { ChatMessage, Question } from '@/types';
+import { memoryApi, tutorApi } from '@/lib/api';
+import type { ChatMessage, MemoryEntry, Question } from '@/types';
 
 interface UseChatOptions {
   /** 根据 kpId 获取学生对该知识点的掌握等级 */
@@ -86,6 +86,28 @@ export function useChat(options: UseChatOptions = {}) {
     [messages, getMastery, getKnowledgePoint, getTeachingStyle, teachingStyle],
   );
 
+  const recallMemoryContext = useCallback(
+    async (params: {
+      query: string;
+      subject?: string;
+      knowledgePointId?: number;
+    }) => {
+      try {
+        const memories = await memoryApi.recall({
+          query: params.query,
+          subject: params.subject,
+          knowledgePointId: params.knowledgePointId,
+          limit: 8,
+        });
+        return formatMemoryContext(memories);
+      } catch (error) {
+        console.log('Learning memories not loaded:', error);
+        return '';
+      }
+    },
+    [],
+  );
+
   /**
    * 发送讲题请求
    */
@@ -98,8 +120,14 @@ export function useChat(options: UseChatOptions = {}) {
       addMessage('assistant', '');
       setStreaming(true);
 
+      const memoryContext = await recallMemoryContext({
+        query: studentMessage,
+        subject: question.subject,
+        knowledgePointId: question.kpId || undefined,
+      });
+
       tutorApi.explainStream(
-        makeBody(question, studentMessage),
+        { ...makeBody(question, studentMessage), memoryContext },
         (chunk) => appendToLastMessage(chunk),
         () => {
           setStreaming(false);
@@ -112,7 +140,16 @@ export function useChat(options: UseChatOptions = {}) {
         },
       );
     },
-    [isStreaming, makeBody, addMessage, appendToLastMessage, setStreaming, setCurrentQuestion, persistSafely],
+    [
+      isStreaming,
+      makeBody,
+      addMessage,
+      appendToLastMessage,
+      setStreaming,
+      setCurrentQuestion,
+      persistSafely,
+      recallMemoryContext,
+    ],
   );
 
   /**
@@ -126,8 +163,14 @@ export function useChat(options: UseChatOptions = {}) {
       addMessage('assistant', '');
       setStreaming(true);
 
+      const memoryContext = await recallMemoryContext({
+        query: message,
+        subject: currentQuestion.subject,
+        knowledgePointId: currentQuestion.kpId || undefined,
+      });
+
       tutorApi.explainStream(
-        makeBody(currentQuestion, message),
+        { ...makeBody(currentQuestion, message), memoryContext },
         (chunk) => appendToLastMessage(chunk),
         () => {
           setStreaming(false);
@@ -140,7 +183,16 @@ export function useChat(options: UseChatOptions = {}) {
         },
       );
     },
-    [isStreaming, currentQuestion, makeBody, addMessage, appendToLastMessage, setStreaming, persistSafely],
+    [
+      isStreaming,
+      currentQuestion,
+      makeBody,
+      addMessage,
+      appendToLastMessage,
+      setStreaming,
+      persistSafely,
+      recallMemoryContext,
+    ],
   );
 
   /**
@@ -158,6 +210,11 @@ export function useChat(options: UseChatOptions = {}) {
       addMessage('assistant', '');
       setStreaming(true);
 
+      const memoryContext = await recallMemoryContext({
+        query: message,
+        subject: 'math',
+      });
+
       tutorApi.explainStream(
         {
           questionContent: '',
@@ -171,6 +228,7 @@ export function useChat(options: UseChatOptions = {}) {
           masteryLevel: '中',
           teachingStyle: getTeachingStyle?.() || teachingStyle,
           mode: 'chat',
+          memoryContext,
         },
         (chunk) => appendToLastMessage(chunk),
         () => {
@@ -192,6 +250,7 @@ export function useChat(options: UseChatOptions = {}) {
       getTeachingStyle,
       teachingStyle,
       persistChatSafely,
+      recallMemoryContext,
     ],
   );
 
@@ -204,4 +263,15 @@ export function useChat(options: UseChatOptions = {}) {
     sendFreeMessage,
     reset,
   };
+}
+
+function formatMemoryContext(memories: MemoryEntry[]): string {
+  const activeMemories = memories.filter((memory) => memory.status === 'ACTIVE' && memory.content?.trim());
+  if (activeMemories.length === 0) return '';
+  return activeMemories
+    .map((memory, index) => {
+      const label = memory.type || 'LEARNING';
+      return `${index + 1}. [${label}] ${memory.content}`;
+    })
+    .join('\n');
 }
