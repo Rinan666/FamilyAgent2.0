@@ -1,7 +1,7 @@
 'use client';
 
 import type { Question } from '@/types';
-import { difficultyLabel } from '@/lib/utils';
+import { difficultyLabel, subjectLabel } from '@/lib/utils';
 
 interface QuestionCardProps {
   question: Question;
@@ -16,7 +16,7 @@ export default function QuestionCard({ question, onAsk }: QuestionCardProps) {
       {/* 标签 */}
       <div className="flex items-center gap-2 mb-3">
         <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded">
-          {question.subject}
+          {subjectLabel(question.subject)}
         </span>
         <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
           {difficultyLabel(question.difficulty)}

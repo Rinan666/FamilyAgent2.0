@@ -13,8 +13,10 @@ import type {
   LoginRequest, LoginResponse, RegisterRequest,
   User, Family, FamilyMember,
   Question, KnowledgePoint, QuestionAnswer, QuestionContent,
-  AbilityProfile, TestRecord,
-  ChatMessage, ChatSession, GradeResult, PageResult, SubmitTestRequest, CreateQuestionRequest,
+  AbilityProfile, TestRecord, TestRecordDetail,
+  ChatMessage, ChatSession, GradeResult, MemoryEntry, PageResult, SubmitTestRequest, CreateQuestionRequest,
+  TutorExtractResult,
+  MistakeReviewResult, DailyPracticeResult, ExamReviewResult, StudyPlanResult,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
@@ -70,15 +72,104 @@ function parseJsonField<T>(value: unknown, fallback: T): T {
   return fallback;
 }
 
+function toText(value: unknown): string {
+  if (value == null) return '';
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>;
+    const nested = [
+      record.value,
+      record.text,
+      record.stem,
+      record.content,
+      record.question,
+      record.title,
+      record.answer,
+      record.final_answer,
+      record.finalAnswer,
+      record.standard_answer,
+      record.standardAnswer,
+      record.result,
+    ].map(toText).find(Boolean);
+    return nested || '';
+  }
+  return '';
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  const parsed = parseJsonField<unknown>(value, value);
+  if (Array.isArray(parsed)) {
+    return parsed.map(toText).filter(Boolean);
+  }
+  if (typeof parsed === 'string') {
+    return parsed
+      .split(/\r?\n/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function normalizeQuestionAnswer(rawAnswer: unknown, rawQuestion: Record<string, unknown>): QuestionAnswer {
+  const parsed = parseJsonField<unknown>(rawAnswer, rawAnswer);
+  const answerObject = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+    ? parsed as Record<string, unknown>
+    : {};
+
+  const value = [
+    answerObject.value,
+    answerObject.answer,
+    answerObject.final_answer,
+    answerObject.finalAnswer,
+    answerObject.standard_answer,
+    answerObject.standardAnswer,
+    answerObject.result,
+    rawQuestion.answer_value,
+    rawQuestion.answerValue,
+    rawQuestion.final_answer,
+    rawQuestion.finalAnswer,
+    rawQuestion.standard_answer,
+    rawQuestion.standardAnswer,
+    rawQuestion.result,
+    typeof parsed === 'string' ? parsed : undefined,
+  ].map(toText).find(Boolean) || '';
+
+  const steps = normalizeStringArray(answerObject.steps).length > 0
+    ? normalizeStringArray(answerObject.steps)
+    : normalizeStringArray(answerObject.solution_steps ?? rawQuestion.steps ?? rawQuestion.solution_steps ?? rawQuestion.solutionSteps);
+
+  const explanation = [
+    answerObject.explanation,
+    answerObject.analysis,
+    answerObject.solution,
+    rawQuestion.explanation,
+    rawQuestion.analysis,
+    rawQuestion.solution,
+  ].map(toText).find(Boolean);
+
+  return { value, steps, explanation };
+}
+
 function normalizeQuestion(raw: Question): Question {
+  const rawRecord = raw as unknown as Record<string, unknown>;
   const content = parseJsonField<QuestionContent>(raw.content, { stem: '' });
-  const answer = parseJsonField<QuestionAnswer>(raw.answer, { value: '', steps: [] });
+  const answer = normalizeQuestionAnswer(raw.answer, rawRecord);
   const tags = normalizeTags((raw as Question & { tags?: unknown }).tags);
+  const kpId = Number(raw.kpId ?? rawRecord.kp_id ?? rawRecord.kpId);
+  const stem = [
+    content.stem,
+    rawRecord.stem,
+    rawRecord.question,
+    rawRecord.title,
+    raw.content,
+  ].map(toText).find(Boolean) || '';
 
   return {
     ...raw,
+    kpId: Number.isFinite(kpId) ? kpId : raw.kpId,
     content: {
-      stem: content.stem || String(raw.content ?? ''),
+      stem,
       options: Array.isArray(content.options) ? content.options : undefined,
       figures: Array.isArray(content.figures) ? content.figures : undefined,
     },
@@ -120,9 +211,79 @@ function normalizeSessions(sessions: ChatSession[] | undefined | null): ChatSess
   return (sessions || []).map(normalizeSession);
 }
 
+function normalizeNumberArray(value: unknown): number[] {
+  const parsed = parseJsonField<unknown>(value, []);
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .map((item) => Number(item))
+    .filter((item) => Number.isFinite(item));
+}
+
+function normalizeStringRecord(value: unknown): Record<string, string> {
+  const parsed = parseJsonField<unknown>(value, {});
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+  return Object.fromEntries(
+    Object.entries(parsed as Record<string, unknown>).map(([key, item]) => [key, item == null ? '' : String(item)]),
+  );
+}
+
+function normalizeNumberRecord(value: unknown): Record<string, number> {
+  const parsed = parseJsonField<unknown>(value, {});
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+  return Object.fromEntries(
+    Object.entries(parsed as Record<string, unknown>).map(([key, item]) => {
+      const score = Number(item);
+      return [key, Number.isFinite(score) ? score : 0];
+    }),
+  );
+}
+
+function normalizeTestRecord(raw: TestRecord): TestRecord {
+  const totalScore = Number(raw.totalScore);
+  const totalTime = raw.totalTime == null ? undefined : Number(raw.totalTime);
+
+  return {
+    ...raw,
+    questionIds: normalizeNumberArray((raw as TestRecord & { questionIds?: unknown }).questionIds),
+    answers: normalizeStringRecord((raw as TestRecord & { answers?: unknown }).answers),
+    scores: normalizeNumberRecord((raw as TestRecord & { scores?: unknown }).scores),
+    timeSpent: normalizeNumberArray((raw as TestRecord & { timeSpent?: unknown }).timeSpent),
+    totalScore: Number.isFinite(totalScore) ? totalScore : 0,
+    totalTime: Number.isFinite(totalTime) ? totalTime : undefined,
+  };
+}
+
+function normalizeTestRecords(records: TestRecord[] | undefined | null): TestRecord[] {
+  return (records || []).map(normalizeTestRecord);
+}
+
+function normalizeTestRecordDetail(raw: TestRecordDetail): TestRecordDetail {
+  return {
+    ...raw,
+    record: normalizeTestRecord(raw.record),
+    items: (raw.items || []).map((item) => ({
+      ...item,
+      question: item.question ? normalizeQuestion(item.question) : undefined,
+      studentAnswer: item.studentAnswer == null ? '' : String(item.studentAnswer),
+      score: safeNumber(item.score),
+      correct: Boolean(item.correct),
+      wrong: Boolean(item.wrong),
+      errorType: item.errorType == null ? undefined : String(item.errorType),
+      feedback: item.feedback == null ? undefined : String(item.feedback),
+      parentExplanation: item.parentExplanation == null ? undefined : String(item.parentExplanation),
+      nextSuggestion: item.nextSuggestion == null ? undefined : String(item.nextSuggestion),
+    })),
+  };
+}
+
+function safeNumber(value: unknown): number {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
 async function aiRequest<T>(path: string, body: unknown): Promise<T> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-  const res = await fetch(`${AI_BASE}/ai${path}`, {
+  const res = await fetch(`/ai-proxy${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json;charset=UTF-8',
@@ -140,6 +301,29 @@ async function aiRequest<T>(path: string, body: unknown): Promise<T> {
 }
 
 // SSE 流式请求（直连 Python）
+async function aiFileRequest<T>(path: string, file: File): Promise<T> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await fetch(`${AI_BASE}/ai${path}`, {
+    method: 'POST',
+    headers: {
+      ...(token ? { Authorization: token } : {}),
+    },
+    body: formData,
+  });
+
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    const message = data?.detail || data?.message || `AI service error ${res.status}`;
+    throw new ApiError(res.status, message);
+  }
+
+  if (!data.success) throw new ApiError(500, data.detail || 'AI error');
+  return data as T;
+}
+
 async function sseRequest(
   path: string, body: unknown,
   onChunk: (chunk: string) => void,
@@ -222,11 +406,18 @@ export const questionApi = {
   getKnowledgePoint: (id: number) => request<KnowledgePoint>(`/questions/knowledge-points/${id}`),
   getQuestion: (id: number) => request<Question>(`/questions/${id}`).then(normalizeQuestion),
   listQuestions: async (params: {
-    page?: number; size?: number; subject?: string; kpId?: number;
+    page?: number; size?: number; subject?: string; grade?: string; kpId?: number; kpIds?: number[];
     difficulty?: number; type?: string; tag?: string;
   }) => {
     const sp = new URLSearchParams();
-    Object.entries(params).forEach(([k, v]) => { if (v !== undefined) sp.set(k, String(v)); });
+    Object.entries(params).forEach(([k, v]) => {
+      if (v === undefined) return;
+      if (Array.isArray(v)) {
+        v.forEach((item) => sp.append(k, String(item)));
+        return;
+      }
+      sp.set(k, String(v));
+    });
     const page = await request<PageResult<Question>>(`/questions?${sp}`);
     return { ...page, items: normalizeQuestions(page.items) };
   },
@@ -234,6 +425,7 @@ export const questionApi = {
     request<Question>('/questions', { method: 'POST', body: JSON.stringify(data) }).then(normalizeQuestion),
   batchCreateQuestions: (data: CreateQuestionRequest[]) =>
     request<Question[]>('/questions/batch', { method: 'POST', body: JSON.stringify(data) }).then(normalizeQuestions),
+  deleteQuestion: (id: number) => request<void>(`/questions/${id}`, { method: 'DELETE' }),
   selectForTest: (params: { kpId?: number; subject?: string; difficulty?: number; type?: string; limit?: number }) => {
     const sp = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => { if (v !== undefined) sp.set(k, String(v)); });
@@ -251,9 +443,12 @@ export const questionApi = {
 export const assessmentApi = {
   getProfiles: (_userId?: number) => request<AbilityProfile[]>('/assessment/profiles/me'),
   getZPD: (_userId?: number) => request<AbilityProfile[]>('/assessment/zpd/me'),
-  getHistory: (_userId?: number, limit = 20) => request<TestRecord[]>(`/assessment/history/me?limit=${limit}`),
+  getHistory: (_userId?: number, limit = 20) =>
+    request<TestRecord[]>(`/assessment/history/me?limit=${limit}`).then(normalizeTestRecords),
+  getTestDetail: (id: number) =>
+    request<TestRecordDetail>(`/assessment/tests/${id}/detail`).then(normalizeTestRecordDetail),
   submitTest: (data: SubmitTestRequest) =>
-    request<TestRecord>('/assessment/tests', { method: 'POST', body: JSON.stringify(data) }),
+    request<TestRecord>('/assessment/tests', { method: 'POST', body: JSON.stringify(data) }).then(normalizeTestRecord),
 };
 
 // ============================================
@@ -281,10 +476,51 @@ export const sessionApi = {
   deleteSession: (id: number) => request<void>(`/sessions/${id}`, { method: 'DELETE' }),
 };
 
+export const memoryApi = {
+  listMyMemories: (limit = 20) => request<MemoryEntry[]>(`/memories/me?limit=${limit}`),
+  recall: (body: { query?: string; subject?: string; knowledgePointId?: number; limit?: number }) =>
+    request<MemoryEntry[]>('/memories/recall', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  deleteMemory: (id: number) => request<void>(`/memories/${id}`, { method: 'DELETE' }),
+};
+
 // ============================================
 // AI 家教（直连 Python AI 服务）
 // ============================================
 export const tutorApi = {
+  extractContent: (file: File) =>
+    aiFileRequest<{
+      success: boolean;
+      data: {
+        filename: string;
+        source_type: string;
+        content_type: string;
+        text: string;
+        structured_text?: string;
+        detected_questions?: string[];
+        detected_answers?: string[];
+        detected_steps?: string[];
+        supported: boolean;
+        message: string;
+      };
+    }>('/tutor/extract', file).then((result) => ({
+      success: result.success,
+      data: {
+        filename: result.data.filename,
+        sourceType: result.data.source_type,
+        contentType: result.data.content_type,
+        text: result.data.text,
+        structuredText: result.data.structured_text || result.data.text,
+        detectedQuestions: Array.isArray(result.data.detected_questions) ? result.data.detected_questions : [],
+        detectedAnswers: Array.isArray(result.data.detected_answers) ? result.data.detected_answers : [],
+        detectedSteps: Array.isArray(result.data.detected_steps) ? result.data.detected_steps : [],
+        supported: result.data.supported,
+        message: result.data.message,
+      } satisfies TutorExtractResult,
+    })),
+
   explainStream: (
     body: { questionContent: string; answer: string; steps: string; studentMessage: string;
             history?: { role: string; content: string }[]; grade?: string; subject?: string;
@@ -329,7 +565,8 @@ export const tutorApi = {
     }),
 
   generateQuestions: (body: { subject: string; grade: string; knowledgePoint: string;
-                               questionType?: string; difficulty?: number; count?: number; }) =>
+                               questionType?: string; difficulty?: number; count?: number;
+                               additionalRequirements?: string; }) =>
     aiRequest<{ success: boolean; questions: Question[]; count: number }>('/tutor/generate', {
       subject: body.subject,
       grade: body.grade,
@@ -337,7 +574,75 @@ export const tutorApi = {
       question_type: body.questionType || 'CALCULATION',
       difficulty: body.difficulty || 3,
       count: body.count || 5,
+      additional_requirements: body.additionalRequirements || '',
     }).then((result) => ({ ...result, questions: normalizeQuestions(result.questions) })),
+
+  mistakeReview: (body: {
+    questionContent: string; answer: string; studentAnswer: string; steps?: string;
+    gradeResult?: Record<string, unknown>; grade?: string; subject?: string;
+    knowledgePoint?: string; weakPoints?: string[];
+  }) =>
+    aiRequest<{ success: boolean; skill: 'mistake_review'; data: MistakeReviewResult }>('/tutor/skills/mistake-review', {
+      question_content: body.questionContent,
+      answer: body.answer,
+      student_answer: body.studentAnswer,
+      steps: body.steps || '',
+      grade_result: body.gradeResult || null,
+      grade: body.grade || '初中',
+      subject: body.subject || '数学',
+      knowledge_point: body.knowledgePoint || '未知',
+      weak_points: body.weakPoints || [],
+    }),
+
+  dailyPractice: (body: {
+    knowledgePoint: string; grade?: string; subject?: string; masteryLevel?: string;
+    availableMinutes?: number; difficulty?: string; questionCount?: number;
+    weakPoints?: string[]; scenario?: string;
+  }) =>
+    aiRequest<{ success: boolean; skill: 'daily_practice'; data: DailyPracticeResult }>('/tutor/skills/daily-practice', {
+      knowledge_point: body.knowledgePoint,
+      grade: body.grade || '初中',
+      subject: body.subject || '数学',
+      mastery_level: body.masteryLevel || '中',
+      available_minutes: body.availableMinutes || 15,
+      difficulty: body.difficulty || '标准',
+      question_count: body.questionCount || 5,
+      weak_points: body.weakPoints || [],
+      scenario: body.scenario || '学生自练',
+    }),
+
+  examReview: (body: {
+    examGoal?: string; scoreSummary: string; grade?: string; subject?: string;
+    profiles?: Record<string, unknown>; weakPoints?: string[];
+    recentMistakes?: Record<string, unknown>[]; availableMinutes?: number; reviewDays?: number;
+  }) =>
+    aiRequest<{ success: boolean; skill: 'exam_review'; data: ExamReviewResult }>('/tutor/skills/exam-review', {
+      exam_goal: body.examGoal || '阶段测评提升',
+      score_summary: body.scoreSummary,
+      grade: body.grade || '初中',
+      subject: body.subject || '数学',
+      profiles: body.profiles || {},
+      weak_points: body.weakPoints || [],
+      recent_mistakes: body.recentMistakes || [],
+      available_minutes: body.availableMinutes || 30,
+      review_days: body.reviewDays || 7,
+    }),
+
+  studyPlan: (body: {
+    learningGoal: string; grade?: string; subject?: string;
+    profiles?: Record<string, unknown>; weakPoints?: string[];
+    availableMinutes?: number; planDays?: number; constraints?: string;
+  }) =>
+    aiRequest<{ success: boolean; skill: 'study_plan'; data: StudyPlanResult }>('/tutor/skills/study-plan', {
+      learning_goal: body.learningGoal,
+      grade: body.grade || '初中',
+      subject: body.subject || '数学',
+      profiles: body.profiles || {},
+      weak_points: body.weakPoints || [],
+      available_minutes: body.availableMinutes || 30,
+      plan_days: body.planDays || 7,
+      constraints: body.constraints || '无',
+    }),
 
   mathVerify: (expression?: string, expected?: string, studentAnswer?: string) => {
     const params = new URLSearchParams();

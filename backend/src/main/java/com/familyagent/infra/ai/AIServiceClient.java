@@ -128,6 +128,28 @@ public class AIServiceClient {
     }
 
     /**
+     * Extract learning memories from a finished tutor session.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> extractMemories(Map<String, Object> request, String authorization) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            if (authorization != null && !authorization.isBlank()) {
+                headers.set("Authorization", authorization);
+            }
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+
+            ResponseEntity<Map> response = restTemplate.postForEntity(
+                    baseUrl + "/ai/memory/extract", entity, Map.class);
+            return response.getBody();
+        } catch (Exception e) {
+            log.warn("Memory extraction call failed: {}", e.getMessage());
+            return Map.of("success", false, "error", e.getMessage());
+        }
+    }
+
+    /**
      * BKT知识追踪更新 — 调用Python BKT引擎
      * Python是BKT算法的唯一权威来源
      */

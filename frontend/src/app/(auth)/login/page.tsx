@@ -40,7 +40,7 @@ export default function LoginPage() {
         },
         result.token,
       );
-      router.push('/dashboard/test');
+      router.push('/dashboard');
     } catch (err: unknown) {
       if (err instanceof Error) {
         setError(err.message);
@@ -53,9 +53,9 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4 py-6">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-xl p-8">
+        <div className="rounded-2xl bg-white p-6 shadow-xl sm:p-8">
           {/* Logo */}
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold text-gray-900">家族教育Agent</h1>

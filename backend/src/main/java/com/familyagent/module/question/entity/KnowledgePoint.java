@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 知识点实体
@@ -25,6 +26,9 @@ public class KnowledgePoint {
 
     @TableField(typeHandler = com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler.class)
     private Object metadata;
+
+    @TableField(exist = false)
+    private List<KnowledgePoint> children;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

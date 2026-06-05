@@ -61,11 +61,13 @@ public class QuestionController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String subject,
+            @RequestParam(required = false) String grade,
             @RequestParam(required = false) Long kpId,
+            @RequestParam(required = false) List<Long> kpIds,
             @RequestParam(required = false) Integer difficulty,
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String tag) {
-        Page<Question> pageResult = questionService.listQuestions(page, size, subject, kpId, difficulty, type, tag);
+        Page<Question> pageResult = questionService.listQuestions(page, size, subject, grade, kpId, kpIds, difficulty, type, tag);
         return Result.success(PageResult.of(
                 pageResult.getRecords(), pageResult.getCurrent(),
                 pageResult.getSize(), pageResult.getTotal()));
@@ -81,6 +83,13 @@ public class QuestionController {
     @PostMapping("/batch")
     public Result<List<Question>> batchCreateQuestions(@Valid @RequestBody List<@Valid CreateQuestionRequest> requests) {
         return Result.success(questionService.batchCreateQuestions(requests));
+    }
+
+    @Operation(summary = "删除题目（维护模式）")
+    @DeleteMapping("/{id}")
+    public Result<Void> deleteQuestion(@PathVariable Long id) {
+        questionService.deleteQuestion(id);
+        return Result.success();
     }
 
     @Operation(summary = "抽题（按条件）")

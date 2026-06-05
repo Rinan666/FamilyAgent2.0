@@ -69,7 +69,7 @@ export default function SettingsPage() {
       {/* 版本信息 */}
       <div className="mt-8 text-center text-xs text-gray-400">
         <p>家族教育Agent v0.1.0</p>
-        <p className="mt-1">Phase 1 — AI家教 MVP</p>
+        <p className="mt-1">第一阶段 · AI家教最小可用版</p>
       </div>
     </div>
   );

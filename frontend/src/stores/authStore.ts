@@ -17,10 +17,25 @@ interface AuthState {
   setLoading: (loading: boolean) => void;
 }
 
+function getStoredUser(): User | null {
+  if (typeof window === 'undefined') return null;
+  const raw = localStorage.getItem('user');
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as User;
+  } catch {
+    localStorage.removeItem('user');
+    return null;
+  }
+}
+
+const storedUser = getStoredUser();
+const storedToken = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+
 export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  token: typeof window !== 'undefined' ? localStorage.getItem('token') : null,
-  isAuthenticated: typeof window !== 'undefined' ? !!localStorage.getItem('token') : false,
+  user: storedUser,
+  token: storedToken,
+  isAuthenticated: Boolean(storedToken),
   isLoading: false,
 
   setUser: (user) => set({ user }),

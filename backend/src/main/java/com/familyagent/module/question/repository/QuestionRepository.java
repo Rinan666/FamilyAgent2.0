@@ -93,23 +93,18 @@ public interface QuestionRepository extends BaseMapper<Question> {
     List<Question> selectAdaptive(@Param("userId") Long userId, @Param("limit") int limit);
 
     @Select("""
-        SELECT DISTINCT q.*
+        SELECT q.*
         FROM questions q
-        JOIN test_records tr ON tr.user_id = #{userId}
-        JOIN LATERAL jsonb_each_text(COALESCE(tr.scores, '{}'::jsonb)) score(question_id, score_value) ON true
+        JOIN (
+            SELECT DISTINCT ON (question_id) question_id, created_at
+            FROM wrong_question_records
+            WHERE user_id = #{userId}
+            AND status = 'OPEN'
+            ORDER BY question_id, created_at DESC
+        ) wqr ON wqr.question_id = q.id
         WHERE q.status = 'ACTIVE'
         AND (q.visibility = 'PUBLIC' OR q.family_id IS NULL)
-        AND score.question_id ~ '^[0-9]+$'
-        AND score.score_value ~ '^-?[0-9]+(\\.[0-9]+)?$'
-        AND q.id = score.question_id::bigint
-        AND score.score_value::numeric < 60
-        AND tr.id IN (
-            SELECT id FROM test_records
-            WHERE user_id = #{userId}
-            ORDER BY created_at DESC
-            LIMIT 100
-        )
-        ORDER BY q.id DESC
+        ORDER BY wqr.created_at DESC
         LIMIT #{limit}
         """)
     List<Question> findWrongQuestions(@Param("userId") Long userId, @Param("limit") int limit);

@@ -175,6 +175,35 @@ CREATE INDEX IF NOT EXISTS idx_test_records_family_user ON test_records(family_i
 CREATE INDEX IF NOT EXISTS idx_test_records_created ON test_records(created_at DESC);
 
 -- ============================================
+-- 6.1 Wrong question records
+-- ============================================
+CREATE TABLE IF NOT EXISTS wrong_question_records (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id),
+    family_id BIGINT REFERENCES families(id),
+    test_record_id BIGINT NOT NULL REFERENCES test_records(id) ON DELETE CASCADE,
+    question_id BIGINT NOT NULL REFERENCES questions(id),
+    kp_id BIGINT REFERENCES knowledge_points(id),
+    student_answer TEXT,
+    score DECIMAL(5,2),
+    correct BOOLEAN NOT NULL DEFAULT false,
+    error_type VARCHAR(100),
+    feedback TEXT,
+    parent_explanation TEXT,
+    next_suggestion TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'OPEN',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT uk_wrong_question_record_once UNIQUE (test_record_id, question_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_wrong_question_records_user ON wrong_question_records(user_id);
+CREATE INDEX IF NOT EXISTS idx_wrong_question_records_question ON wrong_question_records(question_id);
+CREATE INDEX IF NOT EXISTS idx_wrong_question_records_test ON wrong_question_records(test_record_id);
+CREATE INDEX IF NOT EXISTS idx_wrong_question_records_user_status ON wrong_question_records(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_wrong_question_records_created ON wrong_question_records(created_at DESC);
+
+-- ============================================
 -- 7. 瀛﹀姏妗ｆ琛?-- ============================================
 CREATE TABLE IF NOT EXISTS ability_profiles (
     id BIGSERIAL PRIMARY KEY,
@@ -221,6 +250,35 @@ CREATE INDEX IF NOT EXISTS idx_chat_sessions_user ON chat_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_family_user ON chat_sessions(family_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_status ON chat_sessions(status);
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_started ON chat_sessions(started_at DESC);
+
+-- ============================================
+-- 8.1 Learning memory entries
+-- ============================================
+CREATE TABLE IF NOT EXISTS memory_entries (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    family_id BIGINT REFERENCES families(id) ON DELETE CASCADE,
+    subject VARCHAR(50),
+    knowledge_point_id BIGINT REFERENCES knowledge_points(id),
+    type VARCHAR(50) NOT NULL DEFAULT 'LEARNING',
+    scope VARCHAR(30) NOT NULL DEFAULT 'PRIVATE',
+    content TEXT NOT NULL,
+    summary TEXT,
+    importance INTEGER NOT NULL DEFAULT 3 CHECK (importance BETWEEN 1 AND 5),
+    confidence DECIMAL(5,4) NOT NULL DEFAULT 0.7,
+    source_session_id BIGINT REFERENCES chat_sessions(id) ON DELETE SET NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_memory_entries_user ON memory_entries(user_id);
+CREATE INDEX IF NOT EXISTS idx_memory_entries_family_user ON memory_entries(family_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_memory_entries_subject ON memory_entries(subject);
+CREATE INDEX IF NOT EXISTS idx_memory_entries_kp ON memory_entries(knowledge_point_id);
+CREATE INDEX IF NOT EXISTS idx_memory_entries_status ON memory_entries(status);
+CREATE INDEX IF NOT EXISTS idx_memory_entries_created ON memory_entries(created_at DESC);
 
 -- ============================================
 -- 9. 鏃ヨ琛紙Phase 2 棰勭暀锛?-- ============================================
