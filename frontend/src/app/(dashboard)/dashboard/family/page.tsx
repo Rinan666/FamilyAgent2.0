@@ -25,10 +25,12 @@ export default function FamilyPage() {
   const loadFamilies = useCallback(async () => {
     setLoading(true);
     try {
+      setError('');
       const data = await familyApi.getMyFamilies();
       setFamilies(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load families', err);
+      setError(err instanceof Error ? err.message : 'Failed to load families');
     } finally {
       setLoading(false);
     }

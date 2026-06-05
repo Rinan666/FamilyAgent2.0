@@ -100,7 +100,7 @@ public class FamilyService {
         if (familyIds.isEmpty()) {
             return List.of();
         }
-        return familyRepository.selectBatchIds(familyIds);
+        return familyRepository.findBasicByIds(familyIds);
     }
 
     public List<FamilyMember> getMembers(Long familyId) {

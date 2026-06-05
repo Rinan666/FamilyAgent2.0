@@ -14,13 +14,25 @@ import java.util.List;
 @Mapper
 public interface FamilyMemberRepository extends BaseMapper<FamilyMember> {
 
-    @Select("SELECT * FROM family_members WHERE family_id = #{familyId}")
+    @Select("""
+        SELECT id, family_id, user_id, role, joined_at
+        FROM family_members
+        WHERE family_id = #{familyId}
+        """)
     List<FamilyMember> findByFamilyId(Long familyId);
 
-    @Select("SELECT * FROM family_members WHERE user_id = #{userId}")
+    @Select("""
+        SELECT id, family_id, user_id, role, joined_at
+        FROM family_members
+        WHERE user_id = #{userId}
+        """)
     List<FamilyMember> findByUserId(Long userId);
 
-    @Select("SELECT * FROM family_members WHERE family_id = #{familyId} AND user_id = #{userId}")
+    @Select("""
+        SELECT id, family_id, user_id, role, joined_at
+        FROM family_members
+        WHERE family_id = #{familyId} AND user_id = #{userId}
+        """)
     FamilyMember findByFamilyAndUser(Long familyId, Long userId);
 
     @Select("SELECT COUNT(*) FROM family_members WHERE family_id = #{familyId}")
