@@ -20,6 +20,33 @@ class GraderAgent(BaseAgent):
         separators = ["\n", "=>", "->", "所以", "因为", "先", "再"]
         return any(separator in student_answer for separator in separators)
 
+    def _with_teaching_diagnosis(self, result: dict) -> dict:
+        """Ensure every grade result carries parent-facing teaching diagnosis."""
+        error_analysis = result.setdefault("error_analysis", {})
+        error_type = error_analysis.get("primary_error_type") or "无"
+        feedback = result.get("overall_feedback") or ""
+
+        if not error_analysis.get("parent_explanation"):
+            if result.get("is_correct"):
+                error_analysis["parent_explanation"] = "孩子本题结果正确，可以继续观察步骤表达是否完整。"
+            elif error_type == "需要复核":
+                error_analysis["parent_explanation"] = "这道题的作答暂时无法通过快速规则确认，需要进一步分析过程。"
+            else:
+                error_analysis["parent_explanation"] = f"孩子本题主要问题是{error_type}，需要结合原题复盘关键步骤。"
+
+        if not error_analysis.get("next_suggestion"):
+            if result.get("is_correct"):
+                error_analysis["next_suggestion"] = "让孩子口头复述解题思路，再做一道同知识点变式题。"
+            elif error_analysis.get("suggestion"):
+                error_analysis["next_suggestion"] = error_analysis["suggestion"]
+            else:
+                error_analysis["next_suggestion"] = "先订正本题，再做一道更基础的同类题确认是否真正理解。"
+
+        if not feedback:
+            result["overall_feedback"] = error_analysis.get("next_suggestion", "")
+
+        return result
+
     def _basic_grade_result(
         self,
         student_answer: str,
@@ -28,7 +55,7 @@ class GraderAgent(BaseAgent):
         uncertain: bool = False,
     ) -> dict:
         if uncertain:
-            return {
+            return self._with_teaching_diagnosis({
                 "overall_score": 0,
                 "is_correct": False,
                 "step_grades": [{
@@ -50,7 +77,7 @@ class GraderAgent(BaseAgent):
                 "math_verification": verification,
                 "grading_mode": "quick",
                 "needs_ai_review": True,
-            }
+            })
 
         if verification.get("is_correct"):
             score = 95 if not self._has_working_steps(student_answer) else 100
@@ -59,7 +86,7 @@ class GraderAgent(BaseAgent):
                 if score < 100
                 else "答案正确，关键步骤也比较完整。"
             )
-            return {
+            return self._with_teaching_diagnosis({
                 "overall_score": score,
                 "is_correct": True,
                 "step_grades": [{
@@ -81,9 +108,9 @@ class GraderAgent(BaseAgent):
                 "math_verification": verification,
                 "grading_mode": "quick",
                 "needs_ai_review": False,
-            }
+            })
 
-        return {
+        return self._with_teaching_diagnosis({
             "overall_score": 0,
             "is_correct": False,
             "step_grades": [{
@@ -105,7 +132,7 @@ class GraderAgent(BaseAgent):
             "math_verification": verification,
             "grading_mode": "quick",
             "needs_ai_review": True,
-        }
+        })
 
     def _apply_math_verification(
         self,
@@ -148,7 +175,7 @@ class GraderAgent(BaseAgent):
         else:
             result["overall_feedback"] = "答案正确，主要思路可以认可。继续保持，并注意书写关键步骤。"
 
-        return result
+        return self._with_teaching_diagnosis(result)
 
     async def grade(
         self,
@@ -194,7 +221,9 @@ class GraderAgent(BaseAgent):
 
         try:
             parsed = json.loads(result)
-            return self._apply_math_verification(parsed, question_content, answer, student_answer)
+            return self._with_teaching_diagnosis(
+                self._apply_math_verification(parsed, question_content, answer, student_answer)
+            )
         except json.JSONDecodeError:
             verification = math_sandbox.verify_answer(
                 question_expr=question_content,
@@ -202,7 +231,7 @@ class GraderAgent(BaseAgent):
                 expected_answer=answer,
             )
             if verification.get("is_correct"):
-                return {
+                return self._with_teaching_diagnosis({
                     "overall_score": 95,
                     "is_correct": True,
                     "step_grades": [{
@@ -222,10 +251,10 @@ class GraderAgent(BaseAgent):
                     },
                     "overall_feedback": "答案正确。当前只写了最终答案，建议补充关键步骤。",
                     "math_verification": verification,
-                }
+                })
 
             # 降级：返回基础评分
-            return {
+            return self._with_teaching_diagnosis({
                 "overall_score": 0,
                 "is_correct": False,
                 "step_grades": [],
@@ -235,7 +264,7 @@ class GraderAgent(BaseAgent):
                     "suggestion": "批改解析异常，请重试",
                 },
                 "overall_feedback": "批改结果解析失败，请重新提交。",
-            }
+            })
 
     async def quick_grade(
         self,

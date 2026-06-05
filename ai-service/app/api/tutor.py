@@ -5,14 +5,16 @@ import json
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.agents.tutor_agent import tutor_agent
 from app.agents.grader_agent import grader_agent
 from app.agents.generator_agent import generator_agent
+from app.agents.skill_workflow_agent import skill_workflow_agent
 from app.middleware.auth import verify_token
+from app.services.content_extractor import extract_content
 from app.utils.sanitizer import sanitize_text
 
 logger = logging.getLogger("familyagent.ai.api.tutor")
@@ -60,6 +62,57 @@ class GenerateRequest(BaseModel):
     difficulty: int = Field(default=3, ge=1, le=5, description="难度1-5")
     count: int = Field(default=5, ge=1, le=10, description="数量")
     additional_requirements: str = Field(default="无")
+
+
+class MistakeReviewRequest(BaseModel):
+    """错题复盘请求"""
+    question_content: str = Field(..., description="题目内容")
+    answer: str = Field(..., description="标准答案")
+    student_answer: str = Field(..., description="学生原答案")
+    steps: str = Field(default="", description="参考解题步骤")
+    grade_result: Optional[dict] = Field(default=None, description="批改结果/历史错因")
+    grade: str = Field(default="初中")
+    subject: str = Field(default="数学")
+    knowledge_point: str = Field(default="未知")
+    weak_points: list[str] = Field(default_factory=list, description="最近薄弱点")
+
+
+class DailyPracticeRequest(BaseModel):
+    """每日短练请求"""
+    knowledge_point: str = Field(..., description="今日知识点/单元")
+    grade: str = Field(default="初中")
+    subject: str = Field(default="数学")
+    mastery_level: str = Field(default="中", description="掌握程度(弱/中/强)")
+    available_minutes: int = Field(default=15, ge=5, le=60)
+    difficulty: str = Field(default="标准", description="基础/标准/提高")
+    question_count: int = Field(default=5, ge=3, le=8)
+    weak_points: list[str] = Field(default_factory=list, description="最近错题或薄弱点")
+    scenario: str = Field(default="学生自练", description="学生自练/家长陪练/老师布置")
+
+
+class ExamReviewRequest(BaseModel):
+    """测评后复习建议请求"""
+    exam_goal: str = Field(default="阶段测评提升", description="考试目标")
+    score_summary: str = Field(..., description="当前得分/正确率摘要")
+    grade: str = Field(default="初中")
+    subject: str = Field(default="数学")
+    profiles: dict = Field(default_factory=dict, description="学力档案/BKT")
+    weak_points: list[str] = Field(default_factory=list, description="薄弱知识点")
+    recent_mistakes: list[dict] = Field(default_factory=list, description="最近错题摘要")
+    available_minutes: int = Field(default=30, ge=10, le=180)
+    review_days: int = Field(default=7, ge=1, le=30)
+
+
+class StudyPlanRequest(BaseModel):
+    """学习计划请求"""
+    learning_goal: str = Field(..., description="学习目标")
+    grade: str = Field(default="初中")
+    subject: str = Field(default="数学")
+    profiles: dict = Field(default_factory=dict, description="学力档案/BKT")
+    weak_points: list[str] = Field(default_factory=list, description="薄弱知识点")
+    available_minutes: int = Field(default=30, ge=10, le=180)
+    plan_days: int = Field(default=7, ge=1, le=30)
+    constraints: str = Field(default="无", description="学习偏好/限制")
 
 
 # ============================================
@@ -208,6 +261,105 @@ async def generate_questions(request: GenerateRequest):
         return {"success": True, "questions": questions, "count": len(questions)}
     except Exception as e:
         logger.error(f"出题错误: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/skills/mistake-review")
+async def run_mistake_review(request: MistakeReviewRequest):
+    """错题复盘 workflow."""
+    try:
+        result = await skill_workflow_agent.mistake_review(
+            question_content=sanitize_text(request.question_content),
+            answer=request.answer,
+            student_answer=sanitize_text(request.student_answer),
+            steps=request.steps,
+            grade_result=request.grade_result,
+            grade=request.grade,
+            subject=request.subject,
+            knowledge_point=request.knowledge_point,
+            weak_points=request.weak_points,
+        )
+        return {"success": True, "skill": "mistake_review", "data": result}
+    except Exception as e:
+        logger.error(f"错题复盘错误: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/skills/daily-practice")
+async def run_daily_practice(request: DailyPracticeRequest):
+    """每日数学短练 workflow."""
+    try:
+        result = await skill_workflow_agent.daily_practice(
+            knowledge_point=request.knowledge_point,
+            grade=request.grade,
+            subject=request.subject,
+            mastery_level=request.mastery_level,
+            available_minutes=request.available_minutes,
+            difficulty=request.difficulty,
+            question_count=request.question_count,
+            weak_points=request.weak_points,
+            scenario=request.scenario,
+        )
+        return {"success": True, "skill": "daily_practice", "data": result}
+    except Exception as e:
+        logger.error(f"每日短练错误: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/skills/exam-review")
+async def run_exam_review(request: ExamReviewRequest):
+    """测评后复习建议 workflow."""
+    try:
+        result = await skill_workflow_agent.exam_review(
+            exam_goal=request.exam_goal,
+            score_summary=request.score_summary,
+            grade=request.grade,
+            subject=request.subject,
+            profiles=request.profiles,
+            weak_points=request.weak_points,
+            recent_mistakes=request.recent_mistakes,
+            available_minutes=request.available_minutes,
+            review_days=request.review_days,
+        )
+        return {"success": True, "skill": "exam_review", "data": result}
+    except Exception as e:
+        logger.error(f"测评复习建议错误: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/skills/study-plan")
+async def run_study_plan(request: StudyPlanRequest):
+    """学习计划 workflow."""
+    try:
+        result = await skill_workflow_agent.study_plan(
+            learning_goal=request.learning_goal,
+            grade=request.grade,
+            subject=request.subject,
+            profiles=request.profiles,
+            weak_points=request.weak_points,
+            available_minutes=request.available_minutes,
+            plan_days=request.plan_days,
+            constraints=request.constraints,
+        )
+        return {"success": True, "skill": "study_plan", "data": result}
+    except Exception as e:
+        logger.error(f"学习计划错误: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/extract")
+async def extract_uploaded_content(file: UploadFile = File(...)):
+    """Extract readable learning content from an uploaded file."""
+    try:
+        data = await file.read()
+        result = extract_content(
+            filename=file.filename or "upload",
+            content_type=file.content_type,
+            data=data,
+        )
+        return {"success": True, "data": result.to_dict()}
+    except Exception as e:
+        logger.error(f"文件内容提取失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
