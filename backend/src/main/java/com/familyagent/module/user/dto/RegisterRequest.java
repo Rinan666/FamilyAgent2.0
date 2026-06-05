@@ -21,4 +21,7 @@ public class RegisterRequest {
     private String nickname;
 
     private String email;
+
+    @NotBlank(message = "邀请码不能为空")
+    private String inviteCode;
 }

@@ -26,6 +26,9 @@ public enum ErrorCode {
     PASSWORD_ERROR(1003, "密码错误"),
     ACCOUNT_DISABLED(1004, "账号已被禁用"),
     LOGIN_FAILED(1005, "登录失败"),
+    INVITE_CODE_REQUIRED(1006, "请输入邀请码"),
+    INVITE_CODE_INVALID(1007, "邀请码无效"),
+    INVITE_CODE_EXHAUSTED(1008, "邀请码使用次数已达上限"),
 
     // 家族 2000-2999
     FAMILY_NOT_FOUND(2001, "家族不存在"),

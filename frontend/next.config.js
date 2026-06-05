@@ -1,5 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  allowedDevOrigins: [
+    'age-shadow-vitamin-ingredients.trycloudflare.com',
+    'words-lawyers-his-domain.trycloudflare.com',
+    'familyagent.cn',
+    'www.familyagent.cn',
+    'app.familyagent.cn',
+    'app.familyagentai.top',
+  ],
   images: {
     remotePatterns: [
       {

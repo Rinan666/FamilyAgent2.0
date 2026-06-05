@@ -71,6 +71,8 @@ if ($dockerOk) {
         docker exec fa-postgres psql -U fa_user -d familyagent -f /docker-entrypoint-initdb.d/01-init.sql 2>&1 | Out-Null
         docker cp "$Root\scripts\migrate-multitenant-storage.sql" fa-postgres:/tmp/migrate-multitenant-storage.sql 2>&1 | Out-Null
         docker exec fa-postgres psql -U fa_user -d familyagent -f /tmp/migrate-multitenant-storage.sql 2>&1 | Out-Null
+        docker cp "$Root\scripts\migrate-invite-codes.sql" fa-postgres:/tmp/migrate-invite-codes.sql 2>&1 | Out-Null
+        docker exec fa-postgres psql -U fa_user -d familyagent -f /tmp/migrate-invite-codes.sql 2>&1 | Out-Null
         Write-Host "       Database ready" -ForegroundColor Green
     } else {
         Write-Host "       [WARN] docker compose failed" -ForegroundColor DarkYellow

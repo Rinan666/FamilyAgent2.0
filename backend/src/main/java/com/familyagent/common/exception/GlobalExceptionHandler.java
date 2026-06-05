@@ -1,5 +1,6 @@
 package com.familyagent.common.exception;
 
+import cn.dev33.satoken.exception.NotLoginException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.response.Result;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +35,13 @@ public class GlobalExceptionHandler {
                 .collect(Collectors.joining("; "));
         log.warn("参数校验失败: {}", message);
         return Result.error(ErrorCode.PARAM_VALID_FAILED, message);
+    }
+
+    @ExceptionHandler(NotLoginException.class)
+    @ResponseStatus(HttpStatus.OK)
+    public Result<?> handleNotLoginException(NotLoginException e) {
+        log.warn("登录状态异常: {}", e.getMessage());
+        return Result.error(ErrorCode.UNAUTHORIZED);
     }
 
     @ExceptionHandler(Exception.class)

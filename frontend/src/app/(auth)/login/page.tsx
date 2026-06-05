@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { userApi } from '@/lib/api';
@@ -13,10 +13,17 @@ export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  useEffect(() => {
+    if (window.location.search.includes('registered=true')) {
+      setNotice('注册成功，请登录后开始数学诊断。');
+    }
+  }, []);
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     setError('');
     setLoading(true);
 
@@ -33,7 +40,7 @@ export default function LoginPage() {
         },
         result.token,
       );
-      router.push('/dashboard');
+      router.push('/dashboard/test');
     } catch (err: unknown) {
       if (err instanceof Error) {
         setError(err.message);
@@ -56,10 +63,15 @@ export default function LoginPage() {
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form action="javascript:void(0)" onSubmit={handleSubmit} className="space-y-4">
             {error && (
               <div className="bg-red-50 text-red-600 px-4 py-2 rounded-lg text-sm">
                 {error}
+              </div>
+            )}
+            {notice && (
+              <div className="bg-green-50 text-green-700 px-4 py-2 rounded-lg text-sm">
+                {notice}
               </div>
             )}
 
@@ -92,7 +104,8 @@ export default function LoginPage() {
             </div>
 
             <button
-              type="submit"
+              type="button"
+              onClick={() => void handleSubmit()}
               disabled={loading}
               className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
             >

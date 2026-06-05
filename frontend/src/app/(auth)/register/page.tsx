@@ -11,16 +11,17 @@ export default function RegisterPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [nickname, setNickname] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      await userApi.register({ username, password, nickname });
+      await userApi.register({ username, password, nickname, inviteCode: inviteCode.trim() });
       router.push('/login?registered=true');
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -42,7 +43,7 @@ export default function RegisterPage() {
             <p className="text-gray-500 mt-2">加入家族教育Agent</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form action="javascript:void(0)" onSubmit={handleSubmit} className="space-y-4">
             {error && (
               <div className="bg-red-50 text-red-600 px-4 py-2 rounded-lg text-sm">
                 {error}
@@ -93,8 +94,24 @@ export default function RegisterPage() {
               />
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                邀请码
+              </label>
+              <input
+                type="text"
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none uppercase"
+                placeholder="请输入内测邀请码"
+                required
+                maxLength={50}
+              />
+            </div>
+
             <button
-              type="submit"
+              type="button"
+              onClick={() => void handleSubmit()}
               disabled={loading}
               className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
             >

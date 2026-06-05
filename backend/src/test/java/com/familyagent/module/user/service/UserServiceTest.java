@@ -2,6 +2,8 @@ package com.familyagent.module.user.service;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.familyagent.common.exception.BusinessException;
+import com.familyagent.module.invite.entity.InviteCode;
+import com.familyagent.module.invite.repository.InviteCodeRepository;
 import com.familyagent.module.user.dto.LoginRequest;
 import com.familyagent.module.user.dto.LoginResponse;
 import com.familyagent.module.user.dto.RegisterRequest;
@@ -24,6 +26,7 @@ import static org.mockito.Mockito.*;
 class UserServiceTest {
 
     @Mock private UserRepository userRepository;
+    @Mock private InviteCodeRepository inviteCodeRepository;
     @InjectMocks private UserService userService;
 
     private static final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
@@ -37,7 +40,9 @@ class UserServiceTest {
         RegisterRequest req = new RegisterRequest();
         req.setUsername("testuser");
         req.setPassword("mypassword123");
+        req.setInviteCode("FAMILY001");
 
+        mockValidInviteCode("FAMILY001");
         when(userRepository.countByUsername("testuser")).thenReturn(0);
 
         userService.register(req);
@@ -51,6 +56,7 @@ class UserServiceTest {
         assertTrue(saved.getPasswordHash().startsWith("$2a$"));
         // 双重验证：用 encoder.matches 确认 hash 与原文匹配
         assertTrue(encoder.matches("mypassword123", saved.getPasswordHash()));
+        verify(inviteCodeRepository).incrementUsedCount(1L);
     }
 
     @Test
@@ -58,11 +64,14 @@ class UserServiceTest {
         RegisterRequest req = new RegisterRequest();
         req.setUsername("existing");
         req.setPassword("pass");
+        req.setInviteCode("FAMILY001");
 
+        mockValidInviteCode("FAMILY001");
         when(userRepository.countByUsername("existing")).thenReturn(1);
 
         assertThrows(BusinessException.class, () -> userService.register(req));
         verify(userRepository, never()).insert(any());
+        verify(inviteCodeRepository, never()).incrementUsedCount(anyLong());
     }
 
     @Test
@@ -70,7 +79,9 @@ class UserServiceTest {
         RegisterRequest req = new RegisterRequest();
         req.setUsername("alice");
         req.setPassword("pass");
+        req.setInviteCode("FAMILY001");
 
+        mockValidInviteCode("FAMILY001");
         when(userRepository.countByUsername("alice")).thenReturn(0);
 
         userService.register(req);
@@ -86,7 +97,9 @@ class UserServiceTest {
         RegisterRequest req = new RegisterRequest();
         req.setUsername("newbie");
         req.setPassword("pass");
+        req.setInviteCode("FAMILY001");
 
+        mockValidInviteCode("FAMILY001");
         when(userRepository.countByUsername("newbie")).thenReturn(0);
 
         userService.register(req);
@@ -95,6 +108,19 @@ class UserServiceTest {
         verify(userRepository).insert(captor.capture());
         assertEquals("USER", captor.getValue().getRole());
         assertEquals("ACTIVE", captor.getValue().getStatus());
+    }
+
+    @Test
+    void register_shouldThrowWhenInviteCodeInvalid() {
+        RegisterRequest req = new RegisterRequest();
+        req.setUsername("newbie");
+        req.setPassword("pass");
+        req.setInviteCode("BADCODE");
+
+        when(inviteCodeRepository.findByCode("BADCODE")).thenReturn(null);
+
+        assertThrows(BusinessException.class, () -> userService.register(req));
+        verify(userRepository, never()).insert(any());
     }
 
     // ============================================
@@ -170,5 +196,17 @@ class UserServiceTest {
         req.setPassword("pass");
 
         assertThrows(BusinessException.class, () -> userService.login(req));
+    }
+
+    private void mockValidInviteCode(String code) {
+        InviteCode inviteCode = new InviteCode();
+        inviteCode.setId(1L);
+        inviteCode.setCode(code);
+        inviteCode.setSource("seed-family-001");
+        inviteCode.setStatus("ACTIVE");
+        inviteCode.setMaxUses(5);
+        inviteCode.setUsedCount(0);
+        when(inviteCodeRepository.findByCode(code)).thenReturn(inviteCode);
+        lenient().when(inviteCodeRepository.incrementUsedCount(1L)).thenReturn(1);
     }
 }

@@ -4,6 +4,8 @@ import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.crypto.SecureUtil;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
+import com.familyagent.module.invite.entity.InviteCode;
+import com.familyagent.module.invite.repository.InviteCodeRepository;
 import com.familyagent.module.user.dto.LoginRequest;
 import com.familyagent.module.user.dto.LoginResponse;
 import com.familyagent.module.user.dto.RegisterRequest;
@@ -16,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 /**
  * 用户服务
@@ -29,6 +32,7 @@ import java.time.LocalDateTime;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final InviteCodeRepository inviteCodeRepository;
     private static final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
     /**
@@ -46,6 +50,9 @@ public class UserService {
 
     @Transactional
     public User register(RegisterRequest request) {
+        String inviteCodeValue = normalizeInviteCode(request.getInviteCode());
+        InviteCode inviteCode = validateInviteCode(inviteCodeValue);
+
         // 检查用户名
         if (userRepository.countByUsername(request.getUsername()) > 0) {
             throw new BusinessException(ErrorCode.USERNAME_EXISTS);
@@ -58,10 +65,41 @@ public class UserService {
         user.setEmail(request.getEmail());
         user.setRole("USER");
         user.setStatus("ACTIVE");
+        user.setMetadata(Map.of(
+                "inviteCode", inviteCode.getCode(),
+                "inviteSource", inviteCode.getSource() == null ? "" : inviteCode.getSource()
+        ));
 
         userRepository.insert(user);
+        int updated = inviteCodeRepository.incrementUsedCount(inviteCode.getId());
+        if (updated == 0) {
+            throw new BusinessException(ErrorCode.INVITE_CODE_EXHAUSTED);
+        }
         log.info("用户注册成功: username={}, id={}", user.getUsername(), user.getId());
         return user;
+    }
+
+    private String normalizeInviteCode(String inviteCode) {
+        if (inviteCode == null || inviteCode.trim().isEmpty()) {
+            throw new BusinessException(ErrorCode.INVITE_CODE_REQUIRED);
+        }
+        return inviteCode.trim().toUpperCase();
+    }
+
+    private InviteCode validateInviteCode(String inviteCodeValue) {
+        InviteCode inviteCode = inviteCodeRepository.findByCode(inviteCodeValue);
+        if (inviteCode == null || !"ACTIVE".equals(inviteCode.getStatus())) {
+            throw new BusinessException(ErrorCode.INVITE_CODE_INVALID);
+        }
+        if (inviteCode.getExpiresAt() != null && inviteCode.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new BusinessException(ErrorCode.INVITE_CODE_INVALID, "邀请码已过期");
+        }
+        if (inviteCode.getUsedCount() != null
+                && inviteCode.getMaxUses() != null
+                && inviteCode.getUsedCount() >= inviteCode.getMaxUses()) {
+            throw new BusinessException(ErrorCode.INVITE_CODE_EXHAUSTED);
+        }
+        return inviteCode;
     }
 
     public LoginResponse login(LoginRequest request) {
@@ -105,7 +143,7 @@ public class UserService {
     }
 
     public User getById(Long id) {
-        User user = userRepository.selectById(id);
+        User user = userRepository.findBasicById(id);
         if (user == null) {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
