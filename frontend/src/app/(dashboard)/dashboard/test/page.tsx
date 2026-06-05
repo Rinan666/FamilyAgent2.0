@@ -36,6 +36,8 @@ interface NormalizedGrade {
   correct: boolean;
   feedback: string;
   errorType?: string;
+  gradingMode?: string;
+  needsAiReview?: boolean;
 }
 
 interface TestDraft {
@@ -49,7 +51,7 @@ interface TestDraft {
 
 const TEST_DRAFT_STORAGE_KEY = 'familyagent:test-generator:draft:v1';
 
-const DEFAULT_REQUEST_TEXT = '生成一份初中数学测试，范围是一元一次方程和一元一次不等式，难度中等，8道题，在线文本';
+const DEFAULT_REQUEST_TEXT = '生成一份初中数学诊断，范围是一元一次方程和一元一次不等式，难度中等，8道题，在线文本';
 
 function flattenKnowledgePoints(nodes: KnowledgePoint[]): KnowledgePoint[] {
   const result: KnowledgePoint[] = [];
@@ -110,6 +112,7 @@ export default function TestGeneratorPage() {
   const [gradeResults, setGradeResults] = useState<Record<number, NormalizedGrade>>({});
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGrading, setIsGrading] = useState(false);
+  const [analyzingQuestionId, setAnalyzingQuestionId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedRecordId, setSavedRecordId] = useState<number | null>(null);
@@ -284,6 +287,8 @@ export default function TestGeneratorPage() {
     const correct = Boolean(data.is_correct ?? data.isCorrect ?? score >= 60);
     const errorAnalysis = (data.error_analysis ?? data.errorAnalysis) as Record<string, unknown> | undefined;
     const feedback = String(data.overall_feedback ?? data.overallFeedback ?? '');
+    const gradingMode = String(data.grading_mode ?? data.gradingMode ?? '');
+    const needsAiReview = Boolean(data.needs_ai_review ?? data.needsAiReview ?? false);
     const errorType = errorAnalysis
       ? String(errorAnalysis.primary_error_type ?? errorAnalysis.primaryErrorType ?? '')
       : undefined;
@@ -293,6 +298,8 @@ export default function TestGeneratorPage() {
       correct,
       feedback,
       errorType,
+      gradingMode,
+      needsAiReview,
     };
   };
 
@@ -302,24 +309,57 @@ export default function TestGeneratorPage() {
     setError(null);
     setSavedRecordId(null);
     try {
-      const nextResults: Record<number, NormalizedGrade> = {};
-      for (const question of questions) {
+      const gradedEntries = await Promise.all(questions.map(async (question) => {
         const studentAnswer = answers[question.id]?.trim() || '';
-        const raw = await tutorApi.grade({
+        const raw = await tutorApi.quickGrade({
           questionContent: question.content.stem,
           answer: question.answer.value,
           steps: (question.answer.steps || []).join('\n'),
           studentAnswer,
           subject: '数学',
-          grade: '初中',
+          grade: '',
         });
-        nextResults[question.id] = normalizeGrade(raw);
-      }
+        return [question.id, normalizeGrade(raw)] as const;
+      }));
+      const nextResults = Object.fromEntries(gradedEntries);
       setGradeResults(nextResults);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'AI 批改失败');
+      setError(err instanceof Error ? err.message : '快速批改失败');
     } finally {
       setIsGrading(false);
+    }
+  };
+
+  const analyzeQuestion = async (question: Question) => {
+    const studentAnswer = answers[question.id]?.trim() || '';
+    if (!studentAnswer) {
+      setError('请先填写答案，再查看详细分析。');
+      return;
+    }
+
+    setAnalyzingQuestionId(question.id);
+    setError(null);
+    try {
+      const raw = await tutorApi.grade({
+        questionContent: question.content.stem,
+        answer: question.answer.value,
+        steps: (question.answer.steps || []).join('\n'),
+        studentAnswer,
+        subject: '数学',
+        grade: '',
+      });
+      setGradeResults((prev) => ({
+        ...prev,
+        [question.id]: {
+          ...normalizeGrade(raw),
+          gradingMode: 'ai',
+          needsAiReview: false,
+        },
+      }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '详细 AI 分析失败');
+    } finally {
+      setAnalyzingQuestionId(null);
     }
   };
 
@@ -362,8 +402,8 @@ export default function TestGeneratorPage() {
     <div className="max-w-6xl mx-auto h-[calc(100vh-8rem)] flex flex-col">
       <div className="flex items-center justify-between mb-4 shrink-0">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">测试生成</h1>
-          <p className="text-xs text-gray-500">独立于 AI 家教对话窗口，按范围、难度和数量生成测试内容</p>
+          <h1 className="text-xl font-bold text-gray-900">数学诊断</h1>
+          <p className="text-xs text-gray-500">先完成一组诊断题，再进入 AI 家教讲解</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -528,7 +568,7 @@ export default function TestGeneratorPage() {
               className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
             >
               {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-              生成测试内容
+              生成诊断题
             </button>
 
             {error && (
@@ -536,7 +576,7 @@ export default function TestGeneratorPage() {
             )}
             {savedRecordId && (
               <p className="rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700">
-                测试记录已保存：#{savedRecordId}
+                诊断记录已保存：#{savedRecordId}
               </p>
             )}
           </div>
@@ -545,7 +585,7 @@ export default function TestGeneratorPage() {
         <section className="bg-white border border-gray-200 rounded-xl overflow-hidden flex flex-col">
           <div className="border-b border-gray-100 px-5 py-4 flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-semibold text-gray-900">测试内容预览</h2>
+              <h2 className="text-sm font-semibold text-gray-900">诊断题预览</h2>
               <p className="text-xs text-gray-400 mt-1">
                 范围：{testRequest.knowledgeScope.join('、') || selectedKnowledgeName} ·
                 难度：{testRequest.difficulty ? difficultyLabel(testRequest.difficulty) : '混合'} ·
@@ -560,8 +600,8 @@ export default function TestGeneratorPage() {
               <div className="h-full flex items-center justify-center text-center text-gray-400">
                 <div>
                   <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                  <p className="text-sm font-medium">还没有生成测试内容</p>
-                  <p className="text-xs mt-1">填写或解析测试要求后，点击生成测试内容</p>
+                  <p className="text-sm font-medium">还没有生成诊断题</p>
+                  <p className="text-xs mt-1">填写或解析诊断要求后，点击生成诊断题</p>
                 </div>
               </div>
             ) : (
@@ -613,9 +653,14 @@ export default function TestGeneratorPage() {
                           >
                             {gradeResults[question.id].correct ? '正确' : '待加强'}
                           </span>
-                          <span className="text-xs text-gray-500">
-                            {Math.round(gradeResults[question.id].score)} 分
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-gray-400">
+                              {gradeResults[question.id].gradingMode === 'ai' ? 'AI 详细分析' : '快速判分'}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {Math.round(gradeResults[question.id].score)} 分
+                            </span>
+                          </div>
                         </div>
                         {gradeResults[question.id].errorType && gradeResults[question.id].errorType !== '无' && (
                           <p className="mt-1 text-xs text-gray-500">
@@ -626,6 +671,17 @@ export default function TestGeneratorPage() {
                           <p className="mt-2 text-xs text-gray-600">
                             {gradeResults[question.id].feedback}
                           </p>
+                        )}
+                        {gradeResults[question.id].gradingMode !== 'ai' && (
+                          <button
+                            type="button"
+                            onClick={() => { void analyzeQuestion(question); }}
+                            disabled={analyzingQuestionId === question.id}
+                            className="mt-2 inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 disabled:opacity-50"
+                          >
+                            {analyzingQuestionId === question.id && <Loader2 className="w-3 h-3 animate-spin" />}
+                            查看详细 AI 分析
+                          </button>
                         )}
                       </div>
                     )}

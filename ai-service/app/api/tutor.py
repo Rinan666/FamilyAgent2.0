@@ -31,12 +31,14 @@ class ExplainRequest(BaseModel):
     steps: str = Field(default="", description="解题步骤")
     student_message: str = Field(default="我想学习这道题", description="学生消息")
     history: Optional[list[dict]] = Field(default=None, description="对话历史")
-    grade: str = Field(default="初中", description="年级")
+    grade: str = Field(default="", description="年级")
     subject: str = Field(default="数学", description="学科")
     knowledge_point: str = Field(default="未知", description="知识点")
     mastery_level: str = Field(default="中", description="掌握程度(弱/中/强)")
     common_errors: str = Field(default="无历史数据", description="常见错误类型")
     teaching_style: str = Field(default="guided", description="讲题风格: guided=引导式, direct=快速答案式")
+    mode: str = Field(default="explain", description="对话模式: explain=讲题, chat=自由对话")
+    memory_context: str = Field(default="", description="家族知识库/日记/关键事件等检索上下文")
 
 
 class GradeRequest(BaseModel):
@@ -89,6 +91,8 @@ async def explain_question(request: ExplainRequest):
                 mastery_level=request.mastery_level,
                 common_errors=request.common_errors,
                 teaching_style=request.teaching_style,
+                mode=request.mode,
+                memory_context=request.memory_context,
             ):
                 yield f"data: {json.dumps({'content': chunk})}\n\n"
 
@@ -131,6 +135,8 @@ async def explain_question_sync(request: ExplainRequest):
             mastery_level=request.mastery_level,
             common_errors=request.common_errors,
             teaching_style=request.teaching_style,
+            mode=request.mode,
+            memory_context=request.memory_context,
         )
         return {"success": True, "content": result}
     except Exception as e:
@@ -168,10 +174,12 @@ async def grade_answer(request: GradeRequest):
 async def quick_grade_answer(request: GradeRequest):
     """快速批改（轻量版）"""
     try:
+        student_answer = sanitize_text(request.student_answer)
+        question_content = sanitize_text(request.question_content)
         result = await grader_agent.quick_grade(
-            question=request.question_content,
+            question=question_content,
             answer=request.answer,
-            student_answer=request.student_answer,
+            student_answer=student_answer,
         )
         return {"success": True, "data": result}
     except Exception as e:

@@ -178,6 +178,8 @@ export interface ChatSession {
   summary?: string;
   status: 'ACTIVE' | 'ENDED';
   visibility?: string;
+  source?: string;
+  metadata?: Record<string, unknown>;
   startedAt: string;
   endedAt?: string;
 }

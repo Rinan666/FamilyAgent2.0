@@ -9,7 +9,7 @@
 import { useCallback } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import { tutorApi } from '@/lib/api';
-import type { Question } from '@/types';
+import type { ChatMessage, Question } from '@/types';
 
 interface UseChatOptions {
   /** 根据 kpId 获取学生对该知识点的掌握等级 */
@@ -19,6 +19,8 @@ interface UseChatOptions {
   /** 讲题风格：引导式或快速答案式 */
   teachingStyle?: 'guided' | 'direct';
   getTeachingStyle?: () => 'guided' | 'direct';
+  persistMessages?: (messages: ChatMessage[], question: Question) => Promise<void> | void;
+  persistChatMessages?: (messages: ChatMessage[]) => Promise<void> | void;
 }
 
 export function useChat(options: UseChatOptions = {}) {
@@ -38,7 +40,29 @@ export function useChat(options: UseChatOptions = {}) {
     getKnowledgePoint = () => '',
     teachingStyle = 'guided',
     getTeachingStyle,
+    persistMessages,
+    persistChatMessages,
   } = options;
+
+  const persistSafely = useCallback(
+    (question: Question) => {
+      void Promise.resolve(persistMessages?.(useChatStore.getState().messages, question))
+        .catch((error: unknown) => {
+          console.log('Chat session not persisted:', error);
+        });
+    },
+    [persistMessages],
+  );
+
+  const persistChatSafely = useCallback(
+    () => {
+      void Promise.resolve(persistChatMessages?.(useChatStore.getState().messages))
+        .catch((error: unknown) => {
+          console.log('Chat session not persisted:', error);
+        });
+    },
+    [persistChatMessages],
+  );
 
   const makeBody = useCallback(
     (question: Question, studentMessage: string) => {
@@ -77,14 +101,18 @@ export function useChat(options: UseChatOptions = {}) {
       tutorApi.explainStream(
         makeBody(question, studentMessage),
         (chunk) => appendToLastMessage(chunk),
-        () => setStreaming(false),
+        () => {
+          setStreaming(false);
+          persistSafely(question);
+        },
         (error) => {
           appendToLastMessage(`\n\n[错误] ${error}`);
           setStreaming(false);
+          persistSafely(question);
         },
       );
     },
-    [isStreaming, makeBody, addMessage, appendToLastMessage, setStreaming, setCurrentQuestion],
+    [isStreaming, makeBody, addMessage, appendToLastMessage, setStreaming, setCurrentQuestion, persistSafely],
   );
 
   /**
@@ -101,14 +129,70 @@ export function useChat(options: UseChatOptions = {}) {
       tutorApi.explainStream(
         makeBody(currentQuestion, message),
         (chunk) => appendToLastMessage(chunk),
-        () => setStreaming(false),
+        () => {
+          setStreaming(false);
+          persistSafely(currentQuestion);
+        },
         (error) => {
           appendToLastMessage(`\n\n[错误] ${error}`);
           setStreaming(false);
+          persistSafely(currentQuestion);
         },
       );
     },
-    [isStreaming, currentQuestion, makeBody, addMessage, appendToLastMessage, setStreaming],
+    [isStreaming, currentQuestion, makeBody, addMessage, appendToLastMessage, setStreaming, persistSafely],
+  );
+
+  /**
+   * 发送自由对话消息（不绑定某一道题）
+   */
+  const sendFreeMessage = useCallback(
+    async (message: string) => {
+      if (isStreaming) return;
+
+      const history = useChatStore.getState().messages
+        .filter((m) => m.role !== 'system')
+        .map((m) => ({ role: m.role, content: m.content }));
+
+      addMessage('user', message);
+      addMessage('assistant', '');
+      setStreaming(true);
+
+      tutorApi.explainStream(
+        {
+          questionContent: '',
+          answer: '',
+          steps: '',
+          studentMessage: message,
+          history,
+          subject: '数学',
+          grade: '',
+          knowledgePoint: '',
+          masteryLevel: '中',
+          teachingStyle: getTeachingStyle?.() || teachingStyle,
+          mode: 'chat',
+        },
+        (chunk) => appendToLastMessage(chunk),
+        () => {
+          setStreaming(false);
+          persistChatSafely();
+        },
+        (error) => {
+          appendToLastMessage(`\n\n[错误] ${error}`);
+          setStreaming(false);
+          persistChatSafely();
+        },
+      );
+    },
+    [
+      isStreaming,
+      addMessage,
+      appendToLastMessage,
+      setStreaming,
+      getTeachingStyle,
+      teachingStyle,
+      persistChatSafely,
+    ],
   );
 
   return {
@@ -117,6 +201,7 @@ export function useChat(options: UseChatOptions = {}) {
     currentQuestion,
     askQuestion,
     sendMessage,
+    sendFreeMessage,
     reset,
   };
 }

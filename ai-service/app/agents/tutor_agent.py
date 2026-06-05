@@ -52,6 +52,25 @@ class TutorAgent(BaseAgent):
             context += tutor_prompts.GUIDED_STYLE_OVERRIDE
         return context
 
+    def _build_chat_context(
+        self,
+        grade: str = "初中",
+        subject: str = "数学",
+        knowledge_point: str = "未知",
+        mastery_level: str = "中",
+        common_errors: str = "无历史数据",
+        memory_context: str = "暂无已检索到的长期记忆或家族知识库上下文。",
+    ) -> str:
+        """构建普通对话上下文"""
+        return tutor_prompts.CHAT_SYSTEM_PROMPT.format(
+            grade=grade or "未设置",
+            subject=subject,
+            knowledge_point=knowledge_point,
+            mastery_level=mastery_level,
+            common_errors=common_errors,
+            memory_context=memory_context or "暂无已检索到的长期记忆或家族知识库上下文。",
+        )
+
     async def explain(
         self,
         question_content: str,
@@ -65,6 +84,8 @@ class TutorAgent(BaseAgent):
         mastery_level: str = "中",
         common_errors: str = "无历史数据",
         teaching_style: str = "guided",
+        mode: str = "explain",
+        memory_context: str = "",
     ) -> str:
         """
         讲题（非流式）
@@ -81,30 +102,40 @@ class TutorAgent(BaseAgent):
             mastery_level: 掌握程度
             common_errors: 常见错误类型
         """
-        context = self._build_context(
-            question_content, answer, steps,
-            grade, subject, knowledge_point,
-            mastery_level, common_errors, teaching_style,
-        )
-
-        # 每次请求都携带完整题目上下文，避免历史对话续聊时丢失题目和讲题风格。
-        if teaching_style == "direct":
-            messages = [
-                {"role": "system", "content": context},
-                {"role": "system", "content": tutor_prompts.DIRECT_STYLE_OVERRIDE},
-                {"role": "user", "content": student_message},
-            ]
-        elif not history:
-            messages = [
-                {"role": "system", "content": context},
-                {"role": "user", "content": student_message},
-            ]
+        if mode == "chat":
+            context = self._build_chat_context(
+                grade, subject, knowledge_point,
+                mastery_level, common_errors, memory_context,
+            )
+            messages = [{"role": "system", "content": context}]
+            if history:
+                messages.extend(history)
+            messages.append({"role": "user", "content": student_message})
         else:
-            messages = [
-                {"role": "system", "content": context},
-                *history,
-                {"role": "user", "content": student_message},
-            ]
+            context = self._build_context(
+                question_content, answer, steps,
+                grade, subject, knowledge_point,
+                mastery_level, common_errors, teaching_style,
+            )
+
+            # 每次请求都携带完整题目上下文，避免历史对话续聊时丢失题目和讲题风格。
+            if teaching_style == "direct":
+                messages = [
+                    {"role": "system", "content": context},
+                    {"role": "system", "content": tutor_prompts.DIRECT_STYLE_OVERRIDE},
+                    {"role": "user", "content": student_message},
+                ]
+            elif not history:
+                messages = [
+                    {"role": "system", "content": context},
+                    {"role": "user", "content": student_message},
+                ]
+            else:
+                messages = [
+                    {"role": "system", "content": context},
+                    *history,
+                    {"role": "user", "content": student_message},
+                ]
 
         return await llm_client.chat(messages, temperature=0.7)
 
@@ -121,35 +152,47 @@ class TutorAgent(BaseAgent):
         mastery_level: str = "中",
         common_errors: str = "无历史数据",
         teaching_style: str = "guided",
+        mode: str = "explain",
+        memory_context: str = "",
     ) -> AsyncIterator[str]:
         """
         讲题（流式输出）
 
         使用SSE推送，前端实现打字机效果
         """
-        context = self._build_context(
-            question_content, answer, steps,
-            grade, subject, knowledge_point,
-            mastery_level, common_errors, teaching_style,
-        )
-
-        if teaching_style == "direct":
-            messages = [
-                {"role": "system", "content": context},
-                {"role": "system", "content": tutor_prompts.DIRECT_STYLE_OVERRIDE},
-                {"role": "user", "content": student_message},
-            ]
-        elif not history:
-            messages = [
-                {"role": "system", "content": context},
-                {"role": "user", "content": student_message},
-            ]
+        if mode == "chat":
+            context = self._build_chat_context(
+                grade, subject, knowledge_point,
+                mastery_level, common_errors, memory_context,
+            )
+            messages = [{"role": "system", "content": context}]
+            if history:
+                messages.extend(history)
+            messages.append({"role": "user", "content": student_message})
         else:
-            messages = [
-                {"role": "system", "content": context},
-                *history,
-                {"role": "user", "content": student_message},
-            ]
+            context = self._build_context(
+                question_content, answer, steps,
+                grade, subject, knowledge_point,
+                mastery_level, common_errors, teaching_style,
+            )
+
+            if teaching_style == "direct":
+                messages = [
+                    {"role": "system", "content": context},
+                    {"role": "system", "content": tutor_prompts.DIRECT_STYLE_OVERRIDE},
+                    {"role": "user", "content": student_message},
+                ]
+            elif not history:
+                messages = [
+                    {"role": "system", "content": context},
+                    {"role": "user", "content": student_message},
+                ]
+            else:
+                messages = [
+                    {"role": "system", "content": context},
+                    *history,
+                    {"role": "user", "content": student_message},
+                ]
 
         async for chunk in llm_client.chat_stream(messages, temperature=0.7):
             yield chunk

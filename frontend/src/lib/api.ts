@@ -14,7 +14,7 @@ import type {
   User, Family, FamilyMember,
   Question, KnowledgePoint, QuestionAnswer, QuestionContent,
   AbilityProfile, TestRecord,
-  ChatSession, GradeResult, PageResult, SubmitTestRequest, CreateQuestionRequest,
+  ChatMessage, ChatSession, GradeResult, PageResult, SubmitTestRequest, CreateQuestionRequest,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
@@ -107,6 +107,17 @@ function normalizeTags(value: unknown): string[] {
 
 function normalizeQuestions(questions: Question[] | undefined | null): Question[] {
   return (questions || []).map(normalizeQuestion);
+}
+
+function normalizeSession(raw: ChatSession): ChatSession {
+  return {
+    ...raw,
+    messages: parseJsonField<ChatMessage[]>(raw.messages, []),
+  };
+}
+
+function normalizeSessions(sessions: ChatSession[] | undefined | null): ChatSession[] {
+  return (sessions || []).map(normalizeSession);
 }
 
 async function aiRequest<T>(path: string, body: unknown): Promise<T> {
@@ -249,9 +260,25 @@ export const assessmentApi = {
 // 会话
 // ============================================
 export const sessionApi = {
-  getSession: (id: number) => request<ChatSession>(`/sessions/${id}`),
-  getUserSessions: (_userId?: number, limit = 20) => request<ChatSession[]>(`/sessions/user/me?limit=${limit}`),
-  getActiveSessions: (_userId?: number) => request<ChatSession[]>('/sessions/active/me'),
+  createSession: (data: {
+    familyId?: number; questionId?: number; subject?: string; knowledgePointId?: number;
+    messages?: ChatMessage[]; visibility?: string; source?: string; metadata?: Record<string, unknown>;
+  }) => request<ChatSession>('/sessions', { method: 'POST', body: JSON.stringify(data) }).then(normalizeSession),
+  getSession: (id: number) => request<ChatSession>(`/sessions/${id}`).then(normalizeSession),
+  getUserSessions: (_userId?: number, limit = 20) =>
+    request<ChatSession[]>(`/sessions/user/me?limit=${limit}`).then(normalizeSessions),
+  getActiveSessions: (_userId?: number) => request<ChatSession[]>('/sessions/active/me').then(normalizeSessions),
+  updateMessages: (id: number, messages: ChatMessage[]) =>
+    request<ChatSession>(`/sessions/${id}/messages`, {
+      method: 'PUT',
+      body: JSON.stringify({ messages }),
+    }).then(normalizeSession),
+  endSession: (id: number, summary?: string) =>
+    request<ChatSession>(`/sessions/${id}/end`, {
+      method: 'POST',
+      body: JSON.stringify({ summary }),
+    }).then(normalizeSession),
+  deleteSession: (id: number) => request<void>(`/sessions/${id}`, { method: 'DELETE' }),
 };
 
 // ============================================
@@ -261,7 +288,8 @@ export const tutorApi = {
   explainStream: (
     body: { questionContent: string; answer: string; steps: string; studentMessage: string;
             history?: { role: string; content: string }[]; grade?: string; subject?: string;
-            knowledgePoint?: string; masteryLevel?: string; teachingStyle?: 'guided' | 'direct'; },
+            knowledgePoint?: string; masteryLevel?: string; teachingStyle?: 'guided' | 'direct';
+            mode?: 'explain' | 'chat'; memoryContext?: string; },
     onChunk: (chunk: string) => void, onDone: () => void, onError: (error: string) => void,
   ) => sseRequest('/tutor/explain', {
     question_content: body.questionContent,
@@ -269,11 +297,13 @@ export const tutorApi = {
     steps: body.steps,
     student_message: body.studentMessage,
     history: body.history,
-    grade: body.grade || '初中',
+    grade: body.grade || '',
     subject: body.subject || '数学',
     knowledge_point: body.knowledgePoint || '',
     mastery_level: body.masteryLevel || '中',
     teaching_style: body.teachingStyle || 'guided',
+    mode: body.mode || 'explain',
+    memory_context: body.memoryContext || '',
   }, onChunk, onDone, onError),
 
   grade: (body: { questionContent: string; answer: string; steps: string;
@@ -285,6 +315,17 @@ export const tutorApi = {
       student_answer: body.studentAnswer,
       subject: body.subject || '数学',
       grade: body.grade || '初中',
+    }),
+
+  quickGrade: (body: { questionContent: string; answer: string; steps?: string;
+                        studentAnswer: string; subject?: string; grade?: string; }) =>
+    aiRequest<{ success: boolean; data: GradeResult }>('/tutor/grade/quick', {
+      question_content: body.questionContent,
+      answer: body.answer,
+      steps: body.steps || '',
+      student_answer: body.studentAnswer,
+      subject: body.subject || '数学',
+      grade: body.grade || '',
     }),
 
   generateQuestions: (body: { subject: string; grade: string; knowledgePoint: string;

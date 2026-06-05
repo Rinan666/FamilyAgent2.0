@@ -1,7 +1,6 @@
 """
 贝叶斯知识追踪引擎测试
 """
-import pytest
 from app.engine.knowledge_tracker import BayesianKnowledgeTracker
 
 

@@ -20,6 +20,93 @@ class GraderAgent(BaseAgent):
         separators = ["\n", "=>", "->", "所以", "因为", "先", "再"]
         return any(separator in student_answer for separator in separators)
 
+    def _basic_grade_result(
+        self,
+        student_answer: str,
+        verification: dict,
+        *,
+        uncertain: bool = False,
+    ) -> dict:
+        if uncertain:
+            return {
+                "overall_score": 0,
+                "is_correct": False,
+                "step_grades": [{
+                    "step_number": 1,
+                    "step_name": "快速判分",
+                    "student_work": student_answer,
+                    "is_correct": False,
+                    "score": 0,
+                    "max_score": 100,
+                    "error_type": "理解偏差",
+                    "feedback": "快速判分无法确认答案是否正确，建议查看详细分析或人工复核。",
+                }],
+                "error_analysis": {
+                    "primary_error_type": "需要复核",
+                    "knowledge_gaps": [],
+                    "suggestion": "当前答案无法通过规则或数学等价性直接判断，建议使用详细 AI 分析。",
+                },
+                "overall_feedback": "快速判分暂时无法确认结果，请查看详细分析。",
+                "math_verification": verification,
+                "grading_mode": "quick",
+                "needs_ai_review": True,
+            }
+
+        if verification.get("is_correct"):
+            score = 95 if not self._has_working_steps(student_answer) else 100
+            feedback = (
+                "答案正确。当前只写了最终答案，建议补充关键步骤。"
+                if score < 100
+                else "答案正确，关键步骤也比较完整。"
+            )
+            return {
+                "overall_score": score,
+                "is_correct": True,
+                "step_grades": [{
+                    "step_number": 1,
+                    "step_name": "最终答案",
+                    "student_work": student_answer,
+                    "is_correct": True,
+                    "score": score,
+                    "max_score": 100,
+                    "error_type": "无" if score == 100 else "步骤遗漏",
+                    "feedback": feedback,
+                }],
+                "error_analysis": {
+                    "primary_error_type": "无",
+                    "knowledge_gaps": [],
+                    "suggestion": "继续保持。正式测试中建议保留关键步骤，便于复盘。",
+                },
+                "overall_feedback": feedback,
+                "math_verification": verification,
+                "grading_mode": "quick",
+                "needs_ai_review": False,
+            }
+
+        return {
+            "overall_score": 0,
+            "is_correct": False,
+            "step_grades": [{
+                "step_number": 1,
+                "step_name": "最终答案",
+                "student_work": student_answer,
+                "is_correct": False,
+                "score": 0,
+                "max_score": 100,
+                "error_type": "答案不符",
+                "feedback": "答案与标准答案不一致。若你写了完整过程，可以查看详细分析定位具体错误。",
+            }],
+            "error_analysis": {
+                "primary_error_type": "答案不符",
+                "knowledge_gaps": [],
+                "suggestion": "先核对最终答案；若过程复杂，再查看详细 AI 分析。",
+            },
+            "overall_feedback": "答案暂未通过快速判分。",
+            "math_verification": verification,
+            "grading_mode": "quick",
+            "needs_ai_review": True,
+        }
+
     def _apply_math_verification(
         self,
         result: dict,
@@ -156,21 +243,25 @@ class GraderAgent(BaseAgent):
         answer: str,
         student_answer: str,
     ) -> dict:
-        """快速批改（轻量版，用于简单题目）"""
-        from app.llm.client import llm_client
+        """快速批改（规则 + sympy，不调用LLM）"""
+        if not student_answer.strip():
+            return self._basic_grade_result(
+                student_answer,
+                {"is_correct": False, "method": "empty_answer"},
+                uncertain=False,
+            )
 
-        prompt = grader_prompts.QUICK_GRADE_PROMPT.format(
-            question=question,
-            answer=answer,
+        verification = math_sandbox.verify_answer(
+            question_expr=question,
             student_answer=student_answer,
+            expected_answer=answer,
         )
 
-        result = await llm_client.chat(
-            [{"role": "user", "content": prompt}],
-            temperature=0.2,
-            max_tokens=1024,
+        return self._basic_grade_result(
+            student_answer,
+            verification,
+            uncertain=verification.get("method") == "math_or_string_compare" and not verification.get("is_correct"),
         )
-        return {"result": result}
 
 
 # 全局单例
