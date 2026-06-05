@@ -3,6 +3,7 @@ package com.familyagent.module.assessment.controller;
 import com.familyagent.common.response.Result;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.assessment.dto.SubmitTestRequest;
+import com.familyagent.module.assessment.dto.TestRecordDetailVO;
 import com.familyagent.module.assessment.entity.AbilityProfile;
 import com.familyagent.module.assessment.entity.TestRecord;
 import com.familyagent.module.assessment.service.AssessmentService;
@@ -71,5 +72,11 @@ public class AssessmentController {
     public Result<TestRecord> submitTest(@Valid @RequestBody SubmitTestRequest request) {
         request.setUserId(CurrentUserGuard.currentUserId());
         return Result.success(assessmentService.submitTest(request));
+    }
+
+    @Operation(summary = "获取测试记录详情")
+    @GetMapping("/tests/{id}/detail")
+    public Result<TestRecordDetailVO> getMyTestRecordDetail(@PathVariable Long id) {
+        return Result.success(assessmentService.getTestRecordDetail(CurrentUserGuard.currentUserId(), id));
     }
 }

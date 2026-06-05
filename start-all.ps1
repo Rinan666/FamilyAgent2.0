@@ -73,6 +73,8 @@ if ($dockerOk) {
         docker exec fa-postgres psql -U fa_user -d familyagent -f /tmp/migrate-multitenant-storage.sql 2>&1 | Out-Null
         docker cp "$Root\scripts\migrate-invite-codes.sql" fa-postgres:/tmp/migrate-invite-codes.sql 2>&1 | Out-Null
         docker exec fa-postgres psql -U fa_user -d familyagent -f /tmp/migrate-invite-codes.sql 2>&1 | Out-Null
+        docker cp "$Root\scripts\migrate-wrong-question-records.sql" fa-postgres:/tmp/migrate-wrong-question-records.sql 2>&1 | Out-Null
+        docker exec fa-postgres psql -U fa_user -d familyagent -f /tmp/migrate-wrong-question-records.sql 2>&1 | Out-Null
         Write-Host "       Database ready" -ForegroundColor Green
     } else {
         Write-Host "       [WARN] docker compose failed" -ForegroundColor DarkYellow
@@ -94,7 +96,7 @@ Write-Host "       Backend window opened" -ForegroundColor Green
 # ── 4. Frontend (port 3000) ──
 Write-Host ""
 Write-Host "[4/4] Starting Frontend (port 3000)..." -ForegroundColor Yellow
-Start-ServiceOnPort 3000 "Frontend" "$Root\frontend" "echo Frontend http://localhost:3000 && npm run dev"
+Start-ServiceOnPort 3000 "Frontend" "$Root\frontend" "echo Frontend http://localhost:3000 && npm run build && npm run start"
 Write-Host "       Frontend window opened" -ForegroundColor Green
 
 # ── Done ──

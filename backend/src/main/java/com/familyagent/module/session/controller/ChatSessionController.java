@@ -62,9 +62,10 @@ public class ChatSessionController {
     @PostMapping("/{id}/end")
     public Result<ChatSession> endSession(
             @PathVariable Long id,
+            @RequestHeader(value = "Authorization", required = false) String authorization,
             @RequestBody(required = false) EndChatSessionRequest request) {
         String summary = request == null ? null : request.getSummary();
-        return Result.success(sessionService.endSession(id, summary));
+        return Result.success(sessionService.endSession(id, summary, authorization));
     }
 
     @Operation(summary = "删除会话")

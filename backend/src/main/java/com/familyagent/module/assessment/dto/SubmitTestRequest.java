@@ -39,6 +39,14 @@ public class SubmitTestRequest {
 
         private Boolean correct;
 
+        private String errorType;
+
+        private String feedback;
+
+        private String parentExplanation;
+
+        private String nextSuggestion;
+
         private Integer timeSpent;
     }
 }

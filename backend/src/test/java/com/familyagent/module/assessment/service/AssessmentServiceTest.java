@@ -5,9 +5,12 @@ import com.familyagent.infra.ai.AIServiceClient;
 import com.familyagent.module.assessment.dto.SubmitTestRequest;
 import com.familyagent.module.assessment.entity.AbilityProfile;
 import com.familyagent.module.assessment.entity.TestRecord;
+import com.familyagent.module.assessment.entity.WrongQuestionRecord;
 import com.familyagent.module.assessment.repository.AbilityProfileRepository;
 import com.familyagent.module.assessment.repository.TestRecordRepository;
+import com.familyagent.module.assessment.repository.WrongQuestionRecordRepository;
 import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.question.repository.QuestionRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,7 +32,9 @@ import static org.mockito.Mockito.*;
 class AssessmentServiceTest {
 
     @Mock private TestRecordRepository testRecordRepository;
+    @Mock private WrongQuestionRecordRepository wrongQuestionRecordRepository;
     @Mock private AbilityProfileRepository abilityProfileRepository;
+    @Mock private QuestionRepository questionRepository;
     @Mock private AIServiceClient aiServiceClient;
     @Mock private FamilyService familyService;
     @Spy private ObjectMapper objectMapper = new ObjectMapper();
@@ -139,6 +144,10 @@ class AssessmentServiceTest {
         second.setAnswer("x > 5");
         second.setScore(40.0);
         second.setCorrect(false);
+        second.setErrorType("理解偏差");
+        second.setFeedback("不等号方向和边界需要复核。");
+        second.setParentExplanation("孩子对不等式解集边界理解还不稳定。");
+        second.setNextSuggestion("先订正本题，再做一道同类基础题。");
         second.setTimeSpent(45);
 
         SubmitTestRequest request = new SubmitTestRequest();
@@ -157,6 +166,12 @@ class AssessmentServiceTest {
                 "delta", 0.1,
                 "fallback", false
             ));
+        when(testRecordRepository.insertSubmitted(any(), anyList(), anyString(), anyString(), anyString(), anyList()))
+            .thenAnswer(invocation -> {
+                TestRecord saved = invocation.getArgument(0);
+                saved.setId(500L);
+                return 1;
+            });
 
         TestRecord record = assessmentService.submitTest(request);
 
@@ -176,6 +191,21 @@ class AssessmentServiceTest {
             eq(List.of(30, 45))
         );
         verify(testRecordRepository, never()).insert(any());
+        ArgumentCaptor<WrongQuestionRecord> wrongCaptor = ArgumentCaptor.forClass(WrongQuestionRecord.class);
+        verify(wrongQuestionRecordRepository).insertOrUpdate(wrongCaptor.capture());
+        WrongQuestionRecord wrongRecord = wrongCaptor.getValue();
+        assertEquals(1L, wrongRecord.getUserId());
+        assertEquals(2L, wrongRecord.getFamilyId());
+        assertEquals(500L, wrongRecord.getTestRecordId());
+        assertEquals(102L, wrongRecord.getQuestionId());
+        assertEquals(7L, wrongRecord.getKpId());
+        assertEquals("x > 5", wrongRecord.getStudentAnswer());
+        assertEquals(40.0, wrongRecord.getScore(), 0.0001);
+        assertEquals("理解偏差", wrongRecord.getErrorType());
+        assertEquals("不等号方向和边界需要复核。", wrongRecord.getFeedback());
+        assertEquals("孩子对不等式解集边界理解还不稳定。", wrongRecord.getParentExplanation());
+        assertEquals("先订正本题，再做一道同类基础题。", wrongRecord.getNextSuggestion());
+        assertEquals("OPEN", wrongRecord.getStatus());
         verify(familyService).checkMembership(2L);
         verify(abilityProfileRepository, times(2)).insert(any());
     }
