@@ -150,6 +150,25 @@ public class AIServiceClient {
     }
 
     /**
+     * Generate an embedding vector for backend-owned memory indexing.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> embedText(Map<String, Object> request) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+
+            ResponseEntity<Map> response = restTemplate.postForEntity(
+                    baseUrl + "/ai/embedding/embed", entity, Map.class);
+            return response.getBody();
+        } catch (Exception e) {
+            log.warn("Embedding service call failed: {}", e.getMessage());
+            return Map.of("success", false, "error", e.getMessage());
+        }
+    }
+
+    /**
      * BKT知识追踪更新 — 调用Python BKT引擎
      * Python是BKT算法的唯一权威来源
      */

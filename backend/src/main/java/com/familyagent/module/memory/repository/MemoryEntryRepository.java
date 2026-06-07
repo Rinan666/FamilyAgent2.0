@@ -3,6 +3,7 @@ package com.familyagent.module.memory.repository;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
 import java.util.List;
@@ -17,7 +18,58 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
         ORDER BY importance DESC, updated_at DESC
         LIMIT #{limit}
         """)
-    List<MemoryEntry> findActiveByUserId(Long userId, int limit);
+    List<MemoryEntry> findActiveByUserId(@Param("userId") Long userId, @Param("limit") int limit);
+
+    @Select("""
+        SELECT * FROM memory_entries
+        WHERE family_id = #{familyId}
+          AND status = 'ACTIVE'
+          AND type IN ('FAMILY_STORY', 'ELDER_ADVICE', 'HEALTH_REMINDER', 'GROWTH_RISK', 'VALUE')
+          AND (
+            scope = 'FAMILY_VISIBLE'
+            OR user_id = #{viewerUserId}
+            OR (
+              scope IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
+              AND EXISTS (
+                SELECT 1 FROM family_members fm
+                WHERE fm.family_id = memory_entries.family_id
+                  AND fm.user_id = #{viewerUserId}
+                  AND fm.role IN ('OWNER', 'ADMIN')
+              )
+            )
+            OR (
+              scope IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
+              AND EXISTS (
+                SELECT 1 FROM care_authorizations ca
+                WHERE ca.family_id = memory_entries.family_id
+                  AND ca.subject_user_id = memory_entries.user_id
+                  AND ca.caregiver_user_id = #{viewerUserId}
+                  AND ca.status = 'ACTIVE'
+                  AND ca.scope IN ('ALL', 'DIARY', 'GROWTH_GUARD')
+                  AND (ca.expires_at IS NULL OR ca.expires_at > NOW())
+              )
+            )
+          )
+        ORDER BY importance DESC, updated_at DESC
+        LIMIT #{limit}
+        """)
+    List<MemoryEntry> findActiveFamilyMemories(
+            @Param("familyId") Long familyId,
+            @Param("viewerUserId") Long viewerUserId,
+            @Param("limit") int limit);
+
+    @Select("""
+        SELECT * FROM memory_entries
+        WHERE family_id = #{familyId}
+          AND status = 'ACTIVE'
+          AND metadata->>'source' = 'DIARY_PROMOTION'
+          AND metadata->>'sourceDiaryId' = #{sourceDiaryId}
+        ORDER BY created_at DESC
+        LIMIT 1
+        """)
+    MemoryEntry findActiveBySourceDiaryId(
+            @Param("familyId") Long familyId,
+            @Param("sourceDiaryId") String sourceDiaryId);
 
     @Select("""
         SELECT * FROM memory_entries
@@ -31,5 +83,21 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
           updated_at DESC
         LIMIT #{limit}
         """)
-    List<MemoryEntry> recall(Long userId, String subject, Long knowledgePointId, int limit);
+    List<MemoryEntry> recall(
+            @Param("userId") Long userId,
+            @Param("subject") String subject,
+            @Param("knowledgePointId") Long knowledgePointId,
+            @Param("limit") int limit);
+
+    @Select("""
+        SELECT * FROM memory_entries
+        WHERE family_id = #{familyId}
+          AND status = 'ACTIVE'
+          AND type IN ('FAMILY_STORY', 'ELDER_ADVICE', 'HEALTH_REMINDER', 'GROWTH_RISK', 'VALUE')
+        ORDER BY updated_at DESC
+        LIMIT #{limit}
+        """)
+    List<MemoryEntry> findActiveByFamilyForIndexing(
+            @Param("familyId") Long familyId,
+            @Param("limit") int limit);
 }

@@ -88,7 +88,7 @@ GRADE_RESULT_SCHEMA = {
                         },
                         "parent_explanation": {
                             "type": "string",
-                            "description": "给家长看的简短解释，说明孩子主要卡在哪里",
+                            "description": "给家长看的简短解释，说明学习者主要卡在哪里",
                         },
                         "next_suggestion": {
                             "type": "string",

@@ -492,7 +492,7 @@ export default function TestGeneratorPage() {
       <div className="mb-4 flex shrink-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <h1 className="text-lg font-bold text-gray-900 sm:text-xl">数学诊断</h1>
-          <p className="text-xs text-gray-500">先完成一组诊断题，再进入 AI 家教讲解</p>
+          <p className="text-xs text-gray-500">先完成一组诊断题，再进入学习陪伴讲解</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button

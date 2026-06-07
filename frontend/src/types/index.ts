@@ -24,8 +24,15 @@ export interface LoginResponse {
   username: string;
   nickname: string;
   avatarUrl?: string;
+  role?: string;
+  status?: string;
   token: string;
   tokenName: string;
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
 }
 
 export interface RegisterRequest {
@@ -55,9 +62,82 @@ export interface FamilyMember {
   username?: string;
   nickname?: string;
   avatarUrl?: string;
-  role: 'OWNER' | 'ADMIN' | 'MEMBER' | 'GUEST';
+  role: 'OWNER' | 'ADMIN' | 'GUARDIAN' | 'MEMBER' | 'STUDENT' | 'GUEST';
+  relationshipLabel?: string;
+  reverseRelationshipLabel?: string;
   joinedAt: string;
 }
+
+export interface FamilyRelationship {
+  id: number;
+  familyId: number;
+  fromUserId: number;
+  toUserId: number;
+  label: string;
+  reverseLabel?: string;
+  note?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CareAuthorizationScope = 'ALL' | 'GROWTH_GUARD' | string;
+export type CareAuthorizationStatus = 'ACTIVE' | 'REVOKED' | string;
+
+export interface CareAuthorization {
+  id: number;
+  familyId: number;
+  subjectUserId: number;
+  caregiverUserId: number;
+  scope: CareAuthorizationScope;
+  status: CareAuthorizationStatus;
+  expiresAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// --- 家族日记 / 人生记录 ---
+export type DiaryEntryType =
+  | 'DAILY'
+  | 'IMPORTANT_EVENT'
+  | 'LESSON'
+  | 'EMOTION'
+  | 'MESSAGE_TO_FAMILY'
+  | 'SELF_REFLECTION';
+
+export type DiaryVisibility = 'PRIVATE' | 'FAMILY_VISIBLE' | 'CARE_VISIBLE' | 'LEGACY_VISIBLE';
+
+export interface DiaryEntry {
+  id: number;
+  userId: number;
+  familyId?: number;
+  rawText: string;
+  structured?: {
+    entryType?: DiaryEntryType | string;
+    title?: string;
+    summary?: string;
+    [key: string]: unknown;
+  };
+  mood?: string;
+  tags?: string[];
+  privacyLevel?: string;
+  visibility: DiaryVisibility | string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface CreateDiaryEntryRequest {
+  familyId: number;
+  content: string;
+  entryType?: DiaryEntryType;
+  title?: string;
+  mood?: string;
+  tags?: string[];
+  visibility?: DiaryVisibility;
+  metadata?: Record<string, unknown>;
+}
+
+export type UpdateDiaryEntryRequest = Omit<CreateDiaryEntryRequest, 'familyId'>;
 
 // --- 题库 ---
 export interface KnowledgePoint {
@@ -230,8 +310,8 @@ export interface MemoryEntry {
   familyId?: number;
   subject?: string;
   knowledgePointId?: number;
-  type: 'LEARNING' | 'MISTAKE' | 'PREFERENCE' | 'PLAN' | string;
-  scope: string;
+  type: MemoryEntryType;
+  scope: MemoryScope | string;
   content: string;
   summary?: string;
   importance: number;
@@ -241,6 +321,179 @@ export interface MemoryEntry {
   metadata?: Record<string, unknown>;
   createdAt: string;
   updatedAt?: string;
+}
+
+export type MemoryEntryType =
+  | 'LEARNING'
+  | 'MISTAKE'
+  | 'PREFERENCE'
+  | 'PLAN'
+  | 'FAMILY_STORY'
+  | 'ELDER_ADVICE'
+  | 'HEALTH_REMINDER'
+  | 'GROWTH_RISK'
+  | 'VALUE'
+  | string;
+
+export type MemoryScope = 'PRIVATE' | 'PARENT_VISIBLE' | 'CARE_VISIBLE' | 'FAMILY_VISIBLE';
+
+export interface FamilyMemoryCard {
+  title: string;
+  theme: string;
+  summary: string;
+  risk_points: string[];
+  action_suggestions: string[];
+  suitable_for: string[];
+  sensitivity: 'LOW' | 'MEDIUM' | 'HIGH' | string;
+  safety_note: string;
+}
+
+export interface CreateFamilyMemoryRequest {
+  familyId: number;
+  content: string;
+  type?: MemoryEntryType;
+  scope?: MemoryScope;
+  summary?: string;
+  importance?: number;
+  memoryCard?: FamilyMemoryCard;
+  metadata?: Record<string, unknown>;
+}
+
+export type AgentSaveTool = 'NONE' | 'DIARY' | 'FAMILY_MEMORY' | 'GROWTH_GUARD';
+
+export interface AgentSaveToolPlan {
+  should_save: boolean;
+  tool: AgentSaveTool;
+  content: string;
+  title: string;
+  summary: string;
+  visibility: DiaryVisibility | MemoryScope | string;
+  entry_type: DiaryEntryType | string;
+  memory_type: MemoryEntryType;
+  scope: MemoryScope | string;
+  category: GrowthGuardCategory | string;
+  severity: number;
+  importance: number;
+  tags: string[];
+  reason: string;
+  confirmation_message: string;
+}
+
+export type AgentDraftScene = 'DIARY' | 'HERITAGE' | 'GROWTH_GUARD';
+
+export interface AgentOrganizedDraft {
+  title: string;
+  content: string;
+  tags: string[];
+  diary_entry_type: DiaryEntryType | string;
+  diary_visibility: DiaryVisibility | string;
+  memory_type: MemoryEntryType;
+  memory_scope: MemoryScope | string;
+  growth_category: GrowthGuardCategory | string;
+  growth_severity: number;
+  scenario: string;
+  reason: string;
+}
+
+export type GrowthGuardCategory =
+  | 'POSTURE'
+  | 'DENTAL'
+  | 'VISION'
+  | 'SLEEP'
+  | 'EXERCISE'
+  | 'SCREEN_TIME'
+  | 'EMOTION'
+  | 'COMMUNICATION'
+  | 'OTHER';
+
+export type GrowthFollowUpStatus = 'PENDING' | 'WATCHING' | 'IMPROVED' | 'ARCHIVED';
+
+export interface GrowthGuardRecord {
+  id: number;
+  familyId: number;
+  targetUserId?: number;
+  createdBy: number;
+  category: GrowthGuardCategory | string;
+  content: string;
+  severity: number;
+  observedAt: string;
+  followUpAt?: string;
+  visibility: MemoryScope | string;
+  status: 'ACTIVE' | 'ARCHIVED' | string;
+  metadata?: Record<string, unknown> & { followUpStatus?: GrowthFollowUpStatus | string };
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface CreateGrowthGuardRecordRequest {
+  familyId: number;
+  targetUserId?: number;
+  category: GrowthGuardCategory;
+  content: string;
+  severity?: number;
+  observedAt?: string;
+  followUpAt?: string;
+  visibility?: MemoryScope;
+  metadata?: Record<string, unknown>;
+}
+
+export interface WeeklyGrowthReport {
+  title: string;
+  summary: string;
+  affirmations?: string[];
+  concerns?: string[];
+  signals: string[];
+  family_experience_refs: string[];
+  suggested_actions: string[];
+  follow_up_questions: string[];
+  safety_note: string;
+}
+
+export interface GrowthGuardReport {
+  id: number;
+  familyId: number;
+  targetUserId?: number;
+  createdBy: number;
+  weekStart: string;
+  weekEnd: string;
+  title: string;
+  summary?: string;
+  visibility: MemoryScope | string;
+  status: 'ACTIVE' | 'ARCHIVED' | string;
+  report: WeeklyGrowthReport | Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface CreateGrowthGuardReportRequest {
+  familyId: number;
+  targetUserId?: number;
+  weekStart?: string;
+  weekEnd?: string;
+  title: string;
+  summary?: string;
+  visibility?: MemoryScope;
+  report: WeeklyGrowthReport;
+  metadata?: Record<string, unknown>;
+}
+
+export interface MirrorContextResponse {
+  familyId: number;
+  viewerUserId: number;
+  targetMember: FamilyMember;
+  diaries: DiaryEntry[];
+  memories: MemoryEntry[];
+  mirrorProfile?: Record<string, unknown>;
+  memoryContext: string;
+  disclaimer: string;
+  insufficientRecords: boolean;
+  sourceSummary?: string;
+  retrievalMode?: string;
+  retrievalQuery?: string;
+  embeddingReadyCount?: number;
+  suggestedQuestions?: string[];
+  missingRecordSuggestions?: string[];
 }
 
 export interface TutorExtractResult {

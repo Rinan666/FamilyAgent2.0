@@ -23,8 +23,13 @@ class Settings(BaseSettings):
     claude_api_key: Optional[str] = None
     deepseek_api_key: Optional[str] = None
     openai_api_key: Optional[str] = None
+    dashscope_api_key: Optional[str] = None
+    dashscope_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    dashscope_multimodal_url: str = "https://dashscope.aliyuncs.com/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding"
     default_llm_model: str = "deepseek/deepseek-chat"
     fallback_llm_model: str = "deepseek/deepseek-chat"
+    embedding_model: str = "dashscope-multimodal/tongyi-embedding-vision-flash-2026-03-06"
+    embedding_dimension: int = 1536
 
     # 数据库
     db_host: str = "localhost"
@@ -66,6 +71,8 @@ class Settings(BaseSettings):
             os.environ["ANTHROPIC_API_KEY"] = self.claude_api_key
         if self.openai_api_key and not os.environ.get("OPENAI_API_KEY"):
             os.environ["OPENAI_API_KEY"] = self.openai_api_key
+        if self.dashscope_api_key and not os.environ.get("DASHSCOPE_API_KEY"):
+            os.environ["DASHSCOPE_API_KEY"] = self.dashscope_api_key
 
 
 settings = Settings()

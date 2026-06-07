@@ -1,230 +1,336 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/stores/authStore';
-import { familyApi, questionApi } from '@/lib/api';
+import { diaryApi, familyApi, growthGuardApi, memoryApi } from '@/lib/api';
+import { useViewerRole } from '@/hooks/useViewerRole';
+import { isPlatformAdmin } from '@/lib/roles';
+import type { DiaryEntry, FamilyMember, GrowthGuardRecord, MemoryEntry } from '@/types';
 import {
-  GraduationCap, BarChart3, Users, BookOpen, ArrowRight,
-  Layers, Clock, ClipboardList, BookX, Sparkles,
+  ArrowRight,
+  Bot,
+  BookHeart,
+  BookOpen,
+  CheckCircle,
+  HeartPulse,
+  Loader2,
+  ScrollText,
+  Sparkles,
+  Users,
 } from 'lucide-react';
 
+function memberName(member?: FamilyMember) {
+  if (!member) return '家族成员';
+  return member.relationshipLabel?.trim() || member.nickname?.trim() || member.username?.trim() || `用户 ${member.userId}`;
+}
+
+function diaryTitle(entry: DiaryEntry) {
+  return entry.structured?.title || entry.structured?.summary || entry.rawText.slice(0, 30) || '未命名记录';
+}
+
+function memoryTitle(memory: MemoryEntry) {
+  return memory.summary || memory.content.slice(0, 30) || '未命名经验';
+}
+
+function followUpStatus(record: GrowthGuardRecord) {
+  return String(record.metadata?.followUpStatus || 'PENDING').toUpperCase();
+}
+
+function isPendingGrowth(record: GrowthGuardRecord) {
+  const status = followUpStatus(record);
+  return status !== 'IMPROVED' && status !== 'ARCHIVED';
+}
+
+function recentDate(value?: string) {
+  if (!value) return '';
+  return new Date(value).toLocaleDateString('zh-CN');
+}
+
 export default function DashboardPage() {
-  const user = useAuthStore((s) => s.user);
-  const [stats, setStats] = useState({ families: 0, questions: 0, sessions: 0 });
-  const [families, setFamilies] = useState<{ id: number; name: string; inviteCode?: string }[]>([]);
+  const user = useAuthStore((state) => state.user);
+  const { families, activeFamilyId, activeFamily, viewerRole, isLoading: loadingFamilies } = useViewerRole();
+  const [members, setMembers] = useState<FamilyMember[]>([]);
+  const [diaries, setDiaries] = useState<DiaryEntry[]>([]);
+  const [memories, setMemories] = useState<MemoryEntry[]>([]);
+  const [growthRecords, setGrowthRecords] = useState<GrowthGuardRecord[]>([]);
+  const [loadingData, setLoadingData] = useState(false);
+  const platformAdmin = isPlatformAdmin(user);
 
   useEffect(() => {
-    // 加载家族数据
-    familyApi.getMyFamilies()
-      .then((data) => {
-        const list = Array.isArray(data) ? data : [];
-        setFamilies(list);
-        setStats((s) => ({ ...s, families: list.length }));
-      })
-      .catch(() => {});
+    if (!activeFamilyId) {
+      setMembers([]);
+      setDiaries([]);
+      setMemories([]);
+      setGrowthRecords([]);
+      return;
+    }
 
-    // 加载题库数据
-    questionApi.listQuestions({ page: 1, size: 1 })
-      .then((data) => {
-        setStats((s) => ({ ...s, questions: data?.total || 0 }));
+    let active = true;
+    setLoadingData(true);
+    Promise.all([
+      familyApi.getMembers(activeFamilyId).catch(() => [] as FamilyMember[]),
+      diaryApi.listFamilyEntries(activeFamilyId, 12).catch(() => [] as DiaryEntry[]),
+      memoryApi.listFamilyMemories(activeFamilyId, 12).catch(() => [] as MemoryEntry[]),
+      growthGuardApi.listFamilyRecords(activeFamilyId, 20).catch(() => [] as GrowthGuardRecord[]),
+    ])
+      .then(([memberList, diaryList, memoryList, growthList]) => {
+        if (!active) return;
+        setMembers(Array.isArray(memberList) ? memberList : []);
+        setDiaries(Array.isArray(diaryList) ? diaryList : []);
+        setMemories(Array.isArray(memoryList) ? memoryList : []);
+        setGrowthRecords(Array.isArray(growthList) ? growthList : []);
       })
-      .catch(() => {});
-  }, []);
+      .finally(() => {
+        if (active) setLoadingData(false);
+      });
 
-  const quickLinks = [
-    { href: '/dashboard/tutor', label: 'AI家教', icon: GraduationCap, color: 'bg-blue-50 text-blue-700 hover:bg-blue-100' },
-    { href: '/dashboard/test', label: '数学诊断', icon: ClipboardList, color: 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100' },
-    { href: '/dashboard/notebook', label: '错题复盘', icon: BookX, color: 'bg-red-50 text-red-700 hover:bg-red-100' },
-    { href: '/dashboard/assessment', label: '能力评估', icon: BarChart3, color: 'bg-green-50 text-green-700 hover:bg-green-100' },
-    { href: '/dashboard/knowledge', label: '题库资源', icon: BookOpen, color: 'bg-orange-50 text-orange-700 hover:bg-orange-100' },
-    { href: '/dashboard/family', label: '家族空间', icon: Users, color: 'bg-purple-50 text-purple-700 hover:bg-purple-100' },
+    return () => {
+      active = false;
+    };
+  }, [activeFamilyId]);
+
+  const pendingGrowth = useMemo(
+    () => growthRecords.filter(isPendingGrowth),
+    [growthRecords],
+  );
+  const sparseMembers = useMemo(() => {
+    return members
+      .map((member) => {
+        const diaryCount = diaries.filter((entry) => entry.userId === member.userId).length;
+        return { member, diaryCount };
+      })
+      .filter((item) => item.diaryCount < 2)
+      .slice(0, 3);
+  }, [diaries, members]);
+
+  const todayActions = [
+    {
+      href: `/dashboard/diary?template=choice${activeFamilyId ? `&familyId=${activeFamilyId}` : ''}`,
+      title: '补一条重要选择',
+      desc: '让镜像理解真实决策方式',
+      icon: BookHeart,
+      color: 'bg-blue-50 text-blue-700 hover:bg-blue-100',
+    },
+    {
+      href: `/dashboard/diary?template=family-message${activeFamilyId ? `&familyId=${activeFamilyId}` : ''}`,
+      title: '给家人留一句话',
+      desc: '沉淀关系和表达方式',
+      icon: Sparkles,
+      color: 'bg-rose-50 text-rose-700 hover:bg-rose-100',
+    },
+    {
+      href: `/dashboard/heritage?type=ELDER_ADVICE&scenario=${encodeURIComponent('长者经验')}${activeFamilyId ? `&familyId=${activeFamilyId}` : ''}`,
+      title: '补一条长者经验',
+      desc: '把经验教训变成家族软资产',
+      icon: ScrollText,
+      color: 'bg-amber-50 text-amber-700 hover:bg-amber-100',
+    },
+    {
+      href: `/dashboard/growth?category=VISION${activeFamilyId ? `&familyId=${activeFamilyId}` : ''}`,
+      title: '补一条成长观察',
+      desc: '记录视力、体态、睡眠等信号',
+      icon: HeartPulse,
+      color: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100',
+    },
   ];
 
-  const mainActions = [
-    {
-      href: '/dashboard/tutor',
-      title: 'AI家教',
-      desc: '讲题、追问、整理思路',
-      icon: GraduationCap,
-      color: 'bg-blue-600 text-white',
-    },
-    {
-      href: '/dashboard/test',
-      title: '数学诊断',
-      desc: '生成一组练习题',
-      icon: ClipboardList,
-      color: 'bg-indigo-50 text-indigo-700',
-    },
-    {
-      href: '/dashboard/notebook',
-      title: '错题复盘',
-      desc: '回看最近薄弱点',
-      icon: BookX,
-      color: 'bg-red-50 text-red-700',
-    },
-  ];
+  if (loadingFamilies) {
+    return (
+      <div className="flex h-60 items-center justify-center text-gray-400">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+        加载中...
+      </div>
+    );
+  }
+
+  if (families.length === 0) {
+    return (
+      <div className="mx-auto max-w-3xl rounded-lg border border-gray-200 bg-white p-10 text-center">
+        <Users className="mx-auto mb-3 h-10 w-10 text-gray-300" />
+        <h1 className="text-lg font-semibold text-gray-900">先创建一个家族空间</h1>
+        <p className="mt-2 text-sm text-gray-500">FamilyAgent 以家族空间为单位沉淀日记、经验、成长守护和镜像参考。</p>
+        <Link
+          href="/dashboard/family"
+          className="mt-5 inline-flex h-10 items-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          前往家族空间
+        </Link>
+      </div>
+    );
+  }
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="mx-auto w-full max-w-7xl">
       <section className="mb-4 rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
-            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-700">
               <Sparkles className="h-3.5 w-3.5" />
-              今日学习
+              家族记忆建设
             </div>
             <h1 className="text-2xl font-bold text-gray-900">
-              你好，{user?.nickname || user?.username || '用户'}
+              {activeFamily?.name || '家族空间'}驾驶舱
             </h1>
             <p className="mt-1 text-sm text-gray-500">
-              从一道题开始，把卡点讲清楚。
+              今天的重点不是多打开一个功能，而是补足能让家族 AI 更懂这个家庭的真实记录。
             </p>
           </div>
-          <div className="hidden rounded-xl bg-gray-50 px-3 py-2 text-right sm:block">
-            <p className="text-xs text-gray-400">今日可用</p>
-            <p className="text-xl font-bold text-green-600">∞</p>
+          <div className="grid grid-cols-4 gap-2 text-center">
+            <div className="rounded-lg bg-rose-50 px-3 py-2">
+              <p className="text-lg font-bold text-rose-700">{diaries.length}</p>
+              <p className="text-[11px] text-rose-600">人生记录</p>
+            </div>
+            <div className="rounded-lg bg-amber-50 px-3 py-2">
+              <p className="text-lg font-bold text-amber-700">{memories.length}</p>
+              <p className="text-[11px] text-amber-600">家族经验</p>
+            </div>
+            <div className="rounded-lg bg-emerald-50 px-3 py-2">
+              <p className="text-lg font-bold text-emerald-700">{pendingGrowth.length}</p>
+              <p className="text-[11px] text-emerald-600">待跟进</p>
+            </div>
+            <div className="rounded-lg bg-purple-50 px-3 py-2">
+              <p className="text-lg font-bold text-purple-700">{members.length}</p>
+              <p className="text-[11px] text-purple-600">成员</p>
+            </div>
           </div>
         </div>
-
-        <Link
-          href="/dashboard/tutor"
-          className="mt-4 flex h-12 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
-        >
-          <GraduationCap className="h-5 w-5" />
-          进入 AI 家教
-        </Link>
       </section>
 
-      <div className="mb-4 grid grid-cols-3 gap-2">
-        {mainActions.map((action) => {
-          const Icon = action.icon;
-          return (
-            <Link
-              key={action.href}
-              href={action.href}
-              className={`flex min-h-24 flex-col justify-between rounded-xl p-3 transition-colors ${action.color}`}
-            >
-              <Icon className="h-5 w-5" />
-              <span>
-                <span className="block text-sm font-semibold">{action.title}</span>
-                <span className="mt-1 hidden text-xs opacity-75 sm:block">{action.desc}</span>
-              </span>
-            </Link>
-          );
-        })}
-      </div>
-
-      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
-        <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
-          <div className="mb-2 flex items-center gap-2">
-            <Users className="h-4 w-4 text-purple-500" />
-            <span className="text-xs text-gray-500">我的家族</span>
-          </div>
-          <div className="text-xl font-bold text-gray-900 sm:text-2xl">{stats.families}</div>
+      {loadingData && (
+        <div className="mb-4 flex items-center rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-400">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          正在整理家族记忆状态...
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
-          <div className="mb-2 flex items-center gap-2">
-            <Layers className="h-4 w-4 text-blue-500" />
-            <span className="text-xs text-gray-500">题库数量</span>
-          </div>
-          <div className="text-xl font-bold text-gray-900 sm:text-2xl">{stats.questions}</div>
-        </div>
-        <div className="col-span-2 rounded-xl border border-gray-200 bg-white p-3 sm:p-4 lg:col-span-1">
-          <div className="mb-2 flex items-center gap-2">
-            <Clock className="h-4 w-4 text-green-500" />
-            <span className="text-xs text-gray-500">今日可用</span>
-          </div>
-          <div className="text-xl font-bold text-green-600 sm:text-2xl">∞</div>
-        </div>
-      </div>
+      )}
 
       <section className="mb-4 rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-900">常用入口</h2>
-          <Link href="/dashboard/settings" className="text-xs text-gray-400 hover:text-gray-600">
-            设置
-          </Link>
+          <h2 className="text-sm font-semibold text-gray-900">今日建议记录</h2>
+          <span className="text-xs text-gray-400">低门槛输入，高价值输出</span>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
-          {quickLinks.map((link) => {
-            const Icon = link.icon;
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {todayActions.map((action) => {
+            const Icon = action.icon;
             return (
               <Link
-                key={link.href}
-                href={link.href}
-                className={`flex min-h-14 items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors sm:flex-col sm:justify-center sm:gap-1 sm:text-center ${link.color}`}
+                key={action.href}
+                href={action.href}
+                className={`flex min-h-24 flex-col justify-between rounded-lg border border-transparent p-3 transition-colors ${action.color}`}
               >
-                <Icon className="h-4 w-4 shrink-0" />
-                <span className="truncate">{link.label}</span>
+                <Icon className="h-5 w-5" />
+                <span>
+                  <span className="block text-sm font-semibold">{action.title}</span>
+                  <span className="mt-1 block text-xs opacity-80">{action.desc}</span>
+                </span>
               </Link>
             );
           })}
         </div>
       </section>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.25fr_0.75fr]">
-        {/* 核心功能 */}
-        <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
-          <h3 className="font-semibold text-gray-900 mb-3 text-sm">核心功能</h3>
-          <div className="space-y-2">
-            {[
-              { icon: GraduationCap, title: 'AI家教', desc: '苏格拉底式讲题 · 自适应学习', href: '/dashboard/tutor', color: 'bg-blue-500' },
-              { icon: ClipboardList, title: '测试生成', desc: '按范围 · 难度 · 数量生成测试', href: '/dashboard/test', color: 'bg-indigo-500' },
-              { icon: BarChart3, title: '学力评估', desc: '知识图谱 · 掌握概率可视化', href: '/dashboard/assessment', color: 'bg-green-500' },
-              { icon: BookOpen, title: '题库/知识库', desc: '测试题源 · 多学科与家族经验资源', href: '/dashboard/knowledge', color: 'bg-orange-500' },
-            ].map((f) => (
-              <Link key={f.href} href={f.href}
-                className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors group">
-                <div className={`${f.color} p-2 rounded-lg`}>
-                  <f.icon className="w-4 h-4 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-gray-900">{f.title}</div>
-                  <div className="text-xs text-gray-400">{f.desc}</div>
-                </div>
-                <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-blue-500 shrink-0" />
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        {/* 我的家族 */}
-        <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-gray-900 text-sm">我的家族</h3>
-            <Link href="/dashboard/family" className="text-xs text-blue-600 hover:underline">
-              管理
+      <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+        <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-900">镜像资料提醒</h2>
+            <Link href="/dashboard/mirror" className="text-xs text-blue-600 hover:underline">
+              进入镜像 Agent
             </Link>
           </div>
-          {families.length === 0 ? (
-            <div className="text-center py-6">
-              <Users className="w-8 h-8 text-gray-200 mx-auto mb-2" />
-              <p className="text-sm text-gray-400 mb-3">还没有加入家族</p>
-              <Link href="/dashboard/family"
-                className="px-4 py-2 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700">
-                创建第一个家族
-              </Link>
+          {sparseMembers.length === 0 ? (
+            <div className="rounded-lg bg-green-50 p-4 text-sm text-green-700">
+              <CheckCircle className="mb-2 h-5 w-5" />
+              当前成员的基础记录比较充足，可以继续通过镜像 Agent 测试回答质量。
             </div>
           ) : (
             <div className="space-y-2">
-              {families.map((f) => (
-                <div key={f.id} className="flex flex-col gap-2 p-3 bg-gray-50 rounded-lg sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <div className="w-8 h-8 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center text-sm font-bold">
-                      {f.name.charAt(0)}
-                    </div>
-                    <span className="truncate text-sm font-medium text-gray-900">{f.name}</span>
+              {sparseMembers.map(({ member, diaryCount }) => (
+                <div key={member.userId} className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 p-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-gray-900">{memberName(member)}</p>
+                    <p className="mt-0.5 text-xs text-gray-400">授权日记约 {diaryCount} 条，镜像参考可能偏弱</p>
                   </div>
-                  {f.inviteCode && (
-                    <span className="text-[10px] text-gray-400 font-mono">{f.inviteCode}</span>
-                  )}
+                  <Link
+                    href={`/dashboard/mirror?familyId=${activeFamilyId || ''}&targetUserId=${member.userId}`}
+                    className="inline-flex h-8 shrink-0 items-center rounded-lg bg-purple-50 px-3 text-xs font-medium text-purple-700 hover:bg-purple-100"
+                  >
+                    查看
+                  </Link>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </section>
+
+        <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-900">最近家族动态</h2>
+            <Link href="/dashboard/diary" className="text-xs text-blue-600 hover:underline">
+              查看全部
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {diaries.slice(0, 3).map((entry) => (
+              <Link key={`d-${entry.id}`} href="/dashboard/diary" className="block rounded-lg border border-gray-100 p-3 hover:bg-gray-50">
+                <div className="mb-1 flex items-center gap-2">
+                  <BookHeart className="h-4 w-4 text-rose-500" />
+                  <span className="truncate text-sm font-medium text-gray-900">{diaryTitle(entry)}</span>
+                </div>
+                <p className="line-clamp-2 text-xs leading-5 text-gray-500">{entry.rawText}</p>
+                <p className="mt-1 text-[11px] text-gray-400">{recentDate(entry.createdAt)}</p>
+              </Link>
+            ))}
+            {memories.slice(0, 2).map((memory) => (
+              <Link key={`m-${memory.id}`} href="/dashboard/heritage" className="block rounded-lg border border-gray-100 p-3 hover:bg-gray-50">
+                <div className="mb-1 flex items-center gap-2">
+                  <ScrollText className="h-4 w-4 text-amber-500" />
+                  <span className="truncate text-sm font-medium text-gray-900">{memoryTitle(memory)}</span>
+                </div>
+                <p className="line-clamp-2 text-xs leading-5 text-gray-500">{memory.content}</p>
+                <p className="mt-1 text-[11px] text-gray-400">{recentDate(memory.createdAt)}</p>
+              </Link>
+            ))}
+            {diaries.length === 0 && memories.length === 0 && (
+              <div className="rounded-lg border border-dashed border-gray-200 p-6 text-center">
+                <BookHeart className="mx-auto mb-2 h-8 w-8 text-gray-300" />
+                <p className="text-sm text-gray-500">这个家族还没有可见记录，从一条人生记录开始。</p>
+              </div>
+            )}
+          </div>
+        </section>
       </div>
+
+      <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-900">常用入口</h2>
+          <Link href="/dashboard/family" className="text-xs text-blue-600 hover:underline">
+            家族空间
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          {[
+            { href: '/dashboard/diary', label: '家族日记', icon: BookHeart, color: 'bg-rose-50 text-rose-700 hover:bg-rose-100' },
+            { href: '/dashboard/mirror', label: '镜像 Agent', icon: Bot, color: 'bg-purple-50 text-purple-700 hover:bg-purple-100' },
+            { href: '/dashboard/heritage', label: '家族经验', icon: ScrollText, color: 'bg-amber-50 text-amber-700 hover:bg-amber-100' },
+            { href: '/dashboard/growth', label: '成长守护', icon: HeartPulse, color: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' },
+            { href: '/dashboard/family', label: '家族成员', icon: Users, color: 'bg-sky-50 text-sky-700 hover:bg-sky-100' },
+            ...(platformAdmin ? [{ href: '/dashboard/knowledge', label: '题库资源', icon: BookOpen, color: 'bg-orange-50 text-orange-700 hover:bg-orange-100' }] : []),
+          ].map((item) => {
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex min-h-14 items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${item.color}`}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="truncate">{item.label}</span>
+                <ArrowRight className="ml-auto h-3.5 w-3.5 opacity-50" />
+              </Link>
+            );
+          })}
+        </div>
+      </section>
     </div>
   );
 }

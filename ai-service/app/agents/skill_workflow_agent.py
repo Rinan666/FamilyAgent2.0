@@ -132,7 +132,7 @@ class SkillWorkflowAgent(BaseAgent):
             "error_pattern": self._text(data.get("error_pattern"), "暂未形成稳定错误模式。"),
             "similar_question_suggestions": self._string_list(data.get("similar_question_suggestions")),
             "spaced_review_plan": review_plan,
-            "parent_explanation": self._text(data.get("parent_explanation"), "建议结合孩子原答案复盘关键步骤。"),
+            "parent_explanation": self._text(data.get("parent_explanation"), "建议结合学习者原答案复盘关键步骤。"),
             "missing_info": self._string_list(data.get("missing_info")),
         }
 

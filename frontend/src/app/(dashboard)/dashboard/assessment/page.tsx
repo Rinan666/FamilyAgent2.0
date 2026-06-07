@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { assessmentApi, questionApi, tutorApi } from '@/lib/api';
+import { assessmentApi, familyApi, questionApi, tutorApi } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
+import { useViewerRole } from '@/hooks/useViewerRole';
 import { formatDate, masteryColor, masteryLevel } from '@/lib/utils';
-import type { AbilityProfile, ExamReviewResult, KnowledgePoint, Question, StudyPlanResult, TestRecord, TestRecordDetail } from '@/types';
+import type { AbilityProfile, ExamReviewResult, FamilyMember, KnowledgePoint, Question, StudyPlanResult, TestRecord, TestRecordDetail } from '@/types';
 import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   Radar, ResponsiveContainer, Tooltip,
@@ -53,26 +54,94 @@ export default function AssessmentPage() {
   const [isGeneratingStudyPlan, setIsGeneratingStudyPlan] = useState(false);
   const [aiActionError, setAiActionError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [learnerOptions, setLearnerOptions] = useState<FamilyMember[]>([]);
+  const [selectedTargetUserId, setSelectedTargetUserId] = useState<number | null>(null);
+  const [requestedTargetUserId, setRequestedTargetUserId] = useState<number | null>(null);
+  const [requestedFamilyId, setRequestedFamilyId] = useState<number | null>(null);
 
   const userId = useAuthStore((s) => s.user?.id);
+  const { viewerRole, families, activeFamilyId, setActiveFamilyId } = useViewerRole();
+  const canSelectLearner = viewerRole === 'PARENT' || viewerRole === 'ADMIN';
+  const effectiveUserId = canSelectLearner ? selectedTargetUserId : userId;
+  const selectedLearner = learnerOptions.find((member) => member.userId === selectedTargetUserId);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const rawUserId = params.get('userId');
+    const rawFamilyId = params.get('familyId');
+    const parsedUserId = rawUserId ? Number(rawUserId) : null;
+    const parsedFamilyId = rawFamilyId ? Number(rawFamilyId) : null;
+    setRequestedTargetUserId(parsedUserId && Number.isFinite(parsedUserId) ? parsedUserId : null);
+    setRequestedFamilyId(parsedFamilyId && Number.isFinite(parsedFamilyId) ? parsedFamilyId : null);
+  }, []);
+
+  useEffect(() => {
+    if (!requestedFamilyId || !families.some((family) => family.id === requestedFamilyId)) return;
+    if (activeFamilyId !== requestedFamilyId) {
+      setActiveFamilyId(requestedFamilyId);
+    }
+  }, [activeFamilyId, families, requestedFamilyId, setActiveFamilyId]);
+
+  useEffect(() => {
+    if (!userId || !canSelectLearner || !activeFamilyId) {
+      setLearnerOptions([]);
+      setSelectedTargetUserId(null);
+      return;
+    }
+
+    let cancelled = false;
+    familyApi.getMembers(activeFamilyId)
+      .then((members) => {
+        if (cancelled) return;
+        const learners = (Array.isArray(members) ? members : [])
+          .filter((member) => member.role === 'STUDENT')
+          .filter((member, index, list) => list.findIndex((item) => item.userId === member.userId) === index);
+        setLearnerOptions(learners);
+        setSelectedTargetUserId((current) => {
+          if (current && learners.some((member) => member.userId === current)) return current;
+          if (requestedTargetUserId && learners.some((member) => member.userId === requestedTargetUserId)) {
+            return requestedTargetUserId;
+          }
+          return learners[0]?.userId ?? null;
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLearnerOptions([]);
+          setSelectedTargetUserId(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeFamilyId, canSelectLearner, requestedTargetUserId, userId]);
 
   const loadAll = useCallback(async () => {
+    if (!effectiveUserId) return;
     setLoading(true);
     try {
+      const isOwnReport = effectiveUserId === userId;
       const [profileData, historyData] = await Promise.all([
-        assessmentApi.getProfiles(userId!),
-        assessmentApi.getHistory(userId!, 10),
+        isOwnReport ? assessmentApi.getProfiles(userId) : assessmentApi.getProfilesForUser(effectiveUserId),
+        isOwnReport ? assessmentApi.getHistory(userId, 10) : assessmentApi.getHistoryForUser(effectiveUserId, 10),
       ]);
       setProfiles(profileData || []);
       setTestHistory(historyData || []);
       setLoading(false);
 
-      void questionApi.getWrongQuestions(userId!, 20)
-        .then((wrongData) => setWrongQuestions(wrongData || []))
-        .catch(() => setWrongQuestions([]));
+      if (isOwnReport) {
+        void questionApi.getWrongQuestions(userId, 20)
+          .then((wrongData) => setWrongQuestions(wrongData || []))
+          .catch(() => setWrongQuestions([]));
+      } else {
+        setWrongQuestions([]);
+      }
 
       if (historyData?.[0]?.id) {
-        void assessmentApi.getTestDetail(historyData[0].id)
+        void (isOwnReport
+          ? assessmentApi.getTestDetail(historyData[0].id)
+          : assessmentApi.getTestDetailForUser(effectiveUserId, historyData[0].id))
           .then(setLatestDetail)
           .catch(() => setLatestDetail(null));
       } else {
@@ -98,15 +167,19 @@ export default function AssessmentPage() {
     } finally {
       // Auxiliary data is intentionally loaded in the background above.
     }
-  }, [userId]);
+  }, [effectiveUserId, userId]);
 
   useEffect(() => {
-    if (userId) {
+    if (effectiveUserId) {
       loadAll();
     } else {
+      setProfiles([]);
+      setTestHistory([]);
+      setLatestDetail(null);
+      setWrongQuestions([]);
       setLoading(false);
     }
-  }, [userId, loadAll]);
+  }, [effectiveUserId, loadAll]);
 
   // Statistics
   const mastered = profiles.filter((p) => p.masteryProbability >= 0.85).length;
@@ -240,7 +313,7 @@ export default function AssessmentPage() {
         suggestions.push(`优先复习 ${weakNames.join('、')}。`);
       }
       if (wrongCount > 0) {
-        suggestions.push(`从错题本选择 ${Math.min(3, wrongCount)} 道题，让孩子先复述思路再看 AI 讲解。`);
+        suggestions.push(`从错题本选择 ${Math.min(3, wrongCount)} 道题，让学习者先复述思路再看 AI 讲解。`);
       }
       if (savedSuggestion) {
         suggestions.push(savedSuggestion);
@@ -361,8 +434,30 @@ export default function AssessmentPage() {
   return (
     <div className="max-w-5xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">能力评估</h1>
-        <p className="text-sm text-gray-500">顶层能力树 + 智育学科诊断；当前仅数学诊断数据已接入</p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">{canSelectLearner ? '学习报告' : '能力评估'}</h1>
+            <p className="text-sm text-gray-500">顶层能力树 + 智育学科诊断；当前仅数学诊断数据已接入</p>
+          </div>
+          {canSelectLearner && (
+            <label className="flex flex-col gap-1 text-xs text-gray-500 sm:min-w-56">
+              当前学习者
+              <select
+                value={selectedTargetUserId ?? ''}
+                onChange={(event) => setSelectedTargetUserId(Number(event.target.value) || null)}
+                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {learnerOptions.length === 0 ? (
+                  <option value="">暂无可查看学习者</option>
+                ) : learnerOptions.map((member) => (
+                  <option key={member.userId} value={member.userId}>
+                    {member.nickname || member.username || `用户 ${member.userId}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
       </div>
 
       {/* Stats cards */}
@@ -391,6 +486,11 @@ export default function AssessmentPage() {
               <h2 className="font-semibold text-gray-900">家长反馈摘要</h2>
             </div>
             <p className="text-sm text-gray-700">{parentSummary.level}</p>
+            {canSelectLearner && selectedLearner && (
+              <p className="mt-1 text-xs text-gray-500">
+                当前查看：{selectedLearner.nickname || selectedLearner.username || `用户 ${selectedLearner.userId}`}
+              </p>
+            )}
             <div className="mt-3 flex flex-wrap gap-2 text-xs">
               <span className="rounded border border-blue-100 bg-white px-2 py-1 text-gray-600">
                 最近测试：{parentSummary.latestScore == null ? '未完成' : `${scoreLabel(parentSummary.latestScore)} 分`}

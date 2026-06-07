@@ -20,6 +20,14 @@ public interface UserRepository extends BaseMapper<User> {
     User findByUsername(String username);
 
     @Select("""
+        SELECT id, username, password_hash, nickname, avatar_url, email, phone, role, status,
+               last_login_at, created_at, updated_at
+        FROM users
+        WHERE id = #{id}
+        """)
+    User findByIdWithPassword(Long id);
+
+    @Select("""
         SELECT id, username, nickname, avatar_url, email, phone, role, status,
                last_login_at, created_at, updated_at
         FROM users

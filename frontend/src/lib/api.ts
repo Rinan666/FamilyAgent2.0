@@ -10,14 +10,17 @@
  */
 import type {
   ApiResult,
-  LoginRequest, LoginResponse, RegisterRequest,
-  User, Family, FamilyMember,
+  LoginRequest, LoginResponse, RegisterRequest, ChangePasswordRequest,
+  User, Family, FamilyMember, FamilyRelationship, CareAuthorization, DiaryEntry, CreateDiaryEntryRequest, UpdateDiaryEntryRequest,
   Question, KnowledgePoint, QuestionAnswer, QuestionContent,
   AbilityProfile, TestRecord, TestRecordDetail,
   ChatMessage, ChatSession, GradeResult, MemoryEntry, PageResult, SubmitTestRequest, CreateQuestionRequest,
-  TutorExtractResult,
-  MistakeReviewResult, DailyPracticeResult, ExamReviewResult, StudyPlanResult,
+  TutorExtractResult, CreateFamilyMemoryRequest, FamilyMemoryCard, MemoryEntryType,
+  CreateGrowthGuardRecordRequest, GrowthGuardRecord, CreateGrowthGuardReportRequest, GrowthGuardReport, WeeklyGrowthReport,
+  GrowthFollowUpStatus, MirrorContextResponse, MistakeReviewResult, DailyPracticeResult, ExamReviewResult, StudyPlanResult,
+  AgentDraftScene, AgentOrganizedDraft, AgentSaveToolPlan,
 } from '@/types';
+import type { ViewerRole } from '@/lib/roles';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
 const AI_BASE = process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:8000';
@@ -281,6 +284,32 @@ function safeNumber(value: unknown): number {
   return Number.isFinite(number) ? number : 0;
 }
 
+function normalizeWeeklyGrowthReport(value: unknown): WeeklyGrowthReport {
+  const parsed = parseJsonField<Record<string, unknown>>(value, {});
+  return {
+    title: toText(parsed.title) || '本周成长提醒',
+    summary: toText(parsed.summary),
+    affirmations: normalizeStringArray(parsed.affirmations),
+    concerns: normalizeStringArray(parsed.concerns),
+    signals: normalizeStringArray(parsed.signals),
+    family_experience_refs: normalizeStringArray(parsed.family_experience_refs),
+    suggested_actions: normalizeStringArray(parsed.suggested_actions),
+    follow_up_questions: normalizeStringArray(parsed.follow_up_questions),
+    safety_note: toText(parsed.safety_note) || '此内容只作为家庭观察提醒，不构成医学诊断或治疗建议。',
+  };
+}
+
+function normalizeGrowthGuardReport(raw: GrowthGuardReport): GrowthGuardReport {
+  const report = normalizeWeeklyGrowthReport(raw.report);
+  return {
+    ...raw,
+    title: raw.title || report.title,
+    summary: raw.summary || report.summary,
+    report,
+    metadata: parseJsonField<Record<string, unknown>>(raw.metadata, {}),
+  };
+}
+
 async function aiRequest<T>(path: string, body: unknown): Promise<T> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
   const res = await fetch(`/ai-proxy${path}`, {
@@ -381,6 +410,8 @@ export const userApi = {
   register: (data: RegisterRequest) => request<User>('/users/register', { method: 'POST', body: JSON.stringify(data) }),
   login: (data: LoginRequest) => request<LoginResponse>('/users/login', { method: 'POST', body: JSON.stringify(data) }),
   getMe: () => request<User>('/users/me'),
+  changePassword: (data: ChangePasswordRequest) =>
+    request<void>('/users/change-password', { method: 'POST', body: JSON.stringify(data) }),
   getUser: (id: number) => request<User>(`/users/${id}`),
 };
 
@@ -395,6 +426,43 @@ export const familyApi = {
   getMyFamilies: () => request<Family[]>('/families/my'),
   getFamily: (id: number) => request<Family>(`/families/${id}`),
   getMembers: (familyId: number) => request<FamilyMember[]>(`/families/${familyId}/members`),
+  getMyRelationshipLabels: (familyId: number) =>
+    request<FamilyRelationship[]>(`/families/${familyId}/relationships/my-labels`),
+  upsertRelationshipLabel: (
+    familyId: number,
+    targetUserId: number,
+    data: { label: string; reverseLabel?: string; note?: string },
+  ) =>
+    request<FamilyRelationship>(`/families/${familyId}/members/${targetUserId}/relationship`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  getMyCareAuthorizations: (familyId: number) =>
+    request<CareAuthorization[]>(`/families/${familyId}/care-authorizations/my`),
+  upsertCareAuthorization: (
+    familyId: number,
+    subjectUserId: number,
+    caregiverUserId: number,
+    data: { scope?: 'ALL' | 'DIARY' | 'GROWTH_GUARD'; active?: boolean; expiresAt?: string },
+  ) =>
+    request<CareAuthorization>(`/families/${familyId}/members/${subjectUserId}/caregivers/${caregiverUserId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  updateMemberRole: (familyId: number, userId: number, role: FamilyMember['role']) =>
+    request<FamilyMember>(`/families/${familyId}/members/${userId}/role?role=${encodeURIComponent(role)}`, {
+      method: 'PUT',
+    }),
+};
+
+export const diaryApi = {
+  create: (data: CreateDiaryEntryRequest) =>
+    request<DiaryEntry>('/diaries', { method: 'POST', body: JSON.stringify(data) }),
+  updateEntry: (id: number, data: UpdateDiaryEntryRequest) =>
+    request<DiaryEntry>(`/diaries/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  listFamilyEntries: (familyId: number, limit = 30) =>
+    request<DiaryEntry[]>(`/diaries/family/${familyId}?limit=${limit}`),
+  deleteEntry: (id: number) => request<void>(`/diaries/${id}`, { method: 'DELETE' }),
 };
 
 // ============================================
@@ -442,11 +510,17 @@ export const questionApi = {
 // ============================================
 export const assessmentApi = {
   getProfiles: (_userId?: number) => request<AbilityProfile[]>('/assessment/profiles/me'),
+  getProfilesForUser: (userId: number) => request<AbilityProfile[]>(`/assessment/profiles/${userId}`),
   getZPD: (_userId?: number) => request<AbilityProfile[]>('/assessment/zpd/me'),
+  getZPDForUser: (userId: number) => request<AbilityProfile[]>(`/assessment/zpd/${userId}`),
   getHistory: (_userId?: number, limit = 20) =>
     request<TestRecord[]>(`/assessment/history/me?limit=${limit}`).then(normalizeTestRecords),
+  getHistoryForUser: (userId: number, limit = 20) =>
+    request<TestRecord[]>(`/assessment/history/${userId}?limit=${limit}`).then(normalizeTestRecords),
   getTestDetail: (id: number) =>
     request<TestRecordDetail>(`/assessment/tests/${id}/detail`).then(normalizeTestRecordDetail),
+  getTestDetailForUser: (userId: number, id: number) =>
+    request<TestRecordDetail>(`/assessment/users/${userId}/tests/${id}/detail`).then(normalizeTestRecordDetail),
   submitTest: (data: SubmitTestRequest) =>
     request<TestRecord>('/assessment/tests', { method: 'POST', body: JSON.stringify(data) }).then(normalizeTestRecord),
 };
@@ -478,6 +552,50 @@ export const sessionApi = {
 
 export const memoryApi = {
   listMyMemories: (limit = 20) => request<MemoryEntry[]>(`/memories/me?limit=${limit}`),
+  listFamilyMemories: (familyId: number, limit = 30) =>
+    request<MemoryEntry[]>(`/memories/family/${familyId}?limit=${limit}`),
+  createFamilyMemory: (data: CreateFamilyMemoryRequest) =>
+    request<MemoryEntry>('/memories/family', { method: 'POST', body: JSON.stringify(data) }),
+  createFamilyMemoryCard: (body: {
+    content: string;
+    memoryType?: MemoryEntryType;
+    familyContext?: string;
+    target?: string;
+  }) =>
+    aiRequest<{ success: boolean; data: FamilyMemoryCard }>('/memory/family-card', {
+      content: body.content,
+      memory_type: body.memoryType || 'ELDER_ADVICE',
+      family_context: body.familyContext || '',
+      target: body.target || '',
+    }),
+  planSaveTool: (body: {
+    message: string;
+    familyContext?: string;
+    targetMemberName?: string;
+    viewerRole?: string;
+  }) =>
+    aiRequest<{ success: boolean; data: AgentSaveToolPlan }>('/memory/save-plan', {
+      message: body.message,
+      family_context: body.familyContext || '',
+      target_member_name: body.targetMemberName || '',
+      viewer_role: body.viewerRole || '',
+    }),
+  organizeDraft: (body: {
+    content: string;
+    scene: AgentDraftScene;
+    familyContext?: string;
+    currentType?: string;
+    currentVisibility?: string;
+    target?: string;
+  }) =>
+    aiRequest<{ success: boolean; data: AgentOrganizedDraft }>('/memory/organize-draft', {
+      content: body.content,
+      scene: body.scene,
+      family_context: body.familyContext || '',
+      current_type: body.currentType || '',
+      current_visibility: body.currentVisibility || '',
+      target: body.target || '',
+    }),
   recall: (body: { query?: string; subject?: string; knowledgePointId?: number; limit?: number }) =>
     request<MemoryEntry[]>('/memories/recall', {
       method: 'POST',
@@ -486,8 +604,46 @@ export const memoryApi = {
   deleteMemory: (id: number) => request<void>(`/memories/${id}`, { method: 'DELETE' }),
 };
 
+export const growthGuardApi = {
+  listFamilyRecords: (familyId: number, limit = 30) =>
+    request<GrowthGuardRecord[]>(`/growth-guards/family/${familyId}?limit=${limit}`),
+  createRecord: (data: CreateGrowthGuardRecordRequest) =>
+    request<GrowthGuardRecord>('/growth-guards', { method: 'POST', body: JSON.stringify(data) }),
+  updateFollowUpStatus: (id: number, followUpStatus: GrowthFollowUpStatus) =>
+    request<GrowthGuardRecord>(`/growth-guards/${id}/follow-up-status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ followUpStatus }),
+    }),
+  deleteRecord: (id: number) => request<void>(`/growth-guards/${id}`, { method: 'DELETE' }),
+  listFamilyReports: (familyId: number, limit = 5) =>
+    request<GrowthGuardReport[]>(`/growth-guards/reports/family/${familyId}?limit=${limit}`)
+      .then((items) => (items || []).map(normalizeGrowthGuardReport)),
+  createReport: (data: CreateGrowthGuardReportRequest) =>
+    request<GrowthGuardReport>('/growth-guards/reports', { method: 'POST', body: JSON.stringify(data) })
+      .then(normalizeGrowthGuardReport),
+  weeklyReport: (body: {
+    familyName?: string;
+    records: GrowthGuardRecord[];
+    memories: MemoryEntry[];
+    target?: string;
+  }) =>
+    aiRequest<{ success: boolean; data: WeeklyGrowthReport }>('/growth/weekly-report', {
+      family_name: body.familyName || '',
+      records: body.records,
+      memories: body.memories,
+      target: body.target || '',
+    }),
+};
+
+export const mirrorApi = {
+  getContext: (familyId: number, targetUserId: number, query?: string) => {
+    const params = query?.trim() ? `?query=${encodeURIComponent(query.trim())}` : '';
+    return request<MirrorContextResponse>(`/mirror/families/${familyId}/members/${targetUserId}/context${params}`);
+  },
+};
+
 // ============================================
-// AI 家教（直连 Python AI 服务）
+// 家庭陪伴 AI（直连 Python AI 服务）
 // ============================================
 export const tutorApi = {
   extractContent: (file: File) =>
@@ -525,7 +681,8 @@ export const tutorApi = {
     body: { questionContent: string; answer: string; steps: string; studentMessage: string;
             history?: { role: string; content: string }[]; grade?: string; subject?: string;
             knowledgePoint?: string; masteryLevel?: string; teachingStyle?: 'guided' | 'direct';
-            mode?: 'explain' | 'chat'; memoryContext?: string; },
+            mode?: 'explain' | 'chat'; memoryContext?: string;
+            viewerRole?: ViewerRole; targetRole?: ViewerRole | 'STUDENT'; },
     onChunk: (chunk: string) => void, onDone: () => void, onError: (error: string) => void,
   ) => sseRequest('/tutor/explain', {
     question_content: body.questionContent,
@@ -540,6 +697,8 @@ export const tutorApi = {
     teaching_style: body.teachingStyle || 'guided',
     mode: body.mode || 'explain',
     memory_context: body.memoryContext || '',
+    viewer_role: body.viewerRole || 'STUDENT',
+    target_role: body.targetRole || 'STUDENT',
   }, onChunk, onDone, onError),
 
   grade: (body: { questionContent: string; answer: string; steps: string;

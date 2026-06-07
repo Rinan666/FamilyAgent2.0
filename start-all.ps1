@@ -12,8 +12,9 @@ Write-Host "    FamilyAgent One-Click Start" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
-# ── PID file for stop-all to close windows ──
+# ── PID files for stop-all to close windows/processes ──
 $PidFile = Join-Path $Root ".service-pids.txt"
+$RuntimePidFile = Join-Path $Root ".codex-runtime-pids.txt"
 "" | Set-Content $PidFile -Force
 
 # ── Helper: kill old process on a port, then start fresh ──
@@ -34,8 +35,39 @@ function Start-ServiceOnPort($port, $title, $workDir, $command) {
     Add-Content $PidFile $newProc.Id
 }
 
+function Set-NamedPid($name, $procId) {
+    $lines = @()
+    if (Test-Path $RuntimePidFile) {
+        $lines = Get-Content $RuntimePidFile | Where-Object { $_ -notmatch "^$name=" }
+    }
+    $lines + "$name=$procId" | Set-Content $RuntimePidFile -Force
+}
+
+function Start-CloudflareTunnel {
+    $cloudflared = Get-Command cloudflared.exe -ErrorAction SilentlyContinue
+    $configPath = Join-Path $env:USERPROFILE ".cloudflared\config.yml"
+    if (-not $cloudflared -or -not (Test-Path $configPath)) {
+        Write-Host "       [SKIP] Cloudflare Tunnel not configured" -ForegroundColor DarkYellow
+        return
+    }
+
+    Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    $logDir = Join-Path $Root ".codex-runtime-logs"
+    New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+    $outLog = Join-Path $logDir "cloudflared-named.out.log"
+    $errLog = Join-Path $logDir "cloudflared-named.err.log"
+    $proc = Start-Process -FilePath $cloudflared.Source `
+        -ArgumentList @("tunnel", "--config", $configPath, "run") `
+        -WindowStyle Hidden `
+        -RedirectStandardOutput $outLog `
+        -RedirectStandardError $errLog `
+        -PassThru
+    Set-NamedPid "cloudflared-named" $proc.Id
+    Write-Host "       Cloudflare Tunnel started (PID $($proc.Id))" -ForegroundColor Green
+}
+
 # ── 0. Check prerequisites ──
-Write-Host "[0/4] Checking prerequisites..." -ForegroundColor Yellow
+Write-Host "[0/5] Checking prerequisites..." -ForegroundColor Yellow
 
 $dockerOk = $true
 try {
@@ -61,12 +93,12 @@ Write-Host "       All checks passed" -ForegroundColor Green
 
 # ── 1. Infrastructure ──
 Write-Host ""
-Write-Host "[1/4] Starting infrastructure..." -ForegroundColor Yellow
+Write-Host "[1/5] Starting infrastructure..." -ForegroundColor Yellow
 if ($dockerOk) {
     docker compose -f "$Root\docker-compose.yml" up -d 2>&1 | Out-Null
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "       Containers started, waiting 15s..." -ForegroundColor Green
-        Start-Sleep 15
+        Write-Host "       Containers started, waiting 5s..." -ForegroundColor Green
+        Start-Sleep 5
         Write-Host "       Initializing database..." -ForegroundColor Yellow
         docker exec fa-postgres psql -U fa_user -d familyagent -f /docker-entrypoint-initdb.d/01-init.sql 2>&1 | Out-Null
         docker cp "$Root\scripts\migrate-multitenant-storage.sql" fa-postgres:/tmp/migrate-multitenant-storage.sql 2>&1 | Out-Null
@@ -83,21 +115,26 @@ if ($dockerOk) {
 
 # ── 2. AI Service (port 8000) ──
 Write-Host ""
-Write-Host "[2/4] Starting AI Service (port 8000)..." -ForegroundColor Yellow
+Write-Host "[2/5] Starting AI Service (port 8000)..." -ForegroundColor Yellow
 Start-ServiceOnPort 8000 "AI-Service" "$Root\ai-service" "echo AI Service http://localhost:8000 && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
 Write-Host "       AI Service window opened" -ForegroundColor Green
 
 # ── 3. Backend (port 8080) ──
 Write-Host ""
-Write-Host "[3/4] Starting Backend (port 8080)..." -ForegroundColor Yellow
+Write-Host "[3/5] Starting Backend (port 8080)..." -ForegroundColor Yellow
 Start-ServiceOnPort 8080 "Backend" "$Root\backend" "echo Backend compiling... first time ~1-2min && mvn spring-boot:run -Dspring-boot.run.profiles=dev"
 Write-Host "       Backend window opened" -ForegroundColor Green
 
 # ── 4. Frontend (port 3000) ──
 Write-Host ""
-Write-Host "[4/4] Starting Frontend (port 3000)..." -ForegroundColor Yellow
+Write-Host "[4/5] Starting Frontend (port 3000)..." -ForegroundColor Yellow
 Start-ServiceOnPort 3000 "Frontend" "$Root\frontend" "echo Frontend http://localhost:3000 && npm run build && npm run start"
 Write-Host "       Frontend window opened" -ForegroundColor Green
+
+# ── 5. Cloudflare Tunnel ──
+Write-Host ""
+Write-Host "[5/5] Starting Cloudflare Tunnel..." -ForegroundColor Yellow
+Start-CloudflareTunnel
 
 # ── Done ──
 Write-Host ""
@@ -105,8 +142,10 @@ Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "   All services launching!" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "   Frontend:  http://localhost:3000" -ForegroundColor Cyan
+Write-Host "   Public:    https://familyagent.cn" -ForegroundColor Cyan
 Write-Host "   Backend:   http://localhost:8080" -ForegroundColor Cyan
 Write-Host "   AI API:    http://localhost:8000/docs" -ForegroundColor Cyan
+Write-Host "   AI Public: https://ai.familyagent.cn/ai/health" -ForegroundColor Cyan
 Write-Host "   MinIO:     http://localhost:9001" -ForegroundColor Cyan
 Write-Host "   RabbitMQ:  http://localhost:15672" -ForegroundColor Cyan
 Write-Host ""

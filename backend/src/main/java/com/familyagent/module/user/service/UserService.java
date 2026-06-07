@@ -6,6 +6,7 @@ import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.invite.entity.InviteCode;
 import com.familyagent.module.invite.repository.InviteCodeRepository;
+import com.familyagent.module.user.dto.ChangePasswordRequest;
 import com.familyagent.module.user.dto.LoginRequest;
 import com.familyagent.module.user.dto.LoginResponse;
 import com.familyagent.module.user.dto.RegisterRequest;
@@ -137,6 +138,8 @@ public class UserService {
                 .username(user.getUsername())
                 .nickname(user.getNickname())
                 .avatarUrl(user.getAvatarUrl())
+                .role(user.getRole())
+                .status(user.getStatus())
                 .token(token)
                 .tokenName("Authorization")
                 .build();
@@ -153,5 +156,24 @@ public class UserService {
     public User getCurrentUser() {
         long userId = StpUtil.getLoginIdAsLong();
         return getById(userId);
+    }
+
+    @Transactional
+    public void changePassword(ChangePasswordRequest request) {
+        long userId = StpUtil.getLoginIdAsLong();
+        User current = userRepository.findByIdWithPassword(userId);
+        if (current == null) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+        if (!passwordMatches(request.getCurrentPassword(), current.getPasswordHash())) {
+            throw new BusinessException(ErrorCode.PASSWORD_ERROR, "当前密码不正确");
+        }
+        if (encoder.matches(request.getNewPassword(), current.getPasswordHash())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "新密码不能与当前密码相同");
+        }
+        current.setPasswordHash(encoder.encode(request.getNewPassword()));
+        userRepository.updateById(current);
+        StpUtil.logout(userId);
+        log.info("用户修改密码成功: userId={}", userId);
     }
 }

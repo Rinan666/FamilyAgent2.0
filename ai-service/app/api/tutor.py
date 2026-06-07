@@ -15,6 +15,7 @@ from app.agents.generator_agent import generator_agent
 from app.agents.skill_workflow_agent import skill_workflow_agent
 from app.middleware.auth import verify_token
 from app.services.content_extractor import extract_content
+from app.utils.privacy_guard import redact_with_note
 from app.utils.sanitizer import sanitize_text
 
 logger = logging.getLogger("familyagent.ai.api.tutor")
@@ -41,6 +42,8 @@ class ExplainRequest(BaseModel):
     teaching_style: str = Field(default="guided", description="讲题风格: guided=引导式, direct=快速答案式")
     mode: str = Field(default="explain", description="对话模式: explain=讲题, chat=自由对话")
     memory_context: str = Field(default="", description="家族知识库/日记/关键事件等检索上下文")
+    viewer_role: str = Field(default="STUDENT", description="当前查看/对话视图: STUDENT/PARENT/ADMIN")
+    target_role: str = Field(default="STUDENT", description="当前学习对象角色: STUDENT/PARENT/ADMIN")
 
 
 class GradeRequest(BaseModel):
@@ -129,6 +132,7 @@ async def explain_question(request: ExplainRequest):
     # 输入清理
     question_content = sanitize_text(request.question_content)
     student_message = sanitize_text(request.student_message)
+    memory_context = redact_with_note(request.memory_context).text
 
     async def generate():
         try:
@@ -145,7 +149,9 @@ async def explain_question(request: ExplainRequest):
                 common_errors=request.common_errors,
                 teaching_style=request.teaching_style,
                 mode=request.mode,
-                memory_context=request.memory_context,
+                memory_context=memory_context,
+                viewer_role=request.viewer_role,
+                target_role=request.target_role,
             ):
                 yield f"data: {json.dumps({'content': chunk})}\n\n"
 
@@ -175,6 +181,7 @@ async def explain_question_sync(request: ExplainRequest):
     try:
         question_content = sanitize_text(request.question_content)
         student_message = sanitize_text(request.student_message)
+        memory_context = redact_with_note(request.memory_context).text
 
         result = await tutor_agent.explain(
             question_content=question_content,
@@ -189,7 +196,9 @@ async def explain_question_sync(request: ExplainRequest):
             common_errors=request.common_errors,
             teaching_style=request.teaching_style,
             mode=request.mode,
-            memory_context=request.memory_context,
+            memory_context=memory_context,
+            viewer_role=request.viewer_role,
+            target_role=request.target_role,
         )
         return {"success": True, "content": result}
     except Exception as e:

@@ -7,38 +7,43 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
   GraduationCap,
-  ClipboardList,
-  BarChart3,
   Users,
   BookOpen,
   Settings,
-  BookX,
-  Lock,
+  HeartPulse,
+  BookHeart,
+  ScrollText,
+  Bot,
   Menu,
   X,
 } from 'lucide-react';
+import type { ViewerRole } from '@/lib/roles';
 
 const navItems = [
-  { href: '/dashboard', label: '首页', icon: LayoutDashboard, requiresDiagnosis: true },
-  { href: '/dashboard/tutor', label: 'AI家教', icon: GraduationCap, requiresDiagnosis: true },
-  { href: '/dashboard/test', label: '数学诊断', icon: ClipboardList },
-  { href: '/dashboard/notebook', label: '错题本', icon: BookX, requiresDiagnosis: true },
-  { href: '/dashboard/assessment', label: '学力评估', icon: BarChart3, requiresDiagnosis: true },
-  { href: '/dashboard/family', label: '家族空间', icon: Users },
-  { href: '/dashboard/knowledge', label: '题库/知识库', icon: BookOpen },
-  { href: '/dashboard/settings', label: '设置', icon: Settings },
+  { href: '/dashboard', label: '首页', icon: LayoutDashboard, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
+  { href: '/dashboard/diary', label: '家族日记', icon: BookHeart, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
+  { href: '/dashboard/mirror', label: '镜像 Agent', icon: Bot, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
+  { href: '/dashboard/growth', label: '成长守护', icon: HeartPulse, roles: ['PARENT', 'ADMIN'] },
+  { href: '/dashboard/heritage', label: '家族经验', icon: ScrollText, roles: ['PARENT', 'ADMIN'] },
+  { href: '/dashboard/family', label: '家族空间', icon: Users, roles: ['PARENT', 'ADMIN'] },
+  { href: '/dashboard/tutor', label: '家庭陪伴 AI', icon: GraduationCap, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
+  { href: '/dashboard/knowledge', label: '题库/知识库', icon: BookOpen, roles: ['ADMIN'], platformAdminOnly: true },
+  { href: '/dashboard/settings', label: '设置', icon: Settings, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
 ];
 
 const mobilePrimaryNav = [
-  { href: '/dashboard', label: '首页', icon: LayoutDashboard, requiresDiagnosis: true },
-  { href: '/dashboard/tutor', label: '家教', icon: GraduationCap, requiresDiagnosis: true },
-  { href: '/dashboard/test', label: '诊断', icon: ClipboardList },
-  { href: '/dashboard/notebook', label: '错题', icon: BookX, requiresDiagnosis: true },
-  { href: '/dashboard/assessment', label: '评估', icon: BarChart3, requiresDiagnosis: true },
+  { href: '/dashboard', label: '首页', icon: LayoutDashboard, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
+  { href: '/dashboard/diary', label: '日记', icon: BookHeart, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
+  { href: '/dashboard/mirror', label: '镜像', icon: Bot, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
+  { href: '/dashboard/growth', label: '守护', icon: HeartPulse, roles: ['PARENT', 'ADMIN'] },
+  { href: '/dashboard/heritage', label: '经验', icon: ScrollText, roles: ['PARENT', 'ADMIN'] },
+  { href: '/dashboard/tutor', label: '陪伴', icon: GraduationCap, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
+  { href: '/dashboard/settings', label: '设置', icon: Settings, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
 ];
 
 interface SidebarProps {
-  diagnosisLocked?: boolean;
+  viewerRole?: ViewerRole;
+  isPlatformAdmin?: boolean;
   className?: string;
 }
 
@@ -47,40 +52,39 @@ function isActivePath(pathname: string, href: string) {
 }
 
 function NavigationLinks({
-  diagnosisLocked = false,
+  viewerRole = 'STUDENT',
+  isPlatformAdmin = false,
   onNavigate,
 }: {
-  diagnosisLocked?: boolean;
+  viewerRole?: ViewerRole;
+  isPlatformAdmin?: boolean;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
 
   return (
     <>
-      {navItems.map((item) => {
+      {navItems.filter((item) => (
+        item.roles.includes(viewerRole) || Boolean(item.platformAdminOnly && isPlatformAdmin)
+      )).map((item) => {
         const isActive = isActivePath(pathname, item.href);
         const Icon = item.icon;
-        const isLocked = diagnosisLocked && item.requiresDiagnosis;
-        const href = isLocked ? '/dashboard/test?required=1' : item.href;
 
         return (
           <Link
             key={item.href}
-            href={href}
+            href={item.href}
             onClick={onNavigate}
-            title={isLocked ? '完成首次数学诊断后开放' : item.label}
+            title={item.label}
             className={cn(
               'flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors lg:py-2.5',
               isActive
                 ? 'bg-blue-50 text-blue-700'
-                : isLocked
-                  ? 'text-gray-300 hover:bg-gray-50'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
+                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
             )}
           >
             <Icon className="h-5 w-5 shrink-0" />
             <span className="flex-1">{item.label}</span>
-            {isLocked && <Lock className="h-3.5 w-3.5" />}
           </Link>
         );
       })}
@@ -88,36 +92,36 @@ function NavigationLinks({
   );
 }
 
-export function MobileBottomNav({ diagnosisLocked = false }: { diagnosisLocked?: boolean }) {
+export function MobileBottomNav({
+  viewerRole = 'STUDENT',
+}: {
+  viewerRole?: ViewerRole;
+}) {
   const pathname = usePathname();
+  const items = mobilePrimaryNav
+    .filter((item) => item.roles.includes(viewerRole))
+    .slice(0, 5);
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur lg:hidden">
       <div className="mx-auto grid max-w-md grid-cols-5 gap-1">
-        {mobilePrimaryNav.map((item) => {
+        {items.map((item) => {
           const Icon = item.icon;
-          const isLocked = diagnosisLocked && item.requiresDiagnosis;
-          const href = isLocked ? '/dashboard/test?required=1' : item.href;
           const isActive = isActivePath(pathname, item.href);
 
           return (
             <Link
               key={item.href}
-              href={href}
+              href={item.href}
               aria-label={item.label}
               className={cn(
                 'flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 text-[11px] font-medium transition-colors',
                 isActive
                   ? 'bg-blue-50 text-blue-700'
-                  : isLocked
-                    ? 'text-gray-300'
-                    : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800',
+                  : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800',
               )}
             >
-              <span className="relative">
-                <Icon className="h-5 w-5" />
-                {isLocked && <Lock className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-white" />}
-              </span>
+              <Icon className="h-5 w-5" />
               <span className="truncate">{item.label}</span>
             </Link>
           );
@@ -127,7 +131,7 @@ export function MobileBottomNav({ diagnosisLocked = false }: { diagnosisLocked?:
   );
 }
 
-export default function Sidebar({ diagnosisLocked = false, className }: SidebarProps) {
+export default function Sidebar({ viewerRole = 'STUDENT', isPlatformAdmin = false, className }: SidebarProps) {
   return (
     <aside className={cn('hidden w-60 shrink-0 flex-col border-r border-gray-200 bg-white xl:w-64 lg:flex', className)}>
       {/* Logo */}
@@ -140,7 +144,7 @@ export default function Sidebar({ diagnosisLocked = false, className }: SidebarP
 
       {/* Nav */}
       <nav className="flex-1 space-y-1 px-3 py-4">
-        <NavigationLinks diagnosisLocked={diagnosisLocked} />
+        <NavigationLinks viewerRole={viewerRole} isPlatformAdmin={isPlatformAdmin} />
       </nav>
 
       {/* Footer */}
@@ -151,7 +155,13 @@ export default function Sidebar({ diagnosisLocked = false, className }: SidebarP
   );
 }
 
-export function MobileNav({ diagnosisLocked = false }: { diagnosisLocked?: boolean }) {
+export function MobileNav({
+  viewerRole = 'STUDENT',
+  isPlatformAdmin = false,
+}: {
+  viewerRole?: ViewerRole;
+  isPlatformAdmin?: boolean;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -194,7 +204,7 @@ export function MobileNav({ diagnosisLocked = false }: { diagnosisLocked?: boole
             </div>
 
             <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 py-4">
-              <NavigationLinks diagnosisLocked={diagnosisLocked} onNavigate={() => setOpen(false)} />
+              <NavigationLinks viewerRole={viewerRole} isPlatformAdmin={isPlatformAdmin} onNavigate={() => setOpen(false)} />
             </nav>
 
             <div className="border-t border-gray-200 p-4">

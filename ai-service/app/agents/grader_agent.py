@@ -28,15 +28,15 @@ class GraderAgent(BaseAgent):
 
         if not error_analysis.get("parent_explanation"):
             if result.get("is_correct"):
-                error_analysis["parent_explanation"] = "孩子本题结果正确，可以继续观察步骤表达是否完整。"
+                error_analysis["parent_explanation"] = "学习者本题结果正确，可以继续观察步骤表达是否完整。"
             elif error_type == "需要复核":
                 error_analysis["parent_explanation"] = "这道题的作答暂时无法通过快速规则确认，需要进一步分析过程。"
             else:
-                error_analysis["parent_explanation"] = f"孩子本题主要问题是{error_type}，需要结合原题复盘关键步骤。"
+                error_analysis["parent_explanation"] = f"学习者本题主要问题是{error_type}，需要结合原题复盘关键步骤。"
 
         if not error_analysis.get("next_suggestion"):
             if result.get("is_correct"):
-                error_analysis["next_suggestion"] = "让孩子口头复述解题思路，再做一道同知识点变式题。"
+                error_analysis["next_suggestion"] = "让学习者口头复述解题思路，再做一道同知识点变式题。"
             elif error_analysis.get("suggestion"):
                 error_analysis["next_suggestion"] = error_analysis["suggestion"]
             else:

@@ -7,6 +7,7 @@ import MathRenderer from '@/components/tutor/MathRenderer';
 import { useAuthStore } from '@/stores/authStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useChat } from '@/hooks/useChat';
+import { useViewerRole } from '@/hooks/useViewerRole';
 import { assessmentApi, memoryApi, questionApi, sessionApi, tutorApi } from '@/lib/api';
 
 const SESSION_IDLE_LIMIT_MS = 30 * 60 * 1000;
@@ -109,6 +110,7 @@ export default function TutorPage() {
   const [isExtractingFile, setIsExtractingFile] = useState(false);
   const [extractMessage, setExtractMessage] = useState('');
   const [teachingStyle, setTeachingStyle] = useState<'guided' | 'direct'>('guided');
+  const { viewerRole, activeFamilyId } = useViewerRole();
 
   const idleEndInFlightRef = useRef<Set<number>>(new Set());
   const teachingStyleRef = useRef<'guided' | 'direct'>('guided');
@@ -250,6 +252,9 @@ export default function TutorPage() {
     getKnowledgePoint: (kpId) => kpNames[kpId] || '',
     teachingStyle,
     getTeachingStyle: () => teachingStyleRef.current,
+    viewerRole,
+    targetRole: 'STUDENT',
+    activeFamilyId,
     persistMessages: persistSessionMessages,
     persistChatMessages: persistFreeChatMessages,
   });
@@ -472,12 +477,12 @@ export default function TutorPage() {
   );
 
   return (
-    <div className="mx-auto flex h-[calc(100dvh-13rem)] max-w-7xl flex-col lg:h-[calc(100vh-8rem)]">
-      <div className="mb-3 flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mx-auto flex h-[calc(100dvh-8rem)] max-w-7xl flex-col sm:h-[calc(100dvh-11rem)] lg:h-[calc(100vh-8rem)]">
+      <div className="mb-2 flex shrink-0 flex-col gap-2 sm:mb-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-lg font-bold text-gray-900 sm:text-xl">AI 家教</h1>
+          <h1 className="text-lg font-bold text-gray-900 sm:text-xl">家庭陪伴 AI</h1>
           <p className="text-xs text-gray-500">
-            {isTutorMode ? '讲题辅导模式' : '自由学习对话'}
+            {isTutorMode ? '学习陪伴 · 讲题模式' : '自由对话 · 家庭上下文陪伴'}
           </p>
         </div>
         <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
@@ -534,7 +539,7 @@ export default function TutorPage() {
         </div>
       </div>
 
-      <details className="mb-3 shrink-0 overflow-hidden rounded-xl border border-gray-200 bg-white lg:hidden">
+      <details className="mb-2 shrink-0 overflow-hidden rounded-xl border border-gray-200 bg-white sm:mb-3 lg:hidden">
         <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-medium text-gray-800">
           <History className="h-4 w-4" />
           最近会话
@@ -603,7 +608,7 @@ export default function TutorPage() {
               </div>
             ) : memories.length === 0 ? (
               <div className="flex h-full items-center justify-center px-4 text-center text-xs text-gray-400">
-                结束一次辅导后，小智会在这里沉淀几条学习记录。
+                结束一次陪伴对话后，小智会在这里沉淀几条学习记录。
               </div>
             ) : (
               <div className="space-y-2">
@@ -642,7 +647,7 @@ export default function TutorPage() {
             </div>
           )}
 
-          <div className="flex-1 space-y-4 overflow-y-auto p-3 sm:p-4">
+          <div className="flex-1 space-y-3 overflow-y-auto p-2.5 sm:space-y-4 sm:p-4">
             {messages.length === 0 ? (
               <div className="flex h-full items-center justify-center">
                 <div className="text-center text-gray-400">
@@ -652,12 +657,12 @@ export default function TutorPage() {
                       ? '围绕这道题继续提问或说出你的思路'
                       : isComposingQuestion
                         ? '粘贴一道题，开始讲题辅导'
-                        : '可以聊学习计划、卡点、情绪或一道具体题目'}
+                        : '可以聊学习计划、卡点、情绪、家族经验或一道具体题目'}
                   </p>
                   <p className="mt-1 text-xs">
                     {isTutorMode
                       ? (teachingStyle === 'guided' ? '当前为引导式：AI 会一步步提问推进。' : '当前为直接讲解：AI 会给出答案和步骤。')
-                      : '如果你粘贴的是题目，可以切换到讲题模式。'}
+                      : '我会结合可见的学习记忆、家族经验和成长守护摘要来回应。'}
                   </p>
                 </div>
               </div>
@@ -665,7 +670,7 @@ export default function TutorPage() {
               messages.map((msg) => (
                 <div
                   key={msg.id}
-                  className={`flex gap-2 sm:gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  className={`flex gap-1.5 sm:gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   {msg.role === 'assistant' && (
                     <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-medium text-white">
@@ -673,7 +678,7 @@ export default function TutorPage() {
                     </div>
                   )}
                   <div
-                    className={`max-w-[86%] overflow-hidden rounded-2xl px-3 py-2.5 text-sm leading-relaxed whitespace-pre-wrap sm:max-w-[80%] sm:px-4 ${
+                    className={`max-w-[90%] overflow-hidden rounded-2xl px-3 py-2.5 text-sm leading-relaxed whitespace-pre-wrap sm:max-w-[80%] sm:px-4 ${
                       msg.role === 'user'
                         ? 'rounded-br-md bg-blue-600 text-white'
                         : 'rounded-bl-md bg-gray-100 text-gray-900'
@@ -692,10 +697,10 @@ export default function TutorPage() {
             <div ref={chatEndRef} />
           </div>
 
-          <div className="border-t border-gray-200 p-2 sm:p-3">
+          <div className="border-t border-gray-200 p-1.5 pb-[max(env(safe-area-inset-bottom),0.375rem)] sm:p-3">
             <form
               onSubmit={(event) => { event.preventDefault(); handleSend(); }}
-              className="flex gap-2"
+              className="flex items-end gap-1.5 sm:gap-2"
             >
               <input
                 ref={fileInputRef}
@@ -708,7 +713,7 @@ export default function TutorPage() {
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isStreaming || isExtractingFile}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50 sm:h-10 sm:w-10"
                 title="上传题目或学习资料"
               >
                 {isExtractingFile ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
@@ -723,15 +728,15 @@ export default function TutorPage() {
                     ? '输入你的想法或问题...'
                     : isComposingQuestion
                       ? '把题目粘贴到这里...'
-                      : '聊学习计划、卡点、情绪，或直接发一道题...'
+                      : '聊学习计划、卡点、情绪、家族经验，或直接发一道题...'
                 }
                 disabled={isStreaming || isExtractingFile}
-                className="min-h-10 max-h-32 min-w-0 flex-1 resize-none overflow-y-auto rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 sm:px-4"
+                className="min-h-9 max-h-28 min-w-0 flex-1 resize-none overflow-y-auto rounded-lg border border-gray-200 px-2.5 py-2 text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 sm:min-h-10 sm:max-h-32 sm:px-4"
               />
               <button
                 type="submit"
                 disabled={!input.trim() || isStreaming || isExtractingFile}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:opacity-50 sm:w-auto sm:px-4 sm:gap-1"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:opacity-50 sm:h-10 sm:w-auto sm:gap-1 sm:px-4"
                 aria-label="发送"
               >
                 {isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

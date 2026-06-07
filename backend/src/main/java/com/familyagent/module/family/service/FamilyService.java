@@ -4,9 +4,12 @@ import cn.hutool.core.util.RandomUtil;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.family.dto.CreateFamilyRequest;
+import com.familyagent.module.family.dto.FamilyMemberVO;
 import com.familyagent.module.family.entity.Family;
 import com.familyagent.module.family.entity.FamilyMember;
+import com.familyagent.module.family.entity.FamilyRelationship;
 import com.familyagent.module.family.repository.FamilyMemberRepository;
+import com.familyagent.module.family.repository.FamilyRelationshipRepository;
 import com.familyagent.module.family.repository.FamilyRepository;
 import com.familyagent.module.user.entity.User;
 import com.familyagent.module.user.service.UserService;
@@ -16,6 +19,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * 家族服务
@@ -27,7 +35,9 @@ public class FamilyService {
 
     private final FamilyRepository familyRepository;
     private final FamilyMemberRepository memberRepository;
+    private final FamilyRelationshipRepository relationshipRepository;
     private final UserService userService;
+    private static final Set<String> MUTABLE_FAMILY_ROLES = Set.of("ADMIN", "GUARDIAN", "MEMBER", "STUDENT", "GUEST");
 
     @Transactional
     public Family createFamily(CreateFamilyRequest request) {
@@ -103,9 +113,82 @@ public class FamilyService {
         return familyRepository.findBasicByIds(familyIds);
     }
 
-    public List<FamilyMember> getMembers(Long familyId) {
+    public List<FamilyMemberVO> getMembers(Long familyId) {
+        User currentUser = userService.getCurrentUser();
         checkMembership(familyId);
-        return memberRepository.findByFamilyId(familyId);
+        List<FamilyMemberVO> members = memberRepository.findMemberViewsByFamilyId(familyId);
+        attachRelationshipLabels(familyId, currentUser.getId(), members);
+        return members;
+    }
+
+    public void attachRelationshipLabels(Long familyId, Long viewerUserId, List<FamilyMemberVO> members) {
+        if (members == null || members.isEmpty()) {
+            return;
+        }
+        Map<Long, FamilyRelationship> relationships = relationshipRepository
+                .findByFamilyAndViewer(familyId, viewerUserId)
+                .stream()
+                .collect(Collectors.toMap(FamilyRelationship::getToUserId, Function.identity(), (left, right) -> left));
+        for (FamilyMemberVO member : members) {
+            FamilyRelationship relationship = relationships.get(member.getUserId());
+            if (relationship != null) {
+                member.setRelationshipLabel(relationship.getLabel());
+                member.setReverseRelationshipLabel(relationship.getReverseLabel());
+            }
+        }
+    }
+
+    @Transactional
+    public FamilyMemberVO updateMemberRole(Long familyId, Long userId, String role) {
+        String nextRole = normalizeFamilyRole(role);
+        User currentUser = userService.getCurrentUser();
+        FamilyMember currentMember = memberRepository.findByFamilyAndUser(familyId, currentUser.getId());
+        boolean platformAdmin = "ADMIN".equalsIgnoreCase(currentUser.getRole());
+        if (!platformAdmin && (currentMember == null || !isOwnerOrAdmin(currentMember.getRole()))) {
+            throw new BusinessException(ErrorCode.INSUFFICIENT_PERMISSION);
+        }
+
+        FamilyMember targetMember = memberRepository.findByFamilyAndUser(familyId, userId);
+        if (targetMember == null) {
+            throw new BusinessException(ErrorCode.NOT_FAMILY_MEMBER);
+        }
+        if (currentUser.getId().equals(userId)) {
+            throw new BusinessException(ErrorCode.INSUFFICIENT_PERMISSION, "不能修改自己的家庭角色");
+        }
+        if ("OWNER".equalsIgnoreCase(targetMember.getRole())) {
+            throw new BusinessException(ErrorCode.INSUFFICIENT_PERMISSION, "创建者角色不能在此处修改");
+        }
+        if (!platformAdmin && "ADMIN".equalsIgnoreCase(currentMember.getRole())
+                && ("ADMIN".equalsIgnoreCase(targetMember.getRole()) || "ADMIN".equals(nextRole))) {
+            throw new BusinessException(ErrorCode.INSUFFICIENT_PERMISSION, "只有创建者可以调整管理员角色");
+        }
+
+        targetMember.setRole(nextRole);
+        memberRepository.updateById(targetMember);
+        log.info("家庭成员角色更新: familyId={}, operator={}, target={}, role={}",
+                familyId, currentUser.getId(), userId, nextRole);
+        FamilyMemberVO updated = memberRepository.findMemberViewByFamilyAndUser(familyId, userId);
+        attachRelationshipLabels(familyId, currentUser.getId(), List.of(updated));
+        return updated;
+    }
+
+    public void checkCanViewLearningReport(Long targetUserId) {
+        User currentUser = userService.getCurrentUser();
+        if (currentUser.getId().equals(targetUserId) || "ADMIN".equalsIgnoreCase(currentUser.getRole())) {
+            return;
+        }
+
+        List<FamilyMember> memberships = memberRepository.findByUserId(currentUser.getId());
+        for (FamilyMember membership : memberships) {
+            if (!canViewLearnerReportFromRole(membership.getRole())) {
+                continue;
+            }
+            FamilyMember targetMember = memberRepository.findByFamilyAndUser(membership.getFamilyId(), targetUserId);
+            if (targetMember != null && "STUDENT".equalsIgnoreCase(targetMember.getRole())) {
+                return;
+            }
+        }
+        throw new BusinessException(ErrorCode.FORBIDDEN, "无权查看该学习者报告");
     }
 
     public void checkMembership(Long familyId) {
@@ -119,9 +202,25 @@ public class FamilyService {
     public void checkOwnerOrAdmin(Long familyId) {
         User currentUser = userService.getCurrentUser();
         FamilyMember member = memberRepository.findByFamilyAndUser(familyId, currentUser.getId());
-        if (member == null || (!"OWNER".equals(member.getRole()) && !"ADMIN".equals(member.getRole()))) {
+        if (member == null || !isOwnerOrAdmin(member.getRole())) {
             throw new BusinessException(ErrorCode.INSUFFICIENT_PERMISSION);
         }
+    }
+
+    private String normalizeFamilyRole(String role) {
+        String normalized = role == null ? "" : role.trim().toUpperCase(Locale.ROOT);
+        if (!MUTABLE_FAMILY_ROLES.contains(normalized)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "家庭角色只能是 ADMIN、GUARDIAN、MEMBER、STUDENT 或 GUEST");
+        }
+        return normalized;
+    }
+
+    private boolean isOwnerOrAdmin(String role) {
+        return "OWNER".equalsIgnoreCase(role) || "ADMIN".equalsIgnoreCase(role);
+    }
+
+    private boolean canViewLearnerReportFromRole(String role) {
+        return "OWNER".equalsIgnoreCase(role) || "ADMIN".equalsIgnoreCase(role) || "GUARDIAN".equalsIgnoreCase(role);
     }
 
     private String generateInviteCode() {

@@ -35,8 +35,8 @@ export default function LoginPage() {
           username: result.username,
           nickname: result.nickname,
           avatarUrl: result.avatarUrl,
-          role: '',
-          status: 'ACTIVE',
+          role: result.role || 'USER',
+          status: result.status || 'ACTIVE',
         },
         result.token,
       );

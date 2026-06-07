@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import assessment, health, memory, tutor
+from app.api import assessment, embedding, growth, health, memory, tutor
 from app.config import settings
 from app.utils.logger import setup_logging
 
@@ -39,6 +39,8 @@ app.add_middleware(
 app.include_router(tutor.router, prefix="/ai/tutor", tags=["Tutor"])
 app.include_router(assessment.router, prefix="/ai/assessment", tags=["Assessment"])
 app.include_router(memory.router, prefix="/ai/memory", tags=["Memory"])
+app.include_router(growth.router, prefix="/ai/growth", tags=["Growth"])
+app.include_router(embedding.router, prefix="/ai/embedding", tags=["Embedding"])
 app.include_router(health.router, prefix="/ai", tags=["Health"])
 
 
