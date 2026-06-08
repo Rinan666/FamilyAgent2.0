@@ -1,19 +1,55 @@
 'use client';
 
-import { useState } from 'react';
-import { useAuthStore } from '@/stores/authStore';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { CalendarDays, CheckCircle, Database, KeyRound, LogOut, RefreshCw, Shield, User } from 'lucide-react';
 import { userApi } from '@/lib/api';
-import { CheckCircle, KeyRound, LogOut, RefreshCw, Shield, User } from 'lucide-react';
+import { isPlatformAdmin } from '@/lib/roles';
+import { useAuthStore } from '@/stores/authStore';
 
 function platformRoleLabel(role?: string) {
   return (role || '').toUpperCase() === 'ADMIN' ? '平台管理员' : '普通用户';
 }
 
+function parseMetadata(metadata?: Record<string, unknown> | string | null) {
+  if (!metadata) return {};
+  if (typeof metadata === 'string') {
+    try {
+      return JSON.parse(metadata) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  }
+  return metadata;
+}
+
+function birthDateFromMetadata(metadata?: Record<string, unknown> | string | null) {
+  const parsed = parseMetadata(metadata);
+  const value = parsed.birthDate || parsed.birthday || parsed.dateOfBirth;
+  return typeof value === 'string' ? value.slice(0, 10) : '';
+}
+
+function ageLabel(birthDate: string) {
+  if (!birthDate) return '20 岁（未设置时默认）';
+  const date = new Date(birthDate);
+  if (Number.isNaN(date.getTime())) return '20 岁（未设置时默认）';
+  const now = new Date();
+  let age = now.getFullYear() - date.getFullYear();
+  const monthDelta = now.getMonth() - date.getMonth();
+  if (monthDelta < 0 || (monthDelta === 0 && now.getDate() < date.getDate())) age -= 1;
+  return age >= 0 && age <= 130 ? `${age} 岁` : '20 岁（未设置时默认）';
+}
+
 export default function SettingsPage() {
   const user = useAuthStore((s) => s.user);
+  const setUser = useAuthStore((s) => s.setUser);
   const logout = useAuthStore((s) => s.logout);
   const router = useRouter();
+  const [birthDate, setBirthDate] = useState(() => birthDateFromMetadata(user?.metadata));
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [profileSuccess, setProfileSuccess] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -21,9 +57,46 @@ export default function SettingsPage() {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
 
+  useEffect(() => {
+    setBirthDate(birthDateFromMetadata(user?.metadata));
+  }, [user?.metadata]);
+
+  useEffect(() => {
+    let active = true;
+    userApi.getMe()
+      .then((latest) => {
+        if (!active) return;
+        setUser(latest);
+        setBirthDate(birthDateFromMetadata(latest.metadata));
+      })
+      .catch(() => {
+        // Keep the cached user if the refresh fails.
+      });
+    return () => {
+      active = false;
+    };
+  }, [setUser]);
+
   const handleLogout = () => {
     logout();
     router.push('/login');
+  };
+
+  const handleUpdateProfile = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setProfileError('');
+    setProfileSuccess('');
+    setSavingProfile(true);
+    try {
+      const updated = await userApi.updateProfile({ birthDate: birthDate || undefined });
+      setUser(updated);
+      setBirthDate(birthDateFromMetadata(updated.metadata));
+      setProfileSuccess('生日已保存，家族成员页会展示生日和年龄。');
+    } catch (err) {
+      setProfileError(err instanceof Error ? err.message : '保存个人资料失败');
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   const handleChangePassword = async (event: React.FormEvent) => {
@@ -59,45 +132,84 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="mx-auto max-w-2xl">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-900">设置</h1>
-        <p className="text-sm text-gray-500">账户与偏好</p>
+        <p className="text-sm text-gray-500">管理账号、安全信息与平台维护入口</p>
       </div>
 
-      {/* 用户信息 */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6 mb-4">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center text-lg font-medium">
+      <div className="mb-4 rounded-xl border border-gray-200 bg-white p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <CalendarDays className="h-5 w-5 text-blue-600" />
+          <h2 className="text-sm font-semibold text-gray-900">个人资料</h2>
+        </div>
+
+        <form onSubmit={handleUpdateProfile} className="space-y-4">
+          {profileError && (
+            <div className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">
+              {profileError}
+            </div>
+          )}
+          {profileSuccess && (
+            <div className="flex items-center gap-2 rounded-lg bg-green-50 px-4 py-2 text-sm text-green-700">
+              <CheckCircle className="h-4 w-4" />
+              {profileSuccess}
+            </div>
+          )}
+
+          <label className="block text-sm font-medium text-gray-700">
+            出生年月日
+            <input
+              type="date"
+              value={birthDate}
+              onChange={(event) => setBirthDate(event.target.value)}
+              className="mt-1 h-10 w-full rounded-lg border border-gray-200 px-3 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </label>
+          <p className="text-xs leading-5 text-gray-500">
+            当前用于 Agent 判断语气和建议边界的年龄：{ageLabel(birthDate)}。未填写时系统按 20 岁处理。
+          </p>
+
+          <button
+            type="submit"
+            disabled={savingProfile}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+          >
+            {savingProfile ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CalendarDays className="h-4 w-4" />}
+            保存生日
+          </button>
+        </form>
+      </div>
+
+      <div className="mb-4 rounded-xl border border-gray-200 bg-white p-6">
+        <div className="mb-4 flex items-center gap-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-lg font-medium text-white">
             {(user?.nickname || user?.username || 'U').charAt(0).toUpperCase()}
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">
-              {user?.nickname || user?.username}
-            </h3>
+            <h3 className="font-semibold text-gray-900">{user?.nickname || user?.username}</h3>
             <p className="text-sm text-gray-500">@{user?.username}</p>
           </div>
         </div>
 
         <div className="space-y-3">
-          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-            <User className="w-4 h-4 text-gray-400" />
+          <div className="flex items-center gap-3 rounded-lg bg-gray-50 p-3">
+            <User className="h-4 w-4 text-gray-400" />
             <div className="flex-1 text-sm">
               <span className="text-gray-500">用户名</span>
               <span className="ml-4 text-gray-900">{user?.username}</span>
             </div>
           </div>
-          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-            <Shield className="w-4 h-4 text-gray-400" />
+          <div className="flex items-center gap-3 rounded-lg bg-gray-50 p-3">
+            <Shield className="h-4 w-4 text-gray-400" />
             <div className="flex-1 text-sm">
-              <span className="text-gray-500">角色</span>
+              <span className="text-gray-500">平台身份</span>
               <span className="ml-4 text-gray-900">{platformRoleLabel(user?.role)}</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 修改密码 */}
       <div className="mb-4 rounded-xl border border-gray-200 bg-white p-6">
         <div className="mb-4 flex items-center gap-2">
           <KeyRound className="h-5 w-5 text-blue-600" />
@@ -166,21 +278,39 @@ export default function SettingsPage() {
         </form>
       </div>
 
-      {/* 退出 */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6">
+      {isPlatformAdmin(user) && (
+        <div className="mb-4 rounded-xl border border-gray-200 bg-white p-6">
+          <div className="mb-3 flex items-center gap-2">
+            <Database className="h-5 w-5 text-purple-600" />
+            <h2 className="text-sm font-semibold text-gray-900">管理员工具</h2>
+          </div>
+          <p className="mb-4 text-sm leading-6 text-gray-500">
+            查看数据库健康、表记录数量和向量索引状态。这里不展示家族私密原文，只用于排查系统状态。
+          </p>
+          <Link
+            href="/dashboard/admin/database"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 text-sm font-medium text-white transition-colors hover:bg-purple-700"
+          >
+            <Database className="h-4 w-4" />
+            打开数据库健康页
+          </Link>
+        </div>
+      )}
+
+      <div className="rounded-xl border border-gray-200 bg-white p-6">
         <button
+          type="button"
           onClick={handleLogout}
-          className="flex items-center gap-2 px-4 py-2 text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors text-sm"
+          className="flex items-center gap-2 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600 transition-colors hover:bg-red-100"
         >
-          <LogOut className="w-4 h-4" />
+          <LogOut className="h-4 w-4" />
           退出登录
         </button>
       </div>
 
-      {/* 版本信息 */}
       <div className="mt-8 text-center text-xs text-gray-400">
-        <p>家族教育Agent v0.1.0</p>
-        <p className="mt-1">第一阶段 · 家庭陪伴 AI 最小可用版</p>
+        <p>FamilyAgent v0.1.0</p>
+        <p className="mt-1">家庭长期记忆与家族 Agent 最小可用版本</p>
       </div>
     </div>
   );

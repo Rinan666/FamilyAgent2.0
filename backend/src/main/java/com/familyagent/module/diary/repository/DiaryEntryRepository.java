@@ -25,7 +25,7 @@ public interface DiaryEntryRepository extends BaseMapper<DiaryEntry> {
                 SELECT 1 FROM family_members fm
                 WHERE fm.family_id = diary_entries.family_id
                   AND fm.user_id = #{viewerUserId}
-                  AND fm.role IN ('OWNER', 'ADMIN')
+                  AND fm.role = 'OWNER'
               )
             )
             OR (
@@ -52,6 +52,22 @@ public interface DiaryEntryRepository extends BaseMapper<DiaryEntry> {
     @Select("""
         SELECT * FROM diary_entries
         WHERE family_id = #{familyId}
+          AND user_id = #{userId}
+          AND visibility = #{visibility}
+          AND (metadata->>'status' IS NULL OR metadata->>'status' = 'ACTIVE')
+          AND COALESCE(metadata->>'diaryDate', TO_CHAR(created_at, 'YYYY-MM-DD')) = #{diaryDate}
+        ORDER BY created_at ASC
+        LIMIT 1
+        """)
+    DiaryEntry findSameDayMergeCandidate(
+            @Param("familyId") Long familyId,
+            @Param("userId") Long userId,
+            @Param("visibility") String visibility,
+            @Param("diaryDate") String diaryDate);
+
+    @Select("""
+        SELECT * FROM diary_entries
+        WHERE family_id = #{familyId}
           AND user_id = #{targetUserId}
           AND (metadata->>'status' IS NULL OR metadata->>'status' = 'ACTIVE')
           AND (
@@ -64,7 +80,7 @@ public interface DiaryEntryRepository extends BaseMapper<DiaryEntry> {
                 SELECT 1 FROM family_members fm
                 WHERE fm.family_id = diary_entries.family_id
                   AND fm.user_id = #{viewerUserId}
-                  AND fm.role IN ('OWNER', 'ADMIN')
+                  AND fm.role = 'OWNER'
               )
             )
             OR (
@@ -104,7 +120,7 @@ public interface DiaryEntryRepository extends BaseMapper<DiaryEntry> {
                 SELECT 1 FROM family_members fm
                 WHERE fm.family_id = diary_entries.family_id
                   AND fm.user_id = #{viewerUserId}
-                  AND fm.role IN ('OWNER', 'ADMIN')
+                  AND fm.role = 'OWNER'
               )
             )
             OR (
@@ -138,5 +154,18 @@ public interface DiaryEntryRepository extends BaseMapper<DiaryEntry> {
         """)
     List<DiaryEntry> findActiveByFamilyForIndexing(
             @Param("familyId") Long familyId,
+            @Param("limit") int limit);
+
+    @Select("""
+        SELECT * FROM diary_entries
+        WHERE family_id = #{familyId}
+          AND user_id = #{userId}
+          AND (metadata->>'status' IS NULL OR metadata->>'status' = 'ACTIVE')
+        ORDER BY created_at DESC
+        LIMIT #{limit}
+        """)
+    List<DiaryEntry> findActiveByFamilyAndUserForStyle(
+            @Param("familyId") Long familyId,
+            @Param("userId") Long userId,
             @Param("limit") int limit);
 }

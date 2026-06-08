@@ -31,9 +31,9 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   }
 
   return (
-    <div className="flex min-h-dvh bg-gray-50">
+    <div className="flex h-dvh overflow-hidden bg-gray-50">
       <Sidebar viewerRole={viewerRole} isPlatformAdmin={platformAdmin} />
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Header
           user={user}
           viewerRole={viewerRole}
@@ -43,7 +43,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
           setActiveFamilyId={setActiveFamilyId}
           mobileNav={<MobileNav viewerRole={viewerRole} isPlatformAdmin={platformAdmin} />}
         />
-        <main className="min-w-0 flex-1 bg-gray-50 px-4 pb-28 pt-5 sm:px-5 lg:p-6">{children}</main>
+        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-gray-50 px-4 pb-28 pt-5 sm:px-5 lg:p-6">{children}</main>
       </div>
       <MobileBottomNav viewerRole={viewerRole} />
     </div>

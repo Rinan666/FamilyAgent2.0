@@ -36,5 +36,18 @@ public class DiarySchemaInitializer {
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_diary_family_user ON diary_entries(family_id, user_id)");
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_diary_visibility ON diary_entries(visibility)");
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_diary_created ON diary_entries(created_at DESC)");
+        jdbcTemplate.execute("""
+            CREATE INDEX IF NOT EXISTS idx_diary_family_visibility_created
+            ON diary_entries(family_id, visibility, created_at DESC)
+            """);
+        jdbcTemplate.execute("""
+            CREATE INDEX IF NOT EXISTS idx_diary_family_user_created
+            ON diary_entries(family_id, user_id, created_at DESC)
+            """);
+        jdbcTemplate.execute("""
+            CREATE INDEX IF NOT EXISTS idx_diary_family_related_user
+            ON diary_entries(family_id, ((metadata->>'relatedUserId')))
+            WHERE metadata ? 'relatedUserId'
+            """);
     }
 }

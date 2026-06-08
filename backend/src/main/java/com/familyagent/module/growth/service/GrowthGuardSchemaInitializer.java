@@ -36,6 +36,31 @@ public class GrowthGuardSchemaInitializer {
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_growth_guard_category ON growth_guard_records(category)");
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_growth_guard_status ON growth_guard_records(status)");
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_growth_guard_observed ON growth_guard_records(observed_at DESC)");
+        jdbcTemplate.execute("""
+            CREATE INDEX IF NOT EXISTS idx_growth_guard_family_visibility_status_observed
+            ON growth_guard_records(family_id, visibility, status, observed_at DESC, created_at DESC)
+            """);
+        jdbcTemplate.execute("""
+            CREATE INDEX IF NOT EXISTS idx_growth_guard_family_target_status_observed
+            ON growth_guard_records(family_id, target_user_id, status, observed_at DESC, created_at DESC)
+            """);
+        jdbcTemplate.execute("""
+            CREATE INDEX IF NOT EXISTS idx_growth_guard_family_creator_status_observed
+            ON growth_guard_records(family_id, created_by, status, observed_at DESC, created_at DESC)
+            """);
+        jdbcTemplate.execute("""
+            CREATE TABLE IF NOT EXISTS growth_guard_staleness_votes (
+                id BIGSERIAL PRIMARY KEY,
+                record_id BIGINT NOT NULL REFERENCES growth_guard_records(id) ON DELETE CASCADE,
+                family_id BIGINT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
+                user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                CONSTRAINT uk_growth_guard_staleness_record_user UNIQUE(record_id, user_id)
+            )
+            """);
+        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_growth_guard_staleness_record ON growth_guard_staleness_votes(record_id)");
+        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_growth_guard_staleness_family ON growth_guard_staleness_votes(family_id)");
+        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_growth_guard_staleness_user ON growth_guard_staleness_votes(user_id)");
 
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS growth_guard_reports (
@@ -59,5 +84,9 @@ public class GrowthGuardSchemaInitializer {
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_growth_report_target ON growth_guard_reports(target_user_id)");
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_growth_report_status ON growth_guard_reports(status)");
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_growth_report_week ON growth_guard_reports(week_end DESC)");
+        jdbcTemplate.execute("""
+            CREATE INDEX IF NOT EXISTS idx_growth_report_family_target_status_week
+            ON growth_guard_reports(family_id, target_user_id, status, week_end DESC)
+            """);
     }
 }

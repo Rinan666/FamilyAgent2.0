@@ -16,6 +16,7 @@ public class LoginResponse {
     private String avatarUrl;
     private String role;
     private String status;
+    private Object metadata;
     private String token;
     private String tokenName;
 }

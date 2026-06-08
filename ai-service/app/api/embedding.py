@@ -8,16 +8,20 @@ from typing import Optional
 
 import httpx
 import litellm
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.utils.privacy_guard import redact_ai_bound_text
 from app.utils.sanitizer import sanitize_text
+from app.utils.safety_limits import enforce_ai_concurrency, enforce_embedding_rate_limit
 
 logger = logging.getLogger("familyagent.ai.api.embedding")
 
-router = APIRouter()
+router = APIRouter(dependencies=[
+    Depends(enforce_embedding_rate_limit),
+    Depends(enforce_ai_concurrency),
+])
 
 
 class EmbedRequest(BaseModel):

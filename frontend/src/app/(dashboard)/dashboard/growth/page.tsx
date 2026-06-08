@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { familyApi, growthGuardApi, memoryApi } from '@/lib/api';
+import { memberAge } from '@/lib/roles';
 import { useViewerRole } from '@/hooks/useViewerRole';
 import VoiceInputButton from '@/components/voice/VoiceInputButton';
 import type {
@@ -60,6 +61,35 @@ const followUpFilters: { value: GrowthFollowUpStatus | 'ALL'; label: string }[] 
   { value: 'IMPROVED', label: '已有改善' },
   { value: 'ARCHIVED', label: '暂不跟进' },
 ];
+
+const recordPageSizeOptions = [3, 6, 9];
+
+const observerPerspectiveOptions = [
+  { value: 'CAREGIVER', label: '照护者观察' },
+  { value: 'SELF', label: '本人自述' },
+  { value: 'ELDER', label: '长辈观察' },
+  { value: 'FAMILY_MEMBER', label: '家人补充' },
+  { value: 'OTHER', label: '其他来源' },
+] as const;
+
+const evidenceTypeOptions = [
+  { value: 'OBSERVED_FACT', label: '可观察事实' },
+  { value: 'SELF_REPORT', label: '本人表达' },
+  { value: 'FEELING', label: '观察者感受' },
+  { value: 'INFERENCE', label: '初步猜测' },
+] as const;
+
+const confidenceOptions = [
+  { value: 'LOW', label: '低：线索少' },
+  { value: 'MEDIUM', label: '中：可继续看趋势' },
+  { value: 'HIGH', label: '高：多次或多来源' },
+] as const;
+
+const selfConfirmedOptions = [
+  { value: 'UNKNOWN', label: '未确认' },
+  { value: 'YES', label: '本人确认' },
+  { value: 'NO', label: '本人未确认' },
+] as const;
 
 const quickTemplates: Record<GrowthGuardCategory, { text: string; severity: number }[]> = {
   POSTURE: [
@@ -155,6 +185,32 @@ function followUpStyle(status: GrowthFollowUpStatus) {
   return followUpOptions.find((option) => option.value === status) || followUpOptions[0];
 }
 
+function metadataText(record: GrowthGuardRecord, key: string) {
+  const value = record.metadata?.[key];
+  return typeof value === 'string' ? value : '';
+}
+
+function optionLabel<T extends readonly { value: string; label: string }[]>(options: T, value?: string) {
+  return options.find((option) => option.value === value)?.label || '';
+}
+
+function buildObservationContent(fact: string, concern: string, uncertainty: string) {
+  return [
+    fact.trim() ? `发生了什么：${fact.trim()}` : '',
+    concern.trim() ? `我有什么担心：${concern.trim()}` : '',
+    uncertainty.trim() ? `我还不确定什么：${uncertainty.trim()}` : '',
+  ].filter(Boolean).join('\n');
+}
+
+function stalenessStats(record: GrowthGuardRecord) {
+  return record.metadata?.stalenessStats || {
+    recordId: record.id,
+    staleVotes: 0,
+    stalenessWeight: 1,
+    myVoted: false,
+  };
+}
+
 export default function GrowthPage() {
   const searchParams = useSearchParams();
   const { families, activeFamilyId, setActiveFamilyId, isLoading: loadingFamilies } = useViewerRole();
@@ -162,12 +218,17 @@ export default function GrowthPage() {
   const [selectedFamilyId, setSelectedFamilyId] = useState<number | null>(null);
   const [targetUserId, setTargetUserId] = useState<number | ''>('');
   const [category, setCategory] = useState<GrowthGuardCategory>('POSTURE');
-  const [content, setContent] = useState('');
+  const [factText, setFactText] = useState('');
+  const [concernText, setConcernText] = useState('');
+  const [uncertaintyText, setUncertaintyText] = useState('');
   const [severity, setSeverity] = useState(3);
   const [observedAt, setObservedAt] = useState(() => new Date().toISOString().slice(0, 10));
   const [followUpAt, setFollowUpAt] = useState(() => dateAfter(7));
-  const [note, setNote] = useState('');
   const [visibility, setVisibility] = useState<MemoryScope>('CARE_VISIBLE');
+  const [observerPerspective, setObserverPerspective] = useState('CAREGIVER');
+  const [evidenceType, setEvidenceType] = useState('OBSERVED_FACT');
+  const [confidenceLevel, setConfidenceLevel] = useState('MEDIUM');
+  const [selfConfirmed, setSelfConfirmed] = useState('UNKNOWN');
   const [records, setRecords] = useState<GrowthGuardRecord[]>([]);
   const [memories, setMemories] = useState<MemoryEntry[]>([]);
   const [report, setReport] = useState<WeeklyGrowthReport | null>(null);
@@ -178,7 +239,10 @@ export default function GrowthPage() {
   const [organizingDraft, setOrganizingDraft] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null);
+  const [markingStaleId, setMarkingStaleId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<GrowthFollowUpStatus | 'ALL'>('ALL');
+  const [recordPage, setRecordPage] = useState(1);
+  const [recordPageSize, setRecordPageSize] = useState(3);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const requestedFamilyId = useMemo(() => {
@@ -208,6 +272,15 @@ export default function GrowthPage() {
     return status !== 'IMPROVED' && status !== 'ARCHIVED';
   });
   const visibleRecords = records.filter((record) => statusFilter === 'ALL' || followUpStatus(record) === statusFilter);
+  const totalRecordPages = Math.max(1, Math.ceil(visibleRecords.length / recordPageSize));
+  const safeRecordPage = Math.min(recordPage, totalRecordPages);
+  const recordPageStart = (safeRecordPage - 1) * recordPageSize;
+  const paginatedRecords = visibleRecords.slice(recordPageStart, recordPageStart + recordPageSize);
+  const observationContent = buildObservationContent(factText, concernText, uncertaintyText);
+
+  useEffect(() => {
+    setRecordPage(1);
+  }, [selectedFamilyId, statusFilter, recordPageSize]);
 
   const loadFamilyData = useCallback(async (familyId: number) => {
     setLoadingRecords(true);
@@ -225,7 +298,7 @@ export default function GrowthPage() {
       setSavedReports(Array.isArray(reportList) ? reportList : []);
       setReport((current) => current ?? reportContent(Array.isArray(reportList) ? reportList[0] : undefined));
       if (!targetUserId && Array.isArray(memberList) && memberList.length > 0) {
-        const learner = memberList.find((member) => member.role === 'STUDENT') || memberList[0];
+        const learner = memberList.find((member) => memberAge(member) < 18) || memberList[0];
         setTargetUserId(learner.userId);
       }
     } catch (err) {
@@ -256,14 +329,14 @@ export default function GrowthPage() {
   useEffect(() => {
     if (requestedCategory) {
       setCategory(requestedCategory);
-      if (!content.trim()) {
+      if (!factText.trim() && !concernText.trim() && !uncertaintyText.trim()) {
         const template = quickTemplates[requestedCategory][0];
-        setContent(template.text);
+        setFactText(template.text);
         setSeverity(template.severity);
         setFollowUpAt(dateAfter(7));
       }
     }
-  }, [content, requestedCategory]);
+  }, [concernText, factText, requestedCategory, uncertaintyText]);
 
   useEffect(() => {
     if (!requestedTargetUserId || currentMembers.length === 0) return;
@@ -284,7 +357,7 @@ export default function GrowthPage() {
   };
 
   const handleSave = async () => {
-    if (!selectedFamilyId || !content.trim()) return;
+    if (!selectedFamilyId || !observationContent.trim()) return;
     setSaving(true);
     setError('');
     try {
@@ -292,15 +365,28 @@ export default function GrowthPage() {
         familyId: selectedFamilyId,
         targetUserId: targetUserId || undefined,
         category,
-        content,
+        content: observationContent,
         severity,
         observedAt,
         followUpAt: followUpAt || undefined,
         visibility,
-        metadata: { followUpStatus: 'PENDING' },
+        metadata: {
+          followUpStatus: 'PENDING',
+          observerPerspective,
+          evidenceType,
+          confidenceLevel,
+          selfConfirmed,
+          observationPrinciple: 'FACT_FEELING_INFERENCE_SEPARATED',
+          observationParts: {
+            fact: factText.trim(),
+            concern: concernText.trim(),
+            uncertainty: uncertaintyText.trim(),
+          },
+        },
       });
-      setContent('');
-      setNote('');
+      setFactText('');
+      setConcernText('');
+      setUncertaintyText('');
       setFollowUpAt(dateAfter(7));
       flashSuccess('成长观察已保存');
       await loadFamilyData(selectedFamilyId);
@@ -325,36 +411,47 @@ export default function GrowthPage() {
     }
   };
 
+  const handleMarkStale = async (record: GrowthGuardRecord) => {
+    setMarkingStaleId(record.id);
+    setError('');
+    try {
+      const updated = await growthGuardApi.markStale(record.id);
+      setRecords((prev) => prev.map((item) => (item.id === record.id ? updated : item)));
+      flashSuccess('已标记为可能过时，AI 会降低它的参考权重');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '过时标记失败');
+    } finally {
+      setMarkingStaleId(null);
+    }
+  };
+
   const handleCategoryChange = (nextCategory: GrowthGuardCategory) => {
     setCategory(nextCategory);
-    if (!content.trim()) {
+    if (!factText.trim() && !concernText.trim() && !uncertaintyText.trim()) {
       const template = quickTemplates[nextCategory][0];
-      setContent(template.text);
+      setFactText(template.text);
       setSeverity(template.severity);
       setFollowUpAt(dateAfter(7));
     }
   };
 
   const applyTemplate = (template: { text: string; severity: number }) => {
-    const nextContent = note.trim()
-      ? `${template.text}\n补充：${note.trim()}`
-      : template.text;
-    setContent(nextContent);
+    setFactText(template.text);
     setSeverity(template.severity);
     setFollowUpAt(dateAfter(7));
   };
 
   const appendVoiceTranscript = useCallback((text: string) => {
-    setContent((current) => (current.trim() ? `${current.trim()}\n${text}` : text));
+    setFactText((current) => (current.trim() ? `${current.trim()}\n${text}` : text));
   }, []);
 
   const handleOrganizeDraft = async () => {
-    if (!content.trim()) return;
+    if (!observationContent.trim()) return;
     setOrganizingDraft(true);
     setError('');
     try {
       const result = await memoryApi.organizeDraft({
-        content,
+        content: observationContent,
         scene: 'GROWTH_GUARD',
         familyContext: selectedFamily?.description || selectedFamily?.name || '',
         currentType: category,
@@ -362,7 +459,9 @@ export default function GrowthPage() {
         target: targetMember ? memberName(targetMember) : '',
       });
       const draft = result.data;
-      setContent(draft.content || content);
+      setFactText(draft.content || observationContent);
+      setConcernText('');
+      setUncertaintyText('');
       if (categoryOptions.some((option) => option.value === draft.growth_category)) {
         setCategory(draft.growth_category as GrowthGuardCategory);
       }
@@ -420,11 +519,11 @@ export default function GrowthPage() {
             memoryCount: memories.length,
           },
         });
-        setSavedReports((prev) => [saved, ...prev.filter((item) => item.id !== saved.id)].slice(0, 5));
+        setSavedReports((prev) => [saved, ...prev.filter((item) => item.id !== saved.id)].slice(0, 3));
       }
-      flashSuccess('已生成并保存本周成长提醒');
+      flashSuccess('已生成并保存成长观察照护摘要');
     } catch (err) {
-      setError(err instanceof Error ? err.message : '生成周提醒失败');
+      setError(err instanceof Error ? err.message : '生成照护摘要失败');
     } finally {
       setGenerating(false);
     }
@@ -444,7 +543,7 @@ export default function GrowthPage() {
       <div className="mx-auto max-w-3xl rounded-lg border border-gray-200 bg-white p-10 text-center">
         <Users className="mx-auto mb-3 h-10 w-10 text-gray-300" />
         <h1 className="text-lg font-semibold text-gray-900">还没有家族空间</h1>
-        <p className="mt-2 text-sm text-gray-500">先创建或加入家族，再记录成长观察。</p>
+        <p className="mt-2 text-sm text-gray-500">先创建或加入家族，再记录可复核的成长线索。</p>
         <Link
           href="/dashboard/family"
           className="mt-5 inline-flex h-10 items-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
@@ -459,24 +558,9 @@ export default function GrowthPage() {
     <div className="mx-auto w-full max-w-6xl">
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">成长守护</h1>
-          <p className="mt-1 text-sm text-gray-500">用轻量记录沉淀孩子状态，再结合家族经验生成每周提醒。</p>
+          <h1 className="text-xl font-bold text-gray-900">成长观察</h1>
+          <p className="mt-1 text-sm text-gray-500">记录可观察事实、来源视角和不确定性。它不是诊断，也不是对人的定性；系统会按复核周期降低旧观察的权重。</p>
         </div>
-        <select
-          value={selectedFamilyId ?? ''}
-          onChange={(event) => {
-            const familyId = Number(event.target.value);
-            setSelectedFamilyId(familyId);
-            setActiveFamilyId(familyId);
-            setTargetUserId('');
-            setReport(null);
-          }}
-          className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          {families.map((family) => (
-            <option key={family.id} value={family.id}>{family.name}</option>
-          ))}
-        </select>
       </div>
 
       {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">{error}</div>}
@@ -489,9 +573,19 @@ export default function GrowthPage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[0.9fr_1.1fr]">
         <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-5">
-          <div className="mb-4 flex items-center gap-2">
-            <HeartPulse className="h-5 w-5 text-green-600" />
-            <h2 className="text-sm font-semibold text-gray-900">新增观察</h2>
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <HeartPulse className="h-5 w-5 text-green-600" />
+              <div>
+                <h2 className="text-sm font-semibold text-gray-900">新增观察</h2>
+                <p className="mt-0.5 text-xs text-gray-500">先写事实，再补充担心和不确定性，方便以后复核是否仍然存在。</p>
+              </div>
+            </div>
+            <span className="rounded-full bg-green-50 px-2 py-1 text-[11px] font-medium text-green-700">观察线索</span>
+          </div>
+
+          <div className="mb-4 rounded-lg border border-green-100 bg-green-50 px-3 py-2 text-xs leading-5 text-green-800">
+            记录的是“可复核线索”，不是对人的判断。AI 摘要会优先参考事实，并对未确认或过期观察降低权重。
           </div>
 
           <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -521,9 +615,59 @@ export default function GrowthPage() {
             </label>
           </div>
 
-          <div className="mb-3 rounded-lg bg-gray-50 p-3">
+          <div className="mb-4 rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
             <div className="mb-2 flex items-center justify-between gap-3">
-              <p className="text-xs font-medium text-gray-500">快捷观察</p>
+              <span className="text-xs font-semibold text-gray-800">核心记录</span>
+              <div className="flex flex-wrap justify-end gap-2">
+                <VoiceInputButton onTranscript={appendVoiceTranscript} disabled={saving || organizingDraft} />
+                <button
+                  type="button"
+                  onClick={handleOrganizeDraft}
+                  disabled={!observationContent.trim() || saving || organizingDraft}
+                  className="inline-flex h-9 items-center gap-2 rounded-lg border border-purple-100 bg-purple-50 px-3 text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50"
+                >
+                  {organizingDraft ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  整理草稿
+                </button>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3">
+              <label className="text-xs font-medium text-gray-500">
+                发生了什么
+                <textarea
+                  value={factText}
+                  onChange={(event) => setFactText(event.target.value)}
+                  rows={3}
+                  placeholder="尽量写可观察事实，例如：写作业时身体前倾，提醒后能坐直一会儿。"
+                  className="mt-1 w-full resize-none rounded-lg border border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </label>
+              <label className="text-xs font-medium text-gray-500">
+                我有什么担心
+                <textarea
+                  value={concernText}
+                  onChange={(event) => setConcernText(event.target.value)}
+                  rows={2}
+                  placeholder="写自己的担心或感受，例如：担心长期坐姿影响体态，但还不确定是否持续。"
+                  className="mt-1 w-full resize-none rounded-lg border border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </label>
+              <label className="text-xs font-medium text-gray-500">
+                我还不确定什么
+                <textarea
+                  value={uncertaintyText}
+                  onChange={(event) => setUncertaintyText(event.target.value)}
+                  rows={2}
+                  placeholder="写需要继续确认的部分，例如：还不确定是桌椅高度、疲劳，还是习惯问题。"
+                  className="mt-1 w-full resize-none rounded-lg border border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="mb-4 rounded-lg bg-gray-50 p-3">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold text-gray-700">快捷填充</p>
               <button
                 type="button"
                 onClick={() => {
@@ -549,96 +693,118 @@ export default function GrowthPage() {
             </div>
           </div>
 
-          <label className="mb-3 block text-xs font-medium text-gray-500">
-            一句话补充
-            <input
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              onBlur={() => {
-                if (!note.trim() || content.includes(`补充：${note.trim()}`)) return;
-                setContent((current) => current.trim() ? `${current.trim()}\n补充：${note.trim()}` : note.trim());
-              }}
-              placeholder="例如：主要发生在写作业后半小时"
-              className="mt-1 h-10 w-full rounded-lg border border-gray-200 px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </label>
-
-          <div className="mb-3">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <span className="text-xs font-medium text-gray-500">观察内容</span>
-              <div className="flex flex-wrap justify-end gap-2">
-                <VoiceInputButton onTranscript={appendVoiceTranscript} disabled={saving || organizingDraft} />
-                <button
-                  type="button"
-                  onClick={handleOrganizeDraft}
-                  disabled={!content.trim() || saving || organizingDraft}
-                  className="inline-flex h-9 items-center gap-2 rounded-lg border border-purple-100 bg-purple-50 px-3 text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50"
-                >
-                  {organizingDraft ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                  整理草稿
-                </button>
-              </div>
+          <div className="mb-4 rounded-lg border border-gray-100 bg-gray-50 p-3">
+            <div className="mb-3">
+              <p className="text-xs font-semibold text-gray-700">补充设置</p>
+              <p className="mt-0.5 text-[11px] text-gray-500">用于帮助 AI 判断来源和可靠性，可按默认值保存。</p>
             </div>
-            <textarea
-              value={content}
-              onChange={(event) => setContent(event.target.value)}
-              rows={5}
-              placeholder="点击上方快捷观察，或直接写一条家庭观察。"
-              className="w-full resize-none rounded-lg border border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
 
-          <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className="text-xs font-medium text-gray-500">
-              观察日期
-              <input
-                type="date"
-                value={observedAt}
-                onChange={(event) => setObservedAt(event.target.value)}
-                className="mt-1 h-10 w-full rounded-lg border border-gray-200 px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </label>
-            <label className="text-xs font-medium text-gray-500">
-              跟进日期
-              <input
-                type="date"
-                value={followUpAt}
-                onChange={(event) => setFollowUpAt(event.target.value)}
-                className="mt-1 h-10 w-full rounded-lg border border-gray-200 px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </label>
-          </div>
+            <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="text-xs font-medium text-gray-500">
+                来源视角
+                <select
+                  value={observerPerspective}
+                  onChange={(event) => setObserverPerspective(event.target.value)}
+                  className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {observerPerspectiveOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs font-medium text-gray-500">
+                证据类型
+                <select
+                  value={evidenceType}
+                  onChange={(event) => setEvidenceType(event.target.value)}
+                  className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {evidenceTypeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
 
-          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className="text-xs font-medium text-gray-500">
-              留意程度：{severityLabel(severity)}
-              <input
-                type="range"
-                min={1}
-                max={5}
-                value={severity}
-                onChange={(event) => setSeverity(Number(event.target.value))}
-                className="mt-3 w-full accent-blue-600"
-              />
-            </label>
-            <label className="text-xs font-medium text-gray-500">
-              可见范围
-              <select
-                value={visibility}
-                onChange={(event) => setVisibility(event.target.value as MemoryScope)}
-                className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {visibilityOptions.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </label>
+            <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="text-xs font-medium text-gray-500">
+                置信程度
+                <select
+                  value={confidenceLevel}
+                  onChange={(event) => setConfidenceLevel(event.target.value)}
+                  className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {confidenceOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs font-medium text-gray-500">
+                本人确认
+                <select
+                  value={selfConfirmed}
+                  onChange={(event) => setSelfConfirmed(event.target.value)}
+                  className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {selfConfirmedOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="text-xs font-medium text-gray-500">
+                观察日期
+                <input
+                  type="date"
+                  value={observedAt}
+                  onChange={(event) => setObservedAt(event.target.value)}
+                  className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </label>
+              <label className="text-xs font-medium text-gray-500">
+                跟进日期
+                <input
+                  type="date"
+                  value={followUpAt}
+                  onChange={(event) => setFollowUpAt(event.target.value)}
+                  className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </label>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="text-xs font-medium text-gray-500">
+                留意程度：{severityLabel(severity)}
+                <input
+                  type="range"
+                  min={1}
+                  max={5}
+                  value={severity}
+                  onChange={(event) => setSeverity(Number(event.target.value))}
+                  className="mt-3 w-full accent-blue-600"
+                />
+              </label>
+              <label className="text-xs font-medium text-gray-500">
+                可见范围
+                <select
+                  value={visibility}
+                  onChange={(event) => setVisibility(event.target.value as MemoryScope)}
+                  className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {visibilityOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
           </div>
 
           <button
             type="button"
             onClick={handleSave}
-            disabled={!selectedFamilyId || !content.trim() || saving}
+            disabled={!selectedFamilyId || !observationContent.trim() || saving}
             className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -650,8 +816,8 @@ export default function GrowthPage() {
           <div className="rounded-lg border border-gray-200 bg-white p-4 sm:p-5">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-sm font-semibold text-gray-900">本周成长提醒</h2>
-                <p className="mt-1 text-xs text-gray-500">基于最近观察和家族经验生成，不构成诊断。</p>
+                <h2 className="text-sm font-semibold text-gray-900">成长观察照护摘要</h2>
+                <p className="mt-1 text-xs text-gray-500">面向照护者，基于观察线索和来源视角生成；默认照护可见，不构成诊断。</p>
               </div>
               <button
                 type="button"
@@ -660,7 +826,7 @@ export default function GrowthPage() {
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-purple-200 bg-purple-50 px-4 text-sm font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50"
               >
                 {generating ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                生成提醒
+                生成照护摘要
               </button>
             </div>
 
@@ -668,7 +834,7 @@ export default function GrowthPage() {
               <div className="rounded-lg bg-purple-50 p-4">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
                   <span className="text-sm font-semibold text-gray-900">{report.title}</span>
-                  <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-purple-700">AI 摘要</span>
+                  <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-purple-700">照护摘要</span>
                 </div>
                 <p className="text-sm leading-6 text-gray-700">{report.summary}</p>
                 {report.affirmations && report.affirmations.length > 0 && (
@@ -692,6 +858,14 @@ export default function GrowthPage() {
                     <p className="mb-1 text-xs font-medium text-yellow-700">温和留意</p>
                     <ul className="space-y-1 text-sm text-yellow-900">
                       {report.concerns.map((item) => <li key={item}>{item}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {report.uncertainty_notes && report.uncertainty_notes.length > 0 && (
+                  <div className="mt-3 rounded-lg bg-white/70 p-3">
+                    <p className="mb-1 text-xs font-medium text-gray-600">不确定性说明</p>
+                    <ul className="space-y-1 text-sm text-gray-700">
+                      {report.uncertainty_notes.map((item) => <li key={item}>{item}</li>)}
                     </ul>
                   </div>
                 )}
@@ -722,13 +896,13 @@ export default function GrowthPage() {
             ) : (
               <div className="rounded-lg border border-dashed border-gray-200 p-8 text-center">
                 <Sparkles className="mx-auto mb-2 h-8 w-8 text-gray-300" />
-                <p className="text-sm text-gray-500">保存 1 条以上成长观察后，可生成本周提醒。</p>
+                <p className="text-sm text-gray-500">保存 1 条以上成长观察后，可生成照护者可见的成长观察摘要。</p>
               </div>
             )}
 
             {savedReports.length > 0 && (
               <div className="mt-4 border-t border-gray-100 pt-4">
-                <p className="mb-2 text-xs font-medium text-gray-500">历史提醒</p>
+                <p className="mb-2 text-xs font-medium text-gray-500">历史照护摘要</p>
                 <div className="space-y-2">
                   {savedReports.map((savedReport) => {
                     const savedContent = reportContent(savedReport);
@@ -800,10 +974,11 @@ export default function GrowthPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {visibleRecords.map((record) => {
+                {paginatedRecords.map((record) => {
                   const target = currentMembers.find((member) => member.userId === record.targetUserId);
                   const status = followUpStatus(record);
                   const statusStyle = followUpStyle(status);
+                  const stale = stalenessStats(record);
                   return (
                     <article key={record.id} className="rounded-lg border border-gray-200 p-4">
                       <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -822,11 +997,57 @@ export default function GrowthPage() {
                             {severityLabel(record.severity)}
                           </span>
                         )}
+                        {metadataText(record, 'confidenceLevel') === 'LOW' && (
+                          <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                            低置信
+                          </span>
+                        )}
+                        {stale.staleVotes > 0 && (
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                            {stale.staleVotes} 人认为可能过时
+                          </span>
+                        )}
                       </div>
                       <p className="text-sm leading-6 text-gray-700">{record.content}</p>
+                      <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-gray-500">
+                        {optionLabel(observerPerspectiveOptions, metadataText(record, 'observerPerspective')) && (
+                          <span className="rounded-full bg-gray-50 px-2 py-0.5">
+                            {optionLabel(observerPerspectiveOptions, metadataText(record, 'observerPerspective'))}
+                          </span>
+                        )}
+                        {optionLabel(evidenceTypeOptions, metadataText(record, 'evidenceType')) && (
+                          <span className="rounded-full bg-gray-50 px-2 py-0.5">
+                            {optionLabel(evidenceTypeOptions, metadataText(record, 'evidenceType'))}
+                          </span>
+                        )}
+                        {optionLabel(selfConfirmedOptions, metadataText(record, 'selfConfirmed')) && (
+                          <span className="rounded-full bg-gray-50 px-2 py-0.5">
+                            {optionLabel(selfConfirmedOptions, metadataText(record, 'selfConfirmed'))}
+                          </span>
+                        )}
+                      </div>
                       <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-400">
                         <span>观察：{record.observedAt}</span>
                         {record.followUpAt && <span>跟进：{record.followUpAt}</span>}
+                        <button
+                          type="button"
+                          onClick={() => { void handleMarkStale(record); }}
+                          disabled={Boolean(stale.myVoted) || markingStaleId === record.id}
+                          className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors disabled:opacity-60 ${
+                            stale.myVoted
+                              ? 'border-slate-200 bg-slate-100 text-slate-600'
+                              : 'border-gray-200 bg-white text-gray-500 hover:border-slate-300 hover:text-slate-700'
+                          }`}
+                          title="标记后，这条观察仍保留，但 AI 会降低它的当前参考权重"
+                        >
+                          {markingStaleId === record.id
+                            ? <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                            : <AlertTriangle className="h-3.5 w-3.5" />}
+                          {stale.myVoted ? '已标过时' : '可能过时'}
+                        </button>
+                        {stale.staleVotes > 0 && (
+                          <span>权重 {Number(stale.stalenessWeight || 1).toFixed(2)}</span>
+                        )}
                         <div className="flex w-full flex-wrap gap-1.5 pt-1 sm:ml-auto sm:w-auto sm:pt-0">
                           {(['PENDING', 'WATCHING', 'IMPROVED'] as GrowthFollowUpStatus[]).map((nextStatus) => (
                             <button
@@ -853,6 +1074,47 @@ export default function GrowthPage() {
                     </article>
                   );
                 })}
+                {visibleRecords.length > recordPageSizeOptions[0] && (
+                  <div className="flex flex-col gap-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <span>每页</span>
+                      <select
+                        value={recordPageSize}
+                        onChange={(event) => {
+                          setRecordPageSize(Number(event.target.value));
+                          setRecordPage(1);
+                        }}
+                        className="h-8 rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        {recordPageSizeOptions.map((option) => (
+                          <option key={option} value={option}>{option} 条</option>
+                        ))}
+                      </select>
+                      <span>
+                        第 {safeRecordPage} / {totalRecordPages} 页
+                        {visibleRecords.length > 0 ? `，当前显示第 ${recordPageStart + 1}-${Math.min(recordPageStart + recordPageSize, visibleRecords.length)} 条` : ''}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setRecordPage((page) => Math.max(1, page - 1))}
+                        disabled={safeRecordPage <= 1}
+                        className="h-8 rounded-lg border border-gray-200 bg-white px-3 text-xs text-gray-600 hover:border-blue-200 hover:text-blue-700 disabled:opacity-50"
+                      >
+                        上一页
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRecordPage((page) => Math.min(totalRecordPages, page + 1))}
+                        disabled={safeRecordPage >= totalRecordPages}
+                        className="h-8 rounded-lg border border-gray-200 bg-white px-3 text-xs text-gray-600 hover:border-blue-200 hover:text-blue-700 disabled:opacity-50"
+                      >
+                        下一页
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -22,7 +22,7 @@ const entryTypeOptions: { value: DiaryEntryType; label: string }[] = [
 const visibilityOptions: { value: DiaryVisibility; label: string; note: string }[] = [
   { value: 'PRIVATE', label: '仅自己可见', note: '只作为个人长期记忆' },
   { value: 'FAMILY_VISIBLE', label: '全家可见', note: '家族成员可读' },
-  { value: 'CARE_VISIBLE', label: '照护授权可见', note: '本人、家庭管理员和你明确授权的照护成员可读' },
+  { value: 'CARE_VISIBLE', label: '照护授权可见', note: '本人、家族创建者和你明确授权的照护成员可读' },
   { value: 'LEGACY_VISIBLE', label: '传承预留', note: '暂按仅自己可见，未来支持授权后开放' },
 ];
 
@@ -45,7 +45,7 @@ const diaryTemplates: {
     visibility: 'FAMILY_VISIBLE',
     title: '今天的一个片段',
     content: '今天发生了：\n\n我当时的感受是：\n\n这件事以后回看，可能值得记住的是：',
-    tags: '日常 家族记忆',
+    tags: '短期片段 日常',
     mood: '平静',
   },
   {
@@ -55,7 +55,7 @@ const diaryTemplates: {
     visibility: 'PRIVATE',
     title: '一次选择的复盘',
     content: '我面对的选择是：\n\n我当时为什么这样选：\n\n结果如何：\n\n如果再来一次，我会提醒自己：',
-    tags: '选择 复盘',
+    tags: '阶段复盘 人生选择',
   },
   {
     id: 'family-message',
@@ -64,17 +64,17 @@ const diaryTemplates: {
     visibility: 'FAMILY_VISIBLE',
     title: '想留给家人的一句话',
     content: '我想对家人说：\n\n这句话背后的原因是：\n\n希望以后你们看到时能记得：',
-    tags: '给家人的话 传承',
+    tags: '长期留存 给家人的话',
     mood: '感激',
   },
   {
     id: 'care',
-    label: '成长观察',
+    label: '生活线索',
     entryType: 'IMPORTANT_EVENT',
     visibility: 'CARE_VISIBLE',
-    title: '一次成长观察',
-    content: '我观察到的现象是：\n\n可能相关的原因：\n\n这周可以轻轻尝试的行动：\n\n下次回看时间：',
-    tags: '成长观察 照护',
+    title: '一次生活线索',
+    content: '我注意到的生活线索是：\n\n可能相关的原因：\n\n这周可以轻轻尝试的行动：\n\n下次回看时间：',
+    tags: '短期线索 照护',
   },
   {
     id: 'lesson',
@@ -83,7 +83,7 @@ const diaryTemplates: {
     visibility: 'FAMILY_VISIBLE',
     title: '一个想传下去的经验',
     content: '这件事发生在：\n\n我踩过的坑或学到的经验是：\n\n如果后辈遇到类似情况，我建议：',
-    tags: '经验教训 长辈经验',
+    tags: '长期经验 家族教训',
     mood: '有收获',
   },
 ];
@@ -103,6 +103,7 @@ interface DiaryDraft {
 }
 
 const DRAFT_VERSION = 'v1';
+const entryPageSizeOptions = [3, 6, 9];
 
 function draftKey(userId?: number, familyId?: number | null, relatedUserId?: number | null) {
   if (!userId || !familyId) return '';
@@ -226,7 +227,7 @@ function aiUsageNote(entry: DiaryEntry) {
       return '仅作者本人可见。默认不会进入其他成员的镜像 Agent 上下文。';
     case 'CARE_VISIBLE':
     case 'PARENT_VISIBLE':
-      return '会在本人、家庭管理员和明确授权照护者范围内，作为家庭陪伴 AI 与镜像 Agent 的参考资料。';
+      return '会在本人、家族创建者和明确授权照护者范围内，作为家族 Agent 与镜像 Agent 的参考资料。';
     case 'FAMILY_VISIBLE':
     case 'FAMILY':
       return '全家成员可见，会在权限允许时进入家庭陪伴 AI、家族经验沉淀和镜像 Agent 参考上下文。';
@@ -253,6 +254,7 @@ export default function DiaryPage() {
   const [tagTextTouched, setTagTextTouched] = useState(false);
   const [pendingTemplate, setPendingTemplate] = useState<DiaryTemplate | null>(null);
   const [draftStatus, setDraftStatus] = useState('');
+  const [saveStatus, setSaveStatus] = useState('');
   const [loadingEntries, setLoadingEntries] = useState(false);
   const [saving, setSaving] = useState(false);
   const [organizingDraft, setOrganizingDraft] = useState(false);
@@ -260,10 +262,14 @@ export default function DiaryPage() {
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [promotingId, setPromotingId] = useState<number | null>(null);
   const [promotedDiaryIds, setPromotedDiaryIds] = useState<Set<number>>(new Set());
+  const [promotionEntry, setPromotionEntry] = useState<DiaryEntry | null>(null);
+  const [promotionReason, setPromotionReason] = useState('');
   const [coreMemoryEntry, setCoreMemoryEntry] = useState<DiaryEntry | null>(null);
   const [coreMemoryReason, setCoreMemoryReason] = useState('');
   const [selectedEntryId, setSelectedEntryId] = useState<number | null>(null);
   const [editingEntryId, setEditingEntryId] = useState<number | null>(null);
+  const [entryPage, setEntryPage] = useState(1);
+  const [entryPageSize, setEntryPageSize] = useState(3);
   const [editEntryType, setEditEntryType] = useState<DiaryEntryType>('DAILY');
   const [editVisibility, setEditVisibility] = useState<DiaryVisibility>('PRIVATE');
   const [editTitle, setEditTitle] = useState('');
@@ -275,6 +281,7 @@ export default function DiaryPage() {
   const draftHydratedKeyRef = useRef('');
   const suppressDraftSaveRef = useRef(false);
   const queryTemplateAppliedRef = useRef('');
+  const queryPrefillAppliedRef = useRef('');
   const requestedFamilyId = useMemo(() => {
     const value = Number(searchParams.get('familyId'));
     return Number.isFinite(value) && value > 0 ? value : null;
@@ -287,6 +294,12 @@ export default function DiaryPage() {
     () => searchParams.get('relatedMemberName')?.trim() || '',
     [searchParams],
   );
+  const requestedPrefill = useMemo(() => ({
+    title: searchParams.get('prefillTitle')?.trim() || '',
+    content: searchParams.get('prefillContent')?.trim() || '',
+    tags: searchParams.get('prefillTags')?.trim() || '',
+    visibility: searchParams.get('prefillVisibility')?.trim() as DiaryVisibility | '',
+  }), [searchParams]);
   const relatedContextLabel = requestedRelatedMemberName
     || (requestedRelatedUserId ? `用户 ${requestedRelatedUserId}` : '');
 
@@ -308,6 +321,10 @@ export default function DiaryPage() {
     () => entries.find((entry) => entry.id === selectedEntryId) || null,
     [entries, selectedEntryId],
   );
+  const totalEntryPages = Math.max(1, Math.ceil(entries.length / entryPageSize));
+  const safeEntryPage = Math.min(entryPage, totalEntryPages);
+  const entryPageStart = (safeEntryPage - 1) * entryPageSize;
+  const paginatedEntries = entries.slice(entryPageStart, entryPageStart + entryPageSize);
   const editQuality = useMemo(
     () => contentQuality(editContent, editTitle, editTagText),
     [editContent, editTagText, editTitle],
@@ -357,9 +374,16 @@ export default function DiaryPage() {
 
   useEffect(() => {
     if (selectedFamilyId) {
+      setEntryPage(1);
       void loadEntries(selectedFamilyId);
     }
   }, [loadEntries, selectedFamilyId]);
+
+  useEffect(() => {
+    if (entryPage !== safeEntryPage) {
+      setEntryPage(safeEntryPage);
+    }
+  }, [entryPage, safeEntryPage]);
 
   useEffect(() => {
     const key = draftKey(user?.id, selectedFamilyId, requestedRelatedUserId);
@@ -458,6 +482,45 @@ export default function DiaryPage() {
     setTimeout(() => setSuccess(''), 3000);
   };
 
+  const persistCurrentDraft = useCallback((status = '草稿已保存，内容不会丢失') => {
+    const key = draftKey(user?.id, selectedFamilyId, requestedRelatedUserId);
+    if (!key || typeof window === 'undefined') return;
+    const hasDraftContent = Boolean(title.trim() || content.trim() || mood.trim() || tagText.trim());
+    if (!hasDraftContent) return;
+    const draft: DiaryDraft = {
+      entryType,
+      visibility,
+      title,
+      content,
+      mood,
+      tagText,
+      relatedUserId: requestedRelatedUserId || undefined,
+      relatedMemberName: relatedContextLabel || undefined,
+      updatedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(key, JSON.stringify(draft));
+    setDraftStatus(status);
+  }, [
+    content,
+    entryType,
+    mood,
+    relatedContextLabel,
+    requestedRelatedUserId,
+    selectedFamilyId,
+    tagText,
+    title,
+    user?.id,
+    visibility,
+  ]);
+
+  const removeCurrentDraft = useCallback(() => {
+    const key = draftKey(user?.id, selectedFamilyId, requestedRelatedUserId);
+    if (key && typeof window !== 'undefined') {
+      localStorage.removeItem(key);
+    }
+    setDraftStatus('');
+  }, [requestedRelatedUserId, selectedFamilyId, user?.id]);
+
   const applyTemplate = useCallback((template: DiaryTemplate) => {
     setEntryType(template.entryType);
     setVisibility(template.visibility);
@@ -505,11 +568,27 @@ export default function DiaryPage() {
     setDraftStatus(`已套用“${template.label}”模板${relatedContextLabel ? `，关联到${relatedContextLabel}` : ''}`);
   }, [applyTemplate, relatedContextLabel, requestedRelatedUserId, searchParams, selectedFamilyId]);
 
+  useEffect(() => {
+    if (!selectedFamilyId || (!requestedPrefill.title && !requestedPrefill.content && !requestedPrefill.tags)) return;
+    const key = `${selectedFamilyId}:${requestedPrefill.title}:${requestedPrefill.content}:${requestedPrefill.tags}`;
+    if (queryPrefillAppliedRef.current === key) return;
+    queryPrefillAppliedRef.current = key;
+    setEntryType('DAILY');
+    setVisibility(requestedPrefill.visibility || 'FAMILY_VISIBLE');
+    setTitle(requestedPrefill.title || '补充一条家庭素材');
+    setContent(requestedPrefill.content || '');
+    setTagText(requestedPrefill.tags || '周报补齐 家族记忆');
+    setMood('');
+    setTitleTouched(false);
+    setContentTouched(false);
+    setMoodTouched(false);
+    setTagTextTouched(false);
+    setPendingTemplate(null);
+    setDraftStatus('已根据家庭周报缺口生成草稿');
+  }, [requestedPrefill, selectedFamilyId]);
+
   const clearDraft = () => {
-    const key = draftKey(user?.id, selectedFamilyId, requestedRelatedUserId);
-    if (key && typeof window !== 'undefined') {
-      localStorage.removeItem(key);
-    }
+    removeCurrentDraft();
     setEntryType('DAILY');
     setVisibility('PRIVATE');
     setTitle('');
@@ -521,15 +600,23 @@ export default function DiaryPage() {
     setMoodTouched(false);
     setTagTextTouched(false);
     setPendingTemplate(null);
-    setDraftStatus('');
   };
 
   const handleSave = async () => {
-    if (!selectedFamilyId || !content.trim()) return;
+    if (!selectedFamilyId) {
+      setError('请先选择一个家族空间，再保存记录。');
+      return;
+    }
+    if (!content.trim()) {
+      setError('正文为空，先写一点内容再保存。');
+      return;
+    }
+    persistCurrentDraft('正在保存，已先保留本地草稿');
     setSaving(true);
     setError('');
+    setSaveStatus('正在保存记录...');
     try {
-      await diaryApi.create({
+      const saved = await diaryApi.create({
         familyId: selectedFamilyId,
         content,
         entryType,
@@ -556,15 +643,26 @@ export default function DiaryPage() {
       setMoodTouched(false);
       setTagTextTouched(false);
       setPendingTemplate(null);
-      const key = draftKey(user?.id, selectedFamilyId, requestedRelatedUserId);
-      if (key && typeof window !== 'undefined') {
-        localStorage.removeItem(key);
-      }
-      setDraftStatus('');
-      flashSuccess(`人生记录已保存：${quality.label}`);
-      await loadEntries(selectedFamilyId);
+      removeCurrentDraft();
+      setEntries((prev) => {
+        const exists = prev.some((entry) => entry.id === saved.id);
+        if (exists) {
+          return prev.map((entry) => (entry.id === saved.id ? saved : entry));
+        }
+        return [saved, ...prev];
+      });
+      setSelectedEntryId(saved.id);
+      setEntryPage(1);
+      const merged = Boolean(saved.metadata?.autoMerged);
+      flashSuccess(merged ? `已合并到今天的日记：${diaryTitle(saved)}` : `人生记录已保存：${quality.label}`);
+      setSaveStatus('');
+      void loadEntries(selectedFamilyId).catch((err) => {
+        setError(err instanceof Error ? `记录已保存，但列表刷新失败：${err.message}` : '记录已保存，但列表刷新失败');
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : '保存失败');
+      persistCurrentDraft('保存失败，草稿已保留');
+      setError(err instanceof Error ? err.message : '保存失败，草稿已保留');
+      setSaveStatus('');
     } finally {
       setSaving(false);
     }
@@ -674,7 +772,7 @@ export default function DiaryPage() {
     }
   };
 
-  const handlePromoteToMemory = async (entry: DiaryEntry, options?: { coreMemory?: boolean; coreReason?: string }) => {
+  const handlePromoteToMemory = async (entry: DiaryEntry, options?: { coreMemory?: boolean; coreReason?: string; promotionReason?: string }) => {
     if (!selectedFamilyId) return;
     const memoryType = inferMemoryType(entry);
     const scope = scopeFromVisibility(entry.visibility);
@@ -700,7 +798,10 @@ export default function DiaryPage() {
           relatedUserId: relatedUserIdFromEntry(entry) || undefined,
           relatedMemberName: relatedMemberNameFromEntry(entry) || undefined,
           coreMemory: isCoreMemory,
+          curationStatus: isCoreMemory ? 'CORE_PENDING_CONFIRMATION' : 'PENDING_CONFIRMATION',
+          promotionReason: options?.promotionReason?.trim() || undefined,
           coreReason: options?.coreReason?.trim() || undefined,
+          curationReason: (options?.coreReason || options?.promotionReason || '').trim() || undefined,
           promotedFromDiaryId: entry.id,
           promotedBy: user?.id,
           promotedByName: user?.nickname || user?.username,
@@ -708,11 +809,13 @@ export default function DiaryPage() {
         },
       });
       setPromotedDiaryIds((prev) => new Set(prev).add(entry.id));
+      setPromotionEntry(null);
+      setPromotionReason('');
       if (isCoreMemory) {
         setCoreMemoryEntry(null);
         setCoreMemoryReason('');
       }
-      flashSuccess(isCoreMemory ? '已沉淀为核心记忆' : `已沉淀为${memoryTypeName(memoryType)}`);
+      flashSuccess(isCoreMemory ? '已沉淀为核心家族记忆，可在家族记忆库中检索。' : `已沉淀为${memoryTypeName(memoryType)}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : '沉淀为家族经验失败');
     } finally {
@@ -724,6 +827,19 @@ export default function DiaryPage() {
     setCoreMemoryEntry(entry);
     setCoreMemoryReason('');
     setError('');
+  };
+
+  const openPromotionDialog = (entry: DiaryEntry) => {
+    setPromotionEntry(entry);
+    setPromotionReason('');
+    setError('');
+  };
+
+  const handlePromoteWithReason = async () => {
+    if (!promotionEntry || !promotionReason.trim()) return;
+    await handlePromoteToMemory(promotionEntry, {
+      promotionReason: promotionReason.trim(),
+    });
   };
 
   const handlePromoteCoreMemory = async () => {
@@ -748,7 +864,7 @@ export default function DiaryPage() {
       <div className="mx-auto max-w-3xl rounded-lg border border-gray-200 bg-white p-10 text-center">
         <Users className="mx-auto mb-3 h-10 w-10 text-gray-300" />
         <h1 className="text-lg font-semibold text-gray-900">还没有家族空间</h1>
-        <p className="mt-2 text-sm text-gray-500">先创建或加入家族，再开始记录人生片段。</p>
+        <p className="mt-2 text-sm text-gray-500">先创建或加入家族，再记录当时发生的片段和感受。</p>
         <Link
           href="/dashboard/family"
           className="mt-5 inline-flex h-10 items-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
@@ -764,21 +880,8 @@ export default function DiaryPage() {
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">家族日记</h1>
-          <p className="mt-1 text-sm text-gray-500">记录人生片段、经验教训和给家人的话，按权限沉淀为家族长期记忆。</p>
+          <p className="mt-1 text-sm text-gray-500">保存某个时间点的经历、感受和想法。日记会随时间淡化，适合保留当时语境，再由 AI 或家人筛选出值得长期沉淀的内容。</p>
         </div>
-        <select
-          value={selectedFamilyId ?? ''}
-          onChange={(event) => {
-            const familyId = Number(event.target.value);
-            setSelectedFamilyId(familyId);
-            setActiveFamilyId(familyId);
-          }}
-          className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          {families.map((family) => (
-            <option key={family.id} value={family.id}>{family.name}</option>
-          ))}
-        </select>
       </div>
 
       {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">{error}</div>}
@@ -789,13 +892,73 @@ export default function DiaryPage() {
         </div>
       )}
 
+      {promotionEntry && (
+        <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 p-4">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-900">提出沉淀为家族经验</h2>
+              <p className="mt-1 text-xs leading-5 text-blue-700">
+                这会先作为“待确认”的经验沉淀进入家族知识库；AI 会知道它是由当前成员提出，而不是全家共同定论。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setPromotionEntry(null);
+                setPromotionReason('');
+              }}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-blue-600 hover:bg-white"
+              aria-label="关闭沉淀理由"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="mb-3 rounded-lg bg-white/70 p-3">
+            <p className="text-xs font-medium text-gray-700">{diaryTitle(promotionEntry)}</p>
+            <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">{promotionEntry.rawText}</p>
+          </div>
+          <label className="block text-xs font-medium text-gray-600">
+            为什么这条记录值得沉淀为家族经验？
+            <textarea
+              value={promotionReason}
+              onChange={(event) => setPromotionReason(event.target.value)}
+              rows={3}
+              maxLength={240}
+              placeholder="例如：这条记录包含一次选择的教训，后辈遇到类似处境时可以参考。"
+              className="mt-1 w-full resize-none rounded-lg border border-blue-100 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-400"
+            />
+          </label>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                setPromotionEntry(null);
+                setPromotionReason('');
+              }}
+              className="inline-flex h-9 items-center justify-center rounded-lg border border-blue-100 bg-white px-3 text-xs font-medium text-blue-700 hover:bg-blue-100"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={handlePromoteWithReason}
+              disabled={!promotionReason.trim() || promotingId === promotionEntry.id}
+              className="inline-flex h-9 items-center justify-center gap-1 rounded-lg bg-blue-600 px-3 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {promotingId === promotionEntry.id ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <ScrollText className="h-3.5 w-3.5" />}
+              提出沉淀
+            </button>
+          </div>
+        </div>
+      )}
+
       {coreMemoryEntry && (
         <div className="mb-4 rounded-lg border border-purple-100 bg-purple-50 p-4">
           <div className="mb-3 flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-gray-900">沉淀为核心记忆</h2>
+              <h2 className="text-sm font-semibold text-gray-900">标为核心家族记忆</h2>
               <p className="mt-1 text-xs leading-5 text-purple-700">
-                核心记忆会作为家族长期经验或价值观参考，不会因为时间久远而快速淡出。
+                核心记忆不是独立入口，会进入家族知识库并作为高优先级家族经验，后续镜像 Agent 在权限允许时会更优先参考。
               </p>
             </div>
             <button
@@ -805,7 +968,7 @@ export default function DiaryPage() {
                 setCoreMemoryReason('');
               }}
               className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-purple-600 hover:bg-white"
-              aria-label="关闭核心记忆沉淀"
+              aria-label="关闭核心记忆标记"
             >
               <X className="h-4 w-4" />
             </button>
@@ -843,7 +1006,7 @@ export default function DiaryPage() {
               className="inline-flex h-9 items-center justify-center gap-1 rounded-lg bg-purple-600 px-3 text-xs font-medium text-white hover:bg-purple-700 disabled:opacity-50"
             >
               {promotingId === coreMemoryEntry.id ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <ScrollText className="h-3.5 w-3.5" />}
-              确认沉淀
+              确认标为核心
             </button>
           </div>
         </div>
@@ -853,7 +1016,7 @@ export default function DiaryPage() {
         <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-5">
           <div className="mb-4 flex items-center gap-2">
             <BookHeart className="h-5 w-5 text-purple-600" />
-            <h2 className="text-sm font-semibold text-gray-900">新增人生记录</h2>
+            <h2 className="text-sm font-semibold text-gray-900">新增每日记录</h2>
           </div>
 
           {relatedContextLabel && (
@@ -895,7 +1058,7 @@ export default function DiaryPage() {
             {pendingTemplate && (
               <div className="mt-3 rounded-lg border border-amber-100 bg-amber-50 p-3">
                 <p className="text-xs leading-5 text-amber-700">
-                  当前内容已经编辑过。要套用“{pendingTemplate.label}”模板并覆盖标题、内容、心情和标签吗？
+                  当前内容已经编辑过。要套用“{pendingTemplate.label}”模板并覆盖标题、内容、心情和时效/主题标签吗？
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button
@@ -918,7 +1081,7 @@ export default function DiaryPage() {
           </div>
 
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
-            <span>{draftStatus || '填写时会自动保存本地草稿'}</span>
+            <span>{saveStatus || draftStatus || '填写时会自动保存本地草稿'}</span>
             {(title || content || mood || tagText || draftStatus) && (
               <button
                 type="button"
@@ -965,7 +1128,7 @@ export default function DiaryPage() {
               <Lock className="h-3.5 w-3.5" />
               AI 使用边界
             </div>
-            这条记录只会在当前可见范围内进入家庭陪伴 AI 和镜像 Agent 的参考上下文。选择“照护授权可见”时，只有本人、家庭管理员和你在家族空间明确授权的照护成员可见。
+            这条记录只会在当前可见范围内进入家族Agent 和镜像 Agent 的参考上下文。选择“照护授权可见”时，只有本人、家族创建者和你在家族空间明确授权的照护成员可见。
           </div>
 
           <label className="mb-3 block text-xs font-medium text-gray-500">
@@ -1030,7 +1193,7 @@ export default function DiaryPage() {
               </select>
             </label>
             <label className="text-xs font-medium text-gray-500">
-              标签
+              时效/主题标签
               <input
                 value={tagText}
                 onChange={(event) => {
@@ -1038,7 +1201,7 @@ export default function DiaryPage() {
                   setTagTextTouched(true);
                   setPendingTemplate(null);
                 }}
-                placeholder="用空格或逗号分隔，例如：工作 选择 后悔"
+                placeholder="用空格或逗号分隔，例如：短期片段 阶段复盘 长期留存 人生选择"
                 className="mt-1 h-10 w-full rounded-lg border border-gray-200 px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
               />
             </label>
@@ -1059,7 +1222,7 @@ export default function DiaryPage() {
             className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            保存记录
+            {saving ? '正在保存...' : '保存记录'}
           </button>
         </section>
 
@@ -1067,7 +1230,10 @@ export default function DiaryPage() {
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold text-gray-900">{selectedFamily?.name || '家族'}的记忆流</h2>
-              <p className="mt-1 text-xs text-gray-500">只显示你有权限查看的记录。</p>
+              <p className="mt-1 text-xs text-gray-500">
+                共 {entries.length} 条可见记录
+                {entries.length > 0 ? `，当前显示第 ${entryPageStart + 1}-${Math.min(entryPageStart + entryPageSize, entries.length)} 条。` : '。'}
+              </p>
             </div>
             <button
               type="button"
@@ -1159,10 +1325,11 @@ export default function DiaryPage() {
                       </select>
                     </label>
                     <label className="text-xs font-medium text-gray-500">
-                      标签
+                      时效/主题标签
                       <input
                         value={editTagText}
                         onChange={(event) => setEditTagText(event.target.value)}
+                        placeholder="例如：短期线索 阶段复盘 长期经验"
                         className="mt-1 h-10 w-full rounded-lg border border-gray-200 px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </label>
@@ -1240,12 +1407,12 @@ export default function DiaryPage() {
                     )}
                     <button
                       type="button"
-                      onClick={() => handlePromoteToMemory(selectedEntry)}
+                      onClick={() => openPromotionDialog(selectedEntry)}
                       disabled={promotedDiaryIds.has(selectedEntry.id) || promotingId === selectedEntry.id}
                       className="inline-flex h-9 items-center gap-1 rounded-lg border border-purple-200 bg-white px-3 text-xs font-medium text-purple-700 hover:bg-purple-50 disabled:text-green-600 disabled:opacity-80"
                     >
                       {promotingId === selectedEntry.id ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <ScrollText className="h-3.5 w-3.5" />}
-                      {promotedDiaryIds.has(selectedEntry.id) ? '已沉淀为经验' : '沉淀为经验'}
+                      {promotedDiaryIds.has(selectedEntry.id) ? '已沉淀为家族经验' : '沉淀为家族经验'}
                     </button>
                     <button
                       type="button"
@@ -1254,7 +1421,7 @@ export default function DiaryPage() {
                       className="inline-flex h-9 items-center gap-1 rounded-lg border border-amber-200 bg-white px-3 text-xs font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50"
                     >
                       <ScrollText className="h-3.5 w-3.5" />
-                      核心记忆
+                      标为核心
                     </button>
                   </div>
                 </>
@@ -1274,7 +1441,7 @@ export default function DiaryPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {entries.map((entry) => (
+              {paginatedEntries.map((entry) => (
                 <article
                   key={entry.id}
                   className={`rounded-lg border p-4 transition-colors ${
@@ -1332,7 +1499,7 @@ export default function DiaryPage() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => handlePromoteToMemory(entry)}
+                            onClick={() => openPromotionDialog(entry)}
                             disabled={isPromoted || promotingId === entry.id}
                             className="inline-flex items-center gap-1 text-gray-400 hover:text-purple-600 disabled:text-green-600 disabled:opacity-80"
                           >
@@ -1343,7 +1510,7 @@ export default function DiaryPage() {
                             ) : (
                               <ScrollText className="h-3.5 w-3.5" />
                             )}
-                            {isPromoted ? '已沉淀' : '沉淀为经验'}
+                            {isPromoted ? '已沉淀' : '沉淀为家族经验'}
                           </button>
                           <button
                             type="button"
@@ -1352,7 +1519,7 @@ export default function DiaryPage() {
                             className="inline-flex items-center gap-1 text-gray-400 hover:text-amber-600 disabled:opacity-50"
                           >
                             <ScrollText className="h-3.5 w-3.5" />
-                            核心记忆
+                            标为核心
                           </button>
                           {entry.userId === user?.id && (
                             <button
@@ -1371,6 +1538,44 @@ export default function DiaryPage() {
                   })()}
                 </article>
               ))}
+              {entries.length > entryPageSizeOptions[0] && (
+                <div className="flex flex-col gap-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <span>每页</span>
+                    <select
+                      value={entryPageSize}
+                      onChange={(event) => {
+                        setEntryPageSize(Number(event.target.value));
+                        setEntryPage(1);
+                      }}
+                      className="h-8 rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {entryPageSizeOptions.map((option) => (
+                        <option key={option} value={option}>{option} 条</option>
+                      ))}
+                    </select>
+                    <span>第 {safeEntryPage} / {totalEntryPages} 页</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEntryPage((page) => Math.max(1, page - 1))}
+                      disabled={safeEntryPage <= 1}
+                      className="h-8 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      上一页
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEntryPage((page) => Math.min(totalEntryPages, page + 1))}
+                      disabled={safeEntryPage >= totalEntryPages}
+                      className="h-8 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      下一页
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </section>

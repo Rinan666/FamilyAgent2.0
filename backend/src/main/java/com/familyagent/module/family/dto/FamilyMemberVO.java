@@ -25,5 +25,7 @@ public class FamilyMemberVO {
     private String role;
     private String relationshipLabel;
     private String reverseRelationshipLabel;
+    private String birthDate;
+    private String birthYear;
     private LocalDateTime joinedAt;
 }

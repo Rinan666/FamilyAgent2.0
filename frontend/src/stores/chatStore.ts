@@ -17,6 +17,7 @@ interface ChatState {
   setMessages: (messages: ChatMessage[]) => void;
   addMessage: (role: 'user' | 'assistant', content: string) => void;
   appendToLastMessage: (content: string) => void;
+  mergeLastAssistantMetadata: (metadata: NonNullable<ChatMessage['metadata']>) => void;
   setStreaming: (streaming: boolean) => void;
   setCurrentQuestion: (question: Question | null) => void;
   reset: () => void;
@@ -54,6 +55,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
           content: lastMessage.content + content,
         };
       }
+      return { messages };
+    });
+  },
+
+  mergeLastAssistantMetadata: (metadata) => {
+    set((state) => {
+      const messages = [...state.messages];
+      const lastAssistantIndex = [...messages].reverse().findIndex((message) => message.role === 'assistant');
+      if (lastAssistantIndex < 0) return { messages };
+      const index = messages.length - 1 - lastAssistantIndex;
+      const message = messages[index];
+      messages[index] = {
+        ...message,
+        metadata: {
+          ...(message.metadata || {}),
+          ...metadata,
+        },
+      };
       return { messages };
     });
   },

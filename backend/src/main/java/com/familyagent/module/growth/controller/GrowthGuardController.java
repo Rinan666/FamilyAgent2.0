@@ -59,6 +59,12 @@ public class GrowthGuardController {
         return Result.success(growthGuardService.updateFollowUpStatus(id, request.getFollowUpStatus()));
     }
 
+    @Operation(summary = "Mark a growth guard record as stale")
+    @PostMapping("/{id}/stale")
+    public Result<GrowthGuardRecord> markStale(@PathVariable Long id) {
+        return Result.success(growthGuardService.markRecordStale(id));
+    }
+
     @Operation(summary = "Archive a growth guard record")
     @DeleteMapping("/{id}")
     public Result<Void> archive(@PathVariable Long id) {

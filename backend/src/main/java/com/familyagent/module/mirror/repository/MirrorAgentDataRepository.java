@@ -23,7 +23,7 @@ public interface MirrorAgentDataRepository extends BaseMapper<MirrorAgentData> {
               SELECT 1 FROM family_members fm
               WHERE fm.family_id = mirror_agent_data.primary_family_id
                 AND fm.user_id = #{viewerUserId}
-                AND fm.role IN ('OWNER', 'ADMIN')
+                AND fm.role = 'OWNER'
             )
             OR (
               visibility IN ('CARE_VISIBLE', 'PARENT_VISIBLE')

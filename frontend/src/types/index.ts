@@ -12,6 +12,7 @@ export interface User {
   phone?: string;
   role: string;
   status: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface LoginRequest {
@@ -26,6 +27,7 @@ export interface LoginResponse {
   avatarUrl?: string;
   role?: string;
   status?: string;
+  metadata?: Record<string, unknown>;
   token: string;
   tokenName: string;
 }
@@ -33,6 +35,10 @@ export interface LoginResponse {
 export interface ChangePasswordRequest {
   currentPassword: string;
   newPassword: string;
+}
+
+export interface UpdateProfileRequest {
+  birthDate?: string;
 }
 
 export interface RegisterRequest {
@@ -65,6 +71,9 @@ export interface FamilyMember {
   role: 'OWNER' | 'ADMIN' | 'GUARDIAN' | 'MEMBER' | 'STUDENT' | 'GUEST';
   relationshipLabel?: string;
   reverseRelationshipLabel?: string;
+  birthDate?: string;
+  birthYear?: string;
+  metadata?: Record<string, unknown>;
   joinedAt: string;
 }
 
@@ -285,6 +294,22 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: string;
+  metadata?: {
+    webSearch?: {
+      needed: boolean;
+      used: boolean;
+      resultCount: number;
+      sources: { title: string; url: string; snippet?: string }[];
+    };
+    rag?: {
+      retrievalMode?: string;
+      embeddingReadyCount?: number;
+      diaryCount: number;
+      memoryCount: number;
+      growthRecordCount?: number;
+      sources: RagRecallSource[];
+    };
+  } & Record<string, unknown>;
 }
 
 export interface ChatSession {
@@ -323,6 +348,50 @@ export interface MemoryEntry {
   updatedAt?: string;
 }
 
+export type MemoryVoteType = 'UP' | 'DOWN';
+
+export interface MemoryVoteStats {
+  memoryId: number;
+  upVotes: number;
+  downVotes: number;
+  voteScore: number;
+  consensusWeight: number;
+  myVote?: MemoryVoteType | '' | string;
+}
+
+export interface AuthorizedMemoryRecallResult {
+  diaries: DiaryEntry[];
+  memories: MemoryEntry[];
+  growthRecords?: GrowthGuardRecord[];
+  diaryCount?: number;
+  memoryCount?: number;
+  growthRecordCount?: number;
+  sources?: RagRecallSource[];
+  retrievalMode?: string;
+  query?: string;
+  embeddingReadyCount?: number;
+}
+
+export interface RagRecallSource {
+  id: string;
+  sourceType: 'LIFE_RECORD' | 'FAMILY_EXPERIENCE' | string;
+  title: string;
+  snippet: string;
+  visibility?: string;
+  temporalLayer?: string;
+  topics?: string[];
+  scenes?: string[];
+}
+
+export interface RebuildMemoryIndexResult {
+  familyId: number;
+  diaryCount: number;
+  memoryCount: number;
+  growthRecordCount?: number;
+  scheduledCount?: number;
+  indexedCount?: number;
+}
+
 export type MemoryEntryType =
   | 'LEARNING'
   | 'MISTAKE'
@@ -337,14 +406,95 @@ export type MemoryEntryType =
 
 export type MemoryScope = 'PRIVATE' | 'PARENT_VISIBLE' | 'CARE_VISIBLE' | 'FAMILY_VISIBLE';
 
+export type MemoryLibraryItemType = 'LIFE_RECORD' | 'FAMILY_EXPERIENCE' | 'GROWTH_OBSERVATION' | 'AI_SUMMARY';
+
+export interface MemoryLibraryItem {
+  id: string;
+  sourceType: MemoryLibraryItemType;
+  type: string;
+  title: string;
+  body: string;
+  familyId: number;
+  memberUserId?: number;
+  memberName: string;
+  visibility: string;
+  tags: string[];
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export type MemoryMaintenanceAction = 'MERGE_REVIEW' | 'ARCHIVE_REVIEW' | 'DELETE_REVIEW' | string;
+
+export interface MemoryMaintenanceSuggestion {
+  action: MemoryMaintenanceAction;
+  score: number;
+  title: string;
+  reason: string;
+  reasons: string[];
+  items: MemoryLibraryItem[];
+}
+
 export interface FamilyMemoryCard {
   title: string;
   theme: string;
   summary: string;
+  motto?: string;
   risk_points: string[];
   action_suggestions: string[];
   suitable_for: string[];
   sensitivity: 'LOW' | 'MEDIUM' | 'HIGH' | string;
+  safety_note: string;
+}
+
+export type HeritageTaskStatus = 'PENDING' | 'DONE' | 'ARCHIVED' | string;
+
+export interface HeritageTask {
+  id: number;
+  familyId: number;
+  memoryId?: number;
+  createdBy: number;
+  title: string;
+  action: string;
+  targetLabel?: string;
+  dueDate?: string;
+  status: HeritageTaskStatus;
+  completionNote?: string;
+  completedBy?: number;
+  completedAt?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface CreateHeritageTaskRequest {
+  familyId: number;
+  memoryId?: number;
+  title: string;
+  action: string;
+  targetLabel?: string;
+  dueDate?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface HeritageTaskDraft {
+  title: string;
+  action: string;
+  target_label: string;
+  due_days: number;
+  completion_prompt: string;
+  reason: string;
+}
+
+export interface FamilyWeeklyDigest {
+  title: string;
+  summary: string;
+  memory_highlights: string[];
+  family_experience_refs: string[];
+  growth_signals: string[];
+  suggested_actions: string[];
+  questions_for_family: string[];
+  missing_records: string[];
   safety_note: string;
 }
 
@@ -420,9 +570,19 @@ export interface GrowthGuardRecord {
   followUpAt?: string;
   visibility: MemoryScope | string;
   status: 'ACTIVE' | 'ARCHIVED' | string;
-  metadata?: Record<string, unknown> & { followUpStatus?: GrowthFollowUpStatus | string };
+  metadata?: Record<string, unknown> & {
+    followUpStatus?: GrowthFollowUpStatus | string;
+    stalenessStats?: GrowthStalenessStats;
+  };
   createdAt: string;
   updatedAt?: string;
+}
+
+export interface GrowthStalenessStats {
+  recordId: number;
+  staleVotes: number;
+  stalenessWeight: number;
+  myVoted?: boolean;
 }
 
 export interface CreateGrowthGuardRecordRequest {
@@ -443,6 +603,7 @@ export interface WeeklyGrowthReport {
   affirmations?: string[];
   concerns?: string[];
   signals: string[];
+  uncertainty_notes?: string[];
   family_experience_refs: string[];
   suggested_actions: string[];
   follow_up_questions: string[];
@@ -484,6 +645,7 @@ export interface MirrorContextResponse {
   targetMember: FamilyMember;
   diaries: DiaryEntry[];
   memories: MemoryEntry[];
+  libraryItems?: MemoryLibraryItem[];
   mirrorProfile?: Record<string, unknown>;
   memoryContext: string;
   disclaimer: string;
@@ -599,6 +761,78 @@ export interface StudyPlanResult {
   review_questions: string[];
   parent_support: string[];
   missing_info: string[];
+}
+
+// --- 管理员数据库健康 ---
+export interface DatabaseTableCount {
+  tableName: string;
+  label: string;
+  count: number;
+  legacy: boolean;
+}
+
+export interface EmbeddingStatusSummary {
+  familyId: number;
+  sourceType: string;
+  status: string;
+  count: number;
+  lastUpdatedAt?: string;
+}
+
+export interface FamilyDatabaseSummary {
+  familyId: number;
+  familyName: string;
+  memberCount: number;
+  diaryCount: number;
+  memoryCount: number;
+  growthRecordCount: number;
+  readyEmbeddingCount: number;
+  failedEmbeddingCount: number;
+}
+
+export interface FailedEmbeddingSummary {
+  id: number;
+  familyId: number;
+  sourceType: string;
+  sourceId: number;
+  error?: string;
+  updatedAt?: string;
+}
+
+export interface DatabaseHealthResponse {
+  generatedAt: string;
+  databaseName: string;
+  pgvectorInstalled: boolean;
+  totalUsers: number;
+  totalFamilies: number;
+  totalCoreRecords: number;
+  totalEmbeddings: number;
+  readyEmbeddings: number;
+  failedEmbeddings: number;
+  tableCounts: DatabaseTableCount[];
+  embeddingStatuses: EmbeddingStatusSummary[];
+  families: FamilyDatabaseSummary[];
+  recentFailedEmbeddings: FailedEmbeddingSummary[];
+}
+
+export interface MemoryRecallDiagnosticRequest {
+  familyId: number;
+  viewerUserId: number;
+  query: string;
+  diaryLimit?: number;
+  memoryLimit?: number;
+}
+
+export interface MemoryRecallDiagnosticResponse {
+  familyId: number;
+  viewerUserId: number;
+  query: string;
+  retrievalMode: string;
+  embeddingReadyCount: number;
+  diaryCount: number;
+  memoryCount: number;
+  growthRecordCount: number;
+  sources: RagRecallSource[];
 }
 
 // --- API响应 ---

@@ -32,5 +32,10 @@ public class CareAuthorizationSchemaInitializer {
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_care_auth_subject ON care_authorizations(family_id, subject_user_id)");
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_care_auth_caregiver ON care_authorizations(family_id, caregiver_user_id)");
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_care_auth_status ON care_authorizations(status)");
+        jdbcTemplate.execute("""
+            CREATE INDEX IF NOT EXISTS idx_care_auth_lookup_active
+            ON care_authorizations(family_id, subject_user_id, caregiver_user_id, scope, expires_at)
+            WHERE status = 'ACTIVE'
+            """);
     }
 }

@@ -5,6 +5,7 @@ import com.familyagent.module.user.dto.ChangePasswordRequest;
 import com.familyagent.module.user.dto.LoginRequest;
 import com.familyagent.module.user.dto.LoginResponse;
 import com.familyagent.module.user.dto.RegisterRequest;
+import com.familyagent.module.user.dto.UpdateProfileRequest;
 import com.familyagent.module.user.entity.User;
 import com.familyagent.module.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,6 +43,13 @@ public class UserController {
     @GetMapping("/me")
     public Result<User> getCurrentUser() {
         User user = userService.getCurrentUser();
+        return Result.success(user);
+    }
+
+    @Operation(summary = "更新当前用户资料")
+    @PostMapping("/me/profile")
+    public Result<User> updateProfile(@Valid @RequestBody UpdateProfileRequest request) {
+        User user = userService.updateProfile(request);
         return Result.success(user);
     }
 

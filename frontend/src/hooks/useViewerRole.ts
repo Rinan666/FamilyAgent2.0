@@ -36,7 +36,7 @@ export function useViewerRole() {
     let cancelled = false;
 
     async function load() {
-      if (!user) return;
+      if (!userId) return;
       setIsLoading(true);
       try {
         const familyList = await familyApi.getMyFamilies();
@@ -48,23 +48,22 @@ export function useViewerRole() {
           nextFamilies.map((family) => familyApi.getMembers(family.id).catch(() => [] as FamilyMember[])),
         );
         if (!cancelled) {
-          const currentUserId = user?.id;
           const nextMemberships = memberLists
             .flat()
-            .filter((member) => !currentUserId || member.userId === currentUserId);
+            .filter((member) => member.userId === userId);
           const selectedFamilyExists = nextFamilies.some((family) => family.id === activeFamilyId);
           const nextActiveFamilyId = selectedFamilyExists ? activeFamilyId : nextFamilies[0]?.id ?? null;
           if (nextActiveFamilyId !== activeFamilyId) {
             setActiveFamilyId(nextActiveFamilyId);
           }
-          cachedUserId = currentUserId ?? null;
+          cachedUserId = userId;
           cachedFamilies = nextFamilies;
           cachedMemberships = nextMemberships;
           setMemberships(nextMemberships);
         }
       } catch {
         if (!cancelled) {
-          cachedUserId = user.id;
+          cachedUserId = userId;
           cachedFamilies = [];
           cachedMemberships = [];
           setFamilies([]);
@@ -75,7 +74,7 @@ export function useViewerRole() {
       }
     }
 
-    if (!user) {
+    if (!userId) {
       cachedUserId = null;
       cachedFamilies = [];
       cachedMemberships = [];
@@ -91,7 +90,7 @@ export function useViewerRole() {
       cancelled = true;
       window.removeEventListener(ROLE_EVENT, load);
     };
-  }, [activeFamilyId, setActiveFamilyId, user]);
+  }, [activeFamilyId, setActiveFamilyId, userId]);
 
   const viewerRole: ViewerRole = useMemo(
     () => deriveViewerRole(user, memberships, activeFamilyId),

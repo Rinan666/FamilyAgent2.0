@@ -5,39 +5,40 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
-  LayoutDashboard,
-  GraduationCap,
   Users,
   BookOpen,
+  Database,
   Settings,
   HeartPulse,
   BookHeart,
   ScrollText,
   Bot,
   Menu,
+  Sparkles,
   X,
 } from 'lucide-react';
 import type { ViewerRole } from '@/lib/roles';
 
 const navItems = [
-  { href: '/dashboard', label: '首页', icon: LayoutDashboard, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
-  { href: '/dashboard/diary', label: '家族日记', icon: BookHeart, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
+  { href: '/dashboard/tutor', label: '家族Agent', icon: Sparkles, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
   { href: '/dashboard/mirror', label: '镜像 Agent', icon: Bot, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
-  { href: '/dashboard/growth', label: '成长守护', icon: HeartPulse, roles: ['PARENT', 'ADMIN'] },
-  { href: '/dashboard/heritage', label: '家族经验', icon: ScrollText, roles: ['PARENT', 'ADMIN'] },
+  { href: '/dashboard/diary', label: '每日记录', icon: BookHeart, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
+  { href: '/dashboard/growth', label: '成长观察', icon: HeartPulse, roles: ['PARENT', 'ADMIN'] },
+  { href: '/dashboard/heritage', label: '经验沉淀', icon: ScrollText, roles: ['PARENT', 'ADMIN'] },
   { href: '/dashboard/family', label: '家族空间', icon: Users, roles: ['PARENT', 'ADMIN'] },
-  { href: '/dashboard/tutor', label: '家庭陪伴 AI', icon: GraduationCap, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
-  { href: '/dashboard/knowledge', label: '题库/知识库', icon: BookOpen, roles: ['ADMIN'], platformAdminOnly: true },
+  { href: '/dashboard/memory', label: '家族知识库', icon: BookOpen, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
+  { href: '/dashboard/admin/database', label: '数据库健康', icon: Database, roles: ['ADMIN'], platformAdminOnly: true },
   { href: '/dashboard/settings', label: '设置', icon: Settings, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
 ];
 
 const mobilePrimaryNav = [
-  { href: '/dashboard', label: '首页', icon: LayoutDashboard, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
-  { href: '/dashboard/diary', label: '日记', icon: BookHeart, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
+  { href: '/dashboard/tutor', label: 'Agent', icon: Sparkles, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
   { href: '/dashboard/mirror', label: '镜像', icon: Bot, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
-  { href: '/dashboard/growth', label: '守护', icon: HeartPulse, roles: ['PARENT', 'ADMIN'] },
+  { href: '/dashboard/diary', label: '记录', icon: BookHeart, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
+  { href: '/dashboard/growth', label: '观察', icon: HeartPulse, roles: ['PARENT', 'ADMIN'] },
   { href: '/dashboard/heritage', label: '经验', icon: ScrollText, roles: ['PARENT', 'ADMIN'] },
-  { href: '/dashboard/tutor', label: '陪伴', icon: GraduationCap, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
+  { href: '/dashboard/family', label: '空间', icon: Users, roles: ['PARENT', 'ADMIN'] },
+  { href: '/dashboard/memory', label: '知识', icon: BookOpen, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
   { href: '/dashboard/settings', label: '设置', icon: Settings, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
 ];
 
@@ -61,12 +62,11 @@ function NavigationLinks({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  void isPlatformAdmin;
 
   return (
     <>
-      {navItems.filter((item) => (
-        item.roles.includes(viewerRole) || Boolean(item.platformAdminOnly && isPlatformAdmin)
-      )).map((item) => {
+      {navItems.filter((item) => item.roles.includes(viewerRole) && (!item.platformAdminOnly || isPlatformAdmin)).map((item) => {
         const isActive = isActivePath(pathname, item.href);
         const Icon = item.icon;
 
@@ -136,9 +136,9 @@ export default function Sidebar({ viewerRole = 'STUDENT', isPlatformAdmin = fals
     <aside className={cn('hidden w-60 shrink-0 flex-col border-r border-gray-200 bg-white xl:w-64 lg:flex', className)}>
       {/* Logo */}
       <div className="h-16 flex items-center px-6 border-b border-gray-200">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <GraduationCap className="w-6 h-6 text-blue-600" />
-          <span className="font-bold text-lg text-gray-900">家族教育</span>
+        <Link href="/dashboard/tutor" className="flex items-center gap-2">
+          <BookHeart className="w-6 h-6 text-blue-600" />
+          <span className="font-bold text-lg text-gray-900">FamilyAgent</span>
         </Link>
       </div>
 
@@ -186,12 +186,12 @@ export function MobileNav({
           <div className="absolute inset-y-0 left-0 flex w-[min(20rem,86vw)] flex-col bg-white shadow-xl">
             <div className="flex h-16 items-center justify-between border-b border-gray-200 px-4">
               <Link
-                href="/dashboard"
+                href="/dashboard/tutor"
                 onClick={() => setOpen(false)}
                 className="flex items-center gap-2"
               >
-                <GraduationCap className="h-6 w-6 text-blue-600" />
-                <span className="text-lg font-bold text-gray-900">家族教育</span>
+                <BookHeart className="h-6 w-6 text-blue-600" />
+                <span className="text-lg font-bold text-gray-900">FamilyAgent</span>
               </Link>
               <button
                 type="button"

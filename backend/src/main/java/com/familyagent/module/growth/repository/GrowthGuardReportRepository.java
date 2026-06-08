@@ -25,7 +25,7 @@ public interface GrowthGuardReportRepository extends BaseMapper<GrowthGuardRepor
                 SELECT 1 FROM family_members fm
                 WHERE fm.family_id = growth_guard_reports.family_id
                   AND fm.user_id = #{viewerUserId}
-                  AND fm.role IN ('OWNER', 'ADMIN')
+                  AND fm.role = 'OWNER'
               )
             )
             OR (

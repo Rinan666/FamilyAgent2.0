@@ -32,6 +32,40 @@ function accountName(member?: FamilyMember | null) {
   return member.nickname?.trim() || member.username?.trim() || `用户 ${member.userId}`;
 }
 
+function memberBirthDate(member?: FamilyMember | null) {
+  if (!member) return '';
+  const value = member.birthDate
+    || (typeof member.metadata?.birthDate === 'string' ? member.metadata.birthDate : '')
+    || (typeof member.metadata?.birthday === 'string' ? member.metadata.birthday : '')
+    || (typeof member.metadata?.dateOfBirth === 'string' ? member.metadata.dateOfBirth : '');
+  return value ? value.slice(0, 10) : '';
+}
+
+function memberAge(member?: FamilyMember | null) {
+  const birthDate = memberBirthDate(member);
+  if (birthDate) {
+    const date = new Date(birthDate);
+    if (!Number.isNaN(date.getTime())) {
+      const now = new Date();
+      let age = now.getFullYear() - date.getFullYear();
+      const monthDelta = now.getMonth() - date.getMonth();
+      if (monthDelta < 0 || (monthDelta === 0 && now.getDate() < date.getDate())) age -= 1;
+      if (age >= 0 && age <= 130) return { age, isDefault: false };
+    }
+  }
+  const year = Number(member?.birthYear || member?.metadata?.birthYear || member?.metadata?.yearOfBirth);
+  if (Number.isFinite(year) && year > 1870 && year <= new Date().getFullYear()) {
+    return { age: new Date().getFullYear() - year, isDefault: false };
+  }
+  return { age: 20, isDefault: true };
+}
+
+function memberProfileLine(member?: FamilyMember | null) {
+  const birthDate = memberBirthDate(member);
+  const age = memberAge(member);
+  return `${birthDate ? `生日：${birthDate}` : '生日未设置'} · 年龄：${age.age} 岁${age.isDefault ? '（默认）' : ''}`;
+}
+
 function diaryTitle(entry: DiaryEntry) {
   return entry.structured?.title || entry.structured?.summary || entry.rawText.slice(0, 34) || '未命名记录';
 }
@@ -329,22 +363,7 @@ export default function FamilyMemberMemoryPage() {
           <h1 className="text-xl font-bold text-gray-900">成员记忆视图</h1>
           <p className="mt-1 text-sm text-gray-500">查看某位成员在当前家族中的可见记录、成长观察与镜像资料完整度。</p>
         </div>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <select
-            value={selectedFamilyId ?? ''}
-            onChange={(event) => {
-              const familyId = Number(event.target.value);
-              setSelectedFamilyId(familyId);
-              setActiveFamilyId(familyId);
-              setTargetUserId(null);
-              setMirrorContext(null);
-            }}
-            className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {families.map((family) => (
-              <option key={family.id} value={family.id}>{family.name}</option>
-            ))}
-          </select>
+        <div className="grid gap-2 sm:grid-cols-1">
           <select
             value={targetUserId ?? ''}
             onChange={(event) => {
@@ -390,6 +409,7 @@ export default function FamilyMemberMemoryPage() {
                 {selectedFamily?.name || '当前家族'}
                 {targetMember?.relationshipLabel?.trim() ? ` · 账号：${accountName(targetMember)}` : ''}
               </p>
+              <p className="mt-1 text-xs text-gray-400">{memberProfileLine(targetMember)}</p>
               <p className="mt-1 text-xs text-gray-400">{level.hint}</p>
             </div>
           </div>
@@ -473,7 +493,7 @@ export default function FamilyMemberMemoryPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-              {coreMemories.slice(0, 6).map((memory) => {
+              {coreMemories.slice(0, 3).map((memory) => {
                 const coreReason = metadataText(memory, 'coreReason');
                 const promotedBy = metadataText(memory, 'promotedByName');
                 const promotedAt = metadataText(memory, 'promotedAt');
@@ -515,7 +535,7 @@ export default function FamilyMemberMemoryPage() {
             <span className="text-xs text-gray-400">后端权限过滤后可见</span>
           </div>
           <div className="space-y-3">
-            {memberLifeRecords.slice(0, 6).map((entry) => {
+            {memberLifeRecords.slice(0, 3).map((entry) => {
               const isRelated = entry.userId !== targetUserId && relatedUserId(entry) === targetUserId;
               return (
               <article key={entry.id} className="rounded-lg border border-gray-100 p-3">
@@ -596,7 +616,7 @@ export default function FamilyMemberMemoryPage() {
             </Link>
           </div>
           <div className="space-y-3">
-            {targetGrowthRecords.slice(0, 5).map((record) => (
+            {targetGrowthRecords.slice(0, 3).map((record) => (
               <article key={record.id} className="rounded-lg border border-gray-100 p-3">
                 <div className="mb-1 flex flex-wrap items-center gap-2">
                   <HeartPulse className="h-4 w-4 text-emerald-500" />

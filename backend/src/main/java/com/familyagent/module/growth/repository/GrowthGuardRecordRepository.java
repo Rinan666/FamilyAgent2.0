@@ -25,7 +25,7 @@ public interface GrowthGuardRecordRepository extends BaseMapper<GrowthGuardRecor
                 SELECT 1 FROM family_members fm
                 WHERE fm.family_id = growth_guard_records.family_id
                   AND fm.user_id = #{viewerUserId}
-                  AND fm.role IN ('OWNER', 'ADMIN')
+                  AND fm.role = 'OWNER'
               )
             )
             OR (
@@ -48,5 +48,29 @@ public interface GrowthGuardRecordRepository extends BaseMapper<GrowthGuardRecor
     List<GrowthGuardRecord> findVisibleByFamily(
             @Param("familyId") Long familyId,
             @Param("viewerUserId") Long viewerUserId,
+            @Param("limit") int limit);
+
+    @Select("""
+        SELECT * FROM growth_guard_records
+        WHERE family_id = #{familyId}
+          AND status = 'ACTIVE'
+        ORDER BY observed_at DESC, created_at DESC
+        LIMIT #{limit}
+        """)
+    List<GrowthGuardRecord> findActiveByFamilyForIndexing(
+            @Param("familyId") Long familyId,
+            @Param("limit") int limit);
+
+    @Select("""
+        SELECT * FROM growth_guard_records
+        WHERE family_id = #{familyId}
+          AND target_user_id = #{targetUserId}
+          AND status = 'ACTIVE'
+        ORDER BY observed_at DESC, created_at DESC
+        LIMIT #{limit}
+        """)
+    List<GrowthGuardRecord> findActiveByFamilyAndTargetForStyle(
+            @Param("familyId") Long familyId,
+            @Param("targetUserId") Long targetUserId,
             @Param("limit") int limit);
 }

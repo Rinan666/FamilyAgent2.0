@@ -2,35 +2,76 @@
  * API 客户端
  *
  * - Java 业务 API 通过 Next.js 代理 (/api/* → backend)
- * - Python AI API 直连 AI 服务（避免 Next.js 代理 POST body 丢失）
+ * - Python AI API 通过 Next.js 代理 (/ai-proxy/* → AI service)
  *
  * 环境变量：
  *   NEXT_PUBLIC_API_URL — 后端地址 (默认 /api)
- *   NEXT_PUBLIC_AI_SERVICE_URL — AI 服务地址 (默认 http://localhost:8000)
+ *   AI_SERVICE_URL — AI 服务地址 (默认 http://localhost:8000)
  */
 import type {
   ApiResult,
-  LoginRequest, LoginResponse, RegisterRequest, ChangePasswordRequest,
+  LoginRequest, LoginResponse, RegisterRequest, ChangePasswordRequest, UpdateProfileRequest,
   User, Family, FamilyMember, FamilyRelationship, CareAuthorization, DiaryEntry, CreateDiaryEntryRequest, UpdateDiaryEntryRequest,
   Question, KnowledgePoint, QuestionAnswer, QuestionContent,
   AbilityProfile, TestRecord, TestRecordDetail,
-  ChatMessage, ChatSession, GradeResult, MemoryEntry, PageResult, SubmitTestRequest, CreateQuestionRequest,
-  TutorExtractResult, CreateFamilyMemoryRequest, FamilyMemoryCard, MemoryEntryType,
+  ChatMessage, ChatSession, GradeResult, MemoryEntry, MemoryLibraryItem, MemoryLibraryItemType, MemoryMaintenanceSuggestion, PageResult, SubmitTestRequest, CreateQuestionRequest,
+  TutorExtractResult, CreateFamilyMemoryRequest, FamilyMemoryCard, MemoryEntryType, MemoryVoteType,
+  HeritageTask, CreateHeritageTaskRequest, HeritageTaskDraft,
   CreateGrowthGuardRecordRequest, GrowthGuardRecord, CreateGrowthGuardReportRequest, GrowthGuardReport, WeeklyGrowthReport,
   GrowthFollowUpStatus, MirrorContextResponse, MistakeReviewResult, DailyPracticeResult, ExamReviewResult, StudyPlanResult,
-  AgentDraftScene, AgentOrganizedDraft, AgentSaveToolPlan,
+  AgentDraftScene, AgentOrganizedDraft, AgentSaveToolPlan, AuthorizedMemoryRecallResult, FamilyWeeklyDigest, RebuildMemoryIndexResult,
+  DatabaseHealthResponse, MemoryRecallDiagnosticRequest, MemoryRecallDiagnosticResponse,
 } from '@/types';
 import type { ViewerRole } from '@/lib/roles';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
-const AI_BASE = process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:8000';
-
 // ============================================
 class ApiError extends Error {
   constructor(public code: number, message: string) {
     super(message);
     this.name = 'ApiError';
   }
+}
+
+function aiErrorMessage(status: number, detail?: unknown, retryAfter?: string | null) {
+  const raw = typeof detail === 'string' ? detail.trim() : '';
+  if (status === 400) {
+    if (raw.includes('系统提示词') || raw.includes('开发者指令') || raw.includes('隐藏策略')) {
+      return '这条请求触碰了系统安全边界，不能回溯或输出内部提示词。可以换一种方式描述你的真实问题。';
+    }
+    if (raw.includes('身份设定') || raw.includes('安全边界') || raw.includes('角色')) {
+      return '这条请求试图改变 Agent 的身份边界，已被拦截。你可以要求语气更温和、更简洁，但不能要求它冒充或改成人设。';
+    }
+    return raw || '这条 AI 请求不符合安全规则，请换一种问法。';
+  }
+  if (status === 413) {
+    return '这次发送的内容太长了，请拆成几段，或只保留最关键的记录再发送。';
+  }
+  if (status === 429) {
+    const seconds = Number(retryAfter);
+    return Number.isFinite(seconds) && seconds > 0
+      ? `AI 请求太频繁了，请约 ${Math.ceil(seconds)} 秒后再试。`
+      : 'AI 请求太频繁了，请稍后再试。';
+  }
+  if (status === 504) {
+    return 'AI 思考时间过长，系统已自动中断。请把问题拆小一点再试。';
+  }
+  if (status === 401) {
+    return 'AI 服务认证失败，请刷新页面或重新登录后再试。';
+  }
+  if (status >= 500) {
+    return 'AI 服务暂时不可用，请稍后再试。';
+  }
+  return raw || `AI 服务返回异常（HTTP ${status}）`;
+}
+
+async function readErrorDetail(res: Response): Promise<unknown> {
+  const data = await res.json().catch(() => null);
+  if (data && typeof data === 'object') {
+    const record = data as Record<string, unknown>;
+    return record.detail || record.message || record.error;
+  }
+  return null;
 }
 
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
@@ -210,6 +251,20 @@ function normalizeSession(raw: ChatSession): ChatSession {
   };
 }
 
+function normalizeUser(raw: User): User {
+  return {
+    ...raw,
+    metadata: parseJsonField<Record<string, unknown>>(raw.metadata, {}),
+  };
+}
+
+function normalizeLoginResponse(raw: LoginResponse): LoginResponse {
+  return {
+    ...raw,
+    metadata: parseJsonField<Record<string, unknown>>(raw.metadata, {}),
+  };
+}
+
 function normalizeSessions(sessions: ChatSession[] | undefined | null): ChatSession[] {
   return (sessions || []).map(normalizeSession);
 }
@@ -292,6 +347,7 @@ function normalizeWeeklyGrowthReport(value: unknown): WeeklyGrowthReport {
     affirmations: normalizeStringArray(parsed.affirmations),
     concerns: normalizeStringArray(parsed.concerns),
     signals: normalizeStringArray(parsed.signals),
+    uncertainty_notes: normalizeStringArray(parsed.uncertainty_notes),
     family_experience_refs: normalizeStringArray(parsed.family_experience_refs),
     suggested_actions: normalizeStringArray(parsed.suggested_actions),
     follow_up_questions: normalizeStringArray(parsed.follow_up_questions),
@@ -322,20 +378,21 @@ async function aiRequest<T>(path: string, body: unknown): Promise<T> {
   });
   if (!res.ok) {
     // 401 from AI is likely a transient auth issue (backend unreachable) — don't kill session
-    throw new ApiError(res.status, `AI service error ${res.status}`);
+    const detail = await readErrorDetail(res);
+    throw new ApiError(res.status, aiErrorMessage(res.status, detail, res.headers.get('Retry-After')));
   }
   const data = await res.json();
-  if (!data.success) throw new ApiError(500, data.detail || 'AI error');
+  if (!data.success) throw new ApiError(500, aiErrorMessage(500, data.detail || 'AI error'));
   return data as T;
 }
 
-// SSE 流式请求（直连 Python）
+// 文件上传请求（同源代理到 Python AI 服务）
 async function aiFileRequest<T>(path: string, file: File): Promise<T> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
   const formData = new FormData();
   formData.append('file', file);
 
-  const res = await fetch(`${AI_BASE}/ai${path}`, {
+  const res = await fetch(`/ai-proxy${path}`, {
     method: 'POST',
     headers: {
       ...(token ? { Authorization: token } : {}),
@@ -345,11 +402,11 @@ async function aiFileRequest<T>(path: string, file: File): Promise<T> {
 
   const data = await res.json().catch(() => null);
   if (!res.ok) {
-    const message = data?.detail || data?.message || `AI service error ${res.status}`;
+    const message = aiErrorMessage(res.status, data?.detail || data?.message, res.headers.get('Retry-After'));
     throw new ApiError(res.status, message);
   }
 
-  if (!data.success) throw new ApiError(500, data.detail || 'AI error');
+  if (!data.success) throw new ApiError(500, aiErrorMessage(500, data.detail || 'AI error'));
   return data as T;
 }
 
@@ -358,10 +415,11 @@ async function sseRequest(
   onChunk: (chunk: string) => void,
   onDone: () => void,
   onError: (error: string) => void,
+  onMetadata?: (metadata: Record<string, unknown>) => void,
 ): Promise<void> {
   try {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    const res = await fetch(`${AI_BASE}/ai${path}`, {
+    const res = await fetch(`/ai-proxy${path}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json;charset=UTF-8',
@@ -369,14 +427,14 @@ async function sseRequest(
       },
       body: JSON.stringify(body),
     });
-    if (res.status === 401) {
-      onError('AI服务认证失败，请尝试刷新页面后重试');
+    if (!res.ok) {
+      const detail = await readErrorDetail(res);
+      onError(aiErrorMessage(res.status, detail, res.headers.get('Retry-After')));
       return;
     }
-    if (!res.ok) { onError(`HTTP ${res.status}`); return; }
 
     const reader = res.body?.getReader();
-    if (!reader) { onError('No stream'); return; }
+    if (!reader) { onError('AI 服务没有返回可读取的响应，请稍后再试。'); return; }
 
     const decoder = new TextDecoder();
     let buffer = '';
@@ -391,7 +449,8 @@ async function sseRequest(
           try {
             const p = JSON.parse(line.slice(6));
             if (p.done) { onDone(); return; }
-            if (p.error) { onError(p.error); return; }
+            if (p.error) { onError(aiErrorMessage(500, p.error)); return; }
+            if (p.metadata) onMetadata?.(p.metadata);
             if (p.content) onChunk(p.content);
           } catch { /* skip */ }
         }
@@ -399,7 +458,7 @@ async function sseRequest(
     }
     onDone();
   } catch (e) {
-    onError(`${e}`);
+    onError(e instanceof Error ? e.message : 'AI 请求失败，请稍后再试。');
   }
 }
 
@@ -407,12 +466,14 @@ async function sseRequest(
 // 用户
 // ============================================
 export const userApi = {
-  register: (data: RegisterRequest) => request<User>('/users/register', { method: 'POST', body: JSON.stringify(data) }),
-  login: (data: LoginRequest) => request<LoginResponse>('/users/login', { method: 'POST', body: JSON.stringify(data) }),
-  getMe: () => request<User>('/users/me'),
+  register: (data: RegisterRequest) => request<User>('/users/register', { method: 'POST', body: JSON.stringify(data) }).then(normalizeUser),
+  login: (data: LoginRequest) => request<LoginResponse>('/users/login', { method: 'POST', body: JSON.stringify(data) }).then(normalizeLoginResponse),
+  getMe: () => request<User>('/users/me').then(normalizeUser),
+  updateProfile: (data: UpdateProfileRequest) =>
+    request<User>('/users/me/profile', { method: 'POST', body: JSON.stringify(data) }).then(normalizeUser),
   changePassword: (data: ChangePasswordRequest) =>
     request<void>('/users/change-password', { method: 'POST', body: JSON.stringify(data) }),
-  getUser: (id: number) => request<User>(`/users/${id}`),
+  getUser: (id: number) => request<User>(`/users/${id}`).then(normalizeUser),
 };
 
 // ============================================
@@ -556,6 +617,11 @@ export const memoryApi = {
     request<MemoryEntry[]>(`/memories/family/${familyId}?limit=${limit}`),
   createFamilyMemory: (data: CreateFamilyMemoryRequest) =>
     request<MemoryEntry>('/memories/family', { method: 'POST', body: JSON.stringify(data) }),
+  voteFamilyMemory: (memoryId: number, voteType: MemoryVoteType) =>
+    request<MemoryEntry>(`/memories/family/${memoryId}/vote`, {
+      method: 'POST',
+      body: JSON.stringify({ voteType }),
+    }),
   createFamilyMemoryCard: (body: {
     content: string;
     memoryType?: MemoryEntryType;
@@ -571,12 +637,14 @@ export const memoryApi = {
   planSaveTool: (body: {
     message: string;
     familyContext?: string;
+    conversationContext?: ChatMessage[];
     targetMemberName?: string;
     viewerRole?: string;
   }) =>
     aiRequest<{ success: boolean; data: AgentSaveToolPlan }>('/memory/save-plan', {
       message: body.message,
       family_context: body.familyContext || '',
+      conversation_context: body.conversationContext || [],
       target_member_name: body.targetMemberName || '',
       viewer_role: body.viewerRole || '',
     }),
@@ -596,12 +664,131 @@ export const memoryApi = {
       current_visibility: body.currentVisibility || '',
       target: body.target || '',
     }),
+  familyWeeklyDigest: (body: {
+    familyName?: string;
+    diaries: DiaryEntry[];
+    memories: MemoryEntry[];
+    growthRecords: GrowthGuardRecord[];
+    target?: string;
+  }) =>
+    aiRequest<{ success: boolean; data: FamilyWeeklyDigest }>('/memory/family-weekly-digest', {
+      family_name: body.familyName || '',
+      diaries: body.diaries,
+      memories: body.memories,
+      growth_records: body.growthRecords,
+      target: body.target || '',
+    }),
+  heritageTaskDraft: (body: {
+    content: string;
+    summary?: string;
+    memoryType?: string;
+    scenario?: string;
+    familyContext?: string;
+    existingActions?: string[];
+  }) =>
+    aiRequest<{ success: boolean; data: HeritageTaskDraft }>('/memory/heritage-task-draft', {
+      content: body.content,
+      summary: body.summary || '',
+      memory_type: body.memoryType || 'ELDER_ADVICE',
+      scenario: body.scenario || '',
+      family_context: body.familyContext || '',
+      existing_actions: body.existingActions || [],
+    }),
   recall: (body: { query?: string; subject?: string; knowledgePointId?: number; limit?: number }) =>
     request<MemoryEntry[]>('/memories/recall', {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  recallFamily: (familyId: number, body: { query?: string; scene?: string; limit?: number; diaryLimit?: number; memoryLimit?: number }) =>
+    request<AuthorizedMemoryRecallResult>(`/memories/family/${familyId}/recall`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  rebuildFamilyIndexes: (familyId: number, limit = 500) =>
+    request<RebuildMemoryIndexResult>(`/memories/family/${familyId}/indexes/rebuild?limit=${limit}`, {
+      method: 'POST',
+    }),
+  rebuildFamilyEmbeddings: (familyId: number, limit = 200) =>
+    request<RebuildMemoryIndexResult>(`/memories/family/${familyId}/embeddings/rebuild?limit=${limit}`, {
+      method: 'POST',
+    }),
   deleteMemory: (id: number) => request<void>(`/memories/${id}`, { method: 'DELETE' }),
+};
+
+export const memoryLibraryApi = {
+  search: (params: {
+    familyId: number;
+    page?: number;
+    pageSize?: number;
+    keyword?: string;
+    type?: MemoryLibraryItemType | 'ALL';
+    memberUserId?: number;
+    visibility?: string;
+  }) => {
+    const sp = new URLSearchParams();
+    sp.set('familyId', String(params.familyId));
+    if (params.page) sp.set('page', String(params.page));
+    if (params.pageSize) sp.set('pageSize', String(params.pageSize));
+    if (params.keyword?.trim()) sp.set('keyword', params.keyword.trim());
+    if (params.type && params.type !== 'ALL') sp.set('type', params.type);
+    if (params.memberUserId) sp.set('memberUserId', String(params.memberUserId));
+    if (params.visibility && params.visibility !== 'ALL') sp.set('visibility', params.visibility);
+    return request<PageResult<MemoryLibraryItem>>(`/memory-library/search?${sp}`);
+  },
+  maintenanceSuggestions: (familyId: number) =>
+    request<MemoryMaintenanceSuggestion[]>(`/memory-library/maintenance-suggestions?familyId=${familyId}`),
+  archived: (params: {
+    familyId: number;
+    page?: number;
+    pageSize?: number;
+    keyword?: string;
+    type?: MemoryLibraryItemType | 'ALL';
+    memberUserId?: number;
+    visibility?: string;
+  }) => {
+    const sp = new URLSearchParams();
+    sp.set('familyId', String(params.familyId));
+    if (params.page) sp.set('page', String(params.page));
+    if (params.pageSize) sp.set('pageSize', String(params.pageSize));
+    if (params.keyword?.trim()) sp.set('keyword', params.keyword.trim());
+    if (params.type && params.type !== 'ALL') sp.set('type', params.type);
+    if (params.memberUserId) sp.set('memberUserId', String(params.memberUserId));
+    if (params.visibility && params.visibility !== 'ALL') sp.set('visibility', params.visibility);
+    return request<PageResult<MemoryLibraryItem>>(`/memory-library/archived?${sp}`);
+  },
+  archiveItem: (familyId: number, itemId: string) => {
+    const sp = new URLSearchParams();
+    sp.set('familyId', String(familyId));
+    sp.set('itemId', itemId);
+    return request<void>(`/memory-library/archive?${sp}`, { method: 'POST' });
+  },
+  restoreItem: (familyId: number, itemId: string) => {
+    const sp = new URLSearchParams();
+    sp.set('familyId', String(familyId));
+    sp.set('itemId', itemId);
+    return request<void>(`/memory-library/restore?${sp}`, { method: 'POST' });
+  },
+};
+
+export const adminApi = {
+  getDatabaseHealth: () => request<DatabaseHealthResponse>('/admin/database/health'),
+  runMemoryRecallDiagnostic: (data: MemoryRecallDiagnosticRequest) =>
+    request<MemoryRecallDiagnosticResponse>('/admin/database/memory-recall-diagnostic', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
+
+export const heritageTaskApi = {
+  listFamilyTasks: (familyId: number, limit = 20) =>
+    request<HeritageTask[]>(`/heritage-tasks/family/${familyId}?limit=${limit}`),
+  create: (data: CreateHeritageTaskRequest) =>
+    request<HeritageTask>('/heritage-tasks', { method: 'POST', body: JSON.stringify(data) }),
+  complete: (id: number, completionNote: string) =>
+    request<HeritageTask>(`/heritage-tasks/${id}/complete`, {
+      method: 'PATCH',
+      body: JSON.stringify({ completionNote }),
+    }),
 };
 
 export const growthGuardApi = {
@@ -614,6 +801,8 @@ export const growthGuardApi = {
       method: 'PATCH',
       body: JSON.stringify({ followUpStatus }),
     }),
+  markStale: (id: number) =>
+    request<GrowthGuardRecord>(`/growth-guards/${id}/stale`, { method: 'POST' }),
   deleteRecord: (id: number) => request<void>(`/growth-guards/${id}`, { method: 'DELETE' }),
   listFamilyReports: (familyId: number, limit = 5) =>
     request<GrowthGuardReport[]>(`/growth-guards/reports/family/${familyId}?limit=${limit}`)
@@ -643,7 +832,7 @@ export const mirrorApi = {
 };
 
 // ============================================
-// 家庭陪伴 AI（直连 Python AI 服务）
+// 家族Agent（直连 Python AI 服务）
 // ============================================
 export const tutorApi = {
   extractContent: (file: File) =>
@@ -682,8 +871,10 @@ export const tutorApi = {
             history?: { role: string; content: string }[]; grade?: string; subject?: string;
             knowledgePoint?: string; masteryLevel?: string; teachingStyle?: 'guided' | 'direct';
             mode?: 'explain' | 'chat'; memoryContext?: string;
-            viewerRole?: ViewerRole; targetRole?: ViewerRole | 'STUDENT'; },
+            viewerRole?: ViewerRole; targetRole?: ViewerRole | 'STUDENT';
+            clientTimestamp?: string; clientTimezone?: string; },
     onChunk: (chunk: string) => void, onDone: () => void, onError: (error: string) => void,
+    onMetadata?: (metadata: Record<string, unknown>) => void,
   ) => sseRequest('/tutor/explain', {
     question_content: body.questionContent,
     answer: body.answer,
@@ -699,7 +890,9 @@ export const tutorApi = {
     memory_context: body.memoryContext || '',
     viewer_role: body.viewerRole || 'STUDENT',
     target_role: body.targetRole || 'STUDENT',
-  }, onChunk, onDone, onError),
+    client_timestamp: body.clientTimestamp || new Date().toISOString(),
+    client_timezone: body.clientTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+  }, onChunk, onDone, onError, onMetadata),
 
   grade: (body: { questionContent: string; answer: string; steps: string;
                    studentAnswer: string; subject?: string; grade?: string; }) =>
@@ -808,7 +1001,7 @@ export const tutorApi = {
     if (expression) params.set('expression', expression);
     if (expected) params.set('expected', expected);
     if (studentAnswer) params.set('student_answer', studentAnswer);
-    return fetch(`${AI_BASE}/ai/tutor/math/verify?${params}`).then(r => r.json());
+    return fetch(`/ai-proxy/tutor/math/verify?${params}`).then(r => r.json());
   },
 };
 

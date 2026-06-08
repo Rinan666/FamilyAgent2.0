@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Bot, CheckCircle, FileText, Layers, Loader2, RefreshCw, Send, UserRound, Users, XCircle } from 'lucide-react';
+import { Bot, CheckCircle, Loader2, RefreshCw, Send, UserRound, Users, XCircle } from 'lucide-react';
 import { diaryApi, familyApi, growthGuardApi, memoryApi, mirrorApi, tutorApi } from '@/lib/api';
+import { memberAge } from '@/lib/roles';
 import { useViewerRole } from '@/hooks/useViewerRole';
+import WebSearchBadge from '@/components/tutor/WebSearchBadge';
 import VoiceInputButton from '@/components/voice/VoiceInputButton';
 import type {
   AgentSaveToolPlan,
@@ -49,6 +51,10 @@ function memberName(member?: FamilyMember | null) {
   return member.relationshipLabel?.trim() || member.nickname?.trim() || member.username?.trim() || `用户 ${member.userId}`;
 }
 
+function agentRoleFromMember(member?: FamilyMember | null): 'PARENT' | 'STUDENT' {
+  return memberAge(member) < 18 ? 'STUDENT' : 'PARENT';
+}
+
 function diaryTitle(entry: DiaryEntry) {
   return entry.structured?.title || entry.structured?.summary || entry.rawText.slice(0, 28) || '未命名记录';
 }
@@ -86,11 +92,6 @@ function temporalLayerClass(item: DiaryEntry | MemoryEntry) {
   }
 }
 
-function temporalNote(item: DiaryEntry | MemoryEntry) {
-  const note = item.metadata?.temporalNote;
-  return typeof note === 'string' ? note : '';
-}
-
 function memoryTitle(memory: MemoryEntry) {
   if (memory.summary?.trim()) return memory.summary.trim();
   if (typeof memory.metadata?.scenario === 'string' && memory.metadata.scenario.trim()) {
@@ -107,8 +108,9 @@ function readinessLevel(context?: MirrorContextResponse | null) {
   if (!context) return { label: '加载中', tone: 'gray', score: 0 };
   const diaryCount = context.diaries?.length || 0;
   const memoryCount = context.memories?.length || 0;
+  const libraryCount = context.libraryItems?.length || 0;
   const profileBonus = hasMirrorProfile(context) ? 1 : 0;
-  const score = Math.min(5, diaryCount + memoryCount + profileBonus);
+  const score = Math.min(5, diaryCount + memoryCount + libraryCount + profileBonus);
   if (score >= 5) return { label: '资料较充分', tone: 'green', score };
   if (score >= 3) return { label: '可谨慎参考', tone: 'blue', score };
   return { label: '资料偏少', tone: 'yellow', score };
@@ -119,12 +121,13 @@ function sourceLead(context?: MirrorContextResponse | null) {
   const relatedDiaryCount = diaries.filter(isRelatedDiary).length;
   const selfDiaryCount = diaries.length - relatedDiaryCount;
   const memoryCount = context?.memories?.length || 0;
+  const libraryCount = context?.libraryItems?.length || 0;
   const profileText = hasMirrorProfile(context) ? '，并参考了授权画像摘要' : '';
-  return `本轮可参考 ${selfDiaryCount} 条本人记录、${relatedDiaryCount} 条家人补充、${memoryCount} 条可见家族经验${profileText}。`;
+  return `本轮可参考 ${selfDiaryCount} 条本人记录、${relatedDiaryCount} 条家人补充、${memoryCount} 条可见经验沉淀、${libraryCount} 条额外匹配片段${profileText}。`;
 }
 
 function memorySourceLabel(memory: MemoryEntry) {
-  return memory.metadata?.coreMemory === true ? '核心记忆' : '家族经验';
+  return memory.metadata?.coreMemory === true ? '核心记忆' : '经验沉淀';
 }
 
 function buildSourceRefs(context?: MirrorContextResponse | null): MirrorSourceRef[] {
@@ -146,7 +149,15 @@ function buildSourceRefs(context?: MirrorContextResponse | null): MirrorSourceRe
     toneClass: temporalLayerClass(memory),
   }));
 
-  return [...diaryRefs, ...memoryRefs].slice(0, 6);
+  const libraryRefs = (context.libraryItems || []).map((item, index) => ({
+    code: `L${index + 1}`,
+    title: item.title || '记忆库片段',
+    sourceLabel: '家族知识库',
+    temporalLabel: '已授权',
+    toneClass: 'bg-indigo-50 text-indigo-700',
+  }));
+
+  return [...diaryRefs, ...memoryRefs, ...libraryRefs].slice(0, 8);
 }
 
 function buildAnswerSourceMetadata(context?: MirrorContextResponse | null) {
@@ -156,6 +167,29 @@ function buildAnswerSourceMetadata(context?: MirrorContextResponse | null) {
     sourceSummary: context ? sourceLead(context) : '',
     insufficientSources: Boolean(context?.insufficientRecords || sourceRefs.length === 0),
     retrievalQuery: context?.retrievalQuery,
+  };
+}
+
+function normalizeMirrorAssistantMetadata(metadata: Record<string, unknown>): NonNullable<ChatMessage['metadata']> {
+  const webSearch = metadata.web_search;
+  if (!webSearch || typeof webSearch !== 'object') return {};
+  const data = webSearch as Record<string, unknown>;
+  const rawSources = Array.isArray(data.sources) ? data.sources : [];
+  return {
+    webSearch: {
+      needed: Boolean(data.needed),
+      used: Boolean(data.used),
+      resultCount: Number(data.result_count) || 0,
+      sources: rawSources
+        .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+        .map((item) => ({
+          title: typeof item.title === 'string' ? item.title : '未命名来源',
+          url: typeof item.url === 'string' ? item.url : '',
+          snippet: typeof item.snippet === 'string' ? item.snippet : '',
+        }))
+        .filter((item) => item.url)
+        .slice(0, 4),
+    },
   };
 }
 
@@ -194,9 +228,9 @@ function todayString() {
 }
 
 function toolLabel(tool: AgentSaveToolPlan['tool']) {
-  if (tool === 'DIARY') return '人生记录';
-  if (tool === 'FAMILY_MEMORY') return '家族经验';
-  if (tool === 'GROWTH_GUARD') return '成长守护';
+  if (tool === 'DIARY') return '每日记录';
+  if (tool === 'FAMILY_MEMORY') return '经验沉淀';
+  if (tool === 'GROWTH_GUARD') return '成长观察';
   return '未保存';
 }
 
@@ -590,7 +624,7 @@ export default function MirrorPage() {
         mode: 'chat',
         memoryContext: contextForAnswer?.memoryContext || '',
         viewerRole,
-        targetRole: 'STUDENT',
+        targetRole: agentRoleFromMember(targetMember),
       },
       (chunk) => {
         setMessages((prev) => prev.map((message) => (
@@ -603,6 +637,14 @@ export default function MirrorPage() {
           message.id === assistantMessage.id ? { ...message, content: `${message.content}\n\n[错误] ${streamError}` } : message
         )));
         setIsStreaming(false);
+      },
+      (metadata) => {
+        const normalized = normalizeMirrorAssistantMetadata(metadata);
+        setMessages((prev) => prev.map((message) => (
+          message.id === assistantMessage.id
+            ? { ...message, metadata: { ...(message.metadata || {}), ...normalized } }
+            : message
+        )));
       },
     );
   };
@@ -637,22 +679,8 @@ export default function MirrorPage() {
       <div className="mb-2 flex shrink-0 flex-col gap-2 sm:mb-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-lg font-bold text-gray-900 sm:text-xl">镜像 Agent</h1>
-          <p className="mt-0.5 line-clamp-1 text-xs text-gray-500 sm:mt-1 sm:text-sm">基于授权日记和家族经验进行风格参考，不代表本人真实意图。</p>
+          <p className="mt-0.5 line-clamp-1 text-xs text-gray-500 sm:mt-1 sm:text-sm">基于授权记录和经验沉淀进行风格参考，不代表本人真实意图。</p>
         </div>
-        <select
-          value={selectedFamilyId ?? ''}
-          onChange={(event) => {
-            const familyId = Number(event.target.value);
-            setSelectedFamilyId(familyId);
-            setActiveFamilyId(familyId);
-            setMessages([]);
-          }}
-          className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          {families.map((family) => (
-            <option key={family.id} value={family.id}>{family.name}</option>
-          ))}
-        </select>
       </div>
 
       {error && <div className="mb-2 shrink-0 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600 sm:mb-3">{error}</div>}
@@ -759,82 +787,12 @@ export default function MirrorPage() {
                     {mirrorContext?.insufficientRecords ? ' 资料偏少时，回答只能作为低置信参考。' : ''}
                   </p>
                 </div>
-                <div>
-                  <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-gray-500">
-                    <FileText className="h-3.5 w-3.5" />
-                    授权日记来源
-                  </p>
-                  <div className="space-y-2">
-                    {targetDiaries.slice(0, 5).map((entry, index) => (
-                      <div key={entry.id} className="rounded-lg border border-gray-100 p-2">
-                        <div className="mb-1 flex items-center gap-1.5">
-                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                            isRelatedDiary(entry) ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'
-                          }`}
-                          >
-                            {diarySourceCode(entry, index)}
-                          </span>
-                          <span className="truncate text-xs font-medium text-gray-800">{diaryTitle(entry)}</span>
-                        </div>
-                        <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">{entry.rawText}</p>
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                          <span className="text-[11px] text-gray-400">{diarySourceLabel(entry)}</span>
-                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${temporalLayerClass(entry)}`}>
-                            {temporalLayerLabel(entry)}
-                          </span>
-                        </div>
-                        {temporalNote(entry) && (
-                          <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-gray-400">{temporalNote(entry)}</p>
-                        )}
-                      </div>
-                    ))}
-                    {targetDiaries.length === 0 && (
-                      <p className="rounded-lg border border-dashed border-gray-200 p-3 text-center text-xs text-gray-400">
-                        暂无该成员授权日记
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-gray-500">
-                    <Layers className="h-3.5 w-3.5" />
-                    家族经验来源
-                  </p>
-                  <div className="mb-2 space-y-2">
-                    {memories.slice(0, 5).map((memory, index) => (
-                      <div key={memory.id} className="rounded-lg border border-gray-100 p-2">
-                        <p className="truncate text-xs font-medium text-gray-800">M{index + 1} · {memoryTitle(memory)}</p>
-                        <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">{memory.content}</p>
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${temporalLayerClass(memory)}`}>
-                            {temporalLayerLabel(memory)}
-                          </span>
-                          {temporalNote(memory) && (
-                            <span className="line-clamp-1 text-[11px] text-gray-400">{temporalNote(memory)}</span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                    {memories.length === 0 && (
-                      <p className="rounded-lg border border-dashed border-gray-200 p-3 text-center text-xs text-gray-400">
-                        暂无可见家族经验
-                      </p>
-                    )}
-                  </div>
-                  <p className="rounded-lg bg-gray-50 p-3 text-xs text-gray-500">
-                    {mirrorContext?.sourceSummary || `已加载 ${memories.length} 条后端权限过滤后的可见经验。`}
-                    AI 只能基于这些记录谨慎推断。
-                    {mirrorContext?.retrievalQuery && (
-                      <span className="mt-1 block text-gray-400">
-                        本轮已按“{mirrorContext.retrievalQuery}”召回相关记录。
-                      </span>
-                    )}
-                    {mirrorContext?.retrievalMode && (
-                      <span className="mt-1 block text-gray-400">
-                        召回模式：{mirrorContext.retrievalMode === 'TEXT_FALLBACK' ? '文本相关性' : '向量索引待接入'}
-                      </span>
-                    )}
-                  </p>
+                <div className="rounded-lg bg-gray-50 p-3 text-xs leading-5 text-gray-500">
+                  <p>{mirrorContext?.sourceSummary || `已加载 ${targetDiaries.length} 条授权记录、${memories.length} 条可见经验沉淀。`}</p>
+                  <p className="mt-1 text-gray-400">相关资料已由后端按权限过滤，回答会轻量引用来源，不再逐条铺开。</p>
+                  {mirrorContext?.retrievalQuery && (
+                    <p className="mt-1 text-gray-400">本轮已按“{mirrorContext.retrievalQuery}”召回相关记录。</p>
+                  )}
                 </div>
                 {missingRecordSuggestions.length > 0 && (
                   <div>
@@ -911,22 +869,10 @@ export default function MirrorPage() {
                   >
                     {readiness.label}
                   </span>
-                  <span className="line-clamp-2 text-xs text-gray-500">{sourceLead(mirrorContext)}</span>
+                  <span className="text-xs text-gray-500">
+                    已加载 {diaries.length} 条授权记录、{memories.length} 条经验沉淀
+                  </span>
                 </div>
-                {(diaries.length > 0 || memories.length > 0) && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {diaries.slice(0, 2).map((entry, index) => (
-                      <span key={`d-${entry.id}`} className="rounded bg-white px-2 py-1 text-[11px] text-gray-500">
-                        {diarySourceCode(entry, index)} · {temporalLayerLabel(entry)} · {diaryTitle(entry)}
-                      </span>
-                    ))}
-                    {memories.slice(0, 2).map((memory, index) => (
-                      <span key={`m-${memory.id}`} className="rounded bg-white px-2 py-1 text-[11px] text-gray-500">
-                        M{index + 1} · {temporalLayerLabel(memory)} · {memoryTitle(memory)}
-                      </span>
-                    ))}
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -980,6 +926,7 @@ export default function MirrorPage() {
                   } ${message.role === 'assistant' && !message.content ? 'animate-pulse' : ''}`}
                   >
                     {message.content || (message.role === 'assistant' ? '思考中...' : '')}
+                    {message.role === 'assistant' && <WebSearchBadge metadata={message.metadata} />}
                     {message.role === 'assistant' && message.toolResult && (
                       <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-green-100 bg-white/70 px-3 py-2 text-xs text-green-700">
                         <CheckCircle className="h-3.5 w-3.5" />
@@ -1034,33 +981,13 @@ export default function MirrorPage() {
                       </div>
                     )}
                     {message.role === 'assistant' && !message.toolResult && !message.pendingTool && (message.sourceRefs?.length || message.insufficientSources) && (
-                      <div className="mt-3 border-t border-gray-200 pt-2">
-                        {message.sourceRefs && message.sourceRefs.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {message.sourceRefs.map((source) => (
-                              <span
-                                key={`${message.id}-${source.code}-${source.title}`}
-                                className="rounded bg-white px-2 py-1 text-[11px] leading-4 text-gray-500"
-                                title={`${source.sourceLabel} · ${source.title}`}
-                              >
-                                <span className="font-semibold text-gray-700">{source.code}</span>
-                                <span> · </span>
-                                <span className={source.toneClass}>{source.temporalLabel}</span>
-                                <span> · {source.title}</span>
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        {message.retrievalQuery && (
-                          <p className="mt-1 text-[11px] leading-4 text-gray-400">
-                            本轮按“{message.retrievalQuery}”召回相关记忆。
-                          </p>
-                        )}
-                        {message.insufficientSources && (
-                          <p className="mt-1 text-[11px] leading-4 text-yellow-700">
-                            本轮资料不足，请谨慎参考。
-                          </p>
-                        )}
+                      <div className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full bg-white/70 px-2.5 py-1 text-[11px] text-gray-500">
+                        <Bot className="h-3 w-3 text-purple-600" />
+                        <span>
+                          {message.insufficientSources
+                            ? '资料偏少，请谨慎看待'
+                            : `已参考 ${message.sourceRefs?.length || 0} 条授权资料`}
+                        </span>
                       </div>
                     )}
                   </div>

@@ -55,9 +55,9 @@ public class CareAuthorizationService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "不能给自己创建照护授权");
         }
 
-        boolean canManage = viewerUserId.equals(subjectUserId) || isOwnerOrAdmin(familyId, viewerUserId);
+        boolean canManage = viewerUserId.equals(subjectUserId) || isOwner(familyId, viewerUserId);
         if (!canManage) {
-            throw new BusinessException(ErrorCode.INSUFFICIENT_PERMISSION, "只有本人或家庭管理员可以维护照护授权");
+            throw new BusinessException(ErrorCode.INSUFFICIENT_PERMISSION, "只有本人或家族创建者可以维护照护授权");
         }
 
         String scope = normalizeScope(request == null ? null : request.getScope());
@@ -93,7 +93,7 @@ public class CareAuthorizationService {
         if (subjectUserId.equals(viewerUserId)) {
             return true;
         }
-        if (isOwnerOrAdmin(familyId, viewerUserId)) {
+        if (isOwner(familyId, viewerUserId)) {
             return true;
         }
         return authorizationRepository.hasActiveAuthorization(
@@ -110,9 +110,9 @@ public class CareAuthorizationService {
         }
     }
 
-    private boolean isOwnerOrAdmin(Long familyId, Long userId) {
+    private boolean isOwner(Long familyId, Long userId) {
         FamilyMember member = memberRepository.findByFamilyAndUser(familyId, userId);
-        return member != null && ("OWNER".equalsIgnoreCase(member.getRole()) || "ADMIN".equalsIgnoreCase(member.getRole()));
+        return member != null && "OWNER".equalsIgnoreCase(member.getRole());
     }
 
     private String normalizeScope(String scope) {

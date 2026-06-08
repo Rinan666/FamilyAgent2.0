@@ -9,9 +9,9 @@ import { useAuthStore } from '@/stores/authStore';
 import { useFamilyContextStore } from '@/stores/familyContextStore';
 import type { CareAuthorization, Family, FamilyMember } from '@/types';
 import {
-  Users, Plus, Copy, CheckCircle, UserPlus, Crown, Shield,
-  ChevronDown, ChevronUp, User, RefreshCw, GraduationCap,
-  HeartHandshake, Pencil, X, Eye, BookHeart,
+  Users, Plus, Copy, CheckCircle, UserPlus, Crown,
+  ChevronDown, ChevronUp, User, RefreshCw,
+  Pencil, X, Eye, BookHeart,
 } from 'lucide-react';
 
 export default function FamilyPage() {
@@ -37,13 +37,44 @@ export default function FamilyPage() {
   const [careAuthorizations, setCareAuthorizations] = useState<Record<number, CareAuthorization[]>>({});
   const [updatingCareKey, setUpdatingCareKey] = useState<string | null>(null);
 
-  const roleOptions: FamilyMember['role'][] = ['ADMIN', 'GUARDIAN', 'MEMBER', 'STUDENT', 'GUEST'];
-
   const memberAccountName = (member: FamilyMember) =>
     member.nickname?.trim() || member.username?.trim() || `用户 ${member.userId}`;
 
   const memberDisplayName = (member: FamilyMember) =>
     member.relationshipLabel?.trim() || memberAccountName(member);
+
+  const memberBirthDate = (member: FamilyMember) => {
+    const value = member.birthDate
+      || (typeof member.metadata?.birthDate === 'string' ? member.metadata.birthDate : '')
+      || (typeof member.metadata?.birthday === 'string' ? member.metadata.birthday : '')
+      || (typeof member.metadata?.dateOfBirth === 'string' ? member.metadata.dateOfBirth : '');
+    return value ? value.slice(0, 10) : '';
+  };
+
+  const memberAge = (member: FamilyMember) => {
+    const birthDate = memberBirthDate(member);
+    if (birthDate) {
+      const date = new Date(birthDate);
+      if (!Number.isNaN(date.getTime())) {
+        const now = new Date();
+        let age = now.getFullYear() - date.getFullYear();
+        const monthDelta = now.getMonth() - date.getMonth();
+        if (monthDelta < 0 || (monthDelta === 0 && now.getDate() < date.getDate())) age -= 1;
+        if (age >= 0 && age <= 130) return { age, isDefault: false };
+      }
+    }
+    const year = Number(member.birthYear || member.metadata?.birthYear || member.metadata?.yearOfBirth);
+    if (Number.isFinite(year) && year > 1870 && year <= new Date().getFullYear()) {
+      return { age: new Date().getFullYear() - year, isDefault: false };
+    }
+    return { age: 20, isDefault: true };
+  };
+
+  const memberProfileLine = (member: FamilyMember) => {
+    const birthDate = memberBirthDate(member);
+    const age = memberAge(member);
+    return `${birthDate ? `生日：${birthDate}` : '生日未设置'} · 年龄：${age.age} 岁${age.isDefault ? '（默认）' : ''}`;
+  };
 
   const loadFamilies = useCallback(async () => {
     setLoading(true);
@@ -245,12 +276,13 @@ export default function FamilyPage() {
   const roleBadge = (role: string) => {
     switch (role) {
       case 'OWNER': return { icon: Crown, label: familyRoleLabel(role), cls: 'text-yellow-600 bg-yellow-50' };
-      case 'ADMIN': return { icon: Shield, label: familyRoleLabel(role), cls: 'text-blue-600 bg-blue-50' };
-      case 'GUARDIAN': return { icon: HeartHandshake, label: familyRoleLabel(role), cls: 'text-emerald-700 bg-emerald-50' };
-      case 'STUDENT': return { icon: GraduationCap, label: familyRoleLabel(role), cls: 'text-green-700 bg-green-50' };
-      case 'GUEST': return { icon: User, label: familyRoleLabel(role), cls: 'text-gray-500 bg-gray-100' };
       default: return { icon: User, label: familyRoleLabel(role), cls: 'text-gray-600 bg-gray-100' };
     }
+  };
+
+  const isLegacyFamilyRole = (role?: string) => {
+    const normalized = (role || '').toUpperCase();
+    return normalized !== 'OWNER' && normalized !== 'MEMBER';
   };
 
   return (
@@ -334,7 +366,7 @@ export default function FamilyPage() {
             const isExpanded = expandedFamily === family.id;
             const memberList = members[family.id] || [];
             const currentMember = memberList.find((member) => member.userId === currentUserId);
-            const canManageRoles = currentMember?.role === 'OWNER' || currentMember?.role === 'ADMIN';
+            const canManageRoles = currentMember?.role === 'OWNER';
             return (
               <div key={family.id}
                 className={`bg-white border rounded-xl overflow-hidden hover:shadow-sm transition-shadow ${
@@ -389,7 +421,7 @@ export default function FamilyPage() {
                         {memberList.map((m) => {
                           const badge = roleBadge(m.role || 'MEMBER');
                           const BadgeIcon = badge.icon;
-                          const canEditRole = canManageRoles && m.role !== 'OWNER' && m.userId !== currentUserId;
+                          const canNormalizeRole = canManageRoles && m.role !== 'OWNER' && isLegacyFamilyRole(m.role);
                           const canEditRelationship = m.userId !== currentUserId;
                           const updateKey = `${family.id}:${m.userId}`;
                           const careKey = `${family.id}:${m.userId}:care`;
@@ -438,17 +470,13 @@ export default function FamilyPage() {
                                 ) : (
                                   <div className="min-w-0">
                                     <div className="flex min-w-0 items-center gap-1.5">
-                                      {m.role === 'STUDENT' ? (
-                                        <Link
-                                          href={`/dashboard/assessment?familyId=${family.id}&userId=${m.userId}`}
-                                          className="truncate text-sm font-medium text-blue-700 hover:underline"
-                                          title="查看学习报告"
-                                        >
-                                          {displayName}
-                                        </Link>
-                                      ) : (
-                                        <span className="truncate text-sm text-gray-800">{displayName}</span>
-                                      )}
+                                      <Link
+                                        href={`/dashboard/family/member?familyId=${family.id}&userId=${m.userId}`}
+                                        className="truncate text-sm font-medium text-gray-900 hover:text-purple-700 hover:underline"
+                                        title="查看成员经验"
+                                      >
+                                        {displayName}
+                                      </Link>
                                       {canEditRelationship && (
                                         <button
                                           type="button"
@@ -461,20 +489,20 @@ export default function FamilyPage() {
                                         </button>
                                       )}
                                     </div>
-                                    {m.relationshipLabel?.trim() && (
-                                      <p className="truncate text-[11px] text-gray-400">{accountName}</p>
-                                    )}
+                                    <p className="truncate text-[11px] text-gray-400">
+                                      {m.relationshipLabel?.trim() ? `${accountName} · ` : ''}{memberProfileLine(m)}
+                                    </p>
                                   </div>
                                 )}
                               </div>
                               <div className="flex shrink-0 items-center gap-2">
                                 <Link
                                   href={`/dashboard/family/member?familyId=${family.id}&userId=${m.userId}`}
-                                  className="inline-flex shrink-0 items-center gap-1 rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-medium text-purple-700 transition-colors hover:bg-purple-100"
+                                  className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-purple-600 px-3 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-purple-700"
                                   title="查看该成员的记忆视图"
                                 >
-                                  <BookHeart className="h-3 w-3" />
-                                  记忆
+                                  <BookHeart className="h-3.5 w-3.5" />
+                                  成员经验
                                 </Link>
                                 <span className={`inline-flex shrink-0 items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium ${badge.cls}`}>
                                   <BadgeIcon className="w-3 h-3" /> {badge.label}
@@ -495,19 +523,16 @@ export default function FamilyPage() {
                                     {careAuthorized ? '已授权照护' : '授权照护'}
                                   </button>
                                 )}
-                                {canEditRole && (
-                                  <select
-                                    value={m.role}
+                                {canNormalizeRole && (
+                                  <button
+                                    type="button"
                                     disabled={updatingRoleKey === updateKey}
-                                    onChange={(event) => {
-                                      void handleUpdateRole(family.id, m, event.target.value as FamilyMember['role']);
-                                    }}
-                                    className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                                    onClick={() => void handleUpdateRole(family.id, m, 'MEMBER')}
+                                    className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 hover:border-blue-200 hover:text-blue-700 disabled:opacity-50"
+                                    title="将历史身份归并为普通成员"
                                   >
-                                    {roleOptions.map((role) => (
-                                      <option key={role} value={role}>{familyRoleLabel(role)}</option>
-                                    ))}
-                                  </select>
+                                    归并为成员
+                                  </button>
                                 )}
                               </div>
                             </div>

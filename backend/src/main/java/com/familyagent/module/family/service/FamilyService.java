@@ -37,7 +37,7 @@ public class FamilyService {
     private final FamilyMemberRepository memberRepository;
     private final FamilyRelationshipRepository relationshipRepository;
     private final UserService userService;
-    private static final Set<String> MUTABLE_FAMILY_ROLES = Set.of("ADMIN", "GUARDIAN", "MEMBER", "STUDENT", "GUEST");
+    private static final Set<String> MUTABLE_FAMILY_ROLES = Set.of("MEMBER");
 
     @Transactional
     public Family createFamily(CreateFamilyRequest request) {
@@ -144,7 +144,7 @@ public class FamilyService {
         User currentUser = userService.getCurrentUser();
         FamilyMember currentMember = memberRepository.findByFamilyAndUser(familyId, currentUser.getId());
         boolean platformAdmin = "ADMIN".equalsIgnoreCase(currentUser.getRole());
-        if (!platformAdmin && (currentMember == null || !isOwnerOrAdmin(currentMember.getRole()))) {
+        if (!platformAdmin && (currentMember == null || !isOwner(currentMember.getRole()))) {
             throw new BusinessException(ErrorCode.INSUFFICIENT_PERMISSION);
         }
 
@@ -158,11 +158,6 @@ public class FamilyService {
         if ("OWNER".equalsIgnoreCase(targetMember.getRole())) {
             throw new BusinessException(ErrorCode.INSUFFICIENT_PERMISSION, "创建者角色不能在此处修改");
         }
-        if (!platformAdmin && "ADMIN".equalsIgnoreCase(currentMember.getRole())
-                && ("ADMIN".equalsIgnoreCase(targetMember.getRole()) || "ADMIN".equals(nextRole))) {
-            throw new BusinessException(ErrorCode.INSUFFICIENT_PERMISSION, "只有创建者可以调整管理员角色");
-        }
-
         targetMember.setRole(nextRole);
         memberRepository.updateById(targetMember);
         log.info("家庭成员角色更新: familyId={}, operator={}, target={}, role={}",
@@ -184,7 +179,7 @@ public class FamilyService {
                 continue;
             }
             FamilyMember targetMember = memberRepository.findByFamilyAndUser(membership.getFamilyId(), targetUserId);
-            if (targetMember != null && "STUDENT".equalsIgnoreCase(targetMember.getRole())) {
+            if (targetMember != null) {
                 return;
             }
         }
@@ -199,28 +194,32 @@ public class FamilyService {
         }
     }
 
-    public void checkOwnerOrAdmin(Long familyId) {
+    public void checkOwner(Long familyId) {
         User currentUser = userService.getCurrentUser();
         FamilyMember member = memberRepository.findByFamilyAndUser(familyId, currentUser.getId());
-        if (member == null || !isOwnerOrAdmin(member.getRole())) {
+        if (member == null || !isOwner(member.getRole())) {
             throw new BusinessException(ErrorCode.INSUFFICIENT_PERMISSION);
         }
     }
 
     private String normalizeFamilyRole(String role) {
         String normalized = role == null ? "" : role.trim().toUpperCase(Locale.ROOT);
+        if ("ADMIN".equals(normalized) || "GUARDIAN".equals(normalized)
+                || "STUDENT".equals(normalized) || "GUEST".equals(normalized)) {
+            return "MEMBER";
+        }
         if (!MUTABLE_FAMILY_ROLES.contains(normalized)) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "家庭角色只能是 ADMIN、GUARDIAN、MEMBER、STUDENT 或 GUEST");
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "家庭角色只能是 MEMBER，创建者角色不可在此处修改");
         }
         return normalized;
     }
 
-    private boolean isOwnerOrAdmin(String role) {
-        return "OWNER".equalsIgnoreCase(role) || "ADMIN".equalsIgnoreCase(role);
+    private boolean isOwner(String role) {
+        return "OWNER".equalsIgnoreCase(role);
     }
 
     private boolean canViewLearnerReportFromRole(String role) {
-        return "OWNER".equalsIgnoreCase(role) || "ADMIN".equalsIgnoreCase(role) || "GUARDIAN".equalsIgnoreCase(role);
+        return "OWNER".equalsIgnoreCase(role);
     }
 
     private String generateInviteCode() {

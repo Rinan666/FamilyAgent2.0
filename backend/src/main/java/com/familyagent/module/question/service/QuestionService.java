@@ -121,11 +121,11 @@ public class QuestionService {
     }
 
     /**
-     * 自适应抽题：基于学力档案的最近发展区
+     * Adaptive selection based on legacy local answer statistics.
      */
     public List<Question> selectAdaptive(Long userId, int limit) {
         List<Question> questions = questionRepository.selectAdaptive(userId, limit);
-        // 如果BKT数据不足，回退到随机抽题
+        // Fall back to random selection when historical performance data is insufficient.
         if (questions.isEmpty()) {
             questions = questionRepository.selectForTest(null, "math", null, null, limit);
         }

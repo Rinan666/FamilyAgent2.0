@@ -42,3 +42,11 @@ def test_keeps_non_sensitive_learning_content():
 
     assert result.text == text
     assert result.categories == []
+
+
+def test_keeps_calendar_dates_when_redacting_class_info():
+    result = redact_ai_bound_text("1月11日我记录了一件事，孩子现在是三年级2班。")
+
+    assert "1月11日" in result.text
+    assert "[班级信息]" in result.text
+    assert "三年级2班" not in result.text
