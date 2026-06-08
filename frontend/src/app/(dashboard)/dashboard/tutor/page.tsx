@@ -46,7 +46,14 @@ type TutorChatMessage = ChatMessage & {
   };
   saveSuggestion?: {
     originalContent: string;
+    status?: 'pending' | 'saving' | 'failed';
+    error?: string;
   };
+};
+
+type TutorSaveResult = {
+  plan: AgentSaveToolPlan;
+  savedRecordId?: number;
 };
 
 function formatSessionTime(value?: string) {
@@ -346,7 +353,7 @@ export default function TutorPage() {
     return map;
   }, [profiles]);
 
-  const executeSavePlan = useCallback(async (plan: AgentSaveToolPlan, originalContent: string) => {
+  const executeSavePlan = useCallback(async (plan: AgentSaveToolPlan, originalContent: string): Promise<TutorSaveResult> => {
     const safePlan = normalizeSaveToolPlan(plan);
     if (!safePlan.should_save || safePlan.tool === 'NONE') {
       throw new Error('这条内容没有可执行的保存方案。');
@@ -445,6 +452,7 @@ export default function TutorPage() {
           sessionMemory,
         ].slice(-8);
       }
+      return { plan: safePlan, savedRecordId };
     } catch (error) {
       if (skillRunId) {
         try {
@@ -468,14 +476,17 @@ export default function TutorPage() {
     }
   }, [activeFamilyId]);
 
-  const createSavePlanForMessage = useCallback(async (messageId: string, content: string) => {
+  const createSavePlanForMessage = useCallback(async (messageId: string, content: string, options: { automatic?: boolean } = {}) => {
     if (!activeFamilyId) {
       setMessages((useChatStore.getState().messages as TutorChatMessage[]).map((message) => (
         message.id === messageId
           ? {
               ...message,
-              saveSuggestion: undefined,
-              content: `${message.content}\n\n这段内容看起来值得保存，但你还没有选择家族空间。请先创建或切换到一个家族后再保存。`,
+              saveSuggestion: {
+                originalContent: content,
+                status: 'failed',
+                error: '请先选择一个家族空间。',
+              },
             }
           : message
       )));
@@ -483,6 +494,17 @@ export default function TutorPage() {
     }
 
     setPlanningToolMessageId(messageId);
+    setMessages((useChatStore.getState().messages as TutorChatMessage[]).map((message) => (
+      message.id === messageId
+        ? {
+            ...message,
+            saveSuggestion: {
+              originalContent: content,
+              status: 'saving',
+            },
+          }
+        : message
+    )));
     try {
       const conversationContext = buildSaveConversationContext(useChatStore.getState().messages as TutorChatMessage[]);
       const planResult = await memoryApi.planSaveTool({
@@ -492,8 +514,9 @@ export default function TutorPage() {
         viewerRole,
       });
       const plan = normalizeSaveToolPlan(planResult.data);
+      let result: TutorSaveResult | null = null;
       if (plan.should_save && plan.tool !== 'NONE') {
-        await executeSavePlan(plan, content);
+        result = await executeSavePlan(plan, content);
       }
       setMessages((useChatStore.getState().messages as TutorChatMessage[]).map((message) => (
         message.id === messageId
@@ -501,12 +524,12 @@ export default function TutorPage() {
               ...message,
               saveSuggestion: undefined,
               content: plan.should_save && plan.tool !== 'NONE'
-                ? `${message.content}\n\n${plan.confirmation_message || `已保存为${toolLabel(plan.tool)}。`}`
+                ? `${message.content}\n\n${options.automatic ? '我已自动整理并保存：' : ''}${plan.confirmation_message || `已保存为${toolLabel(plan.tool)}。`}`
                 : message.content,
               toolResult: plan.should_save && plan.tool !== 'NONE'
                 ? {
                     label: toolLabel(plan.tool),
-                    detail: savePlanDetail(plan),
+                    detail: savePlanDetail(plan, result?.savedRecordId),
                     memoryHref: savedMemoryHref(plan, activeFamilyId),
                     followUpPrompt: followUpPrompt(plan),
                   }
@@ -515,14 +538,16 @@ export default function TutorPage() {
           : message
       )));
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '保存失败，请稍后重试。';
       setMessages((useChatStore.getState().messages as TutorChatMessage[]).map((message) => (
         message.id === messageId
           ? {
               ...message,
-              saveSuggestion: undefined,
-              content: error instanceof Error
-                ? `${message.content}\n\n保存失败：${error.message}`
-                : `${message.content}\n\n保存失败，请稍后重试。`,
+              saveSuggestion: {
+                originalContent: content,
+                status: 'failed',
+                error: errorMessage,
+              },
             }
           : message
       )));
@@ -587,7 +612,7 @@ export default function TutorPage() {
       const plan = rawPlan.should_save && rawPlan.tool !== 'NONE'
         ? rawPlan
         : normalizeSaveToolPlan(fallbackDiarySavePlan(saveTarget));
-      await executeSavePlan(plan, saveTarget);
+      const result = await executeSavePlan(plan, saveTarget);
 
       setMessages([
         ...previous,
@@ -599,7 +624,7 @@ export default function TutorPage() {
             : plan.confirmation_message || `已自动保存为${toolLabel(plan.tool)}。`,
           toolResult: {
             label: toolLabel(plan.tool),
-            detail: savePlanDetail(plan),
+            detail: savePlanDetail(plan, result.savedRecordId),
             memoryHref: savedMemoryHref(plan, activeFamilyId),
             followUpPrompt: followUpPrompt(plan),
           },
@@ -640,6 +665,7 @@ export default function TutorPage() {
           ? { ...item, saveSuggestion: { originalContent: message } }
           : item
       )));
+      void createSavePlanForMessage(assistantMessageId, message, { automatic: true });
     },
   });
 
@@ -959,9 +985,19 @@ export default function TutorPage() {
                       )}
                       {msg.role === 'assistant' && msg.saveSuggestion && !msg.toolResult && (
                         <div className="mt-3 rounded-lg border border-blue-100 bg-white/80 p-3 text-xs text-gray-700">
-                          <div className="font-medium text-blue-700">这段内容以后可能有价值</div>
+                          <div className="font-medium text-blue-700">
+                            {msg.saveSuggestion.status === 'saving'
+                              ? '正在整理并保存'
+                              : msg.saveSuggestion.status === 'failed'
+                              ? '保存没有完成'
+                              : '这段内容以后可能有价值'}
+                          </div>
                           <p className="mt-1 leading-5 text-gray-500">
-                            要不要让我整理成一条每日记录、经验沉淀或成长观察？
+                            {msg.saveSuggestion.status === 'saving'
+                              ? '我正在判断它适合每日记录、经验沉淀还是成长观察，并写入对应的家族空间。'
+                              : msg.saveSuggestion.status === 'failed'
+                              ? `原因：${msg.saveSuggestion.error || '保存失败，请稍后重试。'}`
+                              : '我会自动整理成每日记录、经验沉淀或成长观察；你也可以手动触发一次保存。'}
                           </p>
                           <div className="mt-3 flex flex-wrap gap-2">
                             <button
@@ -972,17 +1008,17 @@ export default function TutorPage() {
                               disabled={planningToolMessageId === msg.id}
                               className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-60"
                             >
-                              {planningToolMessageId === msg.id ? (
+                              {planningToolMessageId === msg.id || msg.saveSuggestion.status === 'saving' ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                               ) : (
                                 <CheckCircle className="h-3.5 w-3.5" />
                               )}
-                              整理并保存
+                              {msg.saveSuggestion.status === 'failed' ? '重试保存' : '整理并保存'}
                             </button>
                             <button
                               type="button"
                               onClick={() => dismissSaveSuggestion(msg.id)}
-                              disabled={planningToolMessageId === msg.id}
+                              disabled={planningToolMessageId === msg.id || msg.saveSuggestion.status === 'saving'}
                               className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-60"
                             >
                               <XCircle className="h-3.5 w-3.5" />

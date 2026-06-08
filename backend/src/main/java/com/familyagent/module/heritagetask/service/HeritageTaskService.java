@@ -88,14 +88,20 @@ public class HeritageTaskService {
             diaryRequest.setEntryType("IMPORTANT_EVENT");
             diaryRequest.setVisibility("FAMILY_VISIBLE");
             diaryRequest.setTags(List.of("家庭任务", "经验传承"));
-            diaryRequest.setMetadata(Map.of(
-                    "source", "HERITAGE_TASK_COMPLETION",
-                    "heritageTaskId", task.getId(),
-                    "sourceMemoryId", task.getMemoryId()
-            ));
+            diaryRequest.setMetadata(buildCompletionMetadata(task));
             diaryEntryService.create(diaryRequest);
         }
         return task;
+    }
+
+    static Map<String, Object> buildCompletionMetadata(HeritageTask task) {
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("source", "HERITAGE_TASK_COMPLETION");
+        metadata.put("heritageTaskId", task.getId());
+        if (task.getMemoryId() != null) {
+            metadata.put("sourceMemoryId", task.getMemoryId());
+        }
+        return metadata;
     }
 
     private static Map<String, Object> buildMetadata(CreateHeritageTaskRequest request, MemoryEntry memory) {

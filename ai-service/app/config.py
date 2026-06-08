@@ -28,9 +28,9 @@ class Settings(BaseSettings):
     dashscope_api_key: Optional[str] = None
     dashscope_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     dashscope_multimodal_url: str = "https://dashscope.aliyuncs.com/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding"
-    default_llm_model: str = "dashscope/qwen-plus"
-    fallback_llm_model: str = "dashscope/qwen-plus"
-    embedding_model: str = "dashscope-multimodal/tongyi-embedding-vision-flash-2026-03-06"
+    default_llm_model: str = "dashscope/qwen-flash"
+    fallback_llm_model: str = "dashscope/qwen-turbo"
+    embedding_model: str = "dashscope-multimodal/qwen3-vl-embedding"
     embedding_dimension: int = 1536
 
     # Web search for time-sensitive public facts.

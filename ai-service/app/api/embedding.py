@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.config import settings
+from app.middleware.auth import verify_token
 from app.utils.privacy_guard import redact_ai_bound_text
 from app.utils.sanitizer import sanitize_text
 from app.utils.safety_limits import enforce_ai_concurrency, enforce_embedding_rate_limit
@@ -19,6 +20,7 @@ from app.utils.safety_limits import enforce_ai_concurrency, enforce_embedding_ra
 logger = logging.getLogger("familyagent.ai.api.embedding")
 
 router = APIRouter(dependencies=[
+    Depends(verify_token),
     Depends(enforce_embedding_rate_limit),
     Depends(enforce_ai_concurrency),
 ])
@@ -106,7 +108,7 @@ async def _dashscope_multimodal_embedding(text: str, model: str, dimensions: int
         logger.warning("DASHSCOPE_API_KEY is missing, using local fallback")
         return _hash_embedding(text, dimensions)
 
-    request_dimension = min(dimensions, 768)
+    request_dimension = _dashscope_multimodal_dimension(model, dimensions)
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
@@ -134,6 +136,13 @@ async def _dashscope_multimodal_embedding(text: str, model: str, dimensions: int
     except Exception as e:
         logger.warning("DashScope multimodal embedding failed, using local fallback: %s", e)
         return _hash_embedding(text, dimensions)
+
+
+def _dashscope_multimodal_dimension(model: str, dimensions: int) -> int:
+    if model == "qwen3-vl-embedding":
+        supported = [2560, 2048, 1536, 1024, 768, 512, 256]
+        return min(supported, key=lambda item: (abs(item - dimensions), -item))
+    return min(dimensions, 768)
 
 
 def _hash_embedding(text: str, dimensions: int) -> list[float]:

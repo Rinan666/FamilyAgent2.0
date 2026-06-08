@@ -42,9 +42,7 @@ PRIVATE_SAVE_OR_MEMORY_PATTERNS = [
 TIME_SENSITIVE_PATTERNS = [
     r"最新",
     r"\blatest\b",
-    r"现在",
     r"\bnow\b",
-    r"当前",
     r"\bcurrent\b",
     r"今天",
     r"\btoday\b",

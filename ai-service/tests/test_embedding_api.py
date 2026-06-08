@@ -1,6 +1,7 @@
 import pytest
 
-from app.api.embedding import _embed, _hash_embedding
+from app.api import embedding
+from app.api.embedding import _dashscope_multimodal_dimension, _embed, _hash_embedding
 
 
 def test_hash_embedding_is_stable_and_normalized():
@@ -18,3 +19,13 @@ async def test_local_embedding_uses_requested_dimensions():
 
     assert len(vector) == 256
     assert any(value != 0 for value in vector)
+
+
+def test_embedding_router_requires_backend_token_verification():
+    dependencies = [item.dependency for item in embedding.router.dependencies]
+
+    assert embedding.verify_token in dependencies
+
+
+def test_qwen3_vl_embedding_allows_1536_dimensions():
+    assert _dashscope_multimodal_dimension("qwen3-vl-embedding", 1536) == 1536

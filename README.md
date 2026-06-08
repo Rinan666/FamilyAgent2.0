@@ -82,27 +82,6 @@ npm run dev
 - 后端：http://localhost:8080
 - AI 文档：http://localhost:8000/docs
 
-## 本地测试种子
-
-`scripts/seed-family003.sql` 提供一个五人测试家族。
-
-```powershell
-docker cp scripts/seed-family003.sql fa-postgres:/tmp/seed-family003.sql
-docker exec fa-postgres psql -U fa_user -d familyagent -f /tmp/seed-family003.sql
-```
-
-测试家族邀请码：`FAMILY003`
-
-测试账号密码统一为：`Test@123456`
-
-| 用户名 | 昵称 | 家族身份 |
-|--------|------|----------|
-| `family003_grandpa` | 李明德 | `OWNER` |
-| `family003_father` | 陈远航 | `ADMIN` |
-| `family003_mother` | 林秋然 | `GUARDIAN` |
-| `family003_aunt` | 陈知微 | `MEMBER` |
-| `family003_student` | 陈一诺 | `STUDENT` |
-
 ## 常用检查
 
 ```bash

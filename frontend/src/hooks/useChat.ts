@@ -17,6 +17,8 @@ type MemoryContextResult = {
   metadata?: NonNullable<ChatMessage['metadata']>;
 };
 
+const FAMILY_CONTEXT_TIMEOUT_MS = 1800;
+
 export type SessionSavedMemory = {
   id: string;
   tool: 'DIARY' | 'FAMILY_MEMORY' | 'GROWTH_GUARD';
@@ -131,25 +133,27 @@ export function useChat(options: UseChatOptions = {}) {
           : params.query;
         const [familyRecall, libraryResult, growthRecords, heritageTasks] = await Promise.all([
           activeFamilyId && allowFamilyContext
-            ? memoryApi.recallFamily(activeFamilyId, {
+            ? withTimeout(memoryApi.recallFamily(activeFamilyId, {
                 query: libraryKeyword,
                 scene: 'FAMILY_AGENT',
                 diaryLimit: 8,
                 memoryLimit: 8,
-              }).catch(() => null)
+              }), null, FAMILY_CONTEXT_TIMEOUT_MS).catch(() => null)
             : Promise.resolve(null),
           activeFamilyId && allowFamilyContext
-            ? memoryLibraryApi.search({
+            ? withTimeout(memoryLibraryApi.search({
                 familyId: activeFamilyId,
                 keyword: libraryKeyword,
                 pageSize: 12,
-              }).catch(() => null)
+              }), null, FAMILY_CONTEXT_TIMEOUT_MS).catch(() => null)
             : Promise.resolve(null),
           activeFamilyId && allowFamilyContext
-            ? growthGuardApi.listFamilyRecords(activeFamilyId, 8).catch(() => [] as GrowthGuardRecord[])
+            ? withTimeout(growthGuardApi.listFamilyRecords(activeFamilyId, 8), [] as GrowthGuardRecord[], FAMILY_CONTEXT_TIMEOUT_MS)
+                .catch(() => [] as GrowthGuardRecord[])
             : Promise.resolve([] as GrowthGuardRecord[]),
           activeFamilyId && allowFamilyContext
-            ? heritageTaskApi.listFamilyTasks(activeFamilyId, 8).catch(() => [] as HeritageTask[])
+            ? withTimeout(heritageTaskApi.listFamilyTasks(activeFamilyId, 8), [] as HeritageTask[], FAMILY_CONTEXT_TIMEOUT_MS)
+                .catch(() => [] as HeritageTask[])
             : Promise.resolve([] as HeritageTask[]),
         ]);
         const libraryItems = libraryResult?.items || [];
@@ -369,6 +373,16 @@ export function useChat(options: UseChatOptions = {}) {
     sendFreeMessage,
     reset,
   };
+}
+
+function withTimeout<T>(promise: Promise<T>, fallback: T, timeoutMs: number): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<T>((resolve) => {
+    timeoutId = setTimeout(() => resolve(fallback), timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  });
 }
 
 function formatMemoryContext({

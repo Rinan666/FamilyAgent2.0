@@ -1,8 +1,10 @@
 """
 家教API路由 — 讲题、批改、出题
 """
+import asyncio
 import json
 import logging
+from contextlib import suppress
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -21,12 +23,35 @@ from app.utils.safety_limits import enforce_ai_concurrency, enforce_ai_rate_limi
 from app.utils.sanitizer import sanitize_text
 
 logger = logging.getLogger("familyagent.ai.api.tutor")
+SSE_KEEPALIVE_SECONDS = 10.0
 
 router = APIRouter(dependencies=[
     Depends(verify_token),
     Depends(enforce_ai_rate_limit),
     Depends(enforce_ai_concurrency),
 ])
+
+
+def _sse_data(payload: dict) -> str:
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _sse_comment(comment: str) -> str:
+    return f": {comment}\n\n"
+
+
+async def _stream_sse_events(queue: asyncio.Queue[dict]):
+    yield _sse_comment("connected")
+    while True:
+        try:
+            payload = await asyncio.wait_for(queue.get(), timeout=SSE_KEEPALIVE_SECONDS)
+        except asyncio.TimeoutError:
+            yield _sse_comment("keep-alive")
+            continue
+
+        yield _sse_data(payload)
+        if payload.get("done") or payload.get("error"):
+            break
 
 
 # ============================================
@@ -144,39 +169,51 @@ async def explain_question(request: ExplainRequest):
     memory_context = redact_with_note(request.memory_context).text
 
     async def generate():
+        queue: asyncio.Queue[dict] = asyncio.Queue()
+
+        async def produce():
+            try:
+                async for chunk in tutor_agent.explain_stream(
+                    question_content=question_content,
+                    answer=request.answer,
+                    steps=request.steps,
+                    student_message=student_message,
+                    history=request.history,
+                    grade=request.grade,
+                    subject=request.subject,
+                    knowledge_point=request.knowledge_point,
+                    mastery_level=request.mastery_level,
+                    common_errors=request.common_errors,
+                    teaching_style=request.teaching_style,
+                    mode=request.mode,
+                    memory_context=memory_context,
+                    viewer_role=request.viewer_role,
+                    target_role=request.target_role,
+                    client_timestamp=request.client_timestamp,
+                    client_timezone=request.client_timezone,
+                ):
+                    if isinstance(chunk, dict) and chunk.get("type") == "metadata":
+                        await queue.put({"metadata": chunk})
+                    elif isinstance(chunk, dict):
+                        await queue.put({"content": chunk.get("content", "")})
+                    else:
+                        await queue.put({"content": chunk})
+
+                await queue.put({"done": True})
+
+            except Exception as e:
+                logger.error(f"璁查娴佸紡閿欒: {e}")
+                await queue.put({"error": str(e)})
+
+        task = asyncio.create_task(produce())
         try:
-            async for chunk in tutor_agent.explain_stream(
-                question_content=question_content,
-                answer=request.answer,
-                steps=request.steps,
-                student_message=student_message,
-                history=request.history,
-                grade=request.grade,
-                subject=request.subject,
-                knowledge_point=request.knowledge_point,
-                mastery_level=request.mastery_level,
-                common_errors=request.common_errors,
-                teaching_style=request.teaching_style,
-                mode=request.mode,
-                memory_context=memory_context,
-                viewer_role=request.viewer_role,
-                target_role=request.target_role,
-                client_timestamp=request.client_timestamp,
-                client_timezone=request.client_timezone,
-            ):
-                if isinstance(chunk, dict) and chunk.get("type") == "metadata":
-                    yield f"data: {json.dumps({'metadata': chunk})}\n\n"
-                elif isinstance(chunk, dict):
-                    yield f"data: {json.dumps({'content': chunk.get('content', '')})}\n\n"
-                else:
-                    yield f"data: {json.dumps({'content': chunk})}\n\n"
-
-            # 结束标记
-            yield f"data: {json.dumps({'done': True})}\n\n"
-
-        except Exception as e:
-            logger.error(f"讲题流式错误: {e}")
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            async for event in _stream_sse_events(queue):
+                yield event
+        finally:
+            if not task.done():
+                task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task
 
     return StreamingResponse(
         generate(),
