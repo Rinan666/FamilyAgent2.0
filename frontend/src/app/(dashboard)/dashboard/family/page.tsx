@@ -313,11 +313,11 @@ export default function FamilyPage() {
       {showCreate && (
         <div className="mb-6 bg-white border border-gray-200 rounded-xl p-5">
           <h3 className="font-semibold text-gray-900 mb-3">创建新家族</h3>
-          <input type="text" value={newFamilyName}
+          <input name="newFamilyName" type="text" value={newFamilyName}
             onChange={(e) => setNewFamilyName(e.target.value)}
             placeholder="家族名称，例如：王家学习小组"
             className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 mb-3" autoFocus />
-          <textarea value={newFamilyDesc}
+          <textarea name="newFamilyDescription" value={newFamilyDesc}
             onChange={(e) => setNewFamilyDesc(e.target.value)}
             placeholder="家族说明（选填）" rows={2}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none mb-3" />
@@ -334,7 +334,7 @@ export default function FamilyPage() {
         <div className="mb-6 bg-white border border-gray-200 rounded-xl p-5">
           <h3 className="font-semibold text-gray-900 mb-3">通过邀请码加入</h3>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <input type="text" value={inviteCode}
+            <input name="inviteCode" type="text" value={inviteCode}
               onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
               placeholder="请输入 8 位邀请码" maxLength={8}
               className="min-w-0 flex-1 px-4 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 uppercase tracking-widest font-mono" autoFocus />
@@ -444,6 +444,7 @@ export default function FamilyPage() {
                                     }}
                                   >
                                     <input
+                                      name="relationshipLabel"
                                       value={relationshipDraft}
                                       onChange={(event) => setRelationshipDraft(event.target.value)}
                                       maxLength={60}

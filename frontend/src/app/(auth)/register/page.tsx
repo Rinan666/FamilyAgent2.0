@@ -87,6 +87,8 @@ export default function RegisterPage() {
                 用户名
               </label>
               <input
+                id="register-username"
+                name="username"
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
@@ -103,6 +105,8 @@ export default function RegisterPage() {
                 昵称
               </label>
               <input
+                id="register-nickname"
+                name="nickname"
                 type="text"
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
@@ -116,6 +120,8 @@ export default function RegisterPage() {
                 密码
               </label>
               <input
+                id="register-password"
+                name="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -131,6 +137,8 @@ export default function RegisterPage() {
                 邀请码
               </label>
               <input
+                id="register-invite-code"
+                name="inviteCode"
                 type="text"
                 value={inviteCode}
                 onChange={(e) => setInviteCode(e.target.value.toUpperCase())}

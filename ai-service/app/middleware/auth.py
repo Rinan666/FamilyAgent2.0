@@ -14,6 +14,10 @@ from app.config import settings
 logger = logging.getLogger("familyagent.ai.middleware.auth")
 
 
+def _backend_unavailable_error() -> HTTPException:
+    return HTTPException(status_code=503, detail="认证服务暂时不可用，请稍后再试")
+
+
 async def verify_token(
     request: Request,
     authorization: Optional[str] = Header(None),
@@ -59,12 +63,19 @@ async def _call_backend_verify(token: str) -> Optional[dict]:
                 # Token 确实无效
                 logger.warning("Token 验证失败: status=401")
                 return None
-            # 其它错误（500等）→ 认为是后端问题，不拦截
-            logger.warning(f"Token 验证后端异常: status={resp.status_code}, 放行")
-            return {"id": -1, "username": "unknown", "nickname": "后端异常-放行"}
+            # 其它错误（500等）→ 按环境配置 fail-open / fail-closed
+            return _handle_backend_unavailable(f"status={resp.status_code}", -1, "backend_error", "后端异常-开发放行")
     except httpx.TimeoutException:
-        logger.warning("Token 验证超时: Java 后端不可达, 放行")
-        return {"id": -2, "username": "timeout", "nickname": "后端超时-放行"}
+        return _handle_backend_unavailable("timeout", -2, "timeout", "后端超时-开发放行")
     except Exception as e:
-        logger.warning(f"Token 验证异常: {e}, 放行")
-        return {"id": -3, "username": "error", "nickname": "验证异常-放行"}
+        return _handle_backend_unavailable(f"exception={e}", -3, "error", "验证异常-开发放行")
+
+
+def _handle_backend_unavailable(reason: str, user_id: int, username: str, nickname: str) -> dict:
+    """Handle backend verification outages with explicit fail-open/fail-closed behavior."""
+    if settings.auth_fail_open_enabled:
+        logger.warning("Token 验证后端不可用: %s, AUTH_FAIL_OPEN=true, 开发放行", reason)
+        return {"id": user_id, "username": username, "nickname": nickname}
+
+    logger.warning("Token 验证后端不可用: %s, AUTH_FAIL_OPEN=false, 拒绝请求", reason)
+    raise _backend_unavailable_error()

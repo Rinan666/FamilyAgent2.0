@@ -33,9 +33,6 @@ interface UseChatOptions {
   getMastery?: (kpId: number) => string;
   /** 根据 kpId 获取知识点名称 */
   getKnowledgePoint?: (kpId: number) => string;
-  /** 讲题风格：引导式或快速答案式 */
-  teachingStyle?: 'guided' | 'direct';
-  getTeachingStyle?: () => 'guided' | 'direct';
   viewerRole?: ViewerRole;
   targetRole?: ViewerRole | 'STUDENT';
   activeFamilyId?: number | null;
@@ -63,8 +60,6 @@ export function useChat(options: UseChatOptions = {}) {
   const {
     getMastery = () => '中',
     getKnowledgePoint = () => '',
-    teachingStyle = 'guided',
-    getTeachingStyle,
     viewerRole = 'STUDENT',
     targetRole = 'STUDENT',
     activeFamilyId,
@@ -112,12 +107,11 @@ export function useChat(options: UseChatOptions = {}) {
         grade: question.grade,
         knowledgePoint: getKnowledgePoint(question.kpId),
         masteryLevel: getMastery(question.kpId),
-        teachingStyle: getTeachingStyle?.() || teachingStyle,
         viewerRole,
         targetRole,
       };
     },
-    [messages, getMastery, getKnowledgePoint, getTeachingStyle, teachingStyle, viewerRole, targetRole],
+    [messages, getMastery, getKnowledgePoint, viewerRole, targetRole],
   );
 
   const recallMemoryContext = useCallback(
@@ -332,7 +326,6 @@ export function useChat(options: UseChatOptions = {}) {
           grade: '',
           knowledgePoint: '家族记忆',
           masteryLevel: '中',
-          teachingStyle: getTeachingStyle?.() || teachingStyle,
           mode: 'chat',
           memoryContext: memoryContext.context,
           viewerRole,
@@ -359,8 +352,6 @@ export function useChat(options: UseChatOptions = {}) {
       appendToLastMessage,
       mergeLastAssistantMetadata,
       setStreaming,
-      getTeachingStyle,
-      teachingStyle,
       viewerRole,
       targetRole,
       onFreeChatDone,

@@ -8,13 +8,7 @@ import type {
   AgentSaveToolPlan,
   ChatMessage,
   ChatSession,
-  DiaryEntryType,
-  DiaryVisibility,
-  GrowthGuardCategory,
   KnowledgePoint,
-  MemoryEntryType,
-  MemoryScope,
-  Question,
 } from '@/types';
 import { CheckCircle, FileText, History, Loader2, MessageSquareText, Paperclip, Plus, Send, Sparkles, Trash2, XCircle } from 'lucide-react';
 import MathRenderer from '@/components/tutor/MathRenderer';
@@ -24,7 +18,19 @@ import { useAuthStore } from '@/stores/authStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useChat, type SessionSavedMemory } from '@/hooks/useChat';
 import { useViewerRole } from '@/hooks/useViewerRole';
-import { assessmentApi, diaryApi, growthGuardApi, memoryApi, questionApi, sessionApi, tutorApi } from '@/lib/api';
+import { assessmentApi, diaryApi, growthGuardApi, memoryApi, questionApi, sessionApi, skillRunApi, tutorApi } from '@/lib/api';
+import {
+  buildDiarySaveRequest,
+  buildFamilyMemorySaveRequest,
+  buildGrowthGuardSaveRequest,
+  normalizeSaveToolPlan,
+  saveMemorySkillMetadata,
+  savePlanDetail,
+  savedRecordType,
+  todayString,
+  toolLabel,
+  truncateAuditText,
+} from '@/lib/savePlan';
 
 type ActivationSceneState = {
   label: string;
@@ -160,36 +166,6 @@ function findLastAssistantMessageId(messages: TutorChatMessage[]) {
   return '';
 }
 
-function scopeFromPlan(plan: AgentSaveToolPlan): MemoryScope {
-  const scope = String(plan.scope || plan.visibility || 'PRIVATE').toUpperCase();
-  if (scope === 'CARE_VISIBLE' || scope === 'FAMILY_VISIBLE' || scope === 'PARENT_VISIBLE') return scope;
-  return 'PRIVATE';
-}
-
-function visibilityFromPlan(plan: AgentSaveToolPlan): DiaryVisibility {
-  const visibility = String(plan.visibility || plan.scope || 'PRIVATE').toUpperCase();
-  if (visibility === 'FAMILY_VISIBLE' || visibility === 'CARE_VISIBLE' || visibility === 'LEGACY_VISIBLE') return visibility;
-  return 'PRIVATE';
-}
-
-function entryTypeFromPlan(plan: AgentSaveToolPlan): DiaryEntryType {
-  const entryType = String(plan.entry_type || 'DAILY').toUpperCase();
-  if (
-    entryType === 'IMPORTANT_EVENT'
-    || entryType === 'LESSON'
-    || entryType === 'EMOTION'
-    || entryType === 'MESSAGE_TO_FAMILY'
-    || entryType === 'SELF_REFLECTION'
-  ) {
-    return entryType;
-  }
-  return 'DAILY';
-}
-
-function todayString() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function ageFromMetadata(metadata?: Record<string, unknown>) {
   if (!metadata) return '20岁';
   const birthDate = metadata.birthDate || metadata.birthday || metadata.dateOfBirth;
@@ -211,13 +187,6 @@ function ageFromMetadata(metadata?: Record<string, unknown>) {
   return '20岁';
 }
 
-function toolLabel(tool: AgentSaveToolPlan['tool']) {
-  if (tool === 'DIARY') return '每日记录';
-  if (tool === 'FAMILY_MEMORY') return '经验沉淀';
-  if (tool === 'GROWTH_GUARD') return '成长观察';
-  return '未保存';
-}
-
 function savedMemoryFromPlan(plan: AgentSaveToolPlan, savedAt: string): SessionSavedMemory | null {
   if (!plan.should_save || plan.tool === 'NONE' || !plan.content?.trim()) return null;
   return {
@@ -230,10 +199,6 @@ function savedMemoryFromPlan(plan: AgentSaveToolPlan, savedAt: string): SessionS
     savedAt,
     reason: plan.reason,
   };
-}
-
-function savePlanDetail(plan: AgentSaveToolPlan) {
-  return `${toolLabel(plan.tool)} · ${plan.title} · ${plan.visibility || plan.scope}`;
 }
 
 function savedMemoryHref(plan: AgentSaveToolPlan, familyId?: number | null) {
@@ -250,46 +215,6 @@ function followUpPrompt(plan: AgentSaveToolPlan) {
   return `继续补充这条每日记录的时间、地点、人物和后来影响：${plan.title}`;
 }
 
-function looksLikeQuestion(content: string) {
-  const text = content.trim();
-  if (text.length < 8) return false;
-  const hasMathSignal = /[=＋+\-×*÷/^√π]|方程|函数|几何|三角|面积|周长|不等式|因式分解|计算|化简|证明|求/.test(text);
-  const hasAskSignal = /[?？]|求|解|证明|计算|化简|等于|多少|答案|怎么做|如何做/.test(text);
-  return hasMathSignal && hasAskSignal;
-}
-
-function buildQuestionFromSession(session: ChatSession): Question | null {
-  const metadata = session.metadata || {};
-  if (metadata.mode === 'chat') return null;
-
-  const questionContent = metadata.questionContent as { stem?: string; options?: string[]; figures?: string[] } | string | undefined;
-  const answer = metadata.answer as { value?: string; steps?: string[]; explanation?: string } | undefined;
-  const stem = typeof questionContent === 'string'
-    ? questionContent
-    : questionContent?.stem || session.messages.find((msg) => msg.role === 'user')?.content;
-
-  if (!stem) return null;
-
-  return {
-    id: session.questionId || -session.id,
-    kpId: session.knowledgePointId || 0,
-    subject: session.subject || 'math',
-    grade: typeof metadata.grade === 'string' ? metadata.grade : 'grade7',
-    type: 'CALCULATION',
-    difficulty: 3,
-    content: {
-      stem,
-      options: typeof questionContent === 'object' ? questionContent.options : undefined,
-      figures: typeof questionContent === 'object' ? questionContent.figures : undefined,
-    },
-    answer: {
-      value: answer?.value || '',
-      steps: Array.isArray(answer?.steps) ? answer.steps : [],
-      explanation: answer?.explanation,
-    },
-  };
-}
-
 export default function TutorPage() {
   const searchParams = useSearchParams();
   const [profiles, setProfiles] = useState<AbilityProfile[]>([]);
@@ -300,12 +225,10 @@ export default function TutorPage() {
   const [input, setInput] = useState('');
   const [isExtractingFile, setIsExtractingFile] = useState(false);
   const [extractMessage, setExtractMessage] = useState('');
-  const [teachingStyle, setTeachingStyle] = useState<'guided' | 'direct'>('guided');
   const [planningToolMessageId, setPlanningToolMessageId] = useState<string | null>(null);
   const [activationScene, setActivationScene] = useState<ActivationSceneState | null>(null);
   const { viewerRole, activeFamilyId, activeFamily, activeMembership, setActiveFamilyId } = useViewerRole();
 
-  const teachingStyleRef = useRef<'guided' | 'direct'>('guided');
   const routePromptAppliedRef = useRef('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -389,41 +312,12 @@ export default function TutorPage() {
     }
   }, [clearSessionSavedMemories, upsertSession]);
 
-  const persistSessionMessages = useCallback(async (nextMessages: ChatMessage[], question: Question) => {
-    if (nextMessages.length === 0) return;
-    const currentSessionId = useChatStore.getState().sessionId;
-
-    const metadata = {
-      mode: 'explain',
-      questionContent: question.content,
-      answer: question.answer,
-      grade: question.grade,
-      teachingStyle: teachingStyleRef.current,
-    };
-
-    const saved = currentSessionId
-      ? await sessionApi.updateMessages(currentSessionId, nextMessages)
-      : await sessionApi.createSession({
-          questionId: question.id > 0 ? question.id : undefined,
-          subject: question.subject,
-          knowledgePointId: question.kpId || undefined,
-          messages: nextMessages,
-          visibility: 'PRIVATE',
-          source: 'TUTOR',
-          metadata,
-        });
-
-    setSessionId(saved.id);
-    upsertSession({ ...saved, metadata: saved.metadata || metadata });
-  }, [setSessionId, upsertSession]);
-
   const persistFreeChatMessages = useCallback(async (nextMessages: ChatMessage[]) => {
     if (nextMessages.length === 0) return;
     const currentSessionId = useChatStore.getState().sessionId;
     const metadata = {
       mode: 'chat',
       source: 'free_chat',
-      teachingStyle: teachingStyleRef.current,
     };
 
     const saved = currentSessionId
@@ -453,67 +347,124 @@ export default function TutorPage() {
   }, [profiles]);
 
   const executeSavePlan = useCallback(async (plan: AgentSaveToolPlan, originalContent: string) => {
+    const safePlan = normalizeSaveToolPlan(plan);
+    if (!safePlan.should_save || safePlan.tool === 'NONE') {
+      throw new Error('这条内容没有可执行的保存方案。');
+    }
     if (!activeFamilyId) {
       throw new Error('请先选择或创建一个家族空间，再保存为家族长期记忆。');
     }
 
     const savedAt = new Date().toISOString();
+    const auditMetadata = saveMemorySkillMetadata(safePlan, savedAt);
+    let skillRunId: number | null = null;
+    try {
+      const skillRun = await skillRunApi.create({
+        familyId: activeFamilyId,
+        skillName: 'save_memory',
+        status: 'RUNNING',
+        source: 'FAMILY_AGENT_CHAT',
+        inputSummary: truncateAuditText(originalContent),
+        saved: false,
+        usedSources: [{
+          sourceType: 'CHAT_MESSAGE',
+          snippet: truncateAuditText(originalContent, 240),
+        }],
+        metadata: auditMetadata,
+      });
+      skillRunId = skillRun.id;
+    } catch (error) {
+      console.log('Skill run audit not created:', error);
+    }
+
     const commonMetadata = {
       source: 'FAMILY_COMPANION_TOOL',
-      plannedTool: plan.tool,
-      plannedToolReason: plan.reason,
+      plannedTool: safePlan.tool,
+      plannedToolReason: safePlan.reason,
       savedFromFamilyChatAt: savedAt,
       recordedAt: savedAt,
       eventAt: savedAt,
       originalPrompt: originalContent.slice(0, 500),
+      ...(skillRunId ? { skillRunId } : {}),
     };
 
-    if (plan.tool === 'DIARY') {
-      await diaryApi.create({
-        familyId: activeFamilyId,
-        content: plan.content,
-        entryType: entryTypeFromPlan(plan),
-        title: plan.title,
-        tags: plan.tags,
-        visibility: visibilityFromPlan(plan),
-        metadata: commonMetadata,
-      });
-    } else if (plan.tool === 'FAMILY_MEMORY') {
-      await memoryApi.createFamilyMemory({
-        familyId: activeFamilyId,
-        content: plan.content,
-        type: plan.memory_type as MemoryEntryType,
-        scope: scopeFromPlan(plan),
-        summary: plan.summary,
-        importance: plan.importance,
-        metadata: {
-          ...commonMetadata,
-          sourceType: 'FAMILY_EXPERIENCE',
-          scenario: '家族Agent对话保存',
-        },
-      });
-    } else if (plan.tool === 'GROWTH_GUARD') {
-      await growthGuardApi.createRecord({
-        familyId: activeFamilyId,
-        category: plan.category as GrowthGuardCategory,
-        content: plan.content,
-        severity: plan.severity,
-        observedAt: todayString(),
-        visibility: scopeFromPlan(plan),
-        metadata: {
-          ...commonMetadata,
-          sourceType: 'GROWTH_OBSERVATION',
-          followUpStatus: 'PENDING',
-        },
-      });
-    }
+    try {
+      let savedRecordId: number | undefined;
+      const recordType = savedRecordType(safePlan.tool);
 
-    const sessionMemory = savedMemoryFromPlan(plan, savedAt);
-    if (sessionMemory) {
-      sessionSavedMemoriesRef.current = [
-        ...sessionSavedMemoriesRef.current.filter((item) => item.content !== sessionMemory.content),
-        sessionMemory,
-      ].slice(-8);
+      if (safePlan.tool === 'DIARY') {
+        const record = await diaryApi.create(buildDiarySaveRequest(activeFamilyId, safePlan, commonMetadata));
+        savedRecordId = record.id;
+      } else if (safePlan.tool === 'FAMILY_MEMORY') {
+        const record = await memoryApi.createFamilyMemory(buildFamilyMemorySaveRequest(
+          activeFamilyId,
+          safePlan,
+          {
+            ...commonMetadata,
+            sourceType: 'FAMILY_EXPERIENCE',
+            scenario: '家族Agent对话保存',
+          },
+        ));
+        savedRecordId = record.id;
+      } else if (safePlan.tool === 'GROWTH_GUARD') {
+        const record = await growthGuardApi.createRecord(buildGrowthGuardSaveRequest(
+          activeFamilyId,
+          safePlan,
+          todayString(),
+          {
+            ...commonMetadata,
+            sourceType: 'GROWTH_OBSERVATION',
+            followUpStatus: 'PENDING',
+          },
+        ));
+        savedRecordId = record.id;
+      }
+
+      if (skillRunId) {
+        try {
+          await skillRunApi.update(skillRunId, {
+            status: 'SUCCEEDED',
+            saved: true,
+            outputSummary: `已保存为${toolLabel(safePlan.tool)}：${safePlan.title || safePlan.content.slice(0, 24)}`,
+            metadata: {
+              ...auditMetadata,
+              savedRecordId,
+              savedRecordType: recordType,
+              savedAt,
+            },
+          });
+        } catch (error) {
+          console.log('Skill run audit not updated after save:', error);
+        }
+      }
+
+      const sessionMemory = savedMemoryFromPlan(safePlan, savedAt);
+      if (sessionMemory) {
+        sessionSavedMemoriesRef.current = [
+          ...sessionSavedMemoriesRef.current.filter((item) => item.content !== sessionMemory.content),
+          sessionMemory,
+        ].slice(-8);
+      }
+    } catch (error) {
+      if (skillRunId) {
+        try {
+          await skillRunApi.update(skillRunId, {
+            status: 'FAILED',
+            saved: false,
+            outputSummary: error instanceof Error
+              ? truncateAuditText(error.message, 500)
+              : '保存失败',
+            metadata: {
+              ...auditMetadata,
+              failureReason: error instanceof Error ? error.message : '保存失败',
+              savedRecordType: savedRecordType(safePlan.tool),
+            },
+          });
+        } catch (auditError) {
+          console.log('Skill run audit not updated after save failure:', auditError);
+        }
+      }
+      throw error;
     }
   }, [activeFamilyId]);
 
@@ -540,7 +491,7 @@ export default function TutorPage() {
         conversationContext,
         viewerRole,
       });
-      const plan = planResult.data;
+      const plan = normalizeSaveToolPlan(planResult.data);
       if (plan.should_save && plan.tool !== 'NONE') {
         await executeSavePlan(plan, content);
       }
@@ -632,10 +583,10 @@ export default function TutorPage() {
         conversationContext: buildSaveConversationContext(previous, userMessage),
         viewerRole,
       });
-      const rawPlan = planResult.data;
+      const rawPlan = normalizeSaveToolPlan(planResult.data);
       const plan = rawPlan.should_save && rawPlan.tool !== 'NONE'
         ? rawPlan
-        : fallbackDiarySavePlan(saveTarget);
+        : normalizeSaveToolPlan(fallbackDiarySavePlan(saveTarget));
       await executeSavePlan(plan, saveTarget);
 
       setMessages([
@@ -670,16 +621,13 @@ export default function TutorPage() {
     }
   }, [activeFamilyId, executeSavePlan, setMessages, viewerRole]);
 
-  const { messages, isStreaming, currentQuestion, askQuestion, sendMessage, sendFreeMessage } = useChat({
+  const { messages, isStreaming, sendFreeMessage } = useChat({
     getMastery: (kpId) => masteryMap[kpId] || 'medium',
     getKnowledgePoint: (kpId) => kpNames[kpId] || '',
-    teachingStyle,
-    getTeachingStyle: () => teachingStyleRef.current,
     viewerRole,
     targetRole: 'STUDENT',
     activeFamilyId,
     viewerIdentityContext,
-    persistMessages: persistSessionMessages,
     persistChatMessages: persistFreeChatMessages,
     onActivationSceneChange: setActivationScene,
     getSessionSavedMemories: () => sessionSavedMemoriesRef.current,
@@ -752,32 +700,12 @@ export default function TutorPage() {
     const msg = input.trim();
     setInput('');
 
-    if (!currentQuestion && looksLikeQuestion(msg)) {
-      const question: Question = {
-        id: -Date.now(),
-        kpId: 0,
-        subject: 'math',
-        grade: '',
-        type: 'CALCULATION',
-        difficulty: 3,
-        content: { stem: msg },
-        answer: { value: '', steps: [] },
-      };
-      askQuestion(question, msg);
+    const handledBySaveTool = await planSaveFromFreeChat(msg);
+    if (handledBySaveTool) {
+      setActivationScene(null);
       return;
     }
-
-    if (!currentQuestion) {
-      const handledBySaveTool = await planSaveFromFreeChat(msg);
-      if (handledBySaveTool) {
-        setActivationScene(null);
-        return;
-      }
-      sendFreeMessage(msg);
-      return;
-    }
-
-    sendMessage(msg);
+    sendFreeMessage(msg);
   };
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
@@ -831,7 +759,7 @@ export default function TutorPage() {
     clearSessionSavedMemories();
     setSessionId(detail.status === 'ACTIVE' ? detail.id : null);
     setMessages(detail.messages || []);
-    setCurrentQuestion(buildQuestionFromSession(detail));
+    setCurrentQuestion(null);
     setActivationScene(null);
     upsertSession(detail);
   };
@@ -846,11 +774,6 @@ export default function TutorPage() {
       clearSessionSavedMemories();
       setInput('');
     }
-  };
-
-  const changeTeachingStyle = (style: 'guided' | 'direct') => {
-    teachingStyleRef.current = style;
-    setTeachingStyle(style);
   };
 
   const renderSessionList = (compact = false) => (
@@ -900,26 +823,6 @@ export default function TutorPage() {
           <p className="text-xs text-gray-500">学习陪伴 · 家族上下文陪伴</p>
         </div>
         <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
-          <div className="flex items-center gap-1 rounded-lg bg-gray-100 p-1">
-            <button
-              type="button"
-              onClick={() => changeTeachingStyle('guided')}
-              className={`rounded-md px-3 py-1 text-xs transition-colors ${
-                teachingStyle === 'guided' ? 'bg-white font-medium text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              引导式
-            </button>
-            <button
-              type="button"
-              onClick={() => changeTeachingStyle('direct')}
-              className={`rounded-md px-3 py-1 text-xs transition-colors ${
-                teachingStyle === 'direct' ? 'bg-white font-medium text-green-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              直接讲解
-            </button>
-          </div>
           {messages.length > 0 && (
             <button
               type="button"
@@ -987,29 +890,16 @@ export default function TutorPage() {
         </aside>
 
         <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white">
-          {currentQuestion && (
-            <div className="flex items-center gap-1 border-b border-gray-100 bg-gray-50 px-4 py-2">
-              <span className="rounded-md bg-blue-600 px-3 py-1 text-xs text-white">讲题中</span>
-              <span className="ml-auto max-w-[250px] truncate text-[10px] text-gray-400">
-                {currentQuestion.content.stem.slice(0, 50)}...
-              </span>
-            </div>
-          )}
-
           <div className="flex-1 space-y-3 overflow-y-auto p-2.5 sm:space-y-4 sm:p-4">
             {messages.length === 0 ? (
               <div className="flex h-full items-center justify-center">
                 <div className="text-center text-gray-400">
                   <FileText className="mx-auto mb-2 h-12 w-12 opacity-30" />
                   <p className="text-sm">
-                    {currentQuestion
-                      ? '围绕这道题继续提问或说出你的思路'
-                      : '可以聊学习计划、卡点、情绪、经验沉淀或一道具体题目'}
+                    可以聊学习计划、卡点、情绪、经验沉淀或一道具体题目
                   </p>
                   <p className="mt-1 text-xs">
-                    {currentQuestion
-                      ? (teachingStyle === 'guided' ? '当前为引导式：AI 会一步步提问推进。' : '当前为直接讲解：AI 会给出答案和步骤。')
-                      : '我会结合可见的每日记录、经验沉淀和成长观察摘要来回应。'}
+                    我会结合可见的每日记录、经验沉淀和成长观察摘要来回应。
                   </p>
                 </div>
               </div>
@@ -1130,7 +1020,7 @@ export default function TutorPage() {
                 </button>
               </div>
             )}
-            {activationScene && !currentQuestion && (
+            {activationScene && (
               <div className="mb-2 flex items-center gap-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">
                 <Sparkles className="h-3.5 w-3.5 shrink-0" />
                 <span className="shrink-0 font-medium">已激活：{activationScene.label}</span>
@@ -1149,6 +1039,7 @@ export default function TutorPage() {
               className="flex items-end gap-1.5 sm:gap-2"
             >
               <input
+                name="studyFile"
                 ref={fileInputRef}
                 type="file"
                 accept=".txt,.md,.markdown,.csv,.json,.tex,.pdf,.docx,image/*"
@@ -1165,15 +1056,12 @@ export default function TutorPage() {
                 {isExtractingFile ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
               </button>
               <textarea
+                name="tutorMessage"
                 rows={1}
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={
-                  currentQuestion
-                    ? '输入你的想法或问题...'
-                    : '聊学习计划、卡点、情绪、经验沉淀，或直接发一道题...'
-                }
+                placeholder="聊学习计划、卡点、情绪、经验沉淀，或直接发一道题..."
                 disabled={isStreaming || isExtractingFile}
                 className="min-h-9 max-h-28 min-w-0 flex-1 resize-none overflow-y-auto rounded-lg border border-gray-200 px-2.5 py-2 text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 sm:min-h-10 sm:max-h-32 sm:px-4"
               />

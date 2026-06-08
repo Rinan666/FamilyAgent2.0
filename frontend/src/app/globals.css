@@ -13,6 +13,11 @@
     --ring: 222.2 84% 4.9%;
   }
 
+  html {
+    text-size-adjust: 100%;
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
     @apply bg-gray-50 text-gray-900 antialiased;
   }

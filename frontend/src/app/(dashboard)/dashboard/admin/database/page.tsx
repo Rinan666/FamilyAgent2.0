@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  Bot,
   CheckCircle,
   Database,
   Loader2,
@@ -178,7 +179,7 @@ export default function AdminDatabaseHealthPage() {
         </div>
       ) : data ? (
         <>
-          <section className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <section className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <div className="rounded-xl border border-gray-200 bg-white p-4">
               <Users className="mb-3 h-5 w-5 text-blue-600" />
               <p className="text-2xl font-bold text-gray-900">{data.totalUsers}</p>
@@ -193,6 +194,11 @@ export default function AdminDatabaseHealthPage() {
               <Database className="mb-3 h-5 w-5 text-emerald-600" />
               <p className="text-2xl font-bold text-gray-900">{data.totalCoreRecords}</p>
               <p className="text-sm text-gray-500">核心家族记录</p>
+            </div>
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <Bot className="mb-3 h-5 w-5 text-violet-600" />
+              <p className="text-2xl font-bold text-gray-900">{data.totalSkillRuns || 0}</p>
+              <p className="text-sm text-gray-500">技能运行审计</p>
             </div>
             <div className="rounded-xl border border-gray-200 bg-white p-4">
               <CheckCircle className="mb-3 h-5 w-5 text-green-600" />
@@ -212,15 +218,15 @@ export default function AdminDatabaseHealthPage() {
                   生成时间：{formatDate(data.generatedAt)}
                 </p>
               </div>
-              {data.failedEmbeddings > 0 ? (
+              {(data.failedEmbeddings > 0 || (data.failedSkillRuns || 0) > 0) ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700">
                   <AlertTriangle className="h-3.5 w-3.5" />
-                  {data.failedEmbeddings} 条向量失败
+                  {data.failedEmbeddings} 条向量失败 / {data.failedSkillRuns || 0} 条技能失败
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-3 py-1 text-xs font-medium text-green-700">
                   <CheckCircle className="h-3.5 w-3.5" />
-                  暂无失败向量
+                  暂无失败向量或技能运行
                 </span>
               )}
             </div>
@@ -266,6 +272,7 @@ export default function AdminDatabaseHealthPage() {
 
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-[160px_180px_1fr_auto]">
               <input
+                name="diagnosticFamilyId"
                 type="number"
                 min="1"
                 value={diagnosticForm.familyId}
@@ -274,6 +281,7 @@ export default function AdminDatabaseHealthPage() {
                 className="h-10 rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-gray-400"
               />
               <input
+                name="diagnosticViewerUserId"
                 type="number"
                 min="1"
                 value={diagnosticForm.viewerUserId}
@@ -282,6 +290,7 @@ export default function AdminDatabaseHealthPage() {
                 className="h-10 rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-gray-400"
               />
               <input
+                name="diagnosticQuery"
                 type="text"
                 value={diagnosticForm.query}
                 onChange={(event) => setDiagnosticForm((prev) => ({ ...prev, query: event.target.value }))}
@@ -371,6 +380,8 @@ export default function AdminDatabaseHealthPage() {
                     <th className="py-2 pr-4 font-medium">人生记录</th>
                     <th className="py-2 pr-4 font-medium">经验</th>
                     <th className="py-2 pr-4 font-medium">观察</th>
+                    <th className="py-2 pr-4 font-medium">技能运行</th>
+                    <th className="py-2 pr-4 font-medium">技能失败</th>
                     <th className="py-2 pr-4 font-medium">READY</th>
                     <th className="py-2 pr-4 font-medium">FAILED</th>
                   </tr>
@@ -383,6 +394,8 @@ export default function AdminDatabaseHealthPage() {
                       <td className="py-3 pr-4 text-gray-600">{family.diaryCount}</td>
                       <td className="py-3 pr-4 text-gray-600">{family.memoryCount}</td>
                       <td className="py-3 pr-4 text-gray-600">{family.growthRecordCount}</td>
+                      <td className="py-3 pr-4 text-violet-700">{family.skillRunCount || 0}</td>
+                      <td className="py-3 pr-4 text-red-700">{family.failedSkillRunCount || 0}</td>
                       <td className="py-3 pr-4 text-green-700">{family.readyEmbeddingCount}</td>
                       <td className="py-3 pr-4 text-red-700">{family.failedEmbeddingCount}</td>
                     </tr>
@@ -439,6 +452,36 @@ export default function AdminDatabaseHealthPage() {
                 </div>
               )}
             </div>
+          </section>
+
+          <section className="mb-4 rounded-xl border border-gray-200 bg-white p-5">
+            <h2 className="mb-3 text-sm font-semibold text-gray-900">最近失败技能运行</h2>
+            {!data.recentFailedSkillRuns || data.recentFailedSkillRuns.length === 0 ? (
+              <p className="text-sm text-gray-500">暂无失败项。</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                {data.recentFailedSkillRuns.map((item) => (
+                  <div key={item.id} className="rounded-lg bg-red-50 p-3">
+                    <div className="mb-1 flex flex-wrap items-center gap-2 text-xs font-medium text-red-700">
+                      <span>#{item.id}</span>
+                      <span>Family {item.familyId}</span>
+                      <span>User {item.triggeredBy}</span>
+                      <span>{item.skillName}</span>
+                      <span>{item.source}</span>
+                    </div>
+                    <p className="line-clamp-2 text-xs leading-5 text-red-700">
+                      {item.outputSummary || '未知失败原因'}
+                    </p>
+                    {item.inputSummary && (
+                      <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-red-500">
+                        输入：{item.inputSummary}
+                      </p>
+                    )}
+                    <p className="mt-1 text-[11px] text-red-500">{formatDate(item.updatedAt)}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
         </>
       ) : null}

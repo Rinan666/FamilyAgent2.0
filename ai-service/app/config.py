@@ -18,6 +18,8 @@ class Settings(BaseSettings):
 
     # Java 后端（Token 验证用）
     backend_url: str = "http://localhost:8080"
+    auth_fail_open: Optional[bool] = None
+    cors_allow_origins: Optional[str] = None
 
     # LLM
     claude_api_key: Optional[str] = None
@@ -94,6 +96,23 @@ class Settings(BaseSettings):
             os.environ["OPENAI_API_KEY"] = self.openai_api_key
         if self.dashscope_api_key and not os.environ.get("DASHSCOPE_API_KEY"):
             os.environ["DASHSCOPE_API_KEY"] = self.dashscope_api_key
+
+    @property
+    def auth_fail_open_enabled(self) -> bool:
+        """Only development defaults to fail-open; all other envs fail-closed."""
+        if self.auth_fail_open is not None:
+            return self.auth_fail_open
+        return self.app_env.lower() == "development"
+
+    @property
+    def cors_origins(self) -> list[str]:
+        """Allowed browser origins for the AI service."""
+        raw = self.cors_allow_origins
+        if not raw:
+            if self.app_env.lower() == "development":
+                return ["http://localhost:3000", "http://127.0.0.1:3000"]
+            return []
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 
 settings = Settings()

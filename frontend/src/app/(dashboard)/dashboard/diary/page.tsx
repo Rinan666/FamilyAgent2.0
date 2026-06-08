@@ -920,6 +920,7 @@ export default function DiaryPage() {
           <label className="block text-xs font-medium text-gray-600">
             为什么这条记录值得沉淀为家族经验？
             <textarea
+              name="promotionReason"
               value={promotionReason}
               onChange={(event) => setPromotionReason(event.target.value)}
               rows={3}
@@ -980,6 +981,7 @@ export default function DiaryPage() {
           <label className="block text-xs font-medium text-gray-600">
             为什么这条记录值得保留下来？
             <textarea
+              name="coreMemoryReason"
               value={coreMemoryReason}
               onChange={(event) => setCoreMemoryReason(event.target.value)}
               rows={3}
@@ -1097,6 +1099,7 @@ export default function DiaryPage() {
             <label className="text-xs font-medium text-gray-500">
               记录类型
               <select
+                name="entryType"
                 value={entryType}
                 onChange={(event) => setEntryType(event.target.value as DiaryEntryType)}
                 className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
@@ -1109,6 +1112,7 @@ export default function DiaryPage() {
             <label className="text-xs font-medium text-gray-500">
               可见范围
               <select
+                name="visibility"
                 value={visibility}
                 onChange={(event) => setVisibility(event.target.value as DiaryVisibility)}
                 className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
@@ -1134,6 +1138,7 @@ export default function DiaryPage() {
           <label className="mb-3 block text-xs font-medium text-gray-500">
             标题
             <input
+              name="title"
               value={title}
               onChange={(event) => {
                 setTitle(event.target.value);
@@ -1162,6 +1167,7 @@ export default function DiaryPage() {
               </div>
             </div>
             <textarea
+              name="content"
               value={content}
               onChange={(event) => {
                 setContent(event.target.value);
@@ -1178,6 +1184,7 @@ export default function DiaryPage() {
             <label className="text-xs font-medium text-gray-500">
               心情
               <select
+                name="mood"
                 value={mood}
                 onChange={(event) => {
                   setMood(event.target.value);
@@ -1195,6 +1202,7 @@ export default function DiaryPage() {
             <label className="text-xs font-medium text-gray-500">
               时效/主题标签
               <input
+                name="tagText"
                 value={tagText}
                 onChange={(event) => {
                   setTagText(event.target.value);
@@ -1274,6 +1282,7 @@ export default function DiaryPage() {
                     <label className="text-xs font-medium text-gray-500">
                       记录类型
                       <select
+                        name="editEntryType"
                         value={editEntryType}
                         onChange={(event) => setEditEntryType(event.target.value as DiaryEntryType)}
                         className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
@@ -1286,6 +1295,7 @@ export default function DiaryPage() {
                     <label className="text-xs font-medium text-gray-500">
                       可见范围
                       <select
+                        name="editVisibility"
                         value={editVisibility}
                         onChange={(event) => setEditVisibility(event.target.value as DiaryVisibility)}
                         className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
@@ -1299,12 +1309,14 @@ export default function DiaryPage() {
                   <label className="block text-xs font-medium text-gray-500">
                     标题
                     <input
+                      name="editTitle"
                       value={editTitle}
                       onChange={(event) => setEditTitle(event.target.value)}
                       className="mt-1 h-10 w-full rounded-lg border border-gray-200 px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </label>
                   <textarea
+                    name="editContent"
                     value={editContent}
                     onChange={(event) => setEditContent(event.target.value)}
                     rows={7}
@@ -1314,6 +1326,7 @@ export default function DiaryPage() {
                     <label className="text-xs font-medium text-gray-500">
                       心情
                       <select
+                        name="editMood"
                         value={editMood}
                         onChange={(event) => setEditMood(event.target.value)}
                         className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
@@ -1327,6 +1340,7 @@ export default function DiaryPage() {
                     <label className="text-xs font-medium text-gray-500">
                       时效/主题标签
                       <input
+                        name="editTagText"
                         value={editTagText}
                         onChange={(event) => setEditTagText(event.target.value)}
                         placeholder="例如：短期线索 阶段复盘 长期经验"
@@ -1542,8 +1556,9 @@ export default function DiaryPage() {
                 <div className="flex flex-col gap-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-2 text-xs text-gray-500">
                     <span>每页</span>
-                    <select
-                      value={entryPageSize}
+                      <select
+                        name="entryPageSize"
+                        value={entryPageSize}
                       onChange={(event) => {
                         setEntryPageSize(Number(event.target.value));
                         setEntryPage(1);

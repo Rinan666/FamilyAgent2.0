@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  poweredByHeader: false,
   allowedDevOrigins: [
     'age-shadow-vitamin-ingredients.trycloudflare.com',
     'words-lawyers-his-domain.trycloudflare.com',
@@ -19,6 +20,33 @@ const nextConfig = {
   },
   // 代理 /api 请求到 Java 后端 (可通过 BACKEND_URL 环境变量覆盖)
   // 注：AI 服务通过前端直连 NEXT_PUBLIC_AI_SERVICE_URL，不经过此代理
+  async headers() {
+    const dynamicHeaders = [
+      {
+        key: 'X-Content-Type-Options',
+        value: 'nosniff',
+      },
+      {
+        key: 'Cache-Control',
+        value: 'no-store, max-age=0, must-revalidate',
+      },
+    ];
+
+    return [
+      {
+        source: '/((?!_next/static|_next/image|favicon.ico).*)',
+        headers: dynamicHeaders,
+      },
+      {
+        source: '/api/:path*',
+        headers: dynamicHeaders,
+      },
+      {
+        source: '/ai-proxy/:path*',
+        headers: dynamicHeaders,
+      },
+    ];
+  },
   async rewrites() {
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:8080';
     const aiServiceUrl = process.env.AI_SERVICE_URL || process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:8000';

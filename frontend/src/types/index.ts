@@ -639,6 +639,44 @@ export interface CreateGrowthGuardReportRequest {
   metadata?: Record<string, unknown>;
 }
 
+export type SkillRunStatus = 'PLANNED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELED' | string;
+
+export interface SkillRun {
+  id: number;
+  familyId: number;
+  triggeredBy: number;
+  skillName: string;
+  status: SkillRunStatus;
+  source: string;
+  inputSummary?: string;
+  outputSummary?: string;
+  saved: boolean;
+  usedSources?: Record<string, unknown>[];
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface CreateSkillRunRequest {
+  familyId: number;
+  skillName: string;
+  status?: SkillRunStatus;
+  source?: string;
+  inputSummary?: string;
+  outputSummary?: string;
+  saved?: boolean;
+  usedSources?: Record<string, unknown>[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpdateSkillRunRequest {
+  status?: SkillRunStatus;
+  outputSummary?: string;
+  saved?: boolean;
+  usedSources?: Record<string, unknown>[];
+  metadata?: Record<string, unknown>;
+}
+
 export interface MirrorContextResponse {
   familyId: number;
   viewerUserId: number;
@@ -786,6 +824,8 @@ export interface FamilyDatabaseSummary {
   diaryCount: number;
   memoryCount: number;
   growthRecordCount: number;
+  skillRunCount: number;
+  failedSkillRunCount: number;
   readyEmbeddingCount: number;
   failedEmbeddingCount: number;
 }
@@ -799,6 +839,17 @@ export interface FailedEmbeddingSummary {
   updatedAt?: string;
 }
 
+export interface FailedSkillRunSummary {
+  id: number;
+  familyId: number;
+  triggeredBy: number;
+  skillName: string;
+  source: string;
+  inputSummary?: string;
+  outputSummary?: string;
+  updatedAt?: string;
+}
+
 export interface DatabaseHealthResponse {
   generatedAt: string;
   databaseName: string;
@@ -806,6 +857,8 @@ export interface DatabaseHealthResponse {
   totalUsers: number;
   totalFamilies: number;
   totalCoreRecords: number;
+  totalSkillRuns: number;
+  failedSkillRuns: number;
   totalEmbeddings: number;
   readyEmbeddings: number;
   failedEmbeddings: number;
@@ -813,6 +866,7 @@ export interface DatabaseHealthResponse {
   embeddingStatuses: EmbeddingStatusSummary[];
   families: FamilyDatabaseSummary[];
   recentFailedEmbeddings: FailedEmbeddingSummary[];
+  recentFailedSkillRuns: FailedSkillRunSummary[];
 }
 
 export interface MemoryRecallDiagnosticRequest {

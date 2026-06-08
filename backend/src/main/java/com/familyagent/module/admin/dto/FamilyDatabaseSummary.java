@@ -13,6 +13,8 @@ public class FamilyDatabaseSummary {
     private long diaryCount;
     private long memoryCount;
     private long growthRecordCount;
+    private long skillRunCount;
+    private long failedSkillRunCount;
     private long readyEmbeddingCount;
     private long failedEmbeddingCount;
 }

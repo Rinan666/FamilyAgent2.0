@@ -592,6 +592,7 @@ export default function GrowthPage() {
             <label className="text-xs font-medium text-gray-500">
               记录对象
               <select
+                name="targetUserId"
                 value={targetUserId}
                 onChange={(event) => setTargetUserId(Number(event.target.value))}
                 className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
@@ -604,6 +605,7 @@ export default function GrowthPage() {
             <label className="text-xs font-medium text-gray-500">
               类别
               <select
+                name="category"
                 value={category}
                 onChange={(event) => handleCategoryChange(event.target.value as GrowthGuardCategory)}
                 className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
@@ -635,6 +637,7 @@ export default function GrowthPage() {
               <label className="text-xs font-medium text-gray-500">
                 发生了什么
                 <textarea
+                  name="factText"
                   value={factText}
                   onChange={(event) => setFactText(event.target.value)}
                   rows={3}
@@ -645,6 +648,7 @@ export default function GrowthPage() {
               <label className="text-xs font-medium text-gray-500">
                 我有什么担心
                 <textarea
+                  name="concernText"
                   value={concernText}
                   onChange={(event) => setConcernText(event.target.value)}
                   rows={2}
@@ -655,6 +659,7 @@ export default function GrowthPage() {
               <label className="text-xs font-medium text-gray-500">
                 我还不确定什么
                 <textarea
+                  name="uncertaintyText"
                   value={uncertaintyText}
                   onChange={(event) => setUncertaintyText(event.target.value)}
                   rows={2}
@@ -703,6 +708,7 @@ export default function GrowthPage() {
               <label className="text-xs font-medium text-gray-500">
                 来源视角
                 <select
+                  name="observerPerspective"
                   value={observerPerspective}
                   onChange={(event) => setObserverPerspective(event.target.value)}
                   className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
@@ -715,6 +721,7 @@ export default function GrowthPage() {
               <label className="text-xs font-medium text-gray-500">
                 证据类型
                 <select
+                  name="evidenceType"
                   value={evidenceType}
                   onChange={(event) => setEvidenceType(event.target.value)}
                   className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
@@ -730,6 +737,7 @@ export default function GrowthPage() {
               <label className="text-xs font-medium text-gray-500">
                 置信程度
                 <select
+                  name="confidenceLevel"
                   value={confidenceLevel}
                   onChange={(event) => setConfidenceLevel(event.target.value)}
                   className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
@@ -742,6 +750,7 @@ export default function GrowthPage() {
               <label className="text-xs font-medium text-gray-500">
                 本人确认
                 <select
+                  name="selfConfirmed"
                   value={selfConfirmed}
                   onChange={(event) => setSelfConfirmed(event.target.value)}
                   className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
@@ -757,6 +766,7 @@ export default function GrowthPage() {
               <label className="text-xs font-medium text-gray-500">
                 观察日期
                 <input
+                  name="observedAt"
                   type="date"
                   value={observedAt}
                   onChange={(event) => setObservedAt(event.target.value)}
@@ -766,6 +776,7 @@ export default function GrowthPage() {
               <label className="text-xs font-medium text-gray-500">
                 跟进日期
                 <input
+                  name="followUpAt"
                   type="date"
                   value={followUpAt}
                   onChange={(event) => setFollowUpAt(event.target.value)}
@@ -778,6 +789,7 @@ export default function GrowthPage() {
               <label className="text-xs font-medium text-gray-500">
                 留意程度：{severityLabel(severity)}
                 <input
+                  name="severity"
                   type="range"
                   min={1}
                   max={5}
@@ -789,6 +801,7 @@ export default function GrowthPage() {
               <label className="text-xs font-medium text-gray-500">
                 可见范围
                 <select
+                  name="visibility"
                   value={visibility}
                   onChange={(event) => setVisibility(event.target.value as MemoryScope)}
                   className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
@@ -938,6 +951,7 @@ export default function GrowthPage() {
               </div>
               <div className="flex items-center gap-2">
                 <select
+                  name="statusFilter"
                   value={statusFilter}
                   onChange={(event) => setStatusFilter(event.target.value as GrowthFollowUpStatus | 'ALL')}
                   className="h-8 rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-600 outline-none focus:ring-2 focus:ring-blue-500"
@@ -1079,6 +1093,7 @@ export default function GrowthPage() {
                     <div className="flex items-center gap-2 text-xs text-gray-500">
                       <span>每页</span>
                       <select
+                        name="recordPageSize"
                         value={recordPageSize}
                         onChange={(event) => {
                           setRecordPageSize(Number(event.target.value));

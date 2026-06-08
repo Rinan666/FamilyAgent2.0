@@ -21,6 +21,7 @@ import type {
   GrowthFollowUpStatus, MirrorContextResponse, MistakeReviewResult, DailyPracticeResult, ExamReviewResult, StudyPlanResult,
   AgentDraftScene, AgentOrganizedDraft, AgentSaveToolPlan, AuthorizedMemoryRecallResult, FamilyWeeklyDigest, RebuildMemoryIndexResult,
   DatabaseHealthResponse, MemoryRecallDiagnosticRequest, MemoryRecallDiagnosticResponse,
+  SkillRun, CreateSkillRunRequest, UpdateSkillRunRequest,
 } from '@/types';
 import type { ViewerRole } from '@/lib/roles';
 
@@ -876,6 +877,16 @@ export const growthGuardApi = {
     }),
 };
 
+export const skillRunApi = {
+  create: (data: CreateSkillRunRequest) =>
+    request<SkillRun>('/skill-runs', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: UpdateSkillRunRequest) =>
+    request<SkillRun>(`/skill-runs/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  get: (id: number) => request<SkillRun>(`/skill-runs/${id}`),
+  listFamilyRuns: (familyId: number, limit = 30) =>
+    request<SkillRun[]>(`/skill-runs/family/${familyId}?limit=${limit}`),
+};
+
 export const mirrorApi = {
   getContext: (familyId: number, targetUserId: number, query?: string) => {
     const params = query?.trim() ? `?query=${encodeURIComponent(query.trim())}` : '';
@@ -921,7 +932,7 @@ export const tutorApi = {
   explainStream: (
     body: { questionContent: string; answer: string; steps: string; studentMessage: string;
             history?: { role: string; content: string }[]; grade?: string; subject?: string;
-            knowledgePoint?: string; masteryLevel?: string; teachingStyle?: 'guided' | 'direct';
+            knowledgePoint?: string; masteryLevel?: string;
             mode?: 'explain' | 'chat'; memoryContext?: string;
             viewerRole?: ViewerRole; targetRole?: ViewerRole | 'STUDENT';
             clientTimestamp?: string; clientTimezone?: string; },
@@ -937,8 +948,7 @@ export const tutorApi = {
     subject: body.subject || '数学',
     knowledge_point: body.knowledgePoint || '',
     mastery_level: body.masteryLevel || '中',
-    teaching_style: body.teachingStyle || 'guided',
-    mode: body.mode || 'explain',
+    mode: body.mode || 'chat',
     memory_context: body.memoryContext || '',
     viewer_role: body.viewerRole || 'STUDENT',
     target_role: body.targetRole || 'STUDENT',

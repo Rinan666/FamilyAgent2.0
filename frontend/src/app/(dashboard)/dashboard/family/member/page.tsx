@@ -410,6 +410,7 @@ export default function FamilyMemberMemoryPage() {
         </div>
         <div className="grid gap-2 sm:grid-cols-1">
           <select
+            name="targetUserId"
             value={targetUserId ?? ''}
             onChange={(event) => {
               setTargetUserId(Number(event.target.value) || null);

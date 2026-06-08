@@ -691,6 +691,7 @@ export default function MemoryLibraryPage() {
           <label className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
+              name="recallQuery"
               value={recallQuery}
               onChange={(event) => setRecallQuery(event.target.value)}
               onKeyDown={(event) => {
@@ -760,6 +761,7 @@ export default function MemoryLibraryPage() {
           <label className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
+              name="query"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="搜索标题、正文、成员、标签..."
@@ -767,6 +769,7 @@ export default function MemoryLibraryPage() {
             />
           </label>
           <select
+            name="typeFilter"
             value={typeFilter}
             onChange={(event) => setTypeFilter(event.target.value as LibraryItemType | 'ALL')}
             className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
@@ -776,6 +779,7 @@ export default function MemoryLibraryPage() {
             ))}
           </select>
           <select
+            name="memberFilter"
             value={memberFilter}
             onChange={(event) => setMemberFilter(event.target.value)}
             className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
@@ -786,6 +790,7 @@ export default function MemoryLibraryPage() {
             ))}
           </select>
           <select
+            name="visibilityFilter"
             value={visibilityFilter}
             onChange={(event) => setVisibilityFilter(event.target.value)}
             className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
@@ -928,6 +933,7 @@ export default function MemoryLibraryPage() {
             <div className="flex items-center gap-2 text-xs text-gray-500">
               <span>每页</span>
               <select
+                name="pageSize"
                 value={pageSize}
                 onChange={(event) => {
                   setPageSize(Number(event.target.value));

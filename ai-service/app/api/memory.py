@@ -9,6 +9,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from app.agents.family_skill_registry import family_skill_registry, get_family_skill
 from app.llm.client import llm_client
 from app.middleware.auth import verify_token
 from app.utils.input_guard import InputGuardError, enforce_input_guard
@@ -79,6 +80,25 @@ class HeritageTaskDraftRequest(BaseModel):
     scenario: str = ""
     family_context: str = ""
     existing_actions: list[str] = Field(default_factory=list)
+
+
+@router.get("/skills")
+def list_family_skill_registry(status: str = ""):
+    return {
+        "success": True,
+        "data": family_skill_registry(status or None),
+    }
+
+
+@router.get("/skills/{name}")
+def get_family_skill_registry_item(name: str):
+    skill = get_family_skill(name)
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    return {
+        "success": True,
+        "data": skill,
+    }
 
 
 MEMORY_SCHEMA = {

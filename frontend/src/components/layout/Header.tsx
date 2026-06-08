@@ -57,6 +57,7 @@ export default function Header({
           <label className="hidden items-center gap-2 text-xs text-gray-500 sm:flex">
             <span className="hidden md:inline">当前家族</span>
             <select
+              name="activeFamilyId"
               value={activeFamilyId ?? ''}
               onChange={(event) => setActiveFamilyId?.(Number(event.target.value) || null)}
               className="h-9 max-w-40 rounded-lg border border-gray-200 bg-white px-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 lg:max-w-52"

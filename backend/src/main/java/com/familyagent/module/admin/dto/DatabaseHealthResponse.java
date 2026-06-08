@@ -16,6 +16,8 @@ public class DatabaseHealthResponse {
     private long totalUsers;
     private long totalFamilies;
     private long totalCoreRecords;
+    private long totalSkillRuns;
+    private long failedSkillRuns;
     private long totalEmbeddings;
     private long readyEmbeddings;
     private long failedEmbeddings;
@@ -23,4 +25,5 @@ public class DatabaseHealthResponse {
     private List<EmbeddingStatusSummary> embeddingStatuses;
     private List<FamilyDatabaseSummary> families;
     private List<FailedEmbeddingSummary> recentFailedEmbeddings;
+    private List<FailedSkillRunSummary> recentFailedSkillRuns;
 }

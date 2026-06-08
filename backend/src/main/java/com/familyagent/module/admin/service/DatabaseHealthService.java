@@ -7,6 +7,7 @@ import com.familyagent.module.admin.dto.DatabaseHealthResponse;
 import com.familyagent.module.admin.dto.DatabaseTableCount;
 import com.familyagent.module.admin.dto.EmbeddingStatusSummary;
 import com.familyagent.module.admin.dto.FailedEmbeddingSummary;
+import com.familyagent.module.admin.dto.FailedSkillRunSummary;
 import com.familyagent.module.admin.dto.FamilyDatabaseSummary;
 import com.familyagent.module.admin.dto.MemoryRecallDiagnosticRequest;
 import com.familyagent.module.admin.dto.MemoryRecallDiagnosticResponse;
@@ -40,6 +41,7 @@ public class DatabaseHealthService {
             new TableDefinition("mirror_agent_data", "Mirror profiles", false),
             new TableDefinition("heritage_tasks", "Heritage tasks", false),
             new TableDefinition("chat_sessions", "Chat sessions", false),
+            new TableDefinition("skill_runs", "Skill run audit", false),
             new TableDefinition("questions", "Legacy questions", true),
             new TableDefinition("knowledge_points", "Legacy knowledge points", true),
             new TableDefinition("test_records", "Legacy tests", true),
@@ -67,6 +69,8 @@ public class DatabaseHealthService {
         long totalCoreRecords = countTable("diary_entries")
                 + countTable("memory_entries")
                 + countTable("growth_guard_records");
+        long totalSkillRuns = countTable("skill_runs");
+        long failedSkillRuns = countSkillRunsByStatus("FAILED");
         long totalEmbeddings = countTable("memory_embeddings");
         long readyEmbeddings = countEmbeddingsByStatus("READY");
         long failedEmbeddings = countEmbeddingsByStatus("FAILED");
@@ -78,6 +82,8 @@ public class DatabaseHealthService {
                 .totalUsers(countTable("users"))
                 .totalFamilies(countTable("families"))
                 .totalCoreRecords(totalCoreRecords)
+                .totalSkillRuns(totalSkillRuns)
+                .failedSkillRuns(failedSkillRuns)
                 .totalEmbeddings(totalEmbeddings)
                 .readyEmbeddings(readyEmbeddings)
                 .failedEmbeddings(failedEmbeddings)
@@ -85,6 +91,7 @@ public class DatabaseHealthService {
                 .embeddingStatuses(queryEmbeddingStatuses())
                 .families(queryFamilySummaries())
                 .recentFailedEmbeddings(queryRecentFailedEmbeddings())
+                .recentFailedSkillRuns(queryRecentFailedSkillRuns())
                 .build();
     }
 
@@ -165,6 +172,16 @@ public class DatabaseHealthService {
         return count == null ? 0 : count.longValue();
     }
 
+    private long countSkillRunsByStatus(String status) {
+        if (!tableExists("skill_runs")) {
+            return 0;
+        }
+        Number count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM skill_runs WHERE status = ?
+                """, Number.class, status);
+        return count == null ? 0 : count.longValue();
+    }
+
     private boolean tableExists(String tableName) {
         Boolean exists = jdbcTemplate.queryForObject("SELECT to_regclass(?) IS NOT NULL", Boolean.class, "public." + tableName);
         return Boolean.TRUE.equals(exists);
@@ -202,6 +219,8 @@ public class DatabaseHealthService {
                     (SELECT COUNT(*) FROM diary_entries de WHERE de.family_id = f.id) AS diary_count,
                     (SELECT COUNT(*) FROM memory_entries me WHERE me.family_id = f.id) AS memory_count,
                     (SELECT COUNT(*) FROM growth_guard_records gr WHERE gr.family_id = f.id) AS growth_record_count,
+                    (SELECT COUNT(*) FROM skill_runs sr WHERE sr.family_id = f.id) AS skill_run_count,
+                    (SELECT COUNT(*) FROM skill_runs sr WHERE sr.family_id = f.id AND sr.status = 'FAILED') AS failed_skill_run_count,
                     (SELECT COUNT(*) FROM memory_embeddings em WHERE em.family_id = f.id AND em.status = 'READY') AS ready_embedding_count,
                     (SELECT COUNT(*) FROM memory_embeddings em WHERE em.family_id = f.id AND em.status = 'FAILED') AS failed_embedding_count
                 FROM families f
@@ -214,6 +233,8 @@ public class DatabaseHealthService {
                 .diaryCount(rs.getLong("diary_count"))
                 .memoryCount(rs.getLong("memory_count"))
                 .growthRecordCount(rs.getLong("growth_record_count"))
+                .skillRunCount(rs.getLong("skill_run_count"))
+                .failedSkillRunCount(rs.getLong("failed_skill_run_count"))
                 .readyEmbeddingCount(rs.getLong("ready_embedding_count"))
                 .failedEmbeddingCount(rs.getLong("failed_embedding_count"))
                 .build());
@@ -235,6 +256,30 @@ public class DatabaseHealthService {
                 .sourceType(rs.getString("source_type"))
                 .sourceId(rs.getLong("source_id"))
                 .error(rs.getString("error"))
+                .updatedAt(rs.getTimestamp("updated_at") == null
+                        ? null
+                        : rs.getTimestamp("updated_at").toLocalDateTime())
+                .build());
+    }
+
+    private List<FailedSkillRunSummary> queryRecentFailedSkillRuns() {
+        if (!tableExists("skill_runs")) {
+            return List.of();
+        }
+        return jdbcTemplate.query("""
+                SELECT id, family_id, triggered_by, skill_name, source, input_summary, output_summary, updated_at
+                FROM skill_runs
+                WHERE status = 'FAILED'
+                ORDER BY updated_at DESC
+                LIMIT 10
+                """, (rs, rowNum) -> FailedSkillRunSummary.builder()
+                .id(rs.getLong("id"))
+                .familyId(rs.getLong("family_id"))
+                .triggeredBy(rs.getLong("triggered_by"))
+                .skillName(rs.getString("skill_name"))
+                .source(rs.getString("source"))
+                .inputSummary(rs.getString("input_summary"))
+                .outputSummary(rs.getString("output_summary"))
                 .updatedAt(rs.getTimestamp("updated_at") == null
                         ? null
                         : rs.getTimestamp("updated_at").toLocalDateTime())

@@ -646,6 +646,7 @@ export default function HeritagePage() {
                 </p>
               </div>
               <select
+                name="interviewThemeId"
                 value={interviewThemeId}
                 onChange={(event) => applyInterviewTheme(event.target.value)}
                 className="h-9 rounded-lg border border-purple-200 bg-white px-3 text-sm text-purple-900 outline-none focus:ring-2 focus:ring-purple-500"
@@ -661,6 +662,7 @@ export default function HeritagePage() {
                 <label key={question} className="block text-xs font-medium text-purple-900">
                   {index + 1}. {question}
                   <textarea
+                    name={`interviewAnswer-${index}`}
                     value={interviewAnswers[index] || ''}
                     onChange={(event) => {
                       const next = [...interviewAnswers];
@@ -695,6 +697,7 @@ export default function HeritagePage() {
               <label className="block text-xs font-medium text-blue-900">
                 1. 当时发生了什么？
                 <textarea
+                  name="atomSituation"
                   value={atomSituation}
                   onChange={(event) => setAtomSituation(event.target.value)}
                   rows={2}
@@ -705,6 +708,7 @@ export default function HeritagePage() {
               <label className="block text-xs font-medium text-blue-900">
                 2. 我当时怎么想？
                 <textarea
+                  name="atomThinking"
                   value={atomThinking}
                   onChange={(event) => setAtomThinking(event.target.value)}
                   rows={2}
@@ -715,6 +719,7 @@ export default function HeritagePage() {
               <label className="block text-xs font-medium text-blue-900">
                 3. 如果重来，我会怎么做？
                 <textarea
+                  name="atomRedo"
                   value={atomRedo}
                   onChange={(event) => setAtomRedo(event.target.value)}
                   rows={2}
@@ -737,6 +742,7 @@ export default function HeritagePage() {
             <label className="text-xs font-medium text-gray-500">
               类型
               <select
+                name="memoryType"
                 value={memoryType}
                 onChange={(event) => {
                   setMemoryType(event.target.value as MemoryEntryType);
@@ -752,6 +758,7 @@ export default function HeritagePage() {
             <label className="text-xs font-medium text-gray-500">
               可见范围
               <select
+                name="scope"
                 value={scope}
                 onChange={(event) => setScope(event.target.value as MemoryScope)}
                 className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
@@ -764,6 +771,7 @@ export default function HeritagePage() {
             <label className="text-xs font-medium text-gray-500">
               适用场景
               <input
+                name="scenario"
                 value={scenario}
                 onChange={(event) => setScenario(event.target.value)}
                 placeholder="例如：换牙期、亲子沟通、视力保护"
@@ -797,6 +805,7 @@ export default function HeritagePage() {
               </div>
             </div>
             <textarea
+              name="content"
               value={content}
               onChange={(event) => {
                 setContent(event.target.value);
@@ -917,6 +926,7 @@ export default function HeritagePage() {
                     {task.status === 'PENDING' ? (
                       <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                         <input
+                          name={`completionNote-${task.id}`}
                           value={completionNotes[task.id] || ''}
                           onChange={(event) => setCompletionNotes((current) => ({ ...current, [task.id]: event.target.value }))}
                           placeholder={taskCompletionPrompt(task)}
@@ -1114,6 +1124,7 @@ export default function HeritagePage() {
                   <div className="flex items-center gap-2 text-xs text-gray-500">
                     <span>每页</span>
                     <select
+                      name="memoryPageSize"
                       value={memoryPageSize}
                       onChange={(event) => {
                         setMemoryPageSize(Number(event.target.value));

@@ -39,11 +39,26 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def response_header_middleware(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+
+    content_type = response.headers.get("content-type", "")
+    if content_type.startswith("application/json") and "charset=" not in content_type.lower():
+        response.headers["Content-Type"] = "application/json; charset=utf-8"
+
+    if response.headers.get("cache-control") is None:
+        response.headers["Cache-Control"] = "no-store, max-age=0, must-revalidate"
+
+    return response
 
 
 @app.exception_handler(PromptLeakAttemptError)

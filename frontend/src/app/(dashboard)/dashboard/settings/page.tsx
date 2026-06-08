@@ -160,6 +160,7 @@ export default function SettingsPage() {
           <label className="block text-sm font-medium text-gray-700">
             出生年月日
             <input
+              name="birthDate"
               type="date"
               value={birthDate}
               onChange={(event) => setBirthDate(event.target.value)}
@@ -232,6 +233,7 @@ export default function SettingsPage() {
           <label className="block text-sm font-medium text-gray-700">
             当前密码
             <input
+              name="currentPassword"
               type="password"
               value={currentPassword}
               onChange={(event) => setCurrentPassword(event.target.value)}
@@ -244,6 +246,7 @@ export default function SettingsPage() {
           <label className="block text-sm font-medium text-gray-700">
             新密码
             <input
+              name="newPassword"
               type="password"
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
@@ -257,6 +260,7 @@ export default function SettingsPage() {
           <label className="block text-sm font-medium text-gray-700">
             确认新密码
             <input
+              name="confirmPassword"
               type="password"
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}

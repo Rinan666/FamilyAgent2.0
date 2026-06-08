@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Bot, CheckCircle, Loader2, RefreshCw, Send, UserRound, Users, XCircle } from 'lucide-react';
-import { diaryApi, familyApi, growthGuardApi, memoryApi, mirrorApi, tutorApi } from '@/lib/api';
+import { diaryApi, familyApi, growthGuardApi, memoryApi, mirrorApi, skillRunApi, tutorApi } from '@/lib/api';
 import { memberAge } from '@/lib/roles';
 import { useViewerRole } from '@/hooks/useViewerRole';
 import WebSearchBadge from '@/components/tutor/WebSearchBadge';
@@ -13,15 +13,23 @@ import type {
   AgentSaveToolPlan,
   ChatMessage,
   DiaryEntry,
-  DiaryEntryType,
-  DiaryVisibility,
   FamilyMember,
-  GrowthGuardCategory,
   MemoryEntry,
-  MemoryEntryType,
-  MemoryScope,
   MirrorContextResponse,
 } from '@/types';
+import {
+  buildDiarySaveRequest,
+  buildFamilyMemorySaveRequest,
+  buildGrowthGuardSaveRequest,
+  normalizeSaveToolPlan,
+  saveMemorySkillMetadata,
+  savePlanDetail,
+  savedRecordType,
+  todayString,
+  toolLabel,
+  truncateAuditText,
+  type SavedRecordType,
+} from '@/lib/savePlan';
 
 type MirrorSourceRef = {
   code: string;
@@ -39,11 +47,22 @@ type MirrorChatMessage = ChatMessage & {
   toolResult?: {
     label: string;
     detail: string;
+    refreshWarning?: string;
   };
   pendingTool?: {
     plan: AgentSaveToolPlan;
     originalContent: string;
+    status?: 'pending' | 'saving' | 'failed';
+    error?: string;
   };
+};
+
+type MirrorSaveResult = {
+  plan: AgentSaveToolPlan;
+  savedRecordId?: number;
+  savedRecordType: SavedRecordType;
+  refreshedContext?: MirrorContextResponse;
+  refreshError?: string;
 };
 
 function memberName(member?: FamilyMember | null) {
@@ -197,53 +216,12 @@ function shouldPlanSaveTool(content: string) {
   return /(保存|存起来|记下来|记录一下|记录下来|沉淀|加入经验|写进|帮我记|帮我存)/.test(content);
 }
 
-function scopeFromPlan(plan: AgentSaveToolPlan): MemoryScope {
-  const scope = String(plan.scope || plan.visibility || 'PRIVATE').toUpperCase();
-  if (scope === 'CARE_VISIBLE' || scope === 'FAMILY_VISIBLE' || scope === 'PARENT_VISIBLE') return scope;
-  return 'PRIVATE';
-}
-
-function visibilityFromPlan(plan: AgentSaveToolPlan): DiaryVisibility {
-  const visibility = String(plan.visibility || plan.scope || 'PRIVATE').toUpperCase();
-  if (visibility === 'FAMILY_VISIBLE' || visibility === 'CARE_VISIBLE' || visibility === 'LEGACY_VISIBLE') return visibility;
-  return 'PRIVATE';
-}
-
-function entryTypeFromPlan(plan: AgentSaveToolPlan): DiaryEntryType {
-  const entryType = String(plan.entry_type || 'DAILY').toUpperCase();
-  if (
-    entryType === 'IMPORTANT_EVENT'
-    || entryType === 'LESSON'
-    || entryType === 'EMOTION'
-    || entryType === 'MESSAGE_TO_FAMILY'
-    || entryType === 'SELF_REFLECTION'
-  ) {
-    return entryType;
-  }
-  return 'DAILY';
-}
-
-function todayString() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function toolLabel(tool: AgentSaveToolPlan['tool']) {
-  if (tool === 'DIARY') return '每日记录';
-  if (tool === 'FAMILY_MEMORY') return '经验沉淀';
-  if (tool === 'GROWTH_GUARD') return '成长观察';
-  return '未保存';
-}
-
 function requiresSaveConfirmation(plan: AgentSaveToolPlan) {
   const visibility = String(plan.visibility || '').toUpperCase();
   const scope = String(plan.scope || '').toUpperCase();
   return plan.tool !== 'DIARY'
     || visibility !== 'PRIVATE'
     || (scope !== '' && scope !== 'PRIVATE');
-}
-
-function savePlanDetail(plan: AgentSaveToolPlan) {
-  return `${toolLabel(plan.tool)} · ${plan.title} · ${plan.visibility || plan.scope}`;
 }
 
 export default function MirrorPage() {
@@ -387,64 +365,126 @@ export default function MirrorPage() {
     return context;
   }, []);
 
-  const executeSavePlan = useCallback(async (plan: AgentSaveToolPlan, originalContent: string) => {
+  const executeSavePlan = useCallback(async (plan: AgentSaveToolPlan, originalContent: string): Promise<MirrorSaveResult> => {
+    const safePlan = normalizeSaveToolPlan(plan);
+    if (!safePlan.should_save || safePlan.tool === 'NONE') {
+      throw new Error('这条内容没有可执行的保存方案。');
+    }
     if (!selectedFamilyId || !targetUserId || !targetMember) {
       throw new Error('缺少家族或成员上下文');
     }
 
-    const commonMetadata = {
-      source: 'MIRROR_AGENT_TOOL',
-      plannedTool: plan.tool,
-      plannedToolReason: plan.reason,
-      relatedUserId: targetUserId,
-      relatedMemberName: memberName(targetMember),
-      savedFromMirrorChatAt: new Date().toISOString(),
-    };
-
-    if (plan.tool === 'DIARY') {
-      await diaryApi.create({
+    const savedAt = new Date().toISOString();
+    const auditMetadata = saveMemorySkillMetadata(safePlan, savedAt);
+    let skillRunId: number | null = null;
+    try {
+      const skillRun = await skillRunApi.create({
         familyId: selectedFamilyId,
-        content: plan.content,
-        entryType: entryTypeFromPlan(plan),
-        title: plan.title,
-        tags: plan.tags,
-        visibility: visibilityFromPlan(plan),
-        metadata: {
-          ...commonMetadata,
-          relationSource: 'MIRROR_AGENT_TOOL',
-        },
+        skillName: 'save_memory',
+        status: 'RUNNING',
+        source: 'MIRROR_AGENT_CHAT',
+        inputSummary: truncateAuditText(originalContent),
+        saved: false,
+        usedSources: [{
+          sourceType: 'CHAT_MESSAGE',
+          snippet: truncateAuditText(originalContent, 240),
+        }],
+        metadata: auditMetadata,
       });
-    } else if (plan.tool === 'FAMILY_MEMORY') {
-      await memoryApi.createFamilyMemory({
-        familyId: selectedFamilyId,
-        content: plan.content,
-        type: plan.memory_type as MemoryEntryType,
-        scope: scopeFromPlan(plan),
-        summary: plan.summary,
-        importance: plan.importance,
-        metadata: {
-          ...commonMetadata,
-          scenario: '镜像对话保存',
-          target: memberName(targetMember),
-        },
-      });
-    } else if (plan.tool === 'GROWTH_GUARD') {
-      await growthGuardApi.createRecord({
-        familyId: selectedFamilyId,
-        targetUserId,
-        category: plan.category as GrowthGuardCategory,
-        content: plan.content,
-        severity: plan.severity,
-        observedAt: todayString(),
-        visibility: scopeFromPlan(plan),
-        metadata: {
-          ...commonMetadata,
-          followUpStatus: 'PENDING',
-        },
-      });
+      skillRunId = skillRun.id;
+    } catch (error) {
+      console.log('Mirror save skill run audit not created:', error);
     }
 
-    return refreshMirrorContext(selectedFamilyId, targetUserId, originalContent);
+    const commonMetadata = {
+      source: 'MIRROR_AGENT_TOOL',
+      plannedTool: safePlan.tool,
+      plannedToolReason: safePlan.reason,
+      relatedUserId: targetUserId,
+      relatedMemberName: memberName(targetMember),
+      savedFromMirrorChatAt: savedAt,
+      recordedAt: savedAt,
+      eventAt: savedAt,
+      originalPrompt: originalContent.slice(0, 500),
+      ...(skillRunId ? { skillRunId } : {}),
+    };
+    const recordType = savedRecordType(safePlan.tool);
+    let savedRecordId: number | undefined;
+
+    try {
+      if (safePlan.tool === 'DIARY') {
+        const record = await diaryApi.create(buildDiarySaveRequest(selectedFamilyId, safePlan, {
+          ...commonMetadata,
+          relationSource: 'MIRROR_AGENT_TOOL',
+        }));
+        savedRecordId = record.id;
+      } else if (safePlan.tool === 'FAMILY_MEMORY') {
+        const record = await memoryApi.createFamilyMemory(buildFamilyMemorySaveRequest(selectedFamilyId, safePlan, {
+          ...commonMetadata,
+          sourceType: 'FAMILY_EXPERIENCE',
+          scenario: '镜像对话保存',
+          target: memberName(targetMember),
+        }));
+        savedRecordId = record.id;
+      } else if (safePlan.tool === 'GROWTH_GUARD') {
+        const record = await growthGuardApi.createRecord(buildGrowthGuardSaveRequest(
+          selectedFamilyId,
+          safePlan,
+          todayString(),
+          {
+          ...commonMetadata,
+          sourceType: 'GROWTH_OBSERVATION',
+          followUpStatus: 'PENDING',
+          },
+          targetUserId,
+        ));
+        savedRecordId = record.id;
+      }
+
+      if (skillRunId) {
+        try {
+          await skillRunApi.update(skillRunId, {
+            status: 'SUCCEEDED',
+            saved: true,
+            outputSummary: `已保存为${toolLabel(safePlan.tool)}：${safePlan.title || safePlan.content.slice(0, 24)}`,
+            metadata: {
+              ...auditMetadata,
+              savedRecordId,
+              savedRecordType: recordType,
+              savedAt,
+            },
+          });
+        } catch (error) {
+          console.log('Mirror save skill run audit not updated after save:', error);
+        }
+      }
+    } catch (error) {
+      if (skillRunId) {
+        try {
+          await skillRunApi.update(skillRunId, {
+            status: 'FAILED',
+            saved: false,
+            outputSummary: error instanceof Error ? truncateAuditText(error.message, 500) : '保存失败',
+            metadata: {
+              ...auditMetadata,
+              failureReason: error instanceof Error ? error.message : '保存失败',
+              savedRecordType: recordType,
+            },
+          });
+        } catch (auditError) {
+          console.log('Mirror save skill run audit not updated after save failure:', auditError);
+        }
+      }
+      throw error;
+    }
+
+    try {
+      const refreshedContext = await refreshMirrorContext(selectedFamilyId, targetUserId, originalContent);
+      return { plan: safePlan, savedRecordId, savedRecordType: recordType, refreshedContext };
+    } catch (error) {
+      const refreshError = error instanceof Error ? error.message : '镜像上下文刷新失败';
+      return { plan: safePlan, savedRecordId, savedRecordType: recordType, refreshError };
+    }
   }, [refreshMirrorContext, selectedFamilyId, targetMember, targetUserId]);
 
   const runSaveTool = useCallback(async (
@@ -460,7 +500,7 @@ export default function MirrorPage() {
       targetMemberName: memberName(targetMember),
       viewerRole,
     });
-    const plan = planResult.data;
+    const plan = normalizeSaveToolPlan(planResult.data);
     if (!plan.should_save || plan.tool === 'NONE') return false;
 
     if (requiresSaveConfirmation(plan)) {
@@ -469,7 +509,7 @@ export default function MirrorPage() {
           ? {
               ...message,
               content: `我建议把这条内容保存为${toolLabel(plan.tool)}，保存前需要你确认。`,
-              pendingTool: { plan, originalContent: content },
+              pendingTool: { plan, originalContent: content, status: 'pending' },
               toolResult: undefined,
             }
           : message
@@ -477,17 +517,18 @@ export default function MirrorPage() {
       return true;
     }
 
-    const refreshedContext = await executeSavePlan(plan, content);
+    const result = await executeSavePlan(plan, content);
     setMessages((prev) => prev.map((message) => (
       message.id === assistantMessageId
         ? {
             ...message,
-            content: plan.confirmation_message || `已保存为${toolLabel(plan.tool)}。`,
+            content: result.plan.confirmation_message || `已保存为${toolLabel(result.plan.tool)}。`,
             toolResult: {
-              label: toolLabel(plan.tool),
-              detail: `${plan.title} · ${plan.visibility || plan.scope}`,
+              label: toolLabel(result.plan.tool),
+              detail: savePlanDetail(result.plan, result.savedRecordId),
+              refreshWarning: result.refreshError ? `保存已完成，但镜像上下文暂时未刷新：${result.refreshError}` : undefined,
             },
-            ...buildAnswerSourceMetadata(refreshedContext),
+            ...(result.refreshedContext ? buildAnswerSourceMetadata(result.refreshedContext) : {}),
           }
         : message
     )));
@@ -499,20 +540,36 @@ export default function MirrorPage() {
     plan: AgentSaveToolPlan,
     originalContent: string,
   ) => {
+    const safePlan = normalizeSaveToolPlan(plan);
     setExecutingToolMessageId(messageId);
+    setMessages((prev) => prev.map((message) => (
+      message.id === messageId
+        ? {
+            ...message,
+            content: `正在保存为${toolLabel(safePlan.tool)}...`,
+            pendingTool: {
+              plan: safePlan,
+              originalContent,
+              status: 'saving',
+            },
+            toolResult: undefined,
+          }
+        : message
+    )));
     try {
-      const refreshedContext = await executeSavePlan(plan, originalContent);
+      const result = await executeSavePlan(safePlan, originalContent);
       setMessages((prev) => prev.map((message) => (
         message.id === messageId
           ? {
               ...message,
-              content: plan.confirmation_message || `已保存为${toolLabel(plan.tool)}。`,
+              content: result.plan.confirmation_message || `已保存为${toolLabel(result.plan.tool)}。`,
               pendingTool: undefined,
               toolResult: {
-                label: toolLabel(plan.tool),
-                detail: savePlanDetail(plan),
+                label: toolLabel(result.plan.tool),
+                detail: savePlanDetail(result.plan, result.savedRecordId),
+                refreshWarning: result.refreshError ? `保存已完成，但镜像上下文暂时未刷新：${result.refreshError}` : undefined,
               },
-              ...buildAnswerSourceMetadata(refreshedContext),
+              ...(result.refreshedContext ? buildAnswerSourceMetadata(result.refreshedContext) : {}),
             }
           : message
       )));
@@ -524,6 +581,12 @@ export default function MirrorPage() {
               content: err instanceof Error
                 ? `保存失败：${err.message}`
                 : '保存失败，请稍后重试。',
+              pendingTool: {
+                plan: safePlan,
+                originalContent,
+                status: 'failed',
+                error: err instanceof Error ? err.message : '保存失败，请稍后重试。',
+              },
             }
           : message
       )));
@@ -730,6 +793,7 @@ export default function MirrorPage() {
             </div>
             <select
               aria-label="镜像对象"
+              name="targetUserId"
               value={targetUserId ?? ''}
               onChange={(event) => {
                 setTargetUserId(Number(event.target.value) || null);
@@ -928,17 +992,36 @@ export default function MirrorPage() {
                     {message.content || (message.role === 'assistant' ? '思考中...' : '')}
                     {message.role === 'assistant' && <WebSearchBadge metadata={message.metadata} />}
                     {message.role === 'assistant' && message.toolResult && (
-                      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-green-100 bg-white/70 px-3 py-2 text-xs text-green-700">
-                        <CheckCircle className="h-3.5 w-3.5" />
-                        <span className="font-medium">已调用工具：{message.toolResult.label}</span>
-                        <span className="text-green-600">{message.toolResult.detail}</span>
+                      <div className="mt-3 rounded-lg border border-green-100 bg-white/70 px-3 py-2 text-xs text-green-700">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <CheckCircle className="h-3.5 w-3.5" />
+                          <span className="font-medium">已保存为{message.toolResult.label}</span>
+                          <span className="text-green-600">{message.toolResult.detail}</span>
+                        </div>
+                        {message.toolResult.refreshWarning && (
+                          <p className="mt-2 leading-5 text-amber-600">{message.toolResult.refreshWarning}</p>
+                        )}
                       </div>
                     )}
                     {message.role === 'assistant' && message.pendingTool && (
-                      <div className="mt-3 rounded-lg border border-yellow-100 bg-white/80 p-3 text-xs text-gray-700">
+                      <div className={`mt-3 rounded-lg border bg-white/80 p-3 text-xs text-gray-700 ${
+                        message.pendingTool.status === 'failed' ? 'border-red-100' : 'border-yellow-100'
+                      }`}
+                      >
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded bg-yellow-50 px-2 py-0.5 font-medium text-yellow-700">
-                            待确认工具
+                          <span className={`rounded px-2 py-0.5 font-medium ${
+                            message.pendingTool.status === 'failed'
+                              ? 'bg-red-50 text-red-700'
+                              : message.pendingTool.status === 'saving'
+                                ? 'bg-blue-50 text-blue-700'
+                                : 'bg-yellow-50 text-yellow-700'
+                          }`}
+                          >
+                            {message.pendingTool.status === 'saving'
+                              ? '正在保存'
+                              : message.pendingTool.status === 'failed'
+                                ? '保存失败'
+                                : '待确认工具'}
                           </span>
                           <span>{savePlanDetail(message.pendingTool.plan)}</span>
                         </div>
@@ -950,7 +1033,15 @@ export default function MirrorPage() {
                         <p className="mt-2 line-clamp-3 rounded bg-gray-50 px-2 py-1.5 leading-5 text-gray-500">
                           {message.pendingTool.plan.content}
                         </p>
+                        {message.pendingTool.error && (
+                          <p className="mt-2 rounded bg-red-50 px-2 py-1.5 leading-5 text-red-600">
+                            {message.pendingTool.error}
+                          </p>
+                        )}
                         <div className="mt-3 flex flex-wrap gap-2">
+                          {(() => {
+                            const isSaving = message.pendingTool?.status === 'saving' || executingToolMessageId === message.id;
+                            return (
                           <button
                             type="button"
                             onClick={() => confirmSaveTool(
@@ -958,20 +1049,22 @@ export default function MirrorPage() {
                               message.pendingTool!.plan,
                               message.pendingTool!.originalContent,
                             )}
-                            disabled={executingToolMessageId === message.id}
+                            disabled={isSaving}
                             className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-green-600 px-3 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-60"
                           >
-                            {executingToolMessageId === message.id ? (
+                            {isSaving ? (
                               <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             ) : (
                               <CheckCircle className="h-3.5 w-3.5" />
                             )}
-                            确认保存
+                            {isSaving ? '正在保存...' : message.pendingTool.status === 'failed' ? '重试保存' : '确认保存'}
                           </button>
+                            );
+                          })()}
                           <button
                             type="button"
                             onClick={() => cancelSaveTool(message.id)}
-                            disabled={executingToolMessageId === message.id}
+                            disabled={message.pendingTool.status === 'saving' || executingToolMessageId === message.id}
                             className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-60"
                           >
                             <XCircle className="h-3.5 w-3.5" />
@@ -1012,6 +1105,7 @@ export default function MirrorPage() {
                 />
               </div>
               <textarea
+                name="mirrorMessage"
                 rows={1}
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
