@@ -15,11 +15,17 @@ from app.agents.generator_agent import generator_agent
 from app.agents.skill_workflow_agent import skill_workflow_agent
 from app.middleware.auth import verify_token
 from app.services.content_extractor import extract_content
+from app.utils.privacy_guard import redact_with_note
+from app.utils.safety_limits import enforce_ai_concurrency, enforce_ai_rate_limit
 from app.utils.sanitizer import sanitize_text
 
 logger = logging.getLogger("familyagent.ai.api.tutor")
 
-router = APIRouter(dependencies=[Depends(verify_token)])
+router = APIRouter(dependencies=[
+    Depends(verify_token),
+    Depends(enforce_ai_rate_limit),
+    Depends(enforce_ai_concurrency),
+])
 
 
 # ============================================
@@ -41,6 +47,10 @@ class ExplainRequest(BaseModel):
     teaching_style: str = Field(default="guided", description="讲题风格: guided=引导式, direct=快速答案式")
     mode: str = Field(default="explain", description="对话模式: explain=讲题, chat=自由对话")
     memory_context: str = Field(default="", description="家族知识库/日记/关键事件等检索上下文")
+    viewer_role: str = Field(default="STUDENT", description="当前查看/对话视图: STUDENT/PARENT/ADMIN")
+    target_role: str = Field(default="STUDENT", description="当前学习对象角色: STUDENT/PARENT/ADMIN")
+    client_timestamp: str = Field(default="", description="用户提问时的客户端时间戳 ISO")
+    client_timezone: str = Field(default="", description="用户客户端时区")
 
 
 class GradeRequest(BaseModel):
@@ -96,7 +106,7 @@ class ExamReviewRequest(BaseModel):
     score_summary: str = Field(..., description="当前得分/正确率摘要")
     grade: str = Field(default="初中")
     subject: str = Field(default="数学")
-    profiles: dict = Field(default_factory=dict, description="学力档案/BKT")
+    profiles: dict = Field(default_factory=dict, description="历史表现")
     weak_points: list[str] = Field(default_factory=list, description="薄弱知识点")
     recent_mistakes: list[dict] = Field(default_factory=list, description="最近错题摘要")
     available_minutes: int = Field(default=30, ge=10, le=180)
@@ -108,7 +118,7 @@ class StudyPlanRequest(BaseModel):
     learning_goal: str = Field(..., description="学习目标")
     grade: str = Field(default="初中")
     subject: str = Field(default="数学")
-    profiles: dict = Field(default_factory=dict, description="学力档案/BKT")
+    profiles: dict = Field(default_factory=dict, description="历史表现")
     weak_points: list[str] = Field(default_factory=list, description="薄弱知识点")
     available_minutes: int = Field(default=30, ge=10, le=180)
     plan_days: int = Field(default=7, ge=1, le=30)
@@ -129,6 +139,7 @@ async def explain_question(request: ExplainRequest):
     # 输入清理
     question_content = sanitize_text(request.question_content)
     student_message = sanitize_text(request.student_message)
+    memory_context = redact_with_note(request.memory_context).text
 
     async def generate():
         try:
@@ -145,9 +156,18 @@ async def explain_question(request: ExplainRequest):
                 common_errors=request.common_errors,
                 teaching_style=request.teaching_style,
                 mode=request.mode,
-                memory_context=request.memory_context,
+                memory_context=memory_context,
+                viewer_role=request.viewer_role,
+                target_role=request.target_role,
+                client_timestamp=request.client_timestamp,
+                client_timezone=request.client_timezone,
             ):
-                yield f"data: {json.dumps({'content': chunk})}\n\n"
+                if isinstance(chunk, dict) and chunk.get("type") == "metadata":
+                    yield f"data: {json.dumps({'metadata': chunk})}\n\n"
+                elif isinstance(chunk, dict):
+                    yield f"data: {json.dumps({'content': chunk.get('content', '')})}\n\n"
+                else:
+                    yield f"data: {json.dumps({'content': chunk})}\n\n"
 
             # 结束标记
             yield f"data: {json.dumps({'done': True})}\n\n"
@@ -175,6 +195,7 @@ async def explain_question_sync(request: ExplainRequest):
     try:
         question_content = sanitize_text(request.question_content)
         student_message = sanitize_text(request.student_message)
+        memory_context = redact_with_note(request.memory_context).text
 
         result = await tutor_agent.explain(
             question_content=question_content,
@@ -189,7 +210,11 @@ async def explain_question_sync(request: ExplainRequest):
             common_errors=request.common_errors,
             teaching_style=request.teaching_style,
             mode=request.mode,
-            memory_context=request.memory_context,
+            memory_context=memory_context,
+            viewer_role=request.viewer_role,
+            target_role=request.target_role,
+            client_timestamp=request.client_timestamp,
+            client_timezone=request.client_timezone,
         )
         return {"success": True, "content": result}
     except Exception as e:

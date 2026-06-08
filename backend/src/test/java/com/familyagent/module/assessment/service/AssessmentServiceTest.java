@@ -1,7 +1,5 @@
 package com.familyagent.module.assessment.service;
 
-import com.familyagent.common.exception.BusinessException;
-import com.familyagent.infra.ai.AIServiceClient;
 import com.familyagent.module.assessment.dto.SubmitTestRequest;
 import com.familyagent.module.assessment.entity.AbilityProfile;
 import com.familyagent.module.assessment.entity.TestRecord;
@@ -22,11 +20,21 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.same;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class AssessmentServiceTest {
@@ -35,43 +43,33 @@ class AssessmentServiceTest {
     @Mock private WrongQuestionRecordRepository wrongQuestionRecordRepository;
     @Mock private AbilityProfileRepository abilityProfileRepository;
     @Mock private QuestionRepository questionRepository;
-    @Mock private AIServiceClient aiServiceClient;
     @Mock private FamilyService familyService;
     @Spy private ObjectMapper objectMapper = new ObjectMapper();
     @InjectMocks private AssessmentService assessmentService;
 
-    // ============================================
-    // BKT delegation tests
-    // ============================================
-
     @Test
-    void updateProfile_shouldCreateNewProfileAndCallPythonBKT() {
+    void updateProfile_shouldCreateNewProfileWithLocalStats() {
         when(abilityProfileRepository.findByUserAndKp(1L, 6L)).thenReturn(null);
-        when(aiServiceClient.updateBKT(eq(0.5), eq(true), eq(0)))
-            .thenReturn(Map.of(
-                "success", true,
-                "posterior_mastery", 0.8182,
-                "mastery_level", "强",
-                "delta", 0.3182,
-                "fallback", false
-            ));
 
         assessmentService.updateProfile(1L, 6L, true);
 
         ArgumentCaptor<AbilityProfile> captor = ArgumentCaptor.forClass(AbilityProfile.class);
-        verify(abilityProfileRepository).insert(captor.capture()); // 新建档案
+        verify(abilityProfileRepository).insert(captor.capture());
         AbilityProfile profile = captor.getValue();
 
-        assertEquals(0.8182, profile.getMasteryProbability(), 0.0001);
+        assertEquals(1L, profile.getUserId());
+        assertEquals(6L, profile.getKpId());
+        assertEquals(1.0, profile.getMasteryProbability(), 0.0001);
         assertEquals(1, profile.getTotalAttempts());
         assertEquals(1, profile.getCorrectAttempts());
         assertEquals(1, profile.getConsecutiveCorrect());
+        assertEquals("PRIVATE", profile.getVisibility());
         assertNotNull(profile.getLastAttemptAt());
         assertNotNull(profile.getLastCorrectAt());
     }
 
     @Test
-    void updateProfile_shouldUpdateExistingProfile() {
+    void updateProfile_shouldUpdateExistingProfileWithLocalStats() {
         AbilityProfile existing = new AbilityProfile();
         existing.setId(10L);
         existing.setUserId(1L);
@@ -83,49 +81,14 @@ class AssessmentServiceTest {
         existing.setLastAttemptAt(LocalDateTime.now().minusDays(2));
 
         when(abilityProfileRepository.findByUserAndKp(1L, 6L)).thenReturn(existing);
-        when(aiServiceClient.updateBKT(eq(0.5), eq(false), anyInt()))
-            .thenReturn(Map.of(
-                "success", true,
-                "posterior_mastery", 0.1111,
-                "mastery_level", "弱",
-                "delta", -0.3889,
-                "fallback", false
-            ));
 
         assessmentService.updateProfile(1L, 6L, false);
 
-        verify(abilityProfileRepository).updateById(existing); // 更新已有档案
-        assertEquals(0.1111, existing.getMasteryProbability(), 0.0001);
+        verify(abilityProfileRepository).updateById(existing);
+        assertEquals(0.5, existing.getMasteryProbability(), 0.0001);
         assertEquals(4, existing.getTotalAttempts());
-        assertEquals(2, existing.getCorrectAttempts()); // 未增加
-        assertEquals(0, existing.getConsecutiveCorrect()); // 重置连续正确
-    }
-
-    @Test
-    void updateProfile_shouldThrowWhenPythonUnreachableAndNoFallback() {
-        when(abilityProfileRepository.findByUserAndKp(1L, 6L)).thenReturn(null);
-        when(aiServiceClient.updateBKT(anyDouble(), anyBoolean(), anyInt()))
-            .thenThrow(new RuntimeException("Connection refused"));
-
-        assertThrows(BusinessException.class, () -> assessmentService.updateProfile(1L, 6L, true));
-    }
-
-    @Test
-    void updateProfile_shouldUseFallbackWhenPythonReturnsFallback() {
-        when(abilityProfileRepository.findByUserAndKp(1L, 6L)).thenReturn(null);
-        when(aiServiceClient.updateBKT(eq(0.5), eq(true), eq(0)))
-            .thenReturn(Map.of(
-                "success", true,
-                "posterior_mastery", 0.6,
-                "mastery_level", "中",
-                "delta", 0.1,
-                "fallback", true
-            ));
-
-        assessmentService.updateProfile(1L, 6L, true);
-
-        // 降级情况下不抛异常，正常持久化
-        verify(abilityProfileRepository).insert(any());
+        assertEquals(2, existing.getCorrectAttempts());
+        assertEquals(0, existing.getConsecutiveCorrect());
     }
 
     @Test
@@ -144,10 +107,10 @@ class AssessmentServiceTest {
         second.setAnswer("x > 5");
         second.setScore(40.0);
         second.setCorrect(false);
-        second.setErrorType("理解偏差");
-        second.setFeedback("不等号方向和边界需要复核。");
-        second.setParentExplanation("孩子对不等式解集边界理解还不稳定。");
-        second.setNextSuggestion("先订正本题，再做一道同类基础题。");
+        second.setErrorType("concept misunderstanding");
+        second.setFeedback("Boundary handling needs review.");
+        second.setParentExplanation("The learner is not yet stable on inequality boundaries.");
+        second.setNextSuggestion("Fix this item first, then try another similar basic item.");
         second.setTimeSpent(45);
 
         SubmitTestRequest request = new SubmitTestRequest();
@@ -158,14 +121,6 @@ class AssessmentServiceTest {
         request.setResults(List.of(first, second));
 
         when(abilityProfileRepository.findByUserAndKp(eq(1L), anyLong())).thenReturn(null);
-        when(aiServiceClient.updateBKT(anyDouble(), anyBoolean(), anyInt()))
-            .thenReturn(Map.of(
-                "success", true,
-                "posterior_mastery", 0.6,
-                "mastery_level", "middle",
-                "delta", 0.1,
-                "fallback", false
-            ));
         when(testRecordRepository.insertSubmitted(any(), anyList(), anyString(), anyString(), anyString(), anyList()))
             .thenAnswer(invocation -> {
                 TestRecord saved = invocation.getArgument(0);
@@ -191,6 +146,7 @@ class AssessmentServiceTest {
             eq(List.of(30, 45))
         );
         verify(testRecordRepository, never()).insert(any());
+
         ArgumentCaptor<WrongQuestionRecord> wrongCaptor = ArgumentCaptor.forClass(WrongQuestionRecord.class);
         verify(wrongQuestionRecordRepository).insertOrUpdate(wrongCaptor.capture());
         WrongQuestionRecord wrongRecord = wrongCaptor.getValue();
@@ -201,23 +157,18 @@ class AssessmentServiceTest {
         assertEquals(7L, wrongRecord.getKpId());
         assertEquals("x > 5", wrongRecord.getStudentAnswer());
         assertEquals(40.0, wrongRecord.getScore(), 0.0001);
-        assertEquals("理解偏差", wrongRecord.getErrorType());
-        assertEquals("不等号方向和边界需要复核。", wrongRecord.getFeedback());
-        assertEquals("孩子对不等式解集边界理解还不稳定。", wrongRecord.getParentExplanation());
-        assertEquals("先订正本题，再做一道同类基础题。", wrongRecord.getNextSuggestion());
+        assertEquals("concept misunderstanding", wrongRecord.getErrorType());
+        assertEquals("Boundary handling needs review.", wrongRecord.getFeedback());
+        assertEquals("The learner is not yet stable on inequality boundaries.", wrongRecord.getParentExplanation());
+        assertEquals("Fix this item first, then try another similar basic item.", wrongRecord.getNextSuggestion());
         assertEquals("OPEN", wrongRecord.getStatus());
         verify(familyService).checkMembership(2L);
         verify(abilityProfileRepository, times(2)).insert(any());
     }
 
-    // ============================================
-    // Query tests
-    // ============================================
-
     @Test
     void getUserProfiles_shouldReturnProfileList() {
-        when(abilityProfileRepository.findByUserId(1L))
-            .thenReturn(List.of(new AbilityProfile()));
+        when(abilityProfileRepository.findByUserId(1L)).thenReturn(List.of(new AbilityProfile()));
 
         List<AbilityProfile> result = assessmentService.getUserProfiles(1L);
 
@@ -227,8 +178,7 @@ class AssessmentServiceTest {
 
     @Test
     void getZPD_shouldReturnLimitedResults() {
-        when(abilityProfileRepository.findZPD(eq(1L), eq(10)))
-            .thenReturn(List.of());
+        when(abilityProfileRepository.findZPD(eq(1L), eq(10))).thenReturn(List.of());
 
         List<AbilityProfile> result = assessmentService.getZPD(1L);
 

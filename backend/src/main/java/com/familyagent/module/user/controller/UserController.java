@@ -1,9 +1,11 @@
 package com.familyagent.module.user.controller;
 
 import com.familyagent.common.response.Result;
+import com.familyagent.module.user.dto.ChangePasswordRequest;
 import com.familyagent.module.user.dto.LoginRequest;
 import com.familyagent.module.user.dto.LoginResponse;
 import com.familyagent.module.user.dto.RegisterRequest;
+import com.familyagent.module.user.dto.UpdateProfileRequest;
 import com.familyagent.module.user.entity.User;
 import com.familyagent.module.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,6 +44,20 @@ public class UserController {
     public Result<User> getCurrentUser() {
         User user = userService.getCurrentUser();
         return Result.success(user);
+    }
+
+    @Operation(summary = "更新当前用户资料")
+    @PostMapping("/me/profile")
+    public Result<User> updateProfile(@Valid @RequestBody UpdateProfileRequest request) {
+        User user = userService.updateProfile(request);
+        return Result.success(user);
+    }
+
+    @Operation(summary = "修改当前用户密码")
+    @PostMapping("/change-password")
+    public Result<Void> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+        userService.changePassword(request);
+        return Result.success();
     }
 
     @Operation(summary = "获取用户信息")

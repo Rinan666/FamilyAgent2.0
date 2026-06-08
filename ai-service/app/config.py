@@ -23,8 +23,34 @@ class Settings(BaseSettings):
     claude_api_key: Optional[str] = None
     deepseek_api_key: Optional[str] = None
     openai_api_key: Optional[str] = None
-    default_llm_model: str = "deepseek/deepseek-chat"
-    fallback_llm_model: str = "deepseek/deepseek-chat"
+    dashscope_api_key: Optional[str] = None
+    dashscope_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    dashscope_multimodal_url: str = "https://dashscope.aliyuncs.com/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding"
+    default_llm_model: str = "dashscope/qwen-plus"
+    fallback_llm_model: str = "dashscope/qwen-plus"
+    embedding_model: str = "dashscope-multimodal/tongyi-embedding-vision-flash-2026-03-06"
+    embedding_dimension: int = 1536
+
+    # Web search for time-sensitive public facts.
+    web_search_enabled: bool = True
+    web_search_provider: str = "duckduckgo"
+    web_search_timeout_seconds: float = 8.0
+    web_search_max_results: int = 4
+    tavily_api_key: Optional[str] = None
+
+    # AI cost and DoS protection.
+    ai_max_message_chars: int = 8000
+    ai_max_total_input_chars: int = 20000
+    ai_max_output_tokens: int = 1800
+    ai_hard_timeout_seconds: float = 100.0
+    ai_stream_idle_timeout_seconds: float = 20.0
+    ai_global_concurrency: int = 8
+    ai_user_concurrency: int = 2
+    ai_user_rate_limit_per_minute: int = 20
+    ai_ip_rate_limit_per_minute: int = 60
+    ai_embedding_user_rate_limit_per_minute: int = 120
+    ai_embedding_ip_rate_limit_per_minute: int = 240
+    ai_embedding_timeout_seconds: float = 30.0
 
     # 数据库
     db_host: str = "localhost"
@@ -66,6 +92,8 @@ class Settings(BaseSettings):
             os.environ["ANTHROPIC_API_KEY"] = self.claude_api_key
         if self.openai_api_key and not os.environ.get("OPENAI_API_KEY"):
             os.environ["OPENAI_API_KEY"] = self.openai_api_key
+        if self.dashscope_api_key and not os.environ.get("DASHSCOPE_API_KEY"):
+            os.environ["DASHSCOPE_API_KEY"] = self.dashscope_api_key
 
 
 settings = Settings()

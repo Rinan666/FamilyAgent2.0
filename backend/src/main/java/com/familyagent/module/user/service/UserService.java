@@ -6,18 +6,25 @@ import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.invite.entity.InviteCode;
 import com.familyagent.module.invite.repository.InviteCodeRepository;
+import com.familyagent.module.user.dto.ChangePasswordRequest;
 import com.familyagent.module.user.dto.LoginRequest;
 import com.familyagent.module.user.dto.LoginResponse;
 import com.familyagent.module.user.dto.RegisterRequest;
+import com.familyagent.module.user.dto.UpdateProfileRequest;
 import com.familyagent.module.user.entity.User;
 import com.familyagent.module.user.repository.UserRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -34,6 +41,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final InviteCodeRepository inviteCodeRepository;
     private static final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * 验证密码：先 BCrypt，失败则尝试 SHA-256 迁移
@@ -137,6 +145,9 @@ public class UserService {
                 .username(user.getUsername())
                 .nickname(user.getNickname())
                 .avatarUrl(user.getAvatarUrl())
+                .role(user.getRole())
+                .status(user.getStatus())
+                .metadata(user.getMetadata())
                 .token(token)
                 .tokenName("Authorization")
                 .build();
@@ -153,5 +164,86 @@ public class UserService {
     public User getCurrentUser() {
         long userId = StpUtil.getLoginIdAsLong();
         return getById(userId);
+    }
+
+    @Transactional
+    public User updateProfile(UpdateProfileRequest request) {
+        long userId = StpUtil.getLoginIdAsLong();
+        User current = userRepository.findBasicById(userId);
+        if (current == null) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+
+        Map<String, Object> metadata = toMutableMap(current.getMetadata());
+        String birthDate = normalizeBirthDate(request.getBirthDate());
+        if (birthDate == null) {
+            metadata.remove("birthDate");
+            metadata.remove("birthday");
+            metadata.remove("dateOfBirth");
+            metadata.remove("birthYear");
+            metadata.remove("yearOfBirth");
+        } else {
+            metadata.put("birthDate", birthDate);
+            metadata.put("birthYear", birthDate.substring(0, 4));
+        }
+
+        current.setMetadata(metadata);
+        userRepository.updateMetadata(userId, metadataToJson(metadata));
+        return getById(userId);
+    }
+
+    @Transactional
+    public void changePassword(ChangePasswordRequest request) {
+        long userId = StpUtil.getLoginIdAsLong();
+        User current = userRepository.findByIdWithPassword(userId);
+        if (current == null) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+        if (!passwordMatches(request.getCurrentPassword(), current.getPasswordHash())) {
+            throw new BusinessException(ErrorCode.PASSWORD_ERROR, "当前密码不正确");
+        }
+        if (encoder.matches(request.getNewPassword(), current.getPasswordHash())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "新密码不能与当前密码相同");
+        }
+        current.setPasswordHash(encoder.encode(request.getNewPassword()));
+        userRepository.updateById(current);
+        StpUtil.logout(userId);
+        log.info("用户修改密码成功: userId={}", userId);
+    }
+
+    private static String normalizeBirthDate(String birthDate) {
+        if (birthDate == null || birthDate.trim().isEmpty()) {
+            return null;
+        }
+        String trimmed = birthDate.trim();
+        try {
+            LocalDate parsed = LocalDate.parse(trimmed);
+            if (parsed.isAfter(LocalDate.now()) || parsed.isBefore(LocalDate.now().minusYears(130))) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "出生日期不在合理范围内");
+            }
+            return parsed.toString();
+        } catch (DateTimeParseException e) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "出生日期格式应为 YYYY-MM-DD");
+        }
+    }
+
+    private static Map<String, Object> toMutableMap(Object metadata) {
+        if (metadata == null) {
+            return new LinkedHashMap<>();
+        }
+        try {
+            Map<String, Object> converted = objectMapper.convertValue(metadata, new TypeReference<>() {});
+            return new LinkedHashMap<>(converted);
+        } catch (IllegalArgumentException ignored) {
+            return new LinkedHashMap<>();
+        }
+    }
+
+    private static String metadataToJson(Map<String, Object> metadata) {
+        try {
+            return objectMapper.writeValueAsString(metadata == null ? Map.of() : metadata);
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "个人资料保存失败");
+        }
     }
 }

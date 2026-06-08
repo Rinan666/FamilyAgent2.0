@@ -10,17 +10,23 @@ import { userApi } from '@/lib/api';
 
 export function useAuth(requireAuth: boolean = true) {
   const router = useRouter();
-  const { user, isAuthenticated, isLoading, setUser, setLoading, logout } =
+  const { user, isAuthenticated, isLoading, hasHydrated, hydrateFromStorage, setUser, setLoading, logout } =
     useAuthStore();
 
   useEffect(() => {
+    hydrateFromStorage();
+  }, [hydrateFromStorage]);
+
+  useEffect(() => {
+    if (!hasHydrated) return;
+
     if (!isAuthenticated) {
       setLoading(false);
       if (requireAuth) router.push('/login');
       return;
     }
 
-    if (user) {
+    if (user && user.role) {
       setLoading(false);
       return;
     }
@@ -46,12 +52,13 @@ export function useAuth(requireAuth: boolean = true) {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, user, requireAuth, router, setUser, setLoading, logout]);
+  }, [hasHydrated, isAuthenticated, user, requireAuth, router, setUser, setLoading, logout]);
 
   return {
     user,
     isAuthenticated,
     isLoading,
+    hasHydrated,
     logout,
   };
 }

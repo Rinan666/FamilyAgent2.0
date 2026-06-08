@@ -39,5 +39,33 @@ public class MemorySchemaInitializer {
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_memory_entries_kp ON memory_entries(knowledge_point_id)");
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_memory_entries_status ON memory_entries(status)");
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_memory_entries_created ON memory_entries(created_at DESC)");
+        jdbcTemplate.execute("""
+            CREATE INDEX IF NOT EXISTS idx_memory_entries_family_scope_status_updated
+            ON memory_entries(family_id, scope, status, updated_at DESC)
+            """);
+        jdbcTemplate.execute("""
+            CREATE INDEX IF NOT EXISTS idx_memory_entries_family_type_status_updated
+            ON memory_entries(family_id, type, status, updated_at DESC)
+            """);
+        jdbcTemplate.execute("""
+            CREATE INDEX IF NOT EXISTS idx_memory_entries_diary_promotion_source
+            ON memory_entries(family_id, ((metadata->>'sourceDiaryId')))
+            WHERE metadata->>'source' = 'DIARY_PROMOTION'
+            """);
+        jdbcTemplate.execute("""
+            CREATE TABLE IF NOT EXISTS memory_entry_votes (
+                id BIGSERIAL PRIMARY KEY,
+                memory_id BIGINT NOT NULL REFERENCES memory_entries(id) ON DELETE CASCADE,
+                family_id BIGINT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
+                user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                vote_type VARCHAR(10) NOT NULL CHECK (vote_type IN ('UP', 'DOWN')),
+                created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                CONSTRAINT uk_memory_entry_votes_memory_user UNIQUE(memory_id, user_id)
+            )
+            """);
+        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_memory_entry_votes_memory ON memory_entry_votes(memory_id)");
+        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_memory_entry_votes_family ON memory_entry_votes(family_id)");
+        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_memory_entry_votes_user ON memory_entry_votes(user_id)");
     }
 }

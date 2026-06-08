@@ -80,7 +80,7 @@ EXAM_REVIEW_PROMPT = """请执行“测评后复习建议”工作流。
 - 学科：{subject}
 - 考试目标：{exam_goal}
 - 当前得分/正确率：{score_summary}
-- 学力档案/BKT：{profiles}
+- 历史表现：{profiles}
 - 薄弱知识点：{weak_points}
 - 最近错题摘要：{recent_mistakes}
 - 每天可用时间：{available_minutes} 分钟
@@ -106,7 +106,7 @@ STUDY_PLAN_PROMPT = """请执行“学习计划”工作流。
 - 年级：{grade}
 - 学科：{subject}
 - 学习目标：{learning_goal}
-- 学力档案/BKT：{profiles}
+- 历史表现：{profiles}
 - 薄弱知识点：{weak_points}
 - 可用时间：{available_minutes} 分钟
 - 计划天数：{plan_days} 天

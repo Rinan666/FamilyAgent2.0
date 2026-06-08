@@ -1,6 +1,7 @@
 package com.familyagent.module.family.repository;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.familyagent.module.family.dto.FamilyMemberVO;
 import com.familyagent.module.family.entity.FamilyMember;
 import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Mapper;
@@ -20,6 +21,29 @@ public interface FamilyMemberRepository extends BaseMapper<FamilyMember> {
         WHERE family_id = #{familyId}
         """)
     List<FamilyMember> findByFamilyId(Long familyId);
+
+    @Select("""
+        SELECT fm.id, fm.family_id, fm.user_id, u.username, u.nickname, u.avatar_url, fm.role,
+               COALESCE(u.metadata->>'birthDate', u.metadata->>'birthday', u.metadata->>'dateOfBirth') AS birth_date,
+               COALESCE(u.metadata->>'birthYear', u.metadata->>'yearOfBirth') AS birth_year,
+               fm.joined_at
+        FROM family_members fm
+        JOIN users u ON u.id = fm.user_id
+        WHERE fm.family_id = #{familyId}
+        ORDER BY fm.joined_at ASC, fm.id ASC
+        """)
+    List<FamilyMemberVO> findMemberViewsByFamilyId(Long familyId);
+
+    @Select("""
+        SELECT fm.id, fm.family_id, fm.user_id, u.username, u.nickname, u.avatar_url, fm.role,
+               COALESCE(u.metadata->>'birthDate', u.metadata->>'birthday', u.metadata->>'dateOfBirth') AS birth_date,
+               COALESCE(u.metadata->>'birthYear', u.metadata->>'yearOfBirth') AS birth_year,
+               fm.joined_at
+        FROM family_members fm
+        JOIN users u ON u.id = fm.user_id
+        WHERE fm.family_id = #{familyId} AND fm.user_id = #{userId}
+        """)
+    FamilyMemberVO findMemberViewByFamilyAndUser(Long familyId, Long userId);
 
     @Select("""
         SELECT id, family_id, user_id, role, joined_at

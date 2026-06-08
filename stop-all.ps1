@@ -2,6 +2,7 @@
 $ErrorActionPreference = "Continue"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $PidFile = Join-Path $Root ".service-pids.txt"
+$RuntimePidFile = Join-Path $Root ".codex-runtime-pids.txt"
 
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan
@@ -13,7 +14,8 @@ Write-Host ""
 Write-Host "Closing service windows..." -ForegroundColor Yellow
 if (Test-Path $PidFile) {
     Get-Content $PidFile | ForEach-Object {
-        $procId = [int]$_.Trim()
+        if ($_ -notmatch '(\d+)$') { return }
+        $procId = [int]$matches[1]
         $p = Get-Process -Id $procId -ErrorAction SilentlyContinue
         if ($p -and $p.ProcessName -eq "cmd") {
             Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
@@ -27,6 +29,19 @@ foreach ($title in @("*AI-Service*", "*Backend*", "*Frontend*")) {
         $_.MainWindowTitle -like $title
     } | Stop-Process -Force -ErrorAction SilentlyContinue
 }
+
+if (Test-Path $RuntimePidFile) {
+    Get-Content $RuntimePidFile | ForEach-Object {
+        if ($_ -notmatch '(\d+)$') { return }
+        $procId = [int]$matches[1]
+        $p = Get-Process -Id $procId -ErrorAction SilentlyContinue
+        if ($p -and $p.ProcessName -eq "cloudflared") {
+            Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
+            Write-Host "       Killed cloudflared (PID $procId)" -ForegroundColor DarkYellow
+        }
+    }
+}
+Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep 2
 Write-Host "       Windows closed" -ForegroundColor Green
 

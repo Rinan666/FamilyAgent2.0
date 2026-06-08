@@ -7,6 +7,7 @@ import com.familyagent.module.assessment.dto.TestRecordDetailVO;
 import com.familyagent.module.assessment.entity.AbilityProfile;
 import com.familyagent.module.assessment.entity.TestRecord;
 import com.familyagent.module.assessment.service.AssessmentService;
+import com.familyagent.module.family.service.FamilyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ import java.util.List;
 public class AssessmentController {
 
     private final AssessmentService assessmentService;
+    private final FamilyService familyService;
 
     @Operation(summary = "获取用户学力档案")
     @GetMapping("/profiles/me")
@@ -35,7 +37,7 @@ public class AssessmentController {
     @Operation(summary = "获取用户学力档案")
     @GetMapping("/profiles/{userId}")
     public Result<List<AbilityProfile>> getUserProfiles(@PathVariable Long userId) {
-        CurrentUserGuard.requireSelf(userId);
+        familyService.checkCanViewLearningReport(userId);
         return Result.success(assessmentService.getUserProfiles(userId));
     }
 
@@ -48,7 +50,7 @@ public class AssessmentController {
     @Operation(summary = "获取最近发展区")
     @GetMapping("/zpd/{userId}")
     public Result<List<AbilityProfile>> getZPD(@PathVariable Long userId) {
-        CurrentUserGuard.requireSelf(userId);
+        familyService.checkCanViewLearningReport(userId);
         return Result.success(assessmentService.getZPD(userId));
     }
 
@@ -63,7 +65,7 @@ public class AssessmentController {
     public Result<List<TestRecord>> getTestHistory(
             @PathVariable Long userId,
             @RequestParam(defaultValue = "20") int limit) {
-        CurrentUserGuard.requireSelf(userId);
+        familyService.checkCanViewLearningReport(userId);
         return Result.success(assessmentService.getTestHistory(userId, limit));
     }
 
@@ -78,5 +80,14 @@ public class AssessmentController {
     @GetMapping("/tests/{id}/detail")
     public Result<TestRecordDetailVO> getMyTestRecordDetail(@PathVariable Long id) {
         return Result.success(assessmentService.getTestRecordDetail(CurrentUserGuard.currentUserId(), id));
+    }
+
+    @Operation(summary = "获取指定学习者测试记录详情")
+    @GetMapping("/users/{userId}/tests/{id}/detail")
+    public Result<TestRecordDetailVO> getUserTestRecordDetail(
+            @PathVariable Long userId,
+            @PathVariable Long id) {
+        familyService.checkCanViewLearningReport(userId);
+        return Result.success(assessmentService.getTestRecordDetail(userId, id));
     }
 }

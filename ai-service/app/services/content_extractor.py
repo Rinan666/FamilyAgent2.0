@@ -106,7 +106,7 @@ def extract_content(filename: str, content_type: str | None, data: bytes) -> Ext
             detected_answers=[],
             detected_steps=[],
             supported=False,
-            message="文件解析失败。请确认文件没有损坏，或先复制题目文本后发送给 AI 家教。",
+            message="文件解析失败。请确认文件没有损坏，或先复制题目文本后发送给学习陪伴 AI。",
         )
 
     text = sanitize_text(_normalize_text(text), max_length=MAX_EXTRACTED_CHARS)
@@ -263,4 +263,4 @@ def _build_success_message(parsed: dict[str, Any]) -> str:
     step_count = len(parsed["steps"])
     if question_count or answer_count or step_count:
         return f"已提取文本，并识别到 {question_count} 个题目、{answer_count} 个答案、{step_count} 段解析。"
-    return "已提取文本，但未识别出明确题目结构，可让 AI 家教先整理后讲解。"
+    return "已提取文本，但未识别出明确题目结构，可让学习陪伴 AI 先整理后讲解。"

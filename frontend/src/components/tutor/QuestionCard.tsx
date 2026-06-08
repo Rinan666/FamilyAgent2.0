@@ -52,7 +52,7 @@ export default function QuestionCard({ question, onAsk }: QuestionCardProps) {
           onClick={onAsk}
           className="mt-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
         >
-          向AI家教提问
+          向学习陪伴提问
         </button>
       )}
     </div>

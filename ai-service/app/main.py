@@ -3,12 +3,20 @@ FamilyAgent AI service entrypoint.
 """
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-from app.api import assessment, health, memory, tutor
+from app.api import embedding, growth, health, memory, tutor
 from app.config import settings
 from app.utils.logger import setup_logging
+from app.utils.safety_limits import (
+    PromptLeakAttemptError,
+    RateLimitExceededError,
+    RoleHijackAttemptError,
+    SafetyLimitError,
+)
+from app.utils.security_events import record_security_event
 
 
 @asynccontextmanager
@@ -36,9 +44,70 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.exception_handler(PromptLeakAttemptError)
+async def prompt_leak_handler(request: Request, exc: PromptLeakAttemptError):
+    await record_security_event(
+        request,
+        event_type="PROMPT_LEAK",
+        status_code=400,
+        reason=str(exc),
+    )
+    return JSONResponse(status_code=400, content={"success": False, "detail": str(exc)})
+
+
+@app.exception_handler(RoleHijackAttemptError)
+async def role_hijack_handler(request: Request, exc: RoleHijackAttemptError):
+    await record_security_event(
+        request,
+        event_type="ROLE_HIJACK",
+        status_code=400,
+        reason=str(exc),
+    )
+    return JSONResponse(status_code=400, content={"success": False, "detail": str(exc)})
+
+
+@app.exception_handler(SafetyLimitError)
+async def safety_limit_handler(request: Request, exc: SafetyLimitError):
+    await record_security_event(
+        request,
+        event_type="INPUT_TOO_LARGE",
+        status_code=413,
+        reason=str(exc),
+    )
+    return JSONResponse(status_code=413, content={"success": False, "detail": str(exc)})
+
+
+@app.exception_handler(RateLimitExceededError)
+async def rate_limit_handler(request: Request, exc: RateLimitExceededError):
+    await record_security_event(
+        request,
+        event_type="RATE_LIMIT",
+        status_code=429,
+        reason=str(exc),
+    )
+    return JSONResponse(
+        status_code=429,
+        content={"success": False, "detail": str(exc)},
+        headers={"Retry-After": str(exc.retry_after_seconds)},
+    )
+
+
+@app.exception_handler(TimeoutError)
+async def timeout_handler(request: Request, exc: TimeoutError):
+    await record_security_event(
+        request,
+        event_type="TIMEOUT",
+        status_code=504,
+        reason=str(exc),
+    )
+    return JSONResponse(status_code=504, content={"success": False, "detail": str(exc)})
+
+
 app.include_router(tutor.router, prefix="/ai/tutor", tags=["Tutor"])
-app.include_router(assessment.router, prefix="/ai/assessment", tags=["Assessment"])
 app.include_router(memory.router, prefix="/ai/memory", tags=["Memory"])
+app.include_router(growth.router, prefix="/ai/growth", tags=["Growth"])
+app.include_router(embedding.router, prefix="/ai/embedding", tags=["Embedding"])
 app.include_router(health.router, prefix="/ai", tags=["Health"])
 
 

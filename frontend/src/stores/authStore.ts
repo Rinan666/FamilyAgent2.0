@@ -9,7 +9,9 @@ interface AuthState {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  hasHydrated: boolean;
 
+  hydrateFromStorage: () => void;
   setUser: (user: User) => void;
   setToken: (token: string) => void;
   login: (user: User, token: string) => void;
@@ -29,32 +31,46 @@ function getStoredUser(): User | null {
   }
 }
 
-const storedUser = getStoredUser();
-const storedToken = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-
 export const useAuthStore = create<AuthState>((set) => ({
-  user: storedUser,
-  token: storedToken,
-  isAuthenticated: Boolean(storedToken),
-  isLoading: false,
+  user: null,
+  token: null,
+  isAuthenticated: false,
+  isLoading: true,
+  hasHydrated: false,
 
-  setUser: (user) => set({ user }),
+  hydrateFromStorage: () => {
+    const storedUser = getStoredUser();
+    const storedToken = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+
+    set({
+      user: storedUser,
+      token: storedToken,
+      isAuthenticated: Boolean(storedToken),
+      isLoading: false,
+      hasHydrated: true,
+    });
+  },
+
+  setUser: (user) => {
+    localStorage.setItem('user', JSON.stringify(user));
+    set({ user, isAuthenticated: true, isLoading: false });
+  },
 
   setToken: (token) => {
     localStorage.setItem('token', token);
-    set({ token, isAuthenticated: true });
+    set({ token, isAuthenticated: true, isLoading: false });
   },
 
   login: (user, token) => {
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
-    set({ user, token, isAuthenticated: true });
+    set({ user, token, isAuthenticated: true, isLoading: false, hasHydrated: true });
   },
 
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    set({ user: null, token: null, isAuthenticated: false });
+    set({ user: null, token: null, isAuthenticated: false, isLoading: false, hasHydrated: true });
   },
 
   setLoading: (isLoading) => set({ isLoading }),

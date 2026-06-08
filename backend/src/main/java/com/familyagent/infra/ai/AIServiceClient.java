@@ -4,7 +4,10 @@ import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -18,7 +21,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * AI服务客户端 — 调用Python FastAPI服务
+ * AI service client for the Python FastAPI service.
  */
 @Slf4j
 @Component
@@ -34,7 +37,7 @@ public class AIServiceClient {
     }
 
     /**
-     * 讲题 — SSE流式代理
+     * Proxy tutor SSE streams from the AI service.
      */
     public SseEmitter proxyExplainStream(Map<String, Object> request) {
         SseEmitter emitter = new SseEmitter(300_000L);
@@ -59,7 +62,7 @@ public class AIServiceClient {
                 int responseCode = conn.getResponseCode();
                 if (responseCode != 200) {
                     emitter.completeWithError(
-                            new BusinessException(ErrorCode.AI_SERVICE_ERROR, "AI服务响应异常: " + responseCode));
+                            new BusinessException(ErrorCode.AI_SERVICE_ERROR, "AI service response error: " + responseCode));
                     return;
                 }
 
@@ -73,7 +76,7 @@ public class AIServiceClient {
                 emitter.complete();
 
             } catch (Exception e) {
-                log.error("讲题SSE流代理异常", e);
+                log.error("Tutor SSE proxy failed", e);
                 try {
                     emitter.completeWithError(e);
                 } catch (Exception ex) {
@@ -90,7 +93,7 @@ public class AIServiceClient {
     }
 
     /**
-     * 批改 — 同步调用
+     * Call the grading endpoint synchronously.
      */
     @SuppressWarnings("unchecked")
     public Map<String, Object> gradeAnswer(Map<String, Object> request) {
@@ -103,13 +106,13 @@ public class AIServiceClient {
                     baseUrl + "/ai/tutor/grade", entity, Map.class);
             return response.getBody();
         } catch (Exception e) {
-            log.error("批改服务调用失败", e);
-            throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "批改服务异常: " + e.getMessage());
+            log.error("Grading service call failed", e);
+            throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "Grading service error: " + e.getMessage());
         }
     }
 
     /**
-     * AI出题 — 同步调用
+     * Call the question generation endpoint synchronously.
      */
     @SuppressWarnings("unchecked")
     public Map<String, Object> generateQuestions(Map<String, Object> request) {
@@ -122,8 +125,8 @@ public class AIServiceClient {
                     baseUrl + "/ai/tutor/generate", entity, Map.class);
             return response.getBody();
         } catch (Exception e) {
-            log.error("出题服务调用失败", e);
-            throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "出题服务异常: " + e.getMessage());
+            log.error("Question generation service call failed", e);
+            throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "Question generation service error: " + e.getMessage());
         }
     }
 
@@ -149,51 +152,53 @@ public class AIServiceClient {
         }
     }
 
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> compressDiary(Map<String, Object> request, String authorization) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            if (authorization != null && !authorization.isBlank()) {
+                headers.set("Authorization", authorization);
+            }
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+
+            ResponseEntity<Map> response = restTemplate.postForEntity(
+                    baseUrl + "/ai/memory/compress-diary", entity, Map.class);
+            return response.getBody();
+        } catch (Exception e) {
+            log.warn("Diary compression call failed: {}", e.getMessage());
+            return Map.of("success", false, "error", e.getMessage());
+        }
+    }
+
     /**
-     * BKT知识追踪更新 — 调用Python BKT引擎
-     * Python是BKT算法的唯一权威来源
+     * Generate an embedding vector for backend-owned memory indexing.
      */
     @SuppressWarnings("unchecked")
-    public Map<String, Object> updateBKT(double priorMastery, boolean isCorrect, int daysSinceLast) {
+    public Map<String, Object> embedText(Map<String, Object> request) {
         try {
-            Map<String, Object> request = Map.of(
-                "prior_mastery", priorMastery,
-                "is_correct", isCorrect,
-                "days_since_last", daysSinceLast
-            );
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
 
             ResponseEntity<Map> response = restTemplate.postForEntity(
-                    baseUrl + "/ai/assessment/bkt/update", entity, Map.class);
+                    baseUrl + "/ai/embedding/embed", entity, Map.class);
             return response.getBody();
         } catch (Exception e) {
-            log.error("BKT更新失败, 降级为简单更新", e);
-            // 降级：简单地根据正确/错误调整 (fallback when AI service is down)
-            double posterior = isCorrect
-                ? Math.min(0.99, priorMastery + 0.1)
-                : Math.max(0.01, priorMastery - 0.1);
-            return Map.of(
-                "success", true,
-                "prior_mastery", priorMastery,
-                "posterior_mastery", posterior,
-                "mastery_level", posterior < 0.3 ? "弱" : posterior < 0.6 ? "中" : posterior < 0.85 ? "强" : "精通",
-                "delta", posterior - priorMastery,
-                "fallback", true
-            );
+            log.warn("Embedding service call failed: {}", e.getMessage());
+            return Map.of("success", false, "error", e.getMessage());
         }
     }
 
     /**
-     * 健康检查
+     * Health check.
      */
     @SuppressWarnings("unchecked")
     public Map<String, Object> healthCheck() {
         try {
             return restTemplate.getForObject(baseUrl + "/ai/health", Map.class);
         } catch (Exception e) {
-            log.error("AI服务健康检查失败", e);
+            log.error("AI service health check failed", e);
             return Map.of("status", "unhealthy", "error", e.getMessage());
         }
     }
