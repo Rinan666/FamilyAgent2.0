@@ -26,8 +26,6 @@ import { useChat, type SessionSavedMemory } from '@/hooks/useChat';
 import { useViewerRole } from '@/hooks/useViewerRole';
 import { assessmentApi, diaryApi, growthGuardApi, memoryApi, questionApi, sessionApi, tutorApi } from '@/lib/api';
 
-const SESSION_IDLE_LIMIT_MS = 30 * 60 * 1000;
-
 type ActivationSceneState = {
   label: string;
   instruction: string;
@@ -63,14 +61,6 @@ function getSessionTitle(session: ChatSession) {
   const questionContent = metadata.questionContent as { stem?: string } | string | undefined;
   const questionStem = typeof questionContent === 'string' ? questionContent : questionContent?.stem;
   return (questionStem || firstUserMessage || session.summary || '未命名会话').slice(0, 36);
-}
-
-function getSessionModeLabel(session: ChatSession) {
-  return session.metadata?.mode === 'explain' ? '讲题' : '对话';
-}
-
-function getSessionStatusLabel(session: ChatSession) {
-  return session.status === 'ACTIVE' ? '进行中' : '已结束';
 }
 
 function shouldPlanSaveTool(content: string) {
@@ -260,13 +250,12 @@ function followUpPrompt(plan: AgentSaveToolPlan) {
   return `继续补充这条每日记录的时间、地点、人物和后来影响：${plan.title}`;
 }
 
-function getSessionLastActivity(session: ChatSession) {
-  const messageTimes = session.messages
-    .map((message) => new Date(message.timestamp).getTime())
-    .filter((time) => Number.isFinite(time));
-  if (messageTimes.length > 0) return Math.max(...messageTimes);
-  const fallback = new Date(session.endedAt || session.startedAt || 0).getTime();
-  return Number.isFinite(fallback) ? fallback : 0;
+function looksLikeQuestion(content: string) {
+  const text = content.trim();
+  if (text.length < 8) return false;
+  const hasMathSignal = /[=＋+\-×*÷/^√π]|方程|函数|几何|三角|面积|周长|不等式|因式分解|计算|化简|证明|求/.test(text);
+  const hasAskSignal = /[?？]|求|解|证明|计算|化简|等于|多少|答案|怎么做|如何做/.test(text);
+  return hasMathSignal && hasAskSignal;
 }
 
 function buildQuestionFromSession(session: ChatSession): Question | null {
@@ -309,7 +298,6 @@ export default function TutorPage() {
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [sessionError, setSessionError] = useState('');
   const [input, setInput] = useState('');
-  const [isComposingQuestion, setIsComposingQuestion] = useState(false);
   const [isExtractingFile, setIsExtractingFile] = useState(false);
   const [extractMessage, setExtractMessage] = useState('');
   const [teachingStyle, setTeachingStyle] = useState<'guided' | 'direct'>('guided');
@@ -317,7 +305,6 @@ export default function TutorPage() {
   const [activationScene, setActivationScene] = useState<ActivationSceneState | null>(null);
   const { viewerRole, activeFamilyId, activeFamily, activeMembership, setActiveFamilyId } = useViewerRole();
 
-  const idleEndInFlightRef = useRef<Set<number>>(new Set());
   const teachingStyleRef = useRef<'guided' | 'direct'>('guided');
   const routePromptAppliedRef = useRef('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -384,7 +371,6 @@ export default function TutorPage() {
         useChatStore.getState().reset();
         clearSessionSavedMemories();
         setInput('');
-        setIsComposingQuestion(false);
       }
       return;
     }
@@ -399,7 +385,6 @@ export default function TutorPage() {
         useChatStore.getState().reset();
         clearSessionSavedMemories();
         setInput('');
-        setIsComposingQuestion(false);
       }
     }
   }, [clearSessionSavedMemories, upsertSession]);
@@ -565,7 +550,7 @@ export default function TutorPage() {
               ...message,
               saveSuggestion: undefined,
               content: plan.should_save && plan.tool !== 'NONE'
-                ? `${message.content}\n\n${plan.confirmation_message || `已自动保存为${toolLabel(plan.tool)}。`}`
+                ? `${message.content}\n\n${plan.confirmation_message || `已保存为${toolLabel(plan.tool)}。`}`
                 : message.content,
               toolResult: plan.should_save && plan.tool !== 'NONE'
                 ? {
@@ -585,8 +570,8 @@ export default function TutorPage() {
               ...message,
               saveSuggestion: undefined,
               content: error instanceof Error
-                ? `${message.content}\n\n自动保存失败：${error.message}`
-                : `${message.content}\n\n自动保存失败，请稍后重试。`,
+                ? `${message.content}\n\n保存失败：${error.message}`
+                : `${message.content}\n\n保存失败，请稍后重试。`,
             }
           : message
       )));
@@ -611,7 +596,7 @@ export default function TutorPage() {
     const assistantMessage: TutorChatMessage = {
       id: `a-save-${Date.now()}`,
       role: 'assistant',
-      content: '我在判断这条内容适合保存成哪类家庭记忆...',
+      content: '我在判断这条内容适合保存成哪类家族记忆...',
       timestamp: now,
     };
     setMessages([...previous, userMessage, assistantMessage]);
@@ -702,7 +687,11 @@ export default function TutorPage() {
       if (!shouldEvaluateAutoSave(message)) return;
       const assistantMessageId = findLastAssistantMessageId(useChatStore.getState().messages as TutorChatMessage[]);
       if (!assistantMessageId) return;
-      void createSavePlanForMessage(assistantMessageId, message);
+      setMessages((useChatStore.getState().messages as TutorChatMessage[]).map((item) => (
+        item.id === assistantMessageId && !item.toolResult
+          ? { ...item, saveSuggestion: { originalContent: message } }
+          : item
+      )));
     },
   });
 
@@ -729,34 +718,12 @@ export default function TutorPage() {
     if (!routePrompt || routePromptAppliedRef.current === routePrompt) return;
     routePromptAppliedRef.current = routePrompt;
     setInput(routePrompt);
-    setIsComposingQuestion(false);
     setCurrentQuestion(null);
   }, [routePrompt, setCurrentQuestion]);
 
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
-
-  useEffect(() => {
-    const now = Date.now();
-    for (const session of sessions) {
-      if (session.status !== 'ACTIVE') continue;
-      if (idleEndInFlightRef.current.has(session.id)) continue;
-      if (now - getSessionLastActivity(session) < SESSION_IDLE_LIMIT_MS) continue;
-
-      idleEndInFlightRef.current.add(session.id);
-      void sessionApi.endSession(session.id)
-        .then((ended) => {
-          upsertSession(ended);
-        })
-        .catch((error: unknown) => {
-          console.log('Idle session not ended:', error);
-        })
-        .finally(() => {
-          idleEndInFlightRef.current.delete(session.id);
-        });
-    }
-  }, [sessions, upsertSession]);
 
   useEffect(() => {
     if (userId) {
@@ -785,7 +752,7 @@ export default function TutorPage() {
     const msg = input.trim();
     setInput('');
 
-    if (isComposingQuestion && !currentQuestion) {
+    if (!currentQuestion && looksLikeQuestion(msg)) {
       const question: Question = {
         id: -Date.now(),
         kpId: 0,
@@ -796,7 +763,6 @@ export default function TutorPage() {
         content: { stem: msg },
         answer: { value: '', steps: [] },
       };
-      setIsComposingQuestion(false);
       askQuestion(question, msg);
       return;
     }
@@ -836,9 +802,7 @@ export default function TutorPage() {
         return;
       }
       const extractedText = extracted.structuredText || extracted.text;
-      const prompt = isComposingQuestion && !currentQuestion
-        ? `文件：${extracted.filename}\n\n${extractedText}`
-        : `我上传了文件「${extracted.filename}」。请先核对解析内容，再用适合学生的方式讲解或整理：\n\n${extractedText}`;
+      const prompt = `我上传了文件「${extracted.filename}」。请先核对解析内容，再用适合学生的方式讲解或整理：\n\n${extractedText}`;
       setInput((prev) => (prev.trim() ? `${prev.trim()}\n\n${prompt}` : prompt));
       setExtractMessage(extracted.message);
     } catch (error) {
@@ -868,24 +832,8 @@ export default function TutorPage() {
     setSessionId(detail.status === 'ACTIVE' ? detail.id : null);
     setMessages(detail.messages || []);
     setCurrentQuestion(buildQuestionFromSession(detail));
-    setIsComposingQuestion(false);
     setActivationScene(null);
     upsertSession(detail);
-  };
-
-  const enterTutorMode = () => {
-    if (useChatStore.getState().sessionId) {
-      void endCurrentSession({ resetChat: true });
-    }
-    setIsComposingQuestion(true);
-    setCurrentQuestion(null);
-    setActivationScene(null);
-  };
-
-  const exitTutorMode = () => {
-    setIsComposingQuestion(false);
-    setCurrentQuestion(null);
-    setActivationScene(null);
   };
 
   const deleteSession = async (session: ChatSession, event: React.MouseEvent) => {
@@ -897,7 +845,6 @@ export default function TutorPage() {
       useChatStore.getState().reset();
       clearSessionSavedMemories();
       setInput('');
-      setIsComposingQuestion(false);
     }
   };
 
@@ -905,8 +852,6 @@ export default function TutorPage() {
     teachingStyleRef.current = style;
     setTeachingStyle(style);
   };
-
-  const isTutorMode = Boolean(currentQuestion) || isComposingQuestion;
 
   const renderSessionList = (compact = false) => (
     <div className="space-y-1">
@@ -939,11 +884,8 @@ export default function TutorPage() {
               </span>
             )}
           </div>
-          <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-gray-400">
+          <div className="mt-1 text-[10px] text-gray-400">
             <span>{formatSessionTime(session.startedAt)}</span>
-            <span className={session.status === 'ACTIVE' ? 'text-green-600' : undefined}>
-              {getSessionModeLabel(session)} · {getSessionStatusLabel(session)}
-            </span>
           </div>
         </button>
       ))}
@@ -955,52 +897,29 @@ export default function TutorPage() {
       <div className="mb-2 flex shrink-0 flex-col gap-2 sm:mb-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-lg font-bold text-gray-900 sm:text-xl">家族Agent</h1>
-          <p className="text-xs text-gray-500">
-            {isTutorMode ? '学习陪伴 · 讲题模式' : '自由对话 · 家庭上下文陪伴'}
-          </p>
+          <p className="text-xs text-gray-500">学习陪伴 · 家族上下文陪伴</p>
         </div>
         <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
-          {isTutorMode ? (
-            <div className="flex items-center gap-1 rounded-lg bg-gray-100 p-1">
-              <button
-                type="button"
-                onClick={() => changeTeachingStyle('guided')}
-                className={`rounded-md px-3 py-1 text-xs transition-colors ${
-                  teachingStyle === 'guided' ? 'bg-white font-medium text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                引导式
-              </button>
-              <button
-                type="button"
-                onClick={() => changeTeachingStyle('direct')}
-                className={`rounded-md px-3 py-1 text-xs transition-colors ${
-                  teachingStyle === 'direct' ? 'bg-white font-medium text-green-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                直接讲解
-              </button>
-            </div>
-          ) : (
+          <div className="flex items-center gap-1 rounded-lg bg-gray-100 p-1">
             <button
               type="button"
-              onClick={enterTutorMode}
-              disabled={isStreaming}
-              className="rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+              onClick={() => changeTeachingStyle('guided')}
+              className={`rounded-md px-3 py-1 text-xs transition-colors ${
+                teachingStyle === 'guided' ? 'bg-white font-medium text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
             >
-              进入讲题
+              引导式
             </button>
-          )}
-          {isTutorMode && !currentQuestion && (
             <button
               type="button"
-              onClick={exitTutorMode}
-              disabled={isStreaming}
-              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+              onClick={() => changeTeachingStyle('direct')}
+              className={`rounded-md px-3 py-1 text-xs transition-colors ${
+                teachingStyle === 'direct' ? 'bg-white font-medium text-green-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
             >
-              自由对话
+              直接讲解
             </button>
-          )}
+          </div>
           {messages.length > 0 && (
             <button
               type="button"
@@ -1085,12 +1004,10 @@ export default function TutorPage() {
                   <p className="text-sm">
                     {currentQuestion
                       ? '围绕这道题继续提问或说出你的思路'
-                      : isComposingQuestion
-                        ? '粘贴一道题，开始讲题辅导'
-                        : '可以聊学习计划、卡点、情绪、经验沉淀或一道具体题目'}
+                      : '可以聊学习计划、卡点、情绪、经验沉淀或一道具体题目'}
                   </p>
                   <p className="mt-1 text-xs">
-                    {isTutorMode
+                    {currentQuestion
                       ? (teachingStyle === 'guided' ? '当前为引导式：AI 会一步步提问推进。' : '当前为直接讲解：AI 会给出答案和步骤。')
                       : '我会结合可见的每日记录、经验沉淀和成长观察摘要来回应。'}
                   </p>
@@ -1170,7 +1087,7 @@ export default function TutorPage() {
                               ) : (
                                 <CheckCircle className="h-3.5 w-3.5" />
                               )}
-                              生成保存卡片
+                              整理并保存
                             </button>
                             <button
                               type="button"
@@ -1213,7 +1130,7 @@ export default function TutorPage() {
                 </button>
               </div>
             )}
-            {activationScene && !isTutorMode && (
+            {activationScene && !currentQuestion && (
               <div className="mb-2 flex items-center gap-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">
                 <Sparkles className="h-3.5 w-3.5 shrink-0" />
                 <span className="shrink-0 font-medium">已激活：{activationScene.label}</span>
@@ -1255,9 +1172,7 @@ export default function TutorPage() {
                 placeholder={
                   currentQuestion
                     ? '输入你的想法或问题...'
-                    : isComposingQuestion
-                      ? '把题目粘贴到这里...'
-                      : '聊学习计划、卡点、情绪、经验沉淀，或直接发一道题...'
+                    : '聊学习计划、卡点、情绪、经验沉淀，或直接发一道题...'
                 }
                 disabled={isStreaming || isExtractingFile}
                 className="min-h-9 max-h-28 min-w-0 flex-1 resize-none overflow-y-auto rounded-lg border border-gray-200 px-2.5 py-2 text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 sm:min-h-10 sm:max-h-32 sm:px-4"

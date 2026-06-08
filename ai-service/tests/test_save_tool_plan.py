@@ -1,4 +1,9 @@
-from app.api.memory import _sanitize_save_tool_plan
+import json
+
+import pytest
+
+from app.api import memory
+from app.api.memory import SaveToolPlanRequest, _sanitize_save_tool_plan, plan_agent_save_tool
 
 
 def test_growth_observation_overrides_wrong_diary_tool():
@@ -79,6 +84,40 @@ def test_personal_insight_can_be_family_memory():
     assert plan["scope"] == "FAMILY_VISIBLE"
 
 
+def test_high_value_learning_observation_auto_saves_without_explicit_keyword():
+    plan = _sanitize_save_tool_plan({
+        "should_save": False,
+        "tool": "NONE",
+        "content": "孩子每次做应用题总是先抓数字不读题，所以容易列错式。最近我发现如果先让他拆题意，再画图，他能更稳定地自己列式。",
+    })
+
+    assert plan["should_save"] is True
+    assert plan["tool"] == "FAMILY_MEMORY"
+    assert plan["visibility"] == "CARE_VISIBLE"
+
+
+def test_long_save_content_is_summarized_to_complete_high_value_fragment():
+    long_content = (
+        "今天只是一些闲聊，天气不错，晚饭也还行。"
+        "孩子最近做应用题时总是先抓数字，不太愿意读完整题意，所以经常列错式。"
+        "我试了一下先让他复述题意，再画一张简单线段图，他反而能自己说出等量关系。"
+        "这件事提醒我们，后面遇到应用题先拆题意，不急着计算。"
+        + "普通闲聊内容。" * 120
+    )
+    plan = _sanitize_save_tool_plan({
+        "should_save": True,
+        "tool": "FAMILY_MEMORY",
+        "content": long_content,
+    })
+
+    assert plan["should_save"] is True
+    assert plan["tool"] == "FAMILY_MEMORY"
+    assert len(plan["content"]) < 1200
+    assert "应用题" in plan["content"]
+    assert "先拆题意" in plan["content"]
+    assert "普通闲聊内容" not in plan["content"]
+
+
 def test_short_or_unsaved_content_returns_none():
     plan = _sanitize_save_tool_plan({
         "should_save": False,
@@ -88,6 +127,111 @@ def test_short_or_unsaved_content_returns_none():
 
     assert plan["should_save"] is False
     assert plan["tool"] == "NONE"
+
+
+def test_repetitive_noise_is_not_saved_as_family_memory():
+    plan = _sanitize_save_tool_plan({
+        "should_save": True,
+        "tool": "FAMILY_MEMORY",
+        "content": "成长成长成长成长，价值价值价值，未来未来未来。",
+        "memory_type": "VALUE",
+    })
+
+    assert plan["should_save"] is False
+    assert plan["tool"] == "NONE"
+    assert plan["content"] == ""
+    assert "缺乏" in plan["reason"]
+
+
+def test_abstract_value_words_without_experience_are_not_saved():
+    plan = _sanitize_save_tool_plan({
+        "should_save": True,
+        "tool": "FAMILY_MEMORY",
+        "content": "温柔而深刻的家族成长价值，面向未来的积极人生哲理。",
+        "memory_type": "VALUE",
+    })
+
+    assert plan["should_save"] is False
+    assert plan["tool"] == "NONE"
+    assert plan["content"] == ""
+
+
+def test_low_value_self_insight_is_not_saved():
+    plan = _sanitize_save_tool_plan({
+        "should_save": True,
+        "tool": "DIARY",
+        "content": "我突然明白了，人要向前看，保持积极，未来会更好。",
+        "entry_type": "SELF_REFLECTION",
+    })
+
+    assert plan["should_save"] is False
+    assert plan["tool"] == "NONE"
+    assert plan["content"] == ""
+
+
+@pytest.mark.asyncio
+async def test_low_value_self_insight_is_blocked_before_llm(monkeypatch):
+    async def fail_chat(*args, **kwargs):
+        raise AssertionError("LLM should not be called for low-value insight")
+
+    monkeypatch.setattr(memory.llm_client, "chat", fail_chat)
+
+    response = await plan_agent_save_tool(
+        SaveToolPlanRequest(message="我突然明白了，人要向前看，保持积极，未来会更好。")
+    )
+
+    assert response["success"] is True
+    assert response["data"]["should_save"] is False
+    assert response["data"]["tool"] == "NONE"
+    assert "第一道意图审查" in response["data"]["reason"]
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_but_potentially_valuable_signal_reaches_llm(monkeypatch):
+    async def fake_chat(*args, **kwargs):
+        return json.dumps({
+            "should_save": True,
+            "tool": "DIARY",
+            "content": "孩子最近聊作业时会突然沉默，我有点担心他是不是卡在题意理解上，想后面继续观察。",
+            "title": "作业沟通观察",
+            "summary": "孩子聊作业时突然沉默，后续观察题意理解压力。",
+            "visibility": "PRIVATE",
+            "entry_type": "DAILY",
+            "memory_type": "ELDER_ADVICE",
+            "scope": "PRIVATE",
+            "category": "OTHER",
+            "severity": 2,
+            "importance": 3,
+            "tags": ["作业", "观察"],
+            "reason": "有具体对象、情境和可跟进观察，适合先作为每日记录。",
+            "confirmation_message": "已保存为每日记录。",
+        }, ensure_ascii=False)
+
+    monkeypatch.setattr(memory.llm_client, "chat", fake_chat)
+
+    response = await plan_agent_save_tool(
+        SaveToolPlanRequest(message="孩子最近聊作业的时候会突然沉默，我说不上来哪里不对，但想先记一下。")
+    )
+
+    assert response["success"] is True
+    assert response["data"]["should_save"] is True
+    assert response["data"]["tool"] == "DIARY"
+    assert "突然沉默" in response["data"]["content"]
+
+
+@pytest.mark.asyncio
+async def test_sensitive_slang_loop_is_blocked_before_save_planning_llm(monkeypatch):
+    async def fail_chat(*args, **kwargs):
+        raise AssertionError("LLM should not be called for guarded garbage input")
+
+    monkeypatch.setattr(memory.llm_client, "chat", fail_chat)
+
+    with pytest.raises(memory.InputGuardError) as exc_info:
+        await plan_agent_save_tool(
+            SaveToolPlanRequest(message="导管子睡觉面条下雨导管子睡觉")
+        )
+
+    assert "低俗暗语" in str(exc_info.value)
 
 
 def test_bare_save_command_is_not_saved_as_content():

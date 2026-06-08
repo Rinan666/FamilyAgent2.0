@@ -7,7 +7,7 @@ import { KeyRound, NotebookPen, ShieldCheck, Users } from 'lucide-react';
 import { userApi } from '@/lib/api';
 
 const principles = [
-  { icon: NotebookPen, text: '从一条人生记录开始沉淀家庭记忆' },
+  { icon: NotebookPen, text: '从一条人生记录开始沉淀家族记忆' },
   { icon: Users, text: '通过家族空间连接多位家庭成员' },
   { icon: ShieldCheck, text: '按可见范围共享，不默认公开私密记录' },
 ];

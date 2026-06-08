@@ -31,14 +31,14 @@ function birthDateFromMetadata(metadata?: Record<string, unknown> | string | nul
 }
 
 function ageLabel(birthDate: string) {
-  if (!birthDate) return '20 岁（未设置时默认）';
+  if (!birthDate) return '未设置';
   const date = new Date(birthDate);
-  if (Number.isNaN(date.getTime())) return '20 岁（未设置时默认）';
+  if (Number.isNaN(date.getTime())) return '未设置';
   const now = new Date();
   let age = now.getFullYear() - date.getFullYear();
   const monthDelta = now.getMonth() - date.getMonth();
   if (monthDelta < 0 || (monthDelta === 0 && now.getDate() < date.getDate())) age -= 1;
-  return age >= 0 && age <= 130 ? `${age} 岁` : '20 岁（未设置时默认）';
+  return age >= 0 && age <= 130 ? `${age} 岁` : '未设置';
 }
 
 export default function SettingsPage() {
@@ -167,7 +167,7 @@ export default function SettingsPage() {
             />
           </label>
           <p className="text-xs leading-5 text-gray-500">
-            当前用于 Agent 判断语气和建议边界的年龄：{ageLabel(birthDate)}。未填写时系统按 20 岁处理。
+            当前用于 Agent 判断语气和建议边界的年龄：{ageLabel(birthDate)}。未填写时不会写入默认年龄。
           </p>
 
           <button
@@ -310,7 +310,7 @@ export default function SettingsPage() {
 
       <div className="mt-8 text-center text-xs text-gray-400">
         <p>FamilyAgent v0.1.0</p>
-        <p className="mt-1">家庭长期记忆与家族 Agent 最小可用版本</p>
+        <p className="mt-1">家族长期记忆与家族 Agent 最小可用版本</p>
       </div>
     </div>
   );

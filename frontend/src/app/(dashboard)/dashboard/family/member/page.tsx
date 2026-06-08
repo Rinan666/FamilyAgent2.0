@@ -55,15 +55,15 @@ function memberAge(member?: FamilyMember | null) {
   }
   const year = Number(member?.birthYear || member?.metadata?.birthYear || member?.metadata?.yearOfBirth);
   if (Number.isFinite(year) && year > 1870 && year <= new Date().getFullYear()) {
-    return { age: new Date().getFullYear() - year, isDefault: false };
+    return { age: new Date().getFullYear() - year };
   }
-  return { age: 20, isDefault: true };
+  return null;
 }
 
 function memberProfileLine(member?: FamilyMember | null) {
   const birthDate = memberBirthDate(member);
   const age = memberAge(member);
-  return `${birthDate ? `生日：${birthDate}` : '生日未设置'} · 年龄：${age.age} 岁${age.isDefault ? '（默认）' : ''}`;
+  return `${birthDate ? `生日：${birthDate}` : '生日未设置'} · 年龄：${age ? `${age.age} 岁` : '未设置'}`;
 }
 
 function diaryTitle(entry: DiaryEntry) {
@@ -162,12 +162,57 @@ function hasMirrorProfile(context?: MirrorContextResponse | null) {
   return Boolean(context?.mirrorProfile && Object.keys(context.mirrorProfile).length > 0);
 }
 
-function completenessLevel(diaries: DiaryEntry[], growthRecords: GrowthGuardRecord[], context?: MirrorContextResponse | null) {
-  const profileBonus = hasMirrorProfile(context) ? 1 : 0;
-  const sourceCount = diaries.length + growthRecords.length + (context?.memories?.length || 0) + profileBonus;
-  if (sourceCount >= 8) return { label: '资料较充分', className: 'bg-green-50 text-green-700', hint: '可以进入镜像 Agent 测试更具体的问题。' };
-  if (sourceCount >= 4) return { label: '可谨慎参考', className: 'bg-blue-50 text-blue-700', hint: '建议继续补充关键选择、家人留言或成长观察。' };
-  return { label: '资料偏少', className: 'bg-yellow-50 text-yellow-700', hint: '先补几条高信息密度记录，镜像回答会更稳。' };
+function completenessProfile(
+  selfDiaries: DiaryEntry[],
+  relatedDiaries: DiaryEntry[],
+  growthRecords: GrowthGuardRecord[],
+  context?: MirrorContextResponse | null,
+) {
+  const memoryCount = context?.memories?.length || 0;
+  const scoreParts = [
+    Math.min(selfDiaries.length, 3) * 10,
+    Math.min(relatedDiaries.length, 2) * 8,
+    Math.min(growthRecords.length, 2) * 10,
+    Math.min(memoryCount, 3) * 8,
+    hasMirrorProfile(context) ? 12 : 0,
+  ];
+  const score = Math.min(100, scoreParts.reduce((sum, item) => sum + item, 0));
+  const missing = [
+    selfDiaries.length < 3 ? '本人记录不足 3 条' : '',
+    relatedDiaries.length < 1 ? '缺少家人补充视角' : '',
+    growthRecords.length < 1 ? '缺少成长观察' : '',
+    memoryCount < 2 ? '可见经验沉淀偏少' : '',
+    hasMirrorProfile(context) ? '' : '未形成授权镜像画像摘要',
+  ].filter(Boolean);
+
+  if (score >= 75) {
+    return {
+      score,
+      label: '资料较充分',
+      className: 'bg-green-50 text-green-700',
+      barClassName: 'bg-green-500',
+      hint: '可进入镜像 Agent 测试更具体的问题，但仍需按授权资料回答。',
+      missing,
+    };
+  }
+  if (score >= 40) {
+    return {
+      score,
+      label: '可谨慎参考',
+      className: 'bg-blue-50 text-blue-700',
+      barClassName: 'bg-blue-500',
+      hint: '能提供初步参考，建议继续补充关键选择、家人留言或成长观察。',
+      missing,
+    };
+  }
+  return {
+    score,
+    label: '资料偏少',
+    className: 'bg-yellow-50 text-yellow-700',
+    barClassName: 'bg-yellow-500',
+    hint: '当前只能做低置信参考，先补几条高信息密度记录会更稳。',
+    missing,
+  };
 }
 
 export default function FamilyMemberMemoryPage() {
@@ -304,9 +349,9 @@ export default function FamilyMemberMemoryPage() {
     [growthRecords, targetUserId],
   );
 
-  const level = useMemo(
-    () => completenessLevel(memberLifeRecords, targetGrowthRecords, mirrorContext),
-    [memberLifeRecords, mirrorContext, targetGrowthRecords],
+  const completeness = useMemo(
+    () => completenessProfile(targetDiaries, relatedDiaries, targetGrowthRecords, mirrorContext),
+    [mirrorContext, relatedDiaries, targetDiaries, targetGrowthRecords],
   );
 
   const mirrorMemoryCount = mirrorContext?.memories?.length ?? memories.length;
@@ -401,8 +446,8 @@ export default function FamilyMemberMemoryPage() {
                     {familyRoleLabel(targetMember.role)}
                   </span>
                 )}
-                <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${level.className}`}>
-                  {level.label}
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${completeness.className}`}>
+                  {completeness.label} · {completeness.score}%
                 </span>
               </div>
               <p className="mt-1 text-sm text-gray-500">
@@ -410,7 +455,12 @@ export default function FamilyMemberMemoryPage() {
                 {targetMember?.relationshipLabel?.trim() ? ` · 账号：${accountName(targetMember)}` : ''}
               </p>
               <p className="mt-1 text-xs text-gray-400">{memberProfileLine(targetMember)}</p>
-              <p className="mt-1 text-xs text-gray-400">{level.hint}</p>
+              <p className="mt-1 text-xs text-gray-400">{completeness.hint}</p>
+              {completeness.missing.length > 0 && (
+                <p className="mt-1 text-xs text-gray-400">
+                  待补：{completeness.missing.slice(0, 3).join('、')}
+                </p>
+              )}
             </div>
           </div>
           <div className="grid grid-cols-4 gap-2 text-center">
@@ -431,6 +481,33 @@ export default function FamilyMemberMemoryPage() {
               <p className="text-[11px] text-purple-600">镜像画像</p>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="mb-4 rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900">资料完整度画像</h2>
+            <p className="mt-1 text-xs text-gray-500">
+              基于当前用户可见资料估算，不代表成员真实档案已经完整。
+            </p>
+          </div>
+          <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${completeness.className}`}>
+            {completeness.score}%
+          </span>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+          <div
+            className={`h-full rounded-full ${completeness.barClassName}`}
+            style={{ width: `${completeness.score}%` }}
+          />
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-500 sm:grid-cols-5">
+          <div className="rounded-lg bg-gray-50 p-2">本人记录：{targetDiaries.length}/3</div>
+          <div className="rounded-lg bg-gray-50 p-2">家人补充：{relatedDiaries.length}/1</div>
+          <div className="rounded-lg bg-gray-50 p-2">成长观察：{targetGrowthRecords.length}/1</div>
+          <div className="rounded-lg bg-gray-50 p-2">经验沉淀：{mirrorMemoryCount}/2</div>
+          <div className="rounded-lg bg-gray-50 p-2">镜像画像：{hasMirrorProfile(mirrorContext) ? '有' : '无'}</div>
         </div>
       </section>
 

@@ -14,8 +14,8 @@ export default function RagMemoryBadge({ metadata }: RagMemoryBadgeProps) {
   const hasHits = rag.diaryCount > 0 || rag.memoryCount > 0 || growthRecordCount > 0 || rag.sources.length > 0;
   const modeLabel = rag.retrievalMode === 'VECTOR_WITH_TEXT_FALLBACK' ? '向量+文本' : '文本兜底';
   const label = hasHits
-    ? `已参考家庭记忆 · 每日记录 ${rag.diaryCount} · 经验沉淀 ${rag.memoryCount} · 成长观察 ${growthRecordCount}`
-    : '未命中明确家庭记忆';
+    ? `已参考家族记忆 · 每日记录 ${rag.diaryCount} · 经验沉淀 ${rag.memoryCount} · 成长观察 ${growthRecordCount}`
+    : '未命中明确家族记忆';
   const toneClass = hasHits
     ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
     : 'border-gray-100 bg-white/70 text-gray-500';

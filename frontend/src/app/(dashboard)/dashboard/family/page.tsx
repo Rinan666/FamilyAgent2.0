@@ -65,15 +65,15 @@ export default function FamilyPage() {
     }
     const year = Number(member.birthYear || member.metadata?.birthYear || member.metadata?.yearOfBirth);
     if (Number.isFinite(year) && year > 1870 && year <= new Date().getFullYear()) {
-      return { age: new Date().getFullYear() - year, isDefault: false };
+      return { age: new Date().getFullYear() - year };
     }
-    return { age: 20, isDefault: true };
+    return null;
   };
 
   const memberProfileLine = (member: FamilyMember) => {
     const birthDate = memberBirthDate(member);
     const age = memberAge(member);
-    return `${birthDate ? `生日：${birthDate}` : '生日未设置'} · 年龄：${age.age} 岁${age.isDefault ? '（默认）' : ''}`;
+    return `${birthDate ? `生日：${birthDate}` : '生日未设置'} · 年龄：${age ? `${age.age} 岁` : '未设置'}`;
   };
 
   const loadFamilies = useCallback(async () => {

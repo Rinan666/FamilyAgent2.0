@@ -33,9 +33,16 @@ class ApiError extends Error {
   }
 }
 
+function backendUnavailableError() {
+  return new ApiError(503, 'Backend service unavailable. Please check the Java service and retry.');
+}
+
 function aiErrorMessage(status: number, detail?: unknown, retryAfter?: string | null) {
   const raw = typeof detail === 'string' ? detail.trim() : '';
   if (status === 400) {
+    if (raw.includes('信息熵过低') || raw.includes('低俗暗语') || raw.includes('恶意复读') || raw.includes('刷 Token')) {
+      return raw;
+    }
     if (raw.includes('系统提示词') || raw.includes('开发者指令') || raw.includes('隐藏策略')) {
       return '这条请求触碰了系统安全边界，不能回溯或输出内部提示词。可以换一种方式描述你的真实问题。';
     }
@@ -79,14 +86,29 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = token;
 
-  const res = await fetch(`${API_BASE}${url}`, { ...options, headers });
-  const data: ApiResult<T> = await res.json();
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${url}`, { ...options, headers });
+  } catch {
+    throw backendUnavailableError();
+  }
+
+  let data: ApiResult<T>;
+  try {
+    data = await res.json();
+  } catch {
+    throw res.ok
+      ? new ApiError(502, 'Backend returned an invalid response.')
+      : backendUnavailableError();
+  }
 
   if (data.code !== 200) {
     if (data.code === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      if (typeof window !== 'undefined') window.location.href = '/login';
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+      }
     }
     throw new ApiError(data.code, data.message);
   }
@@ -263,6 +285,29 @@ function normalizeLoginResponse(raw: LoginResponse): LoginResponse {
     ...raw,
     metadata: parseJsonField<Record<string, unknown>>(raw.metadata, {}),
   };
+}
+
+function normalizeFamilyMember(raw: FamilyMember): FamilyMember {
+  const metadata = parseJsonField<Record<string, unknown>>(raw.metadata, {});
+  const birthDate = raw.birthDate
+    || (typeof metadata.birthDate === 'string' ? metadata.birthDate.slice(0, 10) : '')
+    || (typeof metadata.birthday === 'string' ? metadata.birthday.slice(0, 10) : '')
+    || (typeof metadata.dateOfBirth === 'string' ? metadata.dateOfBirth.slice(0, 10) : '');
+  const birthYear = raw.birthYear
+    || (typeof metadata.birthYear === 'string' ? metadata.birthYear : '')
+    || (typeof metadata.yearOfBirth === 'string' ? metadata.yearOfBirth : '')
+    || (birthDate ? birthDate.slice(0, 4) : '');
+
+  return {
+    ...raw,
+    birthDate: birthDate || undefined,
+    birthYear: birthYear || undefined,
+    metadata,
+  };
+}
+
+function normalizeFamilyMembers(members: FamilyMember[] | undefined | null): FamilyMember[] {
+  return (members || []).map(normalizeFamilyMember);
 }
 
 function normalizeSessions(sessions: ChatSession[] | undefined | null): ChatSession[] {
@@ -486,7 +531,8 @@ export const familyApi = {
     request<FamilyMember>(`/families/join?inviteCode=${inviteCode}`, { method: 'POST' }),
   getMyFamilies: () => request<Family[]>('/families/my'),
   getFamily: (id: number) => request<Family>(`/families/${id}`),
-  getMembers: (familyId: number) => request<FamilyMember[]>(`/families/${familyId}/members`),
+  getMembers: (familyId: number) =>
+    request<FamilyMember[]>(`/families/${familyId}/members`).then(normalizeFamilyMembers),
   getMyRelationshipLabels: (familyId: number) =>
     request<FamilyRelationship[]>(`/families/${familyId}/relationships/my-labels`),
   upsertRelationshipLabel: (
@@ -767,6 +813,12 @@ export const memoryLibraryApi = {
     sp.set('familyId', String(familyId));
     sp.set('itemId', itemId);
     return request<void>(`/memory-library/restore?${sp}`, { method: 'POST' });
+  },
+  deleteArchivedItem: (familyId: number, itemId: string) => {
+    const sp = new URLSearchParams();
+    sp.set('familyId', String(familyId));
+    sp.set('itemId', itemId);
+    return request<void>(`/memory-library/archived?${sp}`, { method: 'DELETE' });
   },
 };
 

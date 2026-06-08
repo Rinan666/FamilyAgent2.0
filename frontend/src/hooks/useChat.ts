@@ -125,51 +125,44 @@ export function useChat(options: UseChatOptions = {}) {
       query: string;
       subject?: string;
       knowledgePointId?: number;
-      includeLearningMemories?: boolean;
     }) => {
       try {
-        const activationScene = detectFamilyActivationScene(params.query);
+        const allowFamilyContext = shouldRecallFamilyContext(params.query);
+        const activationScene = allowFamilyContext ? detectFamilyActivationScene(params.query) : null;
         onActivationSceneChange?.(activationScene
           ? { label: activationScene.label, instruction: activationScene.instruction }
           : null);
         const libraryKeyword = activationScene
           ? `${params.query} ${activationScene.label} ${activationScene.searchKeywords.join(' ')}`
           : params.query;
-        const includeLearningMemories = params.includeLearningMemories ?? true;
-        const [learningMemories, familyRecall, libraryResult, growthRecords, heritageTasks] = await Promise.all([
-          includeLearningMemories
-            ? memoryApi.recall({
-                query: params.query,
-                subject: params.subject,
-                knowledgePointId: params.knowledgePointId,
-                limit: 8,
-              }).catch(() => [] as MemoryEntry[])
-            : Promise.resolve([] as MemoryEntry[]),
-          activeFamilyId
+        const [familyRecall, libraryResult, growthRecords, heritageTasks] = await Promise.all([
+          activeFamilyId && allowFamilyContext
             ? memoryApi.recallFamily(activeFamilyId, {
                 query: libraryKeyword,
-                scene: includeLearningMemories ? 'TUTOR' : 'FAMILY_AGENT',
+                scene: 'FAMILY_AGENT',
                 diaryLimit: 8,
                 memoryLimit: 8,
               }).catch(() => null)
             : Promise.resolve(null),
-          activeFamilyId
+          activeFamilyId && allowFamilyContext
             ? memoryLibraryApi.search({
                 familyId: activeFamilyId,
                 keyword: libraryKeyword,
                 pageSize: 12,
               }).catch(() => null)
             : Promise.resolve(null),
-          activeFamilyId
+          activeFamilyId && allowFamilyContext
             ? growthGuardApi.listFamilyRecords(activeFamilyId, 8).catch(() => [] as GrowthGuardRecord[])
             : Promise.resolve([] as GrowthGuardRecord[]),
-          activeFamilyId
+          activeFamilyId && allowFamilyContext
             ? heritageTaskApi.listFamilyTasks(activeFamilyId, 8).catch(() => [] as HeritageTask[])
             : Promise.resolve([] as HeritageTask[]),
         ]);
         const libraryItems = libraryResult?.items || [];
+        if (!allowFamilyContext) {
+          return { context: '' } satisfies MemoryContextResult;
+        }
         const context = formatMemoryContext({
-          learningMemories,
           libraryItems,
           familyMemories: familyRecall?.memories || [],
           diaryEntries: familyRecall?.diaries || [],
@@ -323,7 +316,6 @@ export function useChat(options: UseChatOptions = {}) {
       const memoryContext = await recallMemoryContext({
         query: message,
         subject: 'family',
-        includeLearningMemories: false,
       });
       if (memoryContext.metadata) {
         mergeLastAssistantMetadata(memoryContext.metadata);
@@ -338,7 +330,7 @@ export function useChat(options: UseChatOptions = {}) {
           history,
           subject: '家族Agent',
           grade: '',
-          knowledgePoint: '家庭记忆',
+          knowledgePoint: '家族记忆',
           masteryLevel: '中',
           teachingStyle: getTeachingStyle?.() || teachingStyle,
           mode: 'chat',
@@ -389,7 +381,6 @@ export function useChat(options: UseChatOptions = {}) {
 }
 
 function formatMemoryContext({
-  learningMemories,
   libraryItems,
   familyMemories,
   diaryEntries,
@@ -402,7 +393,6 @@ function formatMemoryContext({
   viewerIdentityContext,
   activationScene,
 }: {
-  learningMemories: MemoryEntry[];
   libraryItems: MemoryLibraryItem[];
   familyMemories: MemoryEntry[];
   diaryEntries: DiaryEntry[];
@@ -422,7 +412,6 @@ function formatMemoryContext({
   const visibleLibraryItems = libraryItems.filter((item) => item.body?.trim() || item.title?.trim());
   sections.push(buildContextHitSummary({
     libraryItems: visibleLibraryItems,
-    learningMemories,
     familyMemories,
     diaryEntries,
     growthRecords,
@@ -437,7 +426,7 @@ function formatMemoryContext({
     .slice(-5);
   if (recentSavedMemories.length > 0) {
     sections.push([
-      '本轮会话刚保存的家庭记忆：',
+      '本轮会话刚保存的家族记忆：',
       recentSavedMemories.map((memory, index) => (
         `${index + 1}. [${memory.label}；${memory.visibility || 'PRIVATE'}；保存时间：${memory.savedAt}] ${memory.title}：${memory.content.slice(0, 260)}${memory.reason ? `；保存理由：${memory.reason}` : ''}`
       )).join('\n'),
@@ -469,16 +458,6 @@ function formatMemoryContext({
     sections.push(`额外匹配片段时间线：\n${visibleLibraryItems
       .slice(0, 12)
       .map((item, index) => `${index + 1}. ${memoryLibrarySourceLabel(item.sourceType)}；归属：${item.memberName || '家族成员'}；创建：${item.createdAt || '未知'}；更新：${item.updatedAt || '未知'}；可见范围：${item.visibility || 'UNKNOWN'}`)
-      .join('\n')}`);
-  }
-
-  const activeLearningMemories = learningMemories.filter((memory) => memory.status === 'ACTIVE' && memory.content?.trim());
-  if (activeLearningMemories.length > 0) {
-    sections.push(`学习记忆：\n${activeLearningMemories
-      .map((memory, index) => {
-        const label = memory.type || 'LEARNING';
-        return `${index + 1}. [${label}] ${memory.content}`;
-      })
       .join('\n')}`);
   }
 
@@ -583,7 +562,6 @@ function memoryLibrarySourceLabel(type: string) {
 
 function buildContextHitSummary({
   libraryItems,
-  learningMemories,
   familyMemories,
   diaryEntries,
   growthRecords,
@@ -593,7 +571,6 @@ function buildContextHitSummary({
   embeddingReadyCount,
 }: {
   libraryItems: MemoryLibraryItem[];
-  learningMemories: MemoryEntry[];
   familyMemories: MemoryEntry[];
   diaryEntries: DiaryEntry[];
   growthRecords: GrowthGuardRecord[];
@@ -607,7 +584,6 @@ function buildContextHitSummary({
     acc[label] = (acc[label] || 0) + 1;
     return acc;
   }, {});
-  const activeLearningCount = learningMemories.filter((memory) => memory.status === 'ACTIVE' && memory.content?.trim()).length;
   const activeFamilyCount = familyMemories.filter((memory) => memory.status === 'ACTIVE' && memory.content?.trim()).length;
   const diaryCount = diaryEntries.filter((entry) => entry.rawText?.trim()).length;
   const growthCount = growthRecords.filter((record) => record.status === 'ACTIVE').length;
@@ -616,7 +592,6 @@ function buildContextHitSummary({
 
   const parts = Object.entries(libraryCounts).map(([label, count]) => `${count} 条${label}`);
   if (parts.length === 0) {
-    if (activeLearningCount > 0) parts.push(`${activeLearningCount} 条学习记忆`);
     if (activeFamilyCount > 0) parts.push(`${activeFamilyCount} 条经验沉淀`);
     if (diaryCount > 0) parts.push(`${diaryCount} 条每日记录`);
     if (growthCount > 0) parts.push(`${growthCount} 条成长观察`);
@@ -631,15 +606,33 @@ function buildContextHitSummary({
 
   if (parts.length === 0) {
     return [
-      '本轮记忆命中摘要：没有命中明确的家庭长期记忆。',
-      '回答策略：不要假装了解这个家庭；可以温和说明资料不足，并建议补充一条每日记录、经验沉淀或成长观察。',
+      '本轮记忆命中摘要：没有命中明确的家族长期记忆。',
+      '回答策略：不要假装了解这个家族；可以温和说明资料不足，并建议补充一条每日记录、经验沉淀或成长观察。',
     ].join('\n');
   }
 
   return [
     `本轮记忆命中摘要：命中 ${parts.join('、')}。RAG 模式：${retrievalMode || 'TEXT_FALLBACK'}；可用向量索引：${embeddingReadyCount ?? 0} 条。`,
-    '回答策略：可以自然说明“我参考了这些授权家庭记录”，但不要逐条罗列或复述原文；先给基于家庭记录的判断，再给下一步小行动。',
+    '回答策略：可以自然说明“我参考了这些授权家族记录”，但不要逐条罗列或复述原文；先给基于家族记录的判断，再给下一步小行动。',
   ].join('\n');
+}
+
+const familyContextTerms = [
+  'family', 'diary', 'memory', 'growth', 'parent', 'child', 'study',
+  'tooth', 'teeth', 'dental', 'screen', 'sleep', 'health', 'exercise', 'emotion',
+  '家族', '家庭', '家人', '家里', '我家', '我们家', '家长', '爸', '妈', '爷', '奶', '外公', '外婆',
+  '孩子', '儿子', '女儿', '孙', '长辈', '亲子', '关系', '沟通', '日记', '记录',
+  '记忆', '经验', '沉淀', '传承', '故事', '成长', '观察', '情绪', '焦虑', '压力',
+  '学习', '作业', '考试', '升学', '志愿', '学校', '选择', '复盘', '后悔', '健康',
+  '牙', '刷牙', '视力', '睡眠', '运动', '体态', '手机', '屏幕', '习惯', '陪伴',
+  '教育', '保存', '记下来', '想起来',
+];
+
+function shouldRecallFamilyContext(query: string) {
+  const normalized = query.trim().toLowerCase().replace(/[，。！？；：“”‘’（）【】《》、,.!?;:'"()[\]{}<>]/g, ' ');
+  if (!normalized) return true;
+  const compact = normalized.replace(/\s+/g, '');
+  return familyContextTerms.some((term) => normalized.includes(term) || compact.includes(term));
 }
 
 type FamilyActivationScene = {

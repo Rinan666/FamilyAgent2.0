@@ -63,7 +63,7 @@ export default function LoginPage() {
           <div>
             <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white/70 px-3 py-1 text-xs font-medium text-emerald-800">
               <Sparkles className="h-3.5 w-3.5" />
-              家庭长期记忆 · 家族经验传承
+              家族长期记忆 · 家族经验传承
             </div>
             <h1 className="max-w-xl text-3xl font-bold leading-tight sm:text-4xl">
               FamilyAgent
@@ -93,7 +93,7 @@ export default function LoginPage() {
             </div>
             <h2 className="text-2xl font-bold text-gray-900">登录</h2>
             <p className="mt-1 text-sm text-gray-500">
-              进入你的家族空间，继续记录和整理家庭记忆。
+              进入你的家族空间，继续记录和整理家族记忆。
             </p>
           </div>
 

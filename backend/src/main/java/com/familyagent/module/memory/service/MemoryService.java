@@ -44,46 +44,11 @@ public class MemoryService {
 
     @Transactional
     public MemoryEntry createMemory(CreateMemoryEntryRequest request) {
-        Long userId = CurrentUserGuard.currentUserId();
-        if (request.getFamilyId() != null) {
-            familyService.checkMembership(request.getFamilyId());
-        }
-
-        MemoryEntry duplicate = memoryRepository.selectOne(new LambdaQueryWrapper<MemoryEntry>()
-                .eq(MemoryEntry::getUserId, userId)
-                .eq(MemoryEntry::getStatus, "ACTIVE")
-                .eq(MemoryEntry::getContent, request.getContent())
-                .last("LIMIT 1"));
-        if (duplicate != null) {
-            return duplicate;
-        }
-
-        MemoryEntry entry = new MemoryEntry();
-        entry.setUserId(userId);
-        entry.setFamilyId(request.getFamilyId());
-        entry.setSubject(blankToNull(request.getSubject()));
-        entry.setKnowledgePointId(request.getKnowledgePointId());
-        entry.setType(defaultString(request.getType(), "LEARNING"));
-        entry.setScope(defaultString(request.getScope(), "PRIVATE"));
-        entry.setContent(request.getContent().trim());
-        entry.setSummary(blankToNull(request.getSummary()));
-        entry.setImportance(clamp(request.getImportance() == null ? 3 : request.getImportance(), 1, 5));
-        entry.setConfidence(request.getConfidence() == null ? BigDecimal.valueOf(0.7) : request.getConfidence());
-        entry.setSourceSessionId(request.getSourceSessionId());
-        entry.setStatus("ACTIVE");
-        entry.setMetadata(MemoryIndexMetadataBuilder.enrichFamilyMemory(
-                request.getMetadata() == null ? Map.of() : request.getMetadata(),
-                entry.getContent(),
-                entry.getSummary(),
-                entry.getType(),
-                entry.getImportance()));
-        memoryRepository.insert(entry);
-        memoryEmbeddingService.indexMemoryAfterCommit(entry);
-        return entry;
+        throw new BusinessException(ErrorCode.BAD_REQUEST, "学习记忆功能已下线，请使用家族记忆、每日记录或成长观察。");
     }
 
     public List<MemoryEntry> listMyMemories(int limit) {
-        return memoryRepository.findActiveByUserId(CurrentUserGuard.currentUserId(), normalizeLimit(limit));
+        return List.of();
     }
 
     @Transactional
@@ -250,11 +215,7 @@ public class MemoryService {
     }
 
     public List<MemoryEntry> recall(String subject, Long knowledgePointId, int limit) {
-        return memoryRepository.recall(
-                CurrentUserGuard.currentUserId(),
-                blankToNull(subject),
-                knowledgePointId,
-                normalizeLimit(limit));
+        return List.of();
     }
 
     @Transactional

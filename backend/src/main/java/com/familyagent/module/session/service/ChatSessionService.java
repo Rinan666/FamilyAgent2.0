@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +26,9 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class ChatSessionService {
+
+    private static final String STATUS_ACTIVE = "ACTIVE";
+    private static final String STATUS_ENDED = "ENDED";
 
     private final ChatSessionRepository sessionRepository;
     private final FamilyService familyService;
@@ -40,7 +44,7 @@ public class ChatSessionService {
             session.setMessages(List.of());
         }
         if (session.getStatus() == null) {
-            session.setStatus("ACTIVE");
+            session.setStatus(STATUS_ACTIVE);
         }
         if (session.getVisibility() == null) {
             session.setVisibility("PRIVATE");
@@ -80,12 +84,27 @@ public class ChatSessionService {
     public ChatSession endSession(Long sessionId, String summary, String authorization) {
         ChatSession session = getSession(sessionId);
         CurrentUserGuard.requireSelf(session.getUserId());
-        session.setStatus("ENDED");
-        session.setSummary(summary);
-        session.setEndedAt(java.time.LocalDateTime.now());
-        sessionRepository.updateById(session);
-        extractMemoriesBestEffort(session, authorization);
-        return session;
+
+        LocalDateTime endedAt = LocalDateTime.now();
+        int updated = sessionRepository.endActiveSession(sessionId, blankToNull(summary), endedAt);
+        ChatSession endedSession = getSession(sessionId);
+
+        if (updated == 0) {
+            if (STATUS_ENDED.equals(endedSession.getStatus()) && endedSession.getEndedAt() == null) {
+                sessionRepository.fillMissingEndedAt(sessionId, endedAt);
+                endedSession.setEndedAt(endedAt);
+            }
+            log.debug("Session end is idempotent: id={}, status={}", sessionId, endedSession.getStatus());
+            return endedSession;
+        }
+
+        endedSession.setStatus(STATUS_ENDED);
+        if (blankToNull(summary) != null) {
+            endedSession.setSummary(summary);
+        }
+        endedSession.setEndedAt(endedAt);
+        extractMemoriesBestEffort(endedSession, authorization);
+        return endedSession;
     }
 
     public ChatSession endSession(Long sessionId, String summary) {
@@ -147,6 +166,10 @@ public class ChatSessionService {
 
     private static String asString(Object value) {
         return value == null ? null : String.valueOf(value);
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
     }
 
     private static String defaultString(String value, String fallback) {

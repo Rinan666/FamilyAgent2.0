@@ -15,6 +15,7 @@ import {
   ScrollText,
   Search,
   Shield,
+  Trash2,
   X,
 } from 'lucide-react';
 import { familyApi, memoryApi, memoryLibraryApi } from '@/lib/api';
@@ -264,6 +265,7 @@ export default function MemoryLibraryPage() {
   const [loadingMaintenance, setLoadingMaintenance] = useState(false);
   const [archivingItemId, setArchivingItemId] = useState('');
   const [restoringItemId, setRestoringItemId] = useState('');
+  const [deletingItemId, setDeletingItemId] = useState('');
   const [viewMode, setViewMode] = useState<LibraryViewMode>('ACTIVE');
 
   const memberOptions = useMemo(
@@ -438,6 +440,26 @@ export default function MemoryLibraryPage() {
     }
   };
 
+  const handleDeleteArchivedItem = async (item: MemoryLibraryItem) => {
+    if (!activeFamilyId || !item.id) return;
+    const confirmed = window.confirm('确认永久删除这条已归档记忆吗？删除后无法恢复，也不会再进入家族 Agent 召回。');
+    if (!confirmed) return;
+    setDeletingItemId(item.id);
+    setError('');
+    try {
+      await memoryLibraryApi.deleteArchivedItem(activeFamilyId, item.id);
+      setSelectedItemId((current) => (current === item.id ? '' : current));
+      await Promise.all([
+        loadData(),
+        loadMaintenanceSuggestions(),
+      ]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '删除失败');
+    } finally {
+      setDeletingItemId('');
+    }
+  };
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setDebouncedQuery(query.trim());
@@ -571,7 +593,7 @@ export default function MemoryLibraryPage() {
           <div>
             <h2 className="text-sm font-semibold text-gray-900">记忆整理建议</h2>
             <p className="mt-1 text-sm leading-6 text-gray-500">
-              系统只给出合并、归档和清理复核建议，不会自动删除家庭记忆。
+              系统只给出合并、归档和清理复核建议，不会自动删除家族记忆。
             </p>
           </div>
           <button
@@ -865,15 +887,26 @@ export default function MemoryLibraryPage() {
                         查看详情
                       </button>
                       {viewMode === 'ARCHIVED' ? (
-                        <button
-                          type="button"
-                          onClick={() => { void handleRestoreItem(item); }}
-                          disabled={restoringItemId === item.id}
-                          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-60"
-                        >
-                          {restoringItemId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-                          恢复
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => { void handleRestoreItem(item); }}
+                            disabled={restoringItemId === item.id || deletingItemId === item.id}
+                            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+                          >
+                            {restoringItemId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                            恢复
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { void handleDeleteArchivedItem(item); }}
+                            disabled={deletingItemId === item.id || restoringItemId === item.id}
+                            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
+                          >
+                            {deletingItemId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                            删除
+                          </button>
+                        </>
                       ) : (
                         <Link
                           href={sourceHref(item, activeFamilyId)}
@@ -976,17 +1009,28 @@ export default function MemoryLibraryPage() {
                 <div className="mb-4 rounded-lg border border-amber-100 bg-amber-50 p-3">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-sm leading-6 text-amber-800">
-                      这条记忆已退出默认展示和普通召回。确认仍有价值时，可以恢复到当前记忆。
+                      这条记忆已退出默认展示和普通召回。确认仍有价值时可以恢复；确认不再需要时可以永久删除。
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => { void handleRestoreItem(selectedItem); }}
-                      disabled={restoringItemId === selectedItem.id}
-                      className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-white px-3 text-xs font-medium text-amber-700 ring-1 ring-amber-100 hover:bg-amber-100 disabled:opacity-60"
-                    >
-                      {restoringItemId === selectedItem.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-                      恢复这条记忆
-                    </button>
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { void handleRestoreItem(selectedItem); }}
+                        disabled={restoringItemId === selectedItem.id || deletingItemId === selectedItem.id}
+                        className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-white px-3 text-xs font-medium text-amber-700 ring-1 ring-amber-100 hover:bg-amber-100 disabled:opacity-60"
+                      >
+                        {restoringItemId === selectedItem.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                        恢复这条记忆
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { void handleDeleteArchivedItem(selectedItem); }}
+                        disabled={deletingItemId === selectedItem.id || restoringItemId === selectedItem.id}
+                        className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-white px-3 text-xs font-medium text-red-600 ring-1 ring-red-100 hover:bg-red-50 disabled:opacity-60"
+                      >
+                        {deletingItemId === selectedItem.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                        永久删除
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

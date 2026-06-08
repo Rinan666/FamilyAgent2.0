@@ -16,6 +16,7 @@ from app.utils.safety_limits import (
     RoleHijackAttemptError,
     SafetyLimitError,
 )
+from app.utils.input_guard import InputGuardError
 from app.utils.security_events import record_security_event
 
 
@@ -76,6 +77,17 @@ async def safety_limit_handler(request: Request, exc: SafetyLimitError):
         reason=str(exc),
     )
     return JSONResponse(status_code=413, content={"success": False, "detail": str(exc)})
+
+
+@app.exception_handler(InputGuardError)
+async def input_guard_handler(request: Request, exc: InputGuardError):
+    await record_security_event(
+        request,
+        event_type=f"INPUT_GUARD_{exc.reason.value}",
+        status_code=400,
+        reason=str(exc),
+    )
+    return JSONResponse(status_code=400, content={"success": False, "detail": str(exc)})
 
 
 @app.exception_handler(RateLimitExceededError)

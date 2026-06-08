@@ -15,6 +15,7 @@ from app.agents.generator_agent import generator_agent
 from app.agents.skill_workflow_agent import skill_workflow_agent
 from app.middleware.auth import verify_token
 from app.services.content_extractor import extract_content
+from app.utils.input_guard import InputGuardError, enforce_input_guard
 from app.utils.privacy_guard import redact_with_note
 from app.utils.safety_limits import enforce_ai_concurrency, enforce_ai_rate_limit
 from app.utils.sanitizer import sanitize_text
@@ -139,6 +140,7 @@ async def explain_question(request: ExplainRequest):
     # 输入清理
     question_content = sanitize_text(request.question_content)
     student_message = sanitize_text(request.student_message)
+    enforce_input_guard(student_message)
     memory_context = redact_with_note(request.memory_context).text
 
     async def generate():
@@ -195,6 +197,7 @@ async def explain_question_sync(request: ExplainRequest):
     try:
         question_content = sanitize_text(request.question_content)
         student_message = sanitize_text(request.student_message)
+        enforce_input_guard(student_message)
         memory_context = redact_with_note(request.memory_context).text
 
         result = await tutor_agent.explain(
@@ -217,6 +220,8 @@ async def explain_question_sync(request: ExplainRequest):
             client_timezone=request.client_timezone,
         )
         return {"success": True, "content": result}
+    except InputGuardError:
+        raise
     except Exception as e:
         logger.error(f"讲题同步错误: {e}")
         raise HTTPException(status_code=500, detail=str(e))

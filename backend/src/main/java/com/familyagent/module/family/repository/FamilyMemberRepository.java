@@ -23,10 +23,12 @@ public interface FamilyMemberRepository extends BaseMapper<FamilyMember> {
     List<FamilyMember> findByFamilyId(Long familyId);
 
     @Select("""
-        SELECT fm.id, fm.family_id, fm.user_id, u.username, u.nickname, u.avatar_url, fm.role,
-               COALESCE(u.metadata->>'birthDate', u.metadata->>'birthday', u.metadata->>'dateOfBirth') AS birth_date,
-               COALESCE(u.metadata->>'birthYear', u.metadata->>'yearOfBirth') AS birth_year,
-               fm.joined_at
+        SELECT fm.id, fm.family_id AS "familyId", fm.user_id AS "userId",
+               u.username, u.nickname, u.avatar_url AS "avatarUrl", fm.role,
+               COALESCE(u.metadata->>'birthDate', u.metadata->>'birthday', u.metadata->>'dateOfBirth') AS "birthDate",
+               COALESCE(u.metadata->>'birthYear', u.metadata->>'yearOfBirth') AS "birthYear",
+               u.metadata AS metadata,
+               fm.joined_at AS "joinedAt"
         FROM family_members fm
         JOIN users u ON u.id = fm.user_id
         WHERE fm.family_id = #{familyId}
@@ -35,10 +37,12 @@ public interface FamilyMemberRepository extends BaseMapper<FamilyMember> {
     List<FamilyMemberVO> findMemberViewsByFamilyId(Long familyId);
 
     @Select("""
-        SELECT fm.id, fm.family_id, fm.user_id, u.username, u.nickname, u.avatar_url, fm.role,
-               COALESCE(u.metadata->>'birthDate', u.metadata->>'birthday', u.metadata->>'dateOfBirth') AS birth_date,
-               COALESCE(u.metadata->>'birthYear', u.metadata->>'yearOfBirth') AS birth_year,
-               fm.joined_at
+        SELECT fm.id, fm.family_id AS "familyId", fm.user_id AS "userId",
+               u.username, u.nickname, u.avatar_url AS "avatarUrl", fm.role,
+               COALESCE(u.metadata->>'birthDate', u.metadata->>'birthday', u.metadata->>'dateOfBirth') AS "birthDate",
+               COALESCE(u.metadata->>'birthYear', u.metadata->>'yearOfBirth') AS "birthYear",
+               u.metadata AS metadata,
+               fm.joined_at AS "joinedAt"
         FROM family_members fm
         JOIN users u ON u.id = fm.user_id
         WHERE fm.family_id = #{familyId} AND fm.user_id = #{userId}

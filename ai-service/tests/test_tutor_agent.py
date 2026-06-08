@@ -48,7 +48,7 @@ def test_normal_chat_has_memory_hit_guidance():
 
     context = agent._build_chat_context(
         subject="家庭陪伴",
-        knowledge_point="家庭记忆",
+        knowledge_point="家族记忆",
         memory_context="本轮记忆命中摘要：命中 2 条每日记录、1 条经验沉淀。",
     )
 
@@ -65,7 +65,7 @@ def test_chat_context_includes_client_time_context():
 
     context = agent._build_chat_context(
         subject="家庭陪伴",
-        knowledge_point="家庭记忆",
+        knowledge_point="家族记忆",
         client_timestamp="2026-06-07T10:20:30.000+08:00",
         client_timezone="Asia/Shanghai",
     )

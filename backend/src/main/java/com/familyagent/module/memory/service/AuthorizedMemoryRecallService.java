@@ -37,6 +37,15 @@ public class AuthorizedMemoryRecallService {
 
     private static final int CANDIDATE_MULTIPLIER = 5;
     private static final double MAX_VECTOR_DISTANCE = 0.72;
+    private static final List<String> FAMILY_RELEVANCE_TERMS = List.of(
+            "family", "diary", "memory", "growth", "parent", "child", "study",
+            "tooth", "teeth", "dental", "screen", "sleep", "health", "exercise", "emotion",
+            "家族", "家庭", "家人", "家里", "我家", "我们家", "家长", "爸", "妈", "爷", "奶", "外公", "外婆",
+            "孩子", "儿子", "女儿", "孙", "长辈", "亲子", "关系", "沟通", "日记", "记录",
+            "记忆", "经验", "沉淀", "传承", "故事", "成长", "观察", "情绪", "焦虑", "压力",
+            "学习", "作业", "考试", "升学", "志愿", "学校", "选择", "复盘", "后悔", "健康",
+            "牙", "刷牙", "视力", "睡眠", "运动", "体态", "手机", "屏幕", "习惯", "陪伴",
+            "教育", "保存", "记下来", "想起来");
 
     private final DiaryEntryRepository diaryRepository;
     private final MemoryEntryRepository memoryRepository;
@@ -69,6 +78,9 @@ public class AuthorizedMemoryRecallService {
             int diaryLimit,
             int memoryLimit) {
         String normalizedQuery = normalize(query);
+        if (!shouldRecallFamilyContext(normalizedQuery)) {
+            return emptyRecall(normalizedQuery, "SKIPPED_UNRELATED_QUERY");
+        }
         int diaryCandidateLimit = Math.max(diaryLimit * CANDIDATE_MULTIPLIER, diaryLimit);
         int memoryCandidateLimit = Math.max(memoryLimit * CANDIDATE_MULTIPLIER, memoryLimit);
 
@@ -129,6 +141,9 @@ public class AuthorizedMemoryRecallService {
             int diaryLimit,
             int memoryLimit) {
         String normalizedQuery = normalize(query);
+        if (!shouldRecallFamilyContext(normalizedQuery)) {
+            return emptyRecall(normalizedQuery, "SKIPPED_UNRELATED_QUERY");
+        }
         int diaryCandidateLimit = Math.max(diaryLimit * CANDIDATE_MULTIPLIER, diaryLimit);
         int memoryCandidateLimit = Math.max(memoryLimit * CANDIDATE_MULTIPLIER, memoryLimit);
 
@@ -741,6 +756,30 @@ public class AuthorizedMemoryRecallService {
                 .replaceAll("[\\p{Punct}，。！？；：“”‘’（）【】《》、]", " ")
                 .replaceAll("\\s+", " ")
                 .trim();
+    }
+
+    private static boolean shouldRecallFamilyContext(String normalizedQuery) {
+        if (normalizedQuery == null || normalizedQuery.isBlank()) {
+            return true;
+        }
+        String compactQuery = normalizedQuery.replace(" ", "");
+        return FAMILY_RELEVANCE_TERMS.stream().anyMatch(term ->
+                normalizedQuery.contains(term) || compactQuery.contains(term));
+    }
+
+    private static AuthorizedMemoryRecallResult emptyRecall(String query, String retrievalMode) {
+        return AuthorizedMemoryRecallResult.builder()
+                .diaries(List.of())
+                .memories(List.of())
+                .growthRecords(List.of())
+                .diaryCount(0)
+                .memoryCount(0)
+                .growthRecordCount(0)
+                .sources(List.of())
+                .retrievalMode(retrievalMode)
+                .query(query)
+                .embeddingReadyCount(0)
+                .build();
     }
 
     private record VectorRanking(

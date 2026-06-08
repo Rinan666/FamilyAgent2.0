@@ -8,6 +8,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -27,13 +28,24 @@ import java.util.concurrent.CompletableFuture;
 @Component
 public class AIServiceClient {
 
+    private static final int MILLIS_PER_SECOND = 1000;
+    private static final int MAX_CONNECT_TIMEOUT_MILLIS = 10_000;
+
     private final RestTemplate restTemplate;
     private final String baseUrl;
 
     public AIServiceClient(@Value("${ai-service.base-url:http://localhost:8000}") String baseUrl,
                            @Value("${ai-service.timeout:60}") int timeout) {
         this.baseUrl = baseUrl;
-        this.restTemplate = new RestTemplate();
+        this.restTemplate = new RestTemplate(createRequestFactory(timeout));
+    }
+
+    private static SimpleClientHttpRequestFactory createRequestFactory(int timeoutSeconds) {
+        int readTimeoutMillis = Math.max(1, timeoutSeconds) * MILLIS_PER_SECOND;
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(Math.min(readTimeoutMillis, MAX_CONNECT_TIMEOUT_MILLIS));
+        requestFactory.setReadTimeout(readTimeoutMillis);
+        return requestFactory;
     }
 
     /**

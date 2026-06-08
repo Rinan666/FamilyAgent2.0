@@ -9,6 +9,7 @@ import com.familyagent.module.memorylibrary.service.MemoryLibraryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -59,6 +60,15 @@ public class MemoryLibraryController {
             @RequestParam Long familyId,
             @RequestParam String itemId) {
         memoryLibraryService.restoreLibraryItem(familyId, itemId);
+        return Result.success();
+    }
+
+    @Operation(summary = "Permanently delete an archived memory library item")
+    @DeleteMapping("/archived")
+    public Result<Void> deleteArchived(
+            @RequestParam Long familyId,
+            @RequestParam String itemId) {
+        memoryLibraryService.deleteArchivedLibraryItem(familyId, itemId);
         return Result.success();
     }
 }

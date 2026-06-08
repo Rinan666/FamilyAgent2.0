@@ -168,6 +168,21 @@ public class MemoryLibraryService {
         }
     }
 
+    public void deleteArchivedLibraryItem(Long familyId, String itemId) {
+        if (familyId == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "familyId 不能为空");
+        }
+        familyService.checkMembership(familyId);
+        ParsedItemId parsed = parseItemId(itemId);
+        switch (parsed.prefix()) {
+            case "diary" -> deleteArchivedDiary(familyId, parsed.id());
+            case "memory" -> deleteArchivedMemory(familyId, parsed.id());
+            case "growth" -> deleteArchivedGrowthRecord(familyId, parsed.id());
+            case "report" -> deleteArchivedGrowthReport(familyId, parsed.id());
+            default -> throw new BusinessException(ErrorCode.BAD_REQUEST, "不支持的记忆类型");
+        }
+    }
+
     private static String baseQuery(boolean archived) {
         String diaryStatusCondition = archived
                 ? "AND de.metadata->>'status' = 'ARCHIVED'"
@@ -584,6 +599,16 @@ public class MemoryLibraryService {
         diaryEntryRepository.updateById(entry);
     }
 
+    private void deleteArchivedDiary(Long familyId, Long diaryId) {
+        DiaryEntry entry = diaryEntryRepository.selectById(diaryId);
+        if (entry == null || !familyId.equals(entry.getFamilyId()) || !isArchivedMetadata(entry.getMetadata())) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        ensureCreatorOrFamilyOwner(familyId, entry.getUserId(), "只能删除自己归档的日记，或由家族创建者删除");
+        deleteEmbeddings("DIARY", diaryId);
+        diaryEntryRepository.deleteById(diaryId);
+    }
+
     private void archiveMemory(Long familyId, Long memoryId) {
         MemoryEntry entry = memoryEntryRepository.selectById(memoryId);
         if (entry == null || !familyId.equals(entry.getFamilyId()) || !"ACTIVE".equals(entry.getStatus())) {
@@ -614,6 +639,16 @@ public class MemoryLibraryService {
         memoryEntryRepository.updateById(entry);
     }
 
+    private void deleteArchivedMemory(Long familyId, Long memoryId) {
+        MemoryEntry entry = memoryEntryRepository.selectById(memoryId);
+        if (entry == null || !familyId.equals(entry.getFamilyId()) || !"ARCHIVED".equals(entry.getStatus())) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        ensureCreatorOrFamilyOwner(familyId, entry.getUserId(), "只能删除自己归档的经验，或由家族创建者删除");
+        deleteEmbeddings("MEMORY", memoryId);
+        memoryEntryRepository.deleteById(memoryId);
+    }
+
     private void archiveGrowthRecord(Long familyId, Long recordId) {
         GrowthGuardRecord record = growthRecordRepository.selectById(recordId);
         if (record == null || !familyId.equals(record.getFamilyId()) || !"ACTIVE".equals(record.getStatus())) {
@@ -630,6 +665,16 @@ public class MemoryLibraryService {
         ensureCreatorOrFamilyOwner(familyId, record.getCreatedBy(), "只能恢复自己创建的观察，或由家族创建者恢复");
         record.setStatus("ACTIVE");
         growthRecordRepository.updateById(record);
+    }
+
+    private void deleteArchivedGrowthRecord(Long familyId, Long recordId) {
+        GrowthGuardRecord record = growthRecordRepository.selectById(recordId);
+        if (record == null || !familyId.equals(record.getFamilyId()) || !"ARCHIVED".equals(record.getStatus())) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        ensureCreatorOrFamilyOwner(familyId, record.getCreatedBy(), "只能删除自己归档的观察，或由家族创建者删除");
+        deleteEmbeddings("GROWTH_OBSERVATION", recordId);
+        growthRecordRepository.deleteById(recordId);
     }
 
     private void archiveGrowthReport(Long familyId, Long reportId) {
@@ -661,6 +706,22 @@ public class MemoryLibraryService {
         ensureCreatorOrFamilyOwner(familyId, report.getCreatedBy(), "只能恢复自己创建的摘要，或由家族创建者恢复");
         report.setStatus("ACTIVE");
         growthReportRepository.updateById(report);
+    }
+
+    private void deleteArchivedGrowthReport(Long familyId, Long reportId) {
+        GrowthGuardReport report = growthReportRepository.selectById(reportId);
+        if (report == null || !"ARCHIVED".equals(report.getStatus()) || !familyId.equals(report.getFamilyId())) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        ensureCreatorOrFamilyOwner(familyId, report.getCreatedBy(), "只能删除自己归档的摘要，或由家族创建者删除");
+        growthReportRepository.deleteById(reportId);
+    }
+
+    private void deleteEmbeddings(String sourceType, Long sourceId) {
+        jdbcTemplate.update(
+                "DELETE FROM memory_embeddings WHERE source_type = ? AND source_id = ?",
+                sourceType,
+                sourceId);
     }
 
     private void ensureCreatorOrFamilyOwner(Long familyId, Long creatorUserId, String message) {

@@ -51,6 +51,32 @@ class AuthorizedMemoryRecallServiceTest {
     @InjectMocks private AuthorizedMemoryRecallService recallService;
 
     @Test
+    void recallForFamily_skipsFamilyMemoryForUnrelatedQuery() {
+        Long familyId = 10L;
+        Long viewerUserId = 101L;
+
+        AuthorizedMemoryRecallResult result = recallService.recallForFamily(
+                familyId,
+                viewerUserId,
+                "Python 装饰器怎么写",
+                3,
+                3);
+
+        verify(familyService).checkMembership(familyId);
+        verify(diaryRepository, never()).findVisibleByFamily(any(), any(), anyInt());
+        verify(memoryRepository, never()).findActiveFamilyMemories(any(), any(), anyInt());
+        verify(growthRecordRepository, never()).findVisibleByFamily(any(), any(), anyInt());
+        verify(embeddingRepository, never()).countReadyByFamilyId(any());
+        verify(aiServiceClient, never()).embedText(any());
+
+        assertEquals(List.of(), result.getDiaries());
+        assertEquals(List.of(), result.getMemories());
+        assertEquals(List.of(), result.getGrowthRecords());
+        assertEquals("SKIPPED_UNRELATED_QUERY", result.getRetrievalMode());
+        assertEquals(0, result.getMemoryCount());
+    }
+
+    @Test
     void recallForFamily_usesOnlyPermissionFilteredCandidates() {
         Long familyId = 10L;
         Long viewerUserId = 101L;

@@ -755,7 +755,7 @@ public class MirrorContextService {
 
     private static String ageLine(String label, FamilyMemberVO member) {
         Integer age = memberAge(member);
-        return label + "：" + (age == null ? "20岁（未设置时默认）" : age + "岁");
+        return label + "：" + (age == null ? "未设置" : age + "岁");
     }
 
     private static Integer memberAge(FamilyMemberVO member) {
