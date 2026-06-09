@@ -927,6 +927,10 @@ export const memoryLibraryApi = {
 
 export const adminApi = {
   getDatabaseHealth: () => request<DatabaseHealthResponse>('/admin/database/health'),
+  deleteUser: (userId: number) =>
+    request<void>(`/admin/database/users/${userId}`, {
+      method: 'DELETE',
+    }),
   runMemoryRecallDiagnostic: (data: MemoryRecallDiagnosticRequest) =>
     request<MemoryRecallDiagnosticResponse>('/admin/database/memory-recall-diagnostic', {
       method: 'POST',

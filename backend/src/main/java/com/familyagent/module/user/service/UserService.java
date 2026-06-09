@@ -4,8 +4,6 @@ import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.crypto.SecureUtil;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
-import com.familyagent.module.invite.entity.InviteCode;
-import com.familyagent.module.invite.repository.InviteCodeRepository;
 import com.familyagent.module.user.dto.ChangePasswordRequest;
 import com.familyagent.module.user.dto.LoginRequest;
 import com.familyagent.module.user.dto.LoginResponse;
@@ -27,41 +25,24 @@ import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/**
- * 用户服务
- * <p>
- * 密码使用 BCrypt 加密（加盐 + 自适应密钥拉伸）。
- * 旧版 SHA-256 密码在登录时自动迁移到 BCrypt。
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
 
     private final UserRepository userRepository;
-    private final InviteCodeRepository inviteCodeRepository;
     private static final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
-    /**
-     * 验证密码：先 BCrypt，失败则尝试 SHA-256 迁移
-     */
     private boolean passwordMatches(String rawPassword, String storedHash) {
-        // BCrypt hash 以 $2a$ 开头
         if (storedHash.startsWith("$2a$")) {
             return encoder.matches(rawPassword, storedHash);
         }
-        // 旧版 SHA-256：验证后自动升级
-        String sha256 = SecureUtil.sha256(rawPassword);
-        return sha256.equals(storedHash);
+        return SecureUtil.sha256(rawPassword).equals(storedHash);
     }
 
     @Transactional
     public User register(RegisterRequest request) {
-        String inviteCodeValue = normalizeInviteCode(request.getInviteCode());
-        InviteCode inviteCode = validateInviteCode(inviteCodeValue);
-
-        // 检查用户名
         if (userRepository.countByUsername(request.getUsername()) > 0) {
             throw new BusinessException(ErrorCode.USERNAME_EXISTS);
         }
@@ -73,41 +54,11 @@ public class UserService {
         user.setEmail(request.getEmail());
         user.setRole("USER");
         user.setStatus("ACTIVE");
-        user.setMetadata(Map.of(
-                "inviteCode", inviteCode.getCode(),
-                "inviteSource", inviteCode.getSource() == null ? "" : inviteCode.getSource()
-        ));
+        user.setMetadata(Map.of());
 
         userRepository.insert(user);
-        int updated = inviteCodeRepository.incrementUsedCount(inviteCode.getId());
-        if (updated == 0) {
-            throw new BusinessException(ErrorCode.INVITE_CODE_EXHAUSTED);
-        }
-        log.info("用户注册成功: username={}, id={}", user.getUsername(), user.getId());
+        log.info("User registered: username={}, id={}", user.getUsername(), user.getId());
         return user;
-    }
-
-    private String normalizeInviteCode(String inviteCode) {
-        if (inviteCode == null || inviteCode.trim().isEmpty()) {
-            throw new BusinessException(ErrorCode.INVITE_CODE_REQUIRED);
-        }
-        return inviteCode.trim().toUpperCase();
-    }
-
-    private InviteCode validateInviteCode(String inviteCodeValue) {
-        InviteCode inviteCode = inviteCodeRepository.findByCode(inviteCodeValue);
-        if (inviteCode == null || !"ACTIVE".equals(inviteCode.getStatus())) {
-            throw new BusinessException(ErrorCode.INVITE_CODE_INVALID);
-        }
-        if (inviteCode.getExpiresAt() != null && inviteCode.getExpiresAt().isBefore(LocalDateTime.now())) {
-            throw new BusinessException(ErrorCode.INVITE_CODE_INVALID, "邀请码已过期");
-        }
-        if (inviteCode.getUsedCount() != null
-                && inviteCode.getMaxUses() != null
-                && inviteCode.getUsedCount() >= inviteCode.getMaxUses()) {
-            throw new BusinessException(ErrorCode.INVITE_CODE_EXHAUSTED);
-        }
-        return inviteCode;
     }
 
     public LoginResponse login(LoginRequest request) {
@@ -124,21 +75,18 @@ public class UserService {
             throw new BusinessException(ErrorCode.PASSWORD_ERROR);
         }
 
-        // 旧 SHA-256 hash 自动升级为 BCrypt
         if (!user.getPasswordHash().startsWith("$2a$")) {
             user.setPasswordHash(encoder.encode(request.getPassword()));
-            log.info("密码已升级为BCrypt: username={}", user.getUsername());
+            log.info("Password hash upgraded to BCrypt: username={}", user.getUsername());
         }
 
-        // Sa-Token 登录
         StpUtil.login(user.getId());
         String token = StpUtil.getTokenValue();
 
-        // 更新最后登录时间
         user.setLastLoginAt(LocalDateTime.now());
         userRepository.updateById(user);
 
-        log.info("用户登录成功: username={}, id={}", user.getUsername(), user.getId());
+        log.info("User login succeeded: username={}, id={}", user.getUsername(), user.getId());
 
         return LoginResponse.builder()
                 .userId(user.getId())
@@ -158,6 +106,7 @@ public class UserService {
         if (user == null) {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
+        user.setMetadata(normalizeMetadataValue(user.getMetadata()));
         return user;
     }
 
@@ -200,15 +149,15 @@ public class UserService {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
         if (!passwordMatches(request.getCurrentPassword(), current.getPasswordHash())) {
-            throw new BusinessException(ErrorCode.PASSWORD_ERROR, "当前密码不正确");
+            throw new BusinessException(ErrorCode.PASSWORD_ERROR, "Current password is incorrect");
         }
         if (encoder.matches(request.getNewPassword(), current.getPasswordHash())) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "新密码不能与当前密码相同");
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "New password must be different from current password");
         }
         current.setPasswordHash(encoder.encode(request.getNewPassword()));
         userRepository.updateById(current);
         StpUtil.logout(userId);
-        log.info("用户修改密码成功: userId={}", userId);
+        log.info("Password changed: userId={}", userId);
     }
 
     private static String normalizeBirthDate(String birthDate) {
@@ -219,31 +168,61 @@ public class UserService {
         try {
             LocalDate parsed = LocalDate.parse(trimmed);
             if (parsed.isAfter(LocalDate.now()) || parsed.isBefore(LocalDate.now().minusYears(130))) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST, "出生日期不在合理范围内");
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "Birth date is out of range");
             }
             return parsed.toString();
         } catch (DateTimeParseException e) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "出生日期格式应为 YYYY-MM-DD");
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Birth date must use YYYY-MM-DD");
         }
     }
 
     private static Map<String, Object> toMutableMap(Object metadata) {
-        if (metadata == null) {
+        Object normalized = normalizeMetadataValue(metadata);
+        if (normalized == null) {
             return new LinkedHashMap<>();
         }
         try {
-            Map<String, Object> converted = objectMapper.convertValue(metadata, new TypeReference<>() {});
+            Map<String, Object> converted = objectMapper.convertValue(normalized, new TypeReference<>() {});
             return new LinkedHashMap<>(converted);
         } catch (IllegalArgumentException ignored) {
             return new LinkedHashMap<>();
         }
     }
 
+    private static Object normalizeMetadataValue(Object metadata) {
+        Object current = metadata;
+        for (int depth = 0; depth < 5; depth++) {
+            if (current == null) {
+                return null;
+            }
+            if (current instanceof String text) {
+                String trimmed = text.trim();
+                if (trimmed.isEmpty()) {
+                    return null;
+                }
+                try {
+                    current = objectMapper.readValue(trimmed, Object.class);
+                    continue;
+                } catch (Exception ignored) {
+                    return trimmed;
+                }
+            }
+            if (current instanceof Map<?, ?> map
+                    && map.size() == 1
+                    && map.get("value") instanceof String nestedText) {
+                current = nestedText;
+                continue;
+            }
+            return current;
+        }
+        return current;
+    }
+
     private static String metadataToJson(Map<String, Object> metadata) {
         try {
             return objectMapper.writeValueAsString(metadata == null ? Map.of() : metadata);
         } catch (Exception e) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "个人资料保存失败");
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Failed to save profile");
         }
     }
 }

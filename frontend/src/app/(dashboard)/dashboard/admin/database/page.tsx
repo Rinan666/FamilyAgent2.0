@@ -11,6 +11,7 @@ import {
   Search,
   Server,
   Shield,
+  Trash2,
   Users,
 } from 'lucide-react';
 import { adminApi } from '@/lib/api';
@@ -46,7 +47,7 @@ function statusTone(status?: string) {
 
 function sourceLabel(sourceType?: string) {
   if (sourceType === 'DIARY' || sourceType === 'LIFE_RECORD') return '人生记录';
-  if (sourceType === 'MEMORY' || sourceType === 'FAMILY_EXPERIENCE') return '经验沉淀';
+  if (sourceType === 'MEMORY' || sourceType === 'FAMILY_EXPERIENCE') return '家族经验';
   if (sourceType === 'GROWTH_OBSERVATION') return '成长观察';
   return sourceType || '未知来源';
 }
@@ -57,9 +58,12 @@ function tableGroup(tables: DatabaseTableCount[], legacy: boolean) {
 
 export default function AdminDatabaseHealthPage() {
   const user = useAuthStore((state) => state.user);
+  const platformAdmin = isPlatformAdmin(user);
+
   const [data, setData] = useState<DatabaseHealthResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+
   const [diagnosticForm, setDiagnosticForm] = useState({
     familyId: '',
     viewerUserId: '',
@@ -69,7 +73,13 @@ export default function AdminDatabaseHealthPage() {
   const [diagnosticError, setDiagnosticError] = useState('');
   const [isDiagnosing, setIsDiagnosing] = useState(false);
 
-  const platformAdmin = isPlatformAdmin(user);
+  const [deleteForm, setDeleteForm] = useState({
+    userId: '',
+    confirmText: '',
+  });
+  const [deleteError, setDeleteError] = useState('');
+  const [deleteMessage, setDeleteMessage] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const embeddingHealth = useMemo(() => {
     if (!data || data.totalEmbeddings === 0) return 0;
@@ -124,6 +134,35 @@ export default function AdminDatabaseHealthPage() {
     }
   }, [diagnosticForm]);
 
+  const deleteUser = useCallback(async () => {
+    const userId = Number(deleteForm.userId);
+    if (!Number.isFinite(userId) || userId <= 0) {
+      setDeleteError('请输入有效的用户 ID');
+      return;
+    }
+    if (deleteForm.confirmText.trim().toUpperCase() !== 'DELETE') {
+      setDeleteError('请输入 DELETE 作为二次确认');
+      return;
+    }
+    if (!window.confirm(`确认删除用户 #${userId} 吗？该操作会清理该用户的关联记录，且不可恢复。`)) {
+      return;
+    }
+
+    setIsDeleting(true);
+    setDeleteError('');
+    setDeleteMessage('');
+    try {
+      await adminApi.deleteUser(userId);
+      setDeleteMessage(`用户 #${userId} 已删除。`);
+      setDeleteForm({ userId: '', confirmText: '' });
+      await loadHealth();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : '删除用户失败');
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [deleteForm, loadHealth]);
+
   useEffect(() => {
     if (platformAdmin) {
       void loadHealth();
@@ -134,31 +173,29 @@ export default function AdminDatabaseHealthPage() {
 
   if (!platformAdmin) {
     return (
-      <div className="mx-auto max-w-2xl rounded-xl border border-gray-200 bg-white p-8 text-center">
+      <div className="mx-auto max-w-2xl rounded-2xl border border-gray-200 bg-white p-8 text-center">
         <Shield className="mx-auto mb-3 h-10 w-10 text-gray-300" />
         <h1 className="text-lg font-semibold text-gray-900">需要平台管理员权限</h1>
-        <p className="mt-2 text-sm text-gray-500">
-          数据库健康页只展示给平台管理员，不对家族创建者开放。
-        </p>
+        <p className="mt-2 text-sm text-gray-500">数据库健康页只展示给平台管理员，不对家族创建者开放。</p>
       </div>
     );
   }
 
   return (
     <div className="mx-auto w-full max-w-7xl">
-      <section className="mb-4 rounded-xl border border-gray-200 bg-white p-5">
+      <section className="mb-4 rounded-2xl border border-gray-200 bg-white p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-900">数据库健康</h1>
             <p className="mt-1 text-sm text-gray-500">
-              查看核心家族数据、历史教育表和 RAG 向量索引状态。诊断工具只展示安全摘要，不展示日记或经验原文。
+              查看核心家族数据、历史兼容表和 RAG 向量状态。这里展示的是系统排查摘要，不展示私密原文。
             </p>
           </div>
           <button
             type="button"
             onClick={loadHealth}
             disabled={isLoading}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
           >
             {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             刷新
@@ -167,7 +204,7 @@ export default function AdminDatabaseHealthPage() {
       </section>
 
       {error && (
-        <div className="mb-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+        <div className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
           {error}
         </div>
       )}
@@ -180,27 +217,27 @@ export default function AdminDatabaseHealthPage() {
       ) : data ? (
         <>
           <section className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <div className="rounded-2xl border border-gray-200 bg-white p-4">
               <Users className="mb-3 h-5 w-5 text-blue-600" />
               <p className="text-2xl font-bold text-gray-900">{data.totalUsers}</p>
               <p className="text-sm text-gray-500">用户</p>
             </div>
-            <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <div className="rounded-2xl border border-gray-200 bg-white p-4">
               <Server className="mb-3 h-5 w-5 text-indigo-600" />
               <p className="text-2xl font-bold text-gray-900">{data.totalFamilies}</p>
               <p className="text-sm text-gray-500">家族空间</p>
             </div>
-            <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <div className="rounded-2xl border border-gray-200 bg-white p-4">
               <Database className="mb-3 h-5 w-5 text-emerald-600" />
               <p className="text-2xl font-bold text-gray-900">{data.totalCoreRecords}</p>
               <p className="text-sm text-gray-500">核心家族记录</p>
             </div>
-            <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <div className="rounded-2xl border border-gray-200 bg-white p-4">
               <Bot className="mb-3 h-5 w-5 text-violet-600" />
               <p className="text-2xl font-bold text-gray-900">{data.totalSkillRuns || 0}</p>
               <p className="text-sm text-gray-500">技能运行审计</p>
             </div>
-            <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <div className="rounded-2xl border border-gray-200 bg-white p-4">
               <CheckCircle className="mb-3 h-5 w-5 text-green-600" />
               <p className="text-2xl font-bold text-gray-900">{embeddingHealth}%</p>
               <p className="text-sm text-gray-500">
@@ -209,13 +246,12 @@ export default function AdminDatabaseHealthPage() {
             </div>
           </section>
 
-          <section className="mb-4 rounded-xl border border-gray-200 bg-white p-5">
+          <section className="mb-4 rounded-2xl border border-gray-200 bg-white p-5">
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-sm font-semibold text-gray-900">基础状态</h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  数据库：{data.databaseName}，pgvector：{data.pgvectorInstalled ? '已启用' : '未启用'}，
-                  生成时间：{formatDate(data.generatedAt)}
+                  数据库：{data.databaseName}，pgvector：{data.pgvectorInstalled ? '已启用' : '未启用'}，生成时间：{formatDate(data.generatedAt)}
                 </p>
               </div>
               {(data.failedEmbeddings > 0 || (data.failedSkillRuns || 0) > 0) ? (
@@ -236,7 +272,7 @@ export default function AdminDatabaseHealthPage() {
                 <p className="mb-2 text-xs font-medium text-gray-400">核心表</p>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {tableGroup(data.tableCounts, false).map((table) => (
-                    <div key={table.tableName} className="rounded-lg bg-gray-50 px-3 py-2">
+                    <div key={table.tableName} className="rounded-xl bg-gray-50 px-3 py-2">
                       <p className="text-sm font-medium text-gray-900">{table.count}</p>
                       <p className="truncate text-xs text-gray-500">{table.label}</p>
                     </div>
@@ -244,10 +280,10 @@ export default function AdminDatabaseHealthPage() {
                 </div>
               </div>
               <div>
-                <p className="mb-2 text-xs font-medium text-gray-400">历史教育表</p>
+                <p className="mb-2 text-xs font-medium text-gray-400">历史兼容表</p>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {tableGroup(data.tableCounts, true).map((table) => (
-                    <div key={table.tableName} className="rounded-lg bg-gray-50 px-3 py-2">
+                    <div key={table.tableName} className="rounded-xl bg-gray-50 px-3 py-2">
                       <p className="text-sm font-medium text-gray-900">{table.count}</p>
                       <p className="truncate text-xs text-gray-500">{table.label}</p>
                     </div>
@@ -257,12 +293,67 @@ export default function AdminDatabaseHealthPage() {
             </div>
           </section>
 
-          <section className="mb-4 rounded-xl border border-gray-200 bg-white p-5">
+          <section className="mb-4 rounded-2xl border border-red-200 bg-white p-5">
+            <div className="mb-4 flex items-start gap-3">
+              <div className="rounded-xl bg-red-50 p-2 text-red-600">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold text-gray-900">删除用户</h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  仅平台管理员可用。删除会清理该用户的会话、记录、成长观察、向量索引和家庭成员映射，且不可恢复。
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-[180px_180px_auto]">
+              <input
+                name="deleteUserId"
+                type="number"
+                min="1"
+                value={deleteForm.userId}
+                onChange={(event) => setDeleteForm((prev) => ({ ...prev, userId: event.target.value }))}
+                placeholder="用户 ID"
+                className="h-10 rounded-xl border border-gray-200 px-3 text-sm outline-none focus:border-red-300"
+              />
+              <input
+                name="deleteConfirm"
+                type="text"
+                value={deleteForm.confirmText}
+                onChange={(event) => setDeleteForm((prev) => ({ ...prev, confirmText: event.target.value }))}
+                placeholder="输入 DELETE 确认"
+                className="h-10 rounded-xl border border-gray-200 px-3 text-sm uppercase outline-none focus:border-red-300"
+              />
+              <button
+                type="button"
+                onClick={deleteUser}
+                disabled={isDeleting}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                删除用户
+              </button>
+            </div>
+
+            {deleteError && (
+              <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-600">
+                {deleteError}
+              </div>
+            )}
+
+            {deleteMessage && (
+              <div className="mt-3 rounded-xl border border-green-100 bg-green-50 px-3 py-2 text-sm text-green-700">
+                {deleteMessage}
+              </div>
+            )}
+          </section>
+
+          <section className="mb-4 rounded-2xl border border-gray-200 bg-white p-5">
             <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <h2 className="text-sm font-semibold text-gray-900">RAG 召回诊断</h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  以指定家族成员的权限视角模拟召回，便于排查 AI 为什么参考了某类记忆。
+                  以指定家族成员的权限视角模拟召回，帮助排查 Agent 为什么参考了某类记忆。
                 </p>
               </div>
               <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
@@ -278,7 +369,7 @@ export default function AdminDatabaseHealthPage() {
                 value={diagnosticForm.familyId}
                 onChange={(event) => setDiagnosticForm((prev) => ({ ...prev, familyId: event.target.value }))}
                 placeholder="familyId"
-                className="h-10 rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-gray-400"
+                className="h-10 rounded-xl border border-gray-200 px-3 text-sm outline-none focus:border-gray-400"
               />
               <input
                 name="diagnosticViewerUserId"
@@ -287,21 +378,21 @@ export default function AdminDatabaseHealthPage() {
                 value={diagnosticForm.viewerUserId}
                 onChange={(event) => setDiagnosticForm((prev) => ({ ...prev, viewerUserId: event.target.value }))}
                 placeholder="viewerUserId"
-                className="h-10 rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-gray-400"
+                className="h-10 rounded-xl border border-gray-200 px-3 text-sm outline-none focus:border-gray-400"
               />
               <input
                 name="diagnosticQuery"
                 type="text"
                 value={diagnosticForm.query}
                 onChange={(event) => setDiagnosticForm((prev) => ({ ...prev, query: event.target.value }))}
-                placeholder="输入问题或关键词，例如：牙齿、升学、家庭沟通"
-                className="h-10 rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-gray-400"
+                placeholder="例如：刷牙、升学、家庭沟通"
+                className="h-10 rounded-xl border border-gray-200 px-3 text-sm outline-none focus:border-gray-400"
               />
               <button
                 type="button"
                 onClick={runDiagnostic}
                 disabled={isDiagnosing}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-gray-900 px-4 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-60"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-gray-900 px-4 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-60"
               >
                 {isDiagnosing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                 诊断
@@ -309,13 +400,13 @@ export default function AdminDatabaseHealthPage() {
             </div>
 
             {diagnosticError && (
-              <div className="mt-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-600">
+              <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-600">
                 {diagnosticError}
               </div>
             )}
 
             {diagnosticResult && (
-              <div className="mt-4 rounded-lg border border-gray-100 bg-gray-50 p-4">
+              <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-4">
                 <div className="mb-3 flex flex-wrap gap-2 text-xs font-medium text-gray-600">
                   <span className="rounded-full bg-white px-2.5 py-1">Family #{diagnosticResult.familyId}</span>
                   <span className="rounded-full bg-white px-2.5 py-1">Viewer #{diagnosticResult.viewerUserId}</span>
@@ -324,26 +415,28 @@ export default function AdminDatabaseHealthPage() {
                     READY embeddings: {diagnosticResult.embeddingReadyCount}
                   </span>
                 </div>
+
                 <div className="mb-4 grid grid-cols-3 gap-2 text-center text-sm">
-                  <div className="rounded-lg bg-white px-3 py-2">
+                  <div className="rounded-xl bg-white px-3 py-2">
                     <p className="font-semibold text-gray-900">{diagnosticResult.diaryCount}</p>
                     <p className="text-xs text-gray-500">人生记录</p>
                   </div>
-                  <div className="rounded-lg bg-white px-3 py-2">
+                  <div className="rounded-xl bg-white px-3 py-2">
                     <p className="font-semibold text-gray-900">{diagnosticResult.memoryCount}</p>
-                    <p className="text-xs text-gray-500">经验沉淀</p>
+                    <p className="text-xs text-gray-500">家族经验</p>
                   </div>
-                  <div className="rounded-lg bg-white px-3 py-2">
+                  <div className="rounded-xl bg-white px-3 py-2">
                     <p className="font-semibold text-gray-900">{diagnosticResult.growthRecordCount}</p>
                     <p className="text-xs text-gray-500">成长观察</p>
                   </div>
                 </div>
+
                 {diagnosticResult.sources.length === 0 ? (
                   <p className="text-sm text-gray-500">没有召回到可见来源。</p>
                 ) : (
                   <div className="space-y-2">
                     {diagnosticResult.sources.map((source) => (
-                      <div key={source.id} className="rounded-lg bg-white p-3">
+                      <div key={source.id} className="rounded-xl bg-white p-3">
                         <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
                           <span className="font-medium text-gray-700">{sourceLabel(source.sourceType)}</span>
                           <span>{source.id}</span>
@@ -369,7 +462,7 @@ export default function AdminDatabaseHealthPage() {
             )}
           </section>
 
-          <section className="mb-4 rounded-xl border border-gray-200 bg-white p-5">
+          <section className="mb-4 rounded-2xl border border-gray-200 bg-white p-5">
             <h2 className="mb-3 text-sm font-semibold text-gray-900">家族数据概况</h2>
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-sm">
@@ -406,14 +499,14 @@ export default function AdminDatabaseHealthPage() {
           </section>
 
           <section className="mb-4 grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-            <div className="rounded-xl border border-gray-200 bg-white p-5">
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
               <h2 className="mb-3 text-sm font-semibold text-gray-900">Embedding 状态</h2>
               {groupedEmbeddingStatuses.length === 0 ? (
                 <p className="text-sm text-gray-500">暂无向量索引数据。</p>
               ) : (
                 <div className="space-y-3">
                   {groupedEmbeddingStatuses.map(([familyId, statuses]) => (
-                    <div key={familyId} className="rounded-lg border border-gray-100 p-3">
+                    <div key={familyId} className="rounded-xl border border-gray-100 p-3">
                       <p className="mb-2 text-xs font-medium text-gray-400">Family #{familyId}</p>
                       <div className="flex flex-wrap gap-2">
                         {statuses.map((item) => (
@@ -432,14 +525,14 @@ export default function AdminDatabaseHealthPage() {
               )}
             </div>
 
-            <div className="rounded-xl border border-gray-200 bg-white p-5">
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
               <h2 className="mb-3 text-sm font-semibold text-gray-900">最近失败向量</h2>
               {data.recentFailedEmbeddings.length === 0 ? (
                 <p className="text-sm text-gray-500">暂无失败项。</p>
               ) : (
                 <div className="space-y-2">
                   {data.recentFailedEmbeddings.map((item) => (
-                    <div key={item.id} className="rounded-lg bg-red-50 p-3">
+                    <div key={item.id} className="rounded-xl bg-red-50 p-3">
                       <div className="mb-1 flex flex-wrap items-center gap-2 text-xs font-medium text-red-700">
                         <span>#{item.id}</span>
                         <span>Family {item.familyId}</span>
@@ -454,14 +547,14 @@ export default function AdminDatabaseHealthPage() {
             </div>
           </section>
 
-          <section className="mb-4 rounded-xl border border-gray-200 bg-white p-5">
+          <section className="mb-4 rounded-2xl border border-gray-200 bg-white p-5">
             <h2 className="mb-3 text-sm font-semibold text-gray-900">最近失败技能运行</h2>
             {!data.recentFailedSkillRuns || data.recentFailedSkillRuns.length === 0 ? (
               <p className="text-sm text-gray-500">暂无失败项。</p>
             ) : (
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                 {data.recentFailedSkillRuns.map((item) => (
-                  <div key={item.id} className="rounded-lg bg-red-50 p-3">
+                  <div key={item.id} className="rounded-xl bg-red-50 p-3">
                     <div className="mb-1 flex flex-wrap items-center gap-2 text-xs font-medium text-red-700">
                       <span>#{item.id}</span>
                       <span>Family {item.familyId}</span>

@@ -25,11 +25,13 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doReturn;
 
 @ExtendWith(MockitoExtension.class)
 class DatabaseHealthServiceTest {
@@ -41,6 +43,65 @@ class DatabaseHealthServiceTest {
     @InjectMocks private DatabaseHealthService databaseHealthService;
 
     @Test
+    void deleteUser_requiresPlatformAdmin() {
+        try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
+            stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(2L);
+            User user = new User();
+            user.setId(2L);
+            user.setRole("USER");
+            when(userRepository.findBasicById(2L)).thenReturn(user);
+
+            BusinessException exception = assertThrows(
+                    BusinessException.class,
+                    () -> databaseHealthService.deleteUser(101L));
+
+            assertEquals(ErrorCode.FORBIDDEN.getCode(), exception.getCode());
+            verify(jdbcTemplate, never()).update("DELETE FROM users WHERE id = ?", 101L);
+        }
+    }
+
+    @Test
+    void deleteUser_rejectsDeletingCurrentAdmin() {
+        try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
+            stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(1L);
+            when(userRepository.findBasicById(1L)).thenReturn(adminUser());
+
+            BusinessException exception = assertThrows(
+                    BusinessException.class,
+                    () -> databaseHealthService.deleteUser(1L));
+
+            assertEquals(ErrorCode.BAD_REQUEST.getCode(), exception.getCode());
+            verify(jdbcTemplate, never()).update("DELETE FROM users WHERE id = ?", 1L);
+        }
+    }
+
+    @Test
+    void deleteUser_deletesUserAndRelatedRecords() {
+        try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
+            stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(1L);
+            when(userRepository.findBasicById(1L)).thenReturn(adminUser());
+
+            User target = new User();
+            target.setId(88L);
+            target.setRole("USER");
+            when(userRepository.findBasicById(88L)).thenReturn(target);
+
+            when(jdbcTemplate.queryForObject(eq("SELECT to_regclass(?) IS NOT NULL"), eq(Boolean.class), anyString()))
+                    .thenReturn(true);
+            doReturn(1).when(jdbcTemplate).update(anyString(), eq(88L));
+
+            databaseHealthService.deleteUser(88L);
+
+            verify(jdbcTemplate).update("UPDATE families SET created_by = NULL WHERE created_by = ?", 88L);
+            verify(jdbcTemplate).update("DELETE FROM family_relationships WHERE from_user_id = ?", 88L);
+            verify(jdbcTemplate).update("DELETE FROM memory_entry_votes WHERE user_id = ?", 88L);
+            verify(jdbcTemplate).update("DELETE FROM chat_sessions WHERE user_id = ?", 88L);
+            verify(jdbcTemplate).update("DELETE FROM family_members WHERE user_id = ?", 88L);
+            verify(jdbcTemplate).update("DELETE FROM users WHERE id = ?", 88L);
+        }
+    }
+
+    @Test
     void diagnoseMemoryRecall_rejectsViewerOutsideFamily() {
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(1L);
@@ -50,7 +111,7 @@ class DatabaseHealthServiceTest {
             MemoryRecallDiagnosticRequest request = new MemoryRecallDiagnosticRequest();
             request.setFamilyId(10L);
             request.setViewerUserId(999L);
-            request.setQuery("牙齿");
+            request.setQuery("tooth");
 
             BusinessException exception = assertThrows(
                     BusinessException.class,
@@ -60,7 +121,7 @@ class DatabaseHealthServiceTest {
             verify(memoryRecallService, never()).recallForFamilyAfterViewerValidated(
                     eq(10L),
                     eq(999L),
-                    eq("牙齿"),
+                    eq("tooth"),
                     anyInt(),
                     anyInt());
         }
@@ -72,19 +133,19 @@ class DatabaseHealthServiceTest {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(1L);
             when(userRepository.findBasicById(1L)).thenReturn(adminUser());
             when(familyMemberRepository.findByFamilyAndUser(10L, 101L)).thenReturn(member(10L, 101L));
-            when(memoryRecallService.recallForFamilyAfterViewerValidated(eq(10L), eq(101L), eq("刷牙"), eq(2), eq(4)))
+            when(memoryRecallService.recallForFamilyAfterViewerValidated(eq(10L), eq(101L), eq("brush teeth"), eq(2), eq(4)))
                     .thenReturn(AuthorizedMemoryRecallResult.builder()
                             .diaryCount(1)
                             .memoryCount(1)
                             .growthRecordCount(0)
-                            .query("刷牙")
+                            .query("brush teeth")
                             .retrievalMode("TEXT_FALLBACK")
                             .embeddingReadyCount(7)
                             .sources(List.of(RecallSourceSummary.builder()
                                     .id("memory-2")
                                     .sourceType("FAMILY_EXPERIENCE")
-                                    .title("家族成员的经验")
-                                    .snippet("每天睡前刷牙")
+                                    .title("Family advice")
+                                    .snippet("Brush teeth before sleep")
                                     .visibility("FAMILY_VISIBLE")
                                     .build()))
                             .build());
@@ -92,7 +153,7 @@ class DatabaseHealthServiceTest {
             MemoryRecallDiagnosticRequest request = new MemoryRecallDiagnosticRequest();
             request.setFamilyId(10L);
             request.setViewerUserId(101L);
-            request.setQuery("刷牙");
+            request.setQuery("brush teeth");
             request.setDiaryLimit(2);
             request.setMemoryLimit(4);
 
@@ -105,7 +166,7 @@ class DatabaseHealthServiceTest {
             assertEquals(1, response.getDiaryCount());
             assertEquals(1, response.getMemoryCount());
             assertEquals(1, response.getSources().size());
-            assertEquals("每天睡前刷牙", response.getSources().get(0).getSnippet());
+            assertEquals("Brush teeth before sleep", response.getSources().get(0).getSnippet());
         }
     }
 

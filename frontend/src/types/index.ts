@@ -50,7 +50,6 @@ export interface RegisterRequest {
   password: string;
   nickname?: string;
   email?: string;
-  inviteCode: string;
 }
 
 // --- 家族 ---
