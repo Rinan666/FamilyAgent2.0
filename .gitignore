@@ -18,7 +18,7 @@ __pycache__/
 *$py.class
 *.egg-info/
 dist/
-.venv/
+.venv*/
 venv/
 env/
 *.egg
@@ -50,6 +50,7 @@ Desktop.ini
 
 # --- Environment ---
 .env
+.env.infra.local
 .env.local
 .env.*.local
 *.env

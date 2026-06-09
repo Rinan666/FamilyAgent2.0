@@ -2,6 +2,10 @@
 $ErrorActionPreference = "Continue"
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$AiServicePort = 8090
+$BackendPort = 8180
+$InfraEnvFile = Join-Path $Root ".env.infra.local"
+$InfraEnvExampleFile = Join-Path $Root ".env.infra.example"
 
 # Add Docker to PATH (may not be in cmd.exe PATH by default)
 $env:Path += ";C:\Program Files\Docker\Docker\resources\bin"
@@ -95,7 +99,14 @@ Write-Host "       All checks passed" -ForegroundColor Green
 Write-Host ""
 Write-Host "[1/5] Starting infrastructure..." -ForegroundColor Yellow
 if ($dockerOk) {
-    docker compose -f "$Root\docker-compose.yml" up -d 2>&1 | Out-Null
+    if (-not (Test-Path $InfraEnvFile)) {
+        Write-Host "       [ERROR] Missing infra config: $InfraEnvFile" -ForegroundColor Red
+        if (Test-Path $InfraEnvExampleFile) {
+            Write-Host "       Copy $InfraEnvExampleFile to .env.infra.local and fill in local infra values." -ForegroundColor Yellow
+        }
+        Pause; exit 1
+    }
+    docker compose --env-file "$InfraEnvFile" -f "$Root\docker-compose.yml" up -d 2>&1 | Out-Null
     if ($LASTEXITCODE -eq 0) {
         Write-Host "       Containers started, waiting 5s..." -ForegroundColor Green
         Start-Sleep 5
@@ -113,16 +124,16 @@ if ($dockerOk) {
     }
 }
 
-# ── 2. AI Service (port 8000) ──
+# ── 2. AI Service (port 8090) ──
 Write-Host ""
-Write-Host "[2/5] Starting AI Service (port 8000)..." -ForegroundColor Yellow
-Start-ServiceOnPort 8000 "AI-Service" "$Root\ai-service" "echo AI Service http://localhost:8000 && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
+Write-Host "[2/5] Starting AI Service (port $AiServicePort)..." -ForegroundColor Yellow
+Start-ServiceOnPort $AiServicePort "AI-Service" "$Root\ai-service" "echo AI Service http://localhost:$AiServicePort && set AI_SERVICE_PORT=$AiServicePort && call start.bat"
 Write-Host "       AI Service window opened" -ForegroundColor Green
 
-# ── 3. Backend (port 8080) ──
+# ── 3. Backend (port 8180) ──
 Write-Host ""
-Write-Host "[3/5] Starting Backend (port 8080)..." -ForegroundColor Yellow
-Start-ServiceOnPort 8080 "Backend" "$Root\backend" "echo Backend compiling... first time ~1-2min && mvn spring-boot:run -Dspring-boot.run.profiles=dev"
+Write-Host "[3/5] Starting Backend (port $BackendPort)..." -ForegroundColor Yellow
+Start-ServiceOnPort $BackendPort "Backend" "$Root\backend" "echo Backend compiling... first time ~1-2min && set SERVER_PORT=$BackendPort && .\mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=dev"
 Write-Host "       Backend window opened" -ForegroundColor Green
 
 # ── 4. Frontend (port 3000) ──
@@ -143,8 +154,8 @@ Write-Host "   All services launching!" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "   Frontend:  http://localhost:3000" -ForegroundColor Cyan
 Write-Host "   Public:    https://familyagent.cn" -ForegroundColor Cyan
-Write-Host "   Backend:   http://localhost:8080" -ForegroundColor Cyan
-Write-Host "   AI API:    http://localhost:8000/docs" -ForegroundColor Cyan
+Write-Host "   Backend:   http://localhost:$BackendPort" -ForegroundColor Cyan
+Write-Host "   AI API:    http://localhost:$AiServicePort/docs" -ForegroundColor Cyan
 Write-Host "   AI Public: https://ai.familyagent.cn/ai/health" -ForegroundColor Cyan
 Write-Host "   MinIO:     http://localhost:9001" -ForegroundColor Cyan
 Write-Host "   RabbitMQ:  http://localhost:15672" -ForegroundColor Cyan

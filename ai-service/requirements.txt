@@ -8,15 +8,15 @@ uvicorn[standard]==0.30.1
 sse-starlette==2.1.0
 
 # LLM
-litellm==1.40.0
-openai==1.30.0
+litellm==1.88.1
+openai==2.41.0
 anthropic==0.28.0
 
 # Math
 sympy==1.12.1
 
 # Data
-pydantic==2.7.0
+pydantic==2.13.4
 pydantic-settings==2.3.0
 sqlalchemy==2.0.30
 asyncpg==0.29.0
@@ -30,7 +30,7 @@ aio-pika==9.4.0
 # faster-whisper==1.0.3
 
 # Utils
-httpx==0.27.0
+httpx==0.28.1
 tenacity==8.3.0
 structlog==24.2.0
 python-dotenv==1.0.1

@@ -35,17 +35,17 @@ check_command docker
 # 复制环境变量
 echo ""
 echo "设置环境变量..."
-if [ ! -f .env ]; then
-    cp .env.example .env
-    echo -e "${GREEN}[OK]${NC} 已创建 .env 文件，请修改其中的配置"
+if [ ! -f .env.infra.local ]; then
+    cp .env.infra.example .env.infra.local
+    echo -e "${GREEN}[OK]${NC} 已创建 .env.infra.local 文件，请修改其中的配置"
 else
-    echo -e "${YELLOW}[跳过]${NC} .env 已存在"
+    echo -e "${YELLOW}[跳过]${NC} .env.infra.local 已存在"
 fi
 
 # 启动 Docker 服务
 echo ""
 echo "启动基础设施..."
-docker-compose up -d
+docker compose --env-file .env.infra.local up -d
 echo -e "${GREEN}[OK]${NC} PostgreSQL, Redis, RabbitMQ, MinIO 已启动"
 
 # 等待服务就绪
@@ -88,7 +88,7 @@ echo -e "${GREEN}  设置完成！${NC}"
 echo ""
 echo "启动方式："
 echo "  1. 后端:  cd backend && mvn spring-boot:run"
-echo "  2. AI服务: cd ai-service && source venv/bin/activate && uvicorn app.main:app --reload --port 8000"
+echo "  2. AI服务: cd ai-service && source venv/bin/activate && uvicorn app.main:app --reload --port 8090"
 echo "  3. 前端:  cd frontend && npm run dev"
 echo ""
 echo "  访问 http://localhost:3000"
