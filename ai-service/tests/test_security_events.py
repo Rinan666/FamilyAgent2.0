@@ -10,7 +10,7 @@ class FakeRequest:
     headers = {"x-forwarded-for": "203.0.113.9, 10.0.0.1"}
     client = SimpleNamespace(host="127.0.0.1")
     state = SimpleNamespace(user_id=42)
-    url = SimpleNamespace(path="/ai/tutor/explain")
+    url = SimpleNamespace(path="/ai/agent/chat/stream")
 
     async def body(self):
         return b'{"student_message":"secret family detail should not be logged"}'
@@ -31,7 +31,7 @@ async def test_security_event_records_metadata_without_raw_body():
     assert event.status_code == 400
     assert event.user_id == "42"
     assert event.ip == "203.0.113.9"
-    assert event.path == "/ai/tutor/explain"
+    assert event.path == "/ai/agent/chat/stream"
     assert event.request_chars > 0
     assert "secret family detail" not in str(event)
 

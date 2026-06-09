@@ -42,6 +42,7 @@ logging:
 ai-service:
   base-url: ${AI_SERVICE_URL}
   timeout: ${AI_SERVICE_TIMEOUT:60}
+  internal-token: ${AI_INTERNAL_SERVICE_TOKEN}
 
 minio:
   endpoint: ${MINIO_ENDPOINT}

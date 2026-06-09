@@ -19,7 +19,7 @@ const nextConfig = {
     ],
   },
   // 代理 /api 请求到 Java 后端 (可通过 BACKEND_URL 环境变量覆盖)
-  // 注：AI 服务通过前端直连 NEXT_PUBLIC_AI_SERVICE_URL，不经过此代理
+  // 注：普通 AI 服务走前端直连；FamilyAgent 聊天流统一走 Java 透明流式代理，避免中间层缓冲。
   async headers() {
     const securityHeaders = [
       {
@@ -46,9 +46,17 @@ const nextConfig = {
     ];
   },
   async rewrites() {
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:8080';
-    const aiServiceUrl = process.env.AI_SERVICE_URL || process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:8000';
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:8180';
+    const aiServiceUrl = process.env.AI_SERVICE_URL || process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:8090';
     return [
+      {
+        source: '/ai-proxy/agent/chat/stream',
+        destination: `${backendUrl}/api/agent/chat/stream`,
+      },
+      {
+        source: '/ai-proxy/tutor/explain',
+        destination: `${backendUrl}/api/tutor/explain`,
+      },
       {
         source: '/ai-proxy/:path*',
         destination: `${aiServiceUrl}/ai/:path*`,

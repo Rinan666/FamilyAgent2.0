@@ -46,6 +46,34 @@ async def test_verify_token_rejects_missing_authorization():
 
 
 @pytest.mark.asyncio
+async def test_internal_service_token_is_accepted(monkeypatch):
+    request = SimpleNamespace(state=SimpleNamespace())
+    monkeypatch.setattr(auth.settings, "ai_internal_service_token", "secret")
+
+    user = await auth.verify_token_or_internal_service(
+        request,
+        internal_service_token="secret",
+    )
+
+    assert user["username"] == "internal-service"
+    assert request.state.internal_service is True
+
+
+@pytest.mark.asyncio
+async def test_internal_service_token_rejects_wrong_value(monkeypatch):
+    request = SimpleNamespace(state=SimpleNamespace())
+    monkeypatch.setattr(auth.settings, "ai_internal_service_token", "secret")
+
+    with pytest.raises(HTTPException) as exc:
+        await auth.verify_token_or_internal_service(
+            request,
+            internal_service_token="wrong",
+        )
+
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
 async def test_backend_401_is_always_rejected(monkeypatch):
     FakeAsyncClient.response = FakeResponse(401)
     FakeAsyncClient.error = None

@@ -212,14 +212,14 @@ function savedMemoryHref(plan: AgentSaveToolPlan, familyId?: number | null) {
   const familyQuery = familyId ? `?familyId=${familyId}` : '';
   if (plan.tool === 'DIARY') return `/dashboard/diary${familyQuery}`;
   if (plan.tool === 'FAMILY_MEMORY') return `/dashboard/heritage${familyQuery}`;
-  if (plan.tool === 'GROWTH_GUARD') return `/dashboard/growth${familyQuery}`;
+  if (plan.tool === 'GROWTH_GUARD') return `/dashboard/diary?tab=growth${familyQuery ? `&${familyQuery.slice(1)}` : ''}`;
   return `/dashboard/memory${familyQuery}`;
 }
 
 function followUpPrompt(plan: AgentSaveToolPlan) {
   if (plan.tool === 'FAMILY_MEMORY') return `继续补充这条经验沉淀的背景：${plan.title}`;
-  if (plan.tool === 'GROWTH_GUARD') return `继续补充这条成长观察的时间、对象和后续变化：${plan.title}`;
-  return `继续补充这条每日记录的时间、地点、人物和后来影响：${plan.title}`;
+      if (plan.tool === 'GROWTH_GUARD') return `继续补充这条守护观察的时间、对象和后续变化：${plan.title}`;
+      return `继续补充这条记录的时间、地点、人物和后来影响：${plan.title}`;
 }
 
 export default function TutorPage() {
@@ -240,6 +240,7 @@ export default function TutorPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const sessionSavedMemoriesRef = useRef<SessionSavedMemory[]>([]);
+  const chatRunIdRef = useRef(0);
 
   const user = useAuthStore((s) => s.user);
   const userId = user?.id;
@@ -250,6 +251,17 @@ export default function TutorPage() {
 
   const clearSessionSavedMemories = useCallback(() => {
     sessionSavedMemoriesRef.current = [];
+  }, []);
+
+  const bumpChatRun = useCallback(() => {
+    chatRunIdRef.current += 1;
+  }, []);
+
+  const isSaveTaskCurrent = useCallback((messageId: string, runId: number, sessionIdAtStart: number | null) => {
+    const state = useChatStore.getState();
+    return chatRunIdRef.current === runId
+      && (sessionIdAtStart == null || state.sessionId === sessionIdAtStart)
+      && (state.messages as TutorChatMessage[]).some((message) => message.id === messageId);
   }, []);
 
   const routePrompt = useMemo(() => searchParams.get('prompt')?.trim() || '', [searchParams]);
@@ -298,6 +310,7 @@ export default function TutorPage() {
     const currentSessionId = useChatStore.getState().sessionId;
     if (!currentSessionId) {
       if (options.resetChat) {
+        bumpChatRun();
         useChatStore.getState().reset();
         clearSessionSavedMemories();
         setInput('');
@@ -312,12 +325,13 @@ export default function TutorPage() {
       console.log('Session not ended:', error);
     } finally {
       if (options.resetChat) {
+        bumpChatRun();
         useChatStore.getState().reset();
         clearSessionSavedMemories();
         setInput('');
       }
     }
-  }, [clearSessionSavedMemories, upsertSession]);
+  }, [bumpChatRun, clearSessionSavedMemories, upsertSession]);
 
   const persistFreeChatMessages = useCallback(async (nextMessages: ChatMessage[]) => {
     if (nextMessages.length === 0) return;
@@ -477,7 +491,16 @@ export default function TutorPage() {
   }, [activeFamilyId]);
 
   const createSavePlanForMessage = useCallback(async (messageId: string, content: string, options: { automatic?: boolean } = {}) => {
+    const isAutomatic = Boolean(options.automatic);
     if (!activeFamilyId) {
+      if (isAutomatic) {
+        setMessages((useChatStore.getState().messages as TutorChatMessage[]).map((message) => (
+          message.id === messageId
+            ? { ...message, saveSuggestion: undefined }
+            : message
+        )));
+        return;
+      }
       setMessages((useChatStore.getState().messages as TutorChatMessage[]).map((message) => (
         message.id === messageId
           ? {
@@ -492,6 +515,11 @@ export default function TutorPage() {
       )));
       return;
     }
+
+    const runId = chatRunIdRef.current;
+    const sessionIdAtStart = useChatStore.getState().sessionId;
+    const isCurrent = () => isSaveTaskCurrent(messageId, runId, sessionIdAtStart);
+    if (!isCurrent()) return;
 
     setPlanningToolMessageId(messageId);
     setMessages((useChatStore.getState().messages as TutorChatMessage[]).map((message) => (
@@ -513,18 +541,36 @@ export default function TutorPage() {
         conversationContext,
         viewerRole,
       });
+      if (!isCurrent()) return;
       const plan = normalizeSaveToolPlan(planResult.data);
+      if ((!plan.should_save || plan.tool === 'NONE') && !isAutomatic) {
+        const reason = plan.reason || plan.confirmation_message || '这段内容暂时没有生成可执行的保存方案。';
+        setMessages((useChatStore.getState().messages as TutorChatMessage[]).map((message) => (
+          message.id === messageId
+            ? {
+                ...message,
+                saveSuggestion: {
+                  originalContent: content,
+                  status: 'failed',
+                  error: reason,
+                },
+              }
+            : message
+        )));
+        return;
+      }
       let result: TutorSaveResult | null = null;
       if (plan.should_save && plan.tool !== 'NONE') {
         result = await executeSavePlan(plan, content);
       }
+      if (!isCurrent()) return;
       setMessages((useChatStore.getState().messages as TutorChatMessage[]).map((message) => (
         message.id === messageId
           ? {
               ...message,
               saveSuggestion: undefined,
               content: plan.should_save && plan.tool !== 'NONE'
-                ? `${message.content}\n\n${options.automatic ? '我已自动整理并保存：' : ''}${plan.confirmation_message || `已保存为${toolLabel(plan.tool)}。`}`
+                ? `${message.content}\n\n${isAutomatic ? '我已自动整理并保存：' : ''}${plan.confirmation_message || `已保存为${toolLabel(plan.tool)}。`}`
                 : message.content,
               toolResult: plan.should_save && plan.tool !== 'NONE'
                 ? {
@@ -538,6 +584,15 @@ export default function TutorPage() {
           : message
       )));
     } catch (error) {
+      if (!isCurrent()) return;
+      if (isAutomatic) {
+        setMessages((useChatStore.getState().messages as TutorChatMessage[]).map((message) => (
+          message.id === messageId
+            ? { ...message, saveSuggestion: undefined }
+            : message
+        )));
+        return;
+      }
       const errorMessage = error instanceof Error ? error.message : '保存失败，请稍后重试。';
       setMessages((useChatStore.getState().messages as TutorChatMessage[]).map((message) => (
         message.id === messageId
@@ -552,9 +607,9 @@ export default function TutorPage() {
           : message
       )));
     } finally {
-      setPlanningToolMessageId(null);
+      setPlanningToolMessageId((current) => (current === messageId ? null : current));
     }
-  }, [activeFamilyId, executeSavePlan, setMessages, viewerRole]);
+  }, [activeFamilyId, executeSavePlan, isSaveTaskCurrent, setMessages, viewerRole]);
 
   const planSaveFromFreeChat = useCallback(async (content: string) => {
     if (!shouldPlanSaveTool(content)) return false;
@@ -770,6 +825,7 @@ export default function TutorPage() {
   };
 
   const startNewSession = () => {
+    bumpChatRun();
     setActivationScene(null);
     clearSessionSavedMemories();
     void endCurrentSession({ resetChat: true });
@@ -782,6 +838,7 @@ export default function TutorPage() {
       await endCurrentSession();
     }
     const detail = await sessionApi.getSession(session.id);
+    bumpChatRun();
     clearSessionSavedMemories();
     setSessionId(detail.status === 'ACTIVE' ? detail.id : null);
     setMessages(detail.messages || []);
@@ -796,6 +853,7 @@ export default function TutorPage() {
     await sessionApi.deleteSession(session.id);
     setSessions((prev) => prev.filter((item) => item.id !== session.id));
     if (sessionId === session.id) {
+      bumpChatRun();
       useChatStore.getState().reset();
       clearSessionSavedMemories();
       setInput('');
@@ -943,7 +1001,7 @@ export default function TutorPage() {
                       </div>
                     )}
                     <div
-                      className={`max-w-[90%] overflow-hidden rounded-2xl px-3 py-2.5 text-sm leading-relaxed whitespace-pre-wrap sm:max-w-[80%] sm:px-4 ${
+                      className={`max-w-[90%] overflow-hidden rounded-2xl px-3 py-2.5 text-sm leading-relaxed sm:max-w-[80%] sm:px-4 ${
                         msg.role === 'user'
                           ? 'rounded-br-md bg-blue-600 text-white'
                           : 'rounded-bl-md bg-gray-100 text-gray-900'
@@ -968,7 +1026,7 @@ export default function TutorPage() {
                                 href={msg.toolResult.memoryHref}
                                 className="inline-flex h-8 items-center rounded-lg border border-green-100 bg-green-50 px-3 text-xs font-medium text-green-700 hover:bg-green-100"
                               >
-                                查看家族知识库
+            查看家族记忆库
                               </Link>
                             )}
                             {msg.toolResult.followUpPrompt && (
@@ -1045,7 +1103,7 @@ export default function TutorPage() {
               <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
                 <FileText className="h-3.5 w-3.5" />
                 <span className="min-w-0 flex-1">
-                  已从家族知识库带入回流测试问题，确认后发送给家族Agent。
+          已从家族记忆库带入回流测试问题，确认后发送给家族Agent。
                 </span>
                 <button
                   type="button"

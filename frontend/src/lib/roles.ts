@@ -11,9 +11,9 @@ export function familyRoleLabel(role?: string) {
 }
 
 export function viewerRoleLabel(role: ViewerRole) {
-  if (role === 'ADMIN') return '平台管理员视图';
+  if (role === 'ADMIN') return '管理员视图';
   if (role === 'PARENT') return '成年人视图';
-  return '未成年人视图';
+  return '成员视图';
 }
 
 export function deriveViewerRole(

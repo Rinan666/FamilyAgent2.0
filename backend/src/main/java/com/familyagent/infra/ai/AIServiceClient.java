@@ -2,6 +2,7 @@ package com.familyagent.infra.ai;
 
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
@@ -11,15 +12,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * AI service client for the Python FastAPI service.
@@ -30,13 +31,20 @@ public class AIServiceClient {
 
     private static final int MILLIS_PER_SECOND = 1000;
     private static final int MAX_CONNECT_TIMEOUT_MILLIS = 10_000;
+    private static final int STREAM_TIMEOUT_MILLIS = 300_000;
+    private static final int STREAM_BUFFER_SIZE = 1024;
+    private static final String INTERNAL_SERVICE_TOKEN_HEADER = "X-Internal-Service-Token";
 
     private final RestTemplate restTemplate;
     private final String baseUrl;
+    private final String internalToken;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public AIServiceClient(@Value("${ai-service.base-url:http://localhost:8000}") String baseUrl,
-                           @Value("${ai-service.timeout:60}") int timeout) {
+    public AIServiceClient(@Value("${ai-service.base-url:http://localhost:8090}") String baseUrl,
+                           @Value("${ai-service.timeout:60}") int timeout,
+                           @Value("${ai-service.internal-token:}") String internalToken) {
         this.baseUrl = baseUrl;
+        this.internalToken = internalToken;
         this.restTemplate = new RestTemplate(createRequestFactory(timeout));
     }
 
@@ -49,96 +57,83 @@ public class AIServiceClient {
     }
 
     /**
-     * Proxy tutor SSE streams from the AI service.
+     * Proxy FamilyAgent chat SSE streams from the AI service.
      */
-    public SseEmitter proxyExplainStream(Map<String, Object> request) {
-        SseEmitter emitter = new SseEmitter(300_000L);
+    public void proxyChatStream(Map<String, Object> request, OutputStream downstream, String authorization) {
+        HttpURLConnection conn = null;
+        try {
+            String jsonBody = objectMapper.writeValueAsString(request);
 
-        CompletableFuture.runAsync(() -> {
-            HttpURLConnection conn = null;
-            try {
-                String jsonBody = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(request);
+            URI uri = URI.create(baseUrl + "/ai/agent/chat/stream");
+            conn = (HttpURLConnection) uri.toURL().openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json;charset=UTF-8");
+            conn.setRequestProperty("Accept", "text/event-stream");
+            if (authorization != null && !authorization.isBlank()) {
+                conn.setRequestProperty("Authorization", authorization);
+            }
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(MAX_CONNECT_TIMEOUT_MILLIS);
+            conn.setReadTimeout(STREAM_TIMEOUT_MILLIS);
 
-                URI uri = URI.create(baseUrl + "/ai/tutor/explain");
-                conn = (HttpURLConnection) uri.toURL().openConnection();
-                conn.setRequestMethod("POST");
-                conn.setRequestProperty("Content-Type", "application/json");
-                conn.setDoOutput(true);
-                conn.setConnectTimeout(10000);
-                conn.setReadTimeout(300000);
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(jsonBody.getBytes(StandardCharsets.UTF_8));
+                os.flush();
+            }
 
-                try (OutputStream os = conn.getOutputStream()) {
-                    os.write(jsonBody.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                }
+            int responseCode = conn.getResponseCode();
+            if (responseCode != HttpURLConnection.HTTP_OK) {
+                String errorBody = readResponseBody(conn);
+                throw new BusinessException(
+                        ErrorCode.AI_SERVICE_ERROR,
+                        "AI service response error: " + responseCode + (errorBody.isBlank() ? "" : " - " + errorBody)
+                );
+            }
 
-                int responseCode = conn.getResponseCode();
-                if (responseCode != 200) {
-                    emitter.completeWithError(
-                            new BusinessException(ErrorCode.AI_SERVICE_ERROR, "AI service response error: " + responseCode));
-                    return;
-                }
-
-                try (BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(conn.getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        emitter.send(SseEmitter.event().data(line));
-                    }
-                }
-                emitter.complete();
-
-            } catch (Exception e) {
-                log.error("Tutor SSE proxy failed", e);
-                try {
-                    emitter.completeWithError(e);
-                } catch (Exception ex) {
-                    // ignore
-                }
-            } finally {
-                if (conn != null) {
-                    conn.disconnect();
+            try (InputStream upstream = conn.getInputStream()) {
+                byte[] buffer = new byte[STREAM_BUFFER_SIZE];
+                int bytesRead;
+                while ((bytesRead = upstream.read(buffer)) != -1) {
+                    downstream.write(buffer, 0, bytesRead);
+                    downstream.flush();
                 }
             }
-        });
-
-        return emitter;
-    }
-
-    /**
-     * Call the grading endpoint synchronously.
-     */
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> gradeAnswer(Map<String, Object> request) {
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
-
-            ResponseEntity<Map> response = restTemplate.postForEntity(
-                    baseUrl + "/ai/tutor/grade", entity, Map.class);
-            return response.getBody();
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
-            log.error("Grading service call failed", e);
-            throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "Grading service error: " + e.getMessage());
+            log.error("FamilyAgent chat SSE proxy failed", e);
+            throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "FamilyAgent chat SSE proxy failed: " + e.getMessage());
+        } finally {
+            if (conn != null) {
+                conn.disconnect();
+            }
         }
     }
 
     /**
-     * Call the question generation endpoint synchronously.
+     * Legacy alias kept while /api/tutor/explain callers are phased out.
      */
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> generateQuestions(Map<String, Object> request) {
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+    @Deprecated
+    public void proxyExplainStream(Map<String, Object> request, OutputStream downstream, String authorization) {
+        proxyChatStream(request, downstream, authorization);
+    }
 
-            ResponseEntity<Map> response = restTemplate.postForEntity(
-                    baseUrl + "/ai/tutor/generate", entity, Map.class);
-            return response.getBody();
-        } catch (Exception e) {
-            log.error("Question generation service call failed", e);
-            throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "Question generation service error: " + e.getMessage());
+    private String readResponseBody(HttpURLConnection conn) {
+        InputStream errorStream = conn.getErrorStream();
+        if (errorStream == null) {
+            return "";
+        }
+
+        try (InputStream input = errorStream; ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[STREAM_BUFFER_SIZE];
+            int bytesRead;
+            while ((bytesRead = input.read(buffer)) != -1) {
+                output.write(buffer, 0, bytesRead);
+            }
+            return output.toString(StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            log.warn("Failed to read AI service error body", e);
+            return "";
         }
     }
 
@@ -191,6 +186,9 @@ public class AIServiceClient {
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
+            if (internalToken != null && !internalToken.isBlank()) {
+                headers.set(INTERNAL_SERVICE_TOKEN_HEADER, internalToken);
+            }
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
 
             ResponseEntity<Map> response = restTemplate.postForEntity(
@@ -211,7 +209,7 @@ public class AIServiceClient {
             return restTemplate.getForObject(baseUrl + "/ai/health", Map.class);
         } catch (Exception e) {
             log.error("AI service health check failed", e);
-            return Map.of("status", "unhealthy", "error", e.getMessage());
+            return Map.of("status", "DOWN", "error", e.getMessage());
         }
     }
 }

@@ -4,6 +4,7 @@ Token 验证 — 调用 Java 后端验证 Sa-Token
 作为 FastAPI Dependency 注入到需要鉴权的路由中。
 """
 import logging
+import secrets
 from typing import Optional
 
 import httpx
@@ -44,6 +45,25 @@ async def verify_token(
     request.state.user_id = user.get("id")
 
     return user
+
+
+async def verify_token_or_internal_service(
+    request: Request,
+    authorization: Optional[str] = Header(None),
+    internal_service_token: Optional[str] = Header(None, alias="X-Internal-Service-Token"),
+) -> dict:
+    """Allow normal user auth or trusted Java backend service-to-service calls."""
+    if internal_service_token:
+        expected = settings.internal_service_token
+        if expected and secrets.compare_digest(internal_service_token, expected):
+            user = {"id": -100, "username": "internal-service", "nickname": "Backend Service"}
+            request.state.user = user
+            request.state.user_id = user["id"]
+            request.state.internal_service = True
+            return user
+        raise HTTPException(status_code=401, detail="内部服务令牌无效")
+
+    return await verify_token(request, authorization=authorization)
 
 
 async def _call_backend_verify(token: str) -> Optional[dict]:

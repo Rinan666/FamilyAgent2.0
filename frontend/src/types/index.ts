@@ -545,6 +545,16 @@ export interface AgentOrganizedDraft {
   reason: string;
 }
 
+export interface HeritageSaveJudge {
+  should_save: boolean;
+  learning_value_score: number;
+  descendant_value: string;
+  reason: string;
+  suggested_revision: string;
+  missing_elements: string[];
+  sensitivity: 'LOW' | 'MEDIUM' | 'HIGH' | string;
+}
+
 export type GrowthGuardCategory =
   | 'POSTURE'
   | 'DENTAL'

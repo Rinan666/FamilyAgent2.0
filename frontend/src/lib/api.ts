@@ -6,7 +6,7 @@
  *
  * 环境变量：
  *   NEXT_PUBLIC_API_URL — 后端地址 (默认 /api)
- *   AI_SERVICE_URL — AI 服务地址 (默认 http://localhost:8000)
+ *   AI_SERVICE_URL — AI 服务地址 (默认 http://localhost:8090)
  */
 import type {
   ApiResult,
@@ -14,12 +14,12 @@ import type {
   User, Family, FamilyMember, FamilyRelationship, CareAuthorization, DiaryEntry, CreateDiaryEntryRequest, UpdateDiaryEntryRequest,
   Question, KnowledgePoint, QuestionAnswer, QuestionContent,
   AbilityProfile, TestRecord, TestRecordDetail,
-  ChatMessage, ChatSession, GradeResult, MemoryEntry, MemoryLibraryItem, MemoryLibraryItemType, MemoryMaintenanceSuggestion, PageResult, SubmitTestRequest, CreateQuestionRequest,
+  ChatMessage, ChatSession, MemoryEntry, MemoryLibraryItem, MemoryLibraryItemType, MemoryMaintenanceSuggestion, PageResult, SubmitTestRequest, CreateQuestionRequest,
   TutorExtractResult, CreateFamilyMemoryRequest, FamilyMemoryCard, MemoryEntryType, MemoryVoteType,
   HeritageTask, CreateHeritageTaskRequest, HeritageTaskDraft,
   CreateGrowthGuardRecordRequest, GrowthGuardRecord, CreateGrowthGuardReportRequest, GrowthGuardReport, WeeklyGrowthReport,
   GrowthFollowUpStatus, MirrorContextResponse, MistakeReviewResult, DailyPracticeResult, ExamReviewResult, StudyPlanResult,
-  AgentDraftScene, AgentOrganizedDraft, AgentSaveToolPlan, AuthorizedMemoryRecallResult, FamilyWeeklyDigest, RebuildMemoryIndexResult,
+  AgentDraftScene, AgentOrganizedDraft, AgentSaveToolPlan, HeritageSaveJudge, AuthorizedMemoryRecallResult, FamilyWeeklyDigest, RebuildMemoryIndexResult,
   DatabaseHealthResponse, MemoryRecallDiagnosticRequest, MemoryRecallDiagnosticResponse,
   SkillRun, CreateSkillRunRequest, UpdateSkillRunRequest,
 } from '@/types';
@@ -463,6 +463,26 @@ async function sseRequest(
   onError: (error: string) => void,
   onMetadata?: (metadata: Record<string, unknown>) => void,
 ): Promise<void> {
+  const handleSseLine = (rawLine: string): boolean => {
+    const line = rawLine.replace(/\r$/, '');
+    if (!line || line.startsWith(':')) return false;
+    if (!line.startsWith('data:')) return false;
+
+    const data = line.slice(5).trimStart();
+    if (!data) return false;
+
+    try {
+      const p = JSON.parse(data);
+      if (p.done) { onDone(); return true; }
+      if (p.error) { onError(aiErrorMessage(500, p.error)); return true; }
+      if (p.metadata) onMetadata?.(p.metadata);
+      if (p.content) onChunk(p.content);
+    } catch {
+      // skip malformed SSE payloads
+    }
+    return false;
+  };
+
   try {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     const res = await fetch(`/ai-proxy${path}`, {
@@ -491,14 +511,18 @@ async function sseRequest(
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
       for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const p = JSON.parse(line.slice(6));
-            if (p.done) { onDone(); return; }
-            if (p.error) { onError(aiErrorMessage(500, p.error)); return; }
-            if (p.metadata) onMetadata?.(p.metadata);
-            if (p.content) onChunk(p.content);
-          } catch { /* skip */ }
+        if (handleSseLine(line)) {
+          return;
+        }
+      }
+    }
+
+    const tail = buffer + decoder.decode();
+    if (tail) {
+      const lines = tail.split('\n');
+      for (const line of lines) {
+        if (handleSseLine(line)) {
+          return;
         }
       }
     }
@@ -710,6 +734,20 @@ export const memoryApi = {
       current_type: body.currentType || '',
       current_visibility: body.currentVisibility || '',
       target: body.target || '',
+    }),
+  judgeHeritageSave: (body: {
+    content: string;
+    memoryType?: string;
+    scenario?: string;
+    familyContext?: string;
+    sourceMode?: string;
+  }) =>
+    aiRequest<{ success: boolean; data: HeritageSaveJudge }>('/memory/heritage-save-judge', {
+      content: body.content,
+      memory_type: body.memoryType || 'ELDER_ADVICE',
+      scenario: body.scenario || '',
+      family_context: body.familyContext || '',
+      source_mode: body.sourceMode || '',
     }),
   familyWeeklyDigest: (body: {
     familyName?: string;
@@ -938,7 +976,7 @@ export const tutorApi = {
             clientTimestamp?: string; clientTimezone?: string; },
     onChunk: (chunk: string) => void, onDone: () => void, onError: (error: string) => void,
     onMetadata?: (metadata: Record<string, unknown>) => void,
-  ) => sseRequest('/tutor/explain', {
+  ) => sseRequest('/agent/chat/stream', {
     question_content: body.questionContent,
     answer: body.answer,
     steps: body.steps,
@@ -955,41 +993,6 @@ export const tutorApi = {
     client_timestamp: body.clientTimestamp || new Date().toISOString(),
     client_timezone: body.clientTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
   }, onChunk, onDone, onError, onMetadata),
-
-  grade: (body: { questionContent: string; answer: string; steps: string;
-                   studentAnswer: string; subject?: string; grade?: string; }) =>
-    aiRequest<{ success: boolean; data: GradeResult }>('/tutor/grade', {
-      question_content: body.questionContent,
-      answer: body.answer,
-      steps: body.steps,
-      student_answer: body.studentAnswer,
-      subject: body.subject || '数学',
-      grade: body.grade || '初中',
-    }),
-
-  quickGrade: (body: { questionContent: string; answer: string; steps?: string;
-                        studentAnswer: string; subject?: string; grade?: string; }) =>
-    aiRequest<{ success: boolean; data: GradeResult }>('/tutor/grade/quick', {
-      question_content: body.questionContent,
-      answer: body.answer,
-      steps: body.steps || '',
-      student_answer: body.studentAnswer,
-      subject: body.subject || '数学',
-      grade: body.grade || '',
-    }),
-
-  generateQuestions: (body: { subject: string; grade: string; knowledgePoint: string;
-                               questionType?: string; difficulty?: number; count?: number;
-                               additionalRequirements?: string; }) =>
-    aiRequest<{ success: boolean; questions: Question[]; count: number }>('/tutor/generate', {
-      subject: body.subject,
-      grade: body.grade,
-      knowledge_point: body.knowledgePoint,
-      question_type: body.questionType || 'CALCULATION',
-      difficulty: body.difficulty || 3,
-      count: body.count || 5,
-      additional_requirements: body.additionalRequirements || '',
-    }).then((result) => ({ ...result, questions: normalizeQuestions(result.questions) })),
 
   mistakeReview: (body: {
     questionContent: string; answer: string; studentAnswer: string; steps?: string;
@@ -1058,13 +1061,6 @@ export const tutorApi = {
       constraints: body.constraints || '无',
     }),
 
-  mathVerify: (expression?: string, expected?: string, studentAnswer?: string) => {
-    const params = new URLSearchParams();
-    if (expression) params.set('expression', expression);
-    if (expected) params.set('expected', expected);
-    if (studentAnswer) params.set('student_answer', studentAnswer);
-    return fetch(`/ai-proxy/tutor/math/verify?${params}`).then(r => r.json());
-  },
 };
 
 export { ApiError };

@@ -1,46 +1,50 @@
-"""
-应用配置管理
-"""
+"""Application configuration loaded from environment variables."""
+
 import os
-from pydantic_settings import BaseSettings
 from typing import Optional
+
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource
 
 
 class Settings(BaseSettings):
-    """应用配置，从环境变量加载"""
+    """Application settings."""
 
-    # 应用
+    # App
     app_env: str = "development"
     app_debug: bool = True
 
-    # AI 服务
-    ai_service_port: int = 8000
+    # AI service
+    ai_service_port: int = 8090
 
-    # Java 后端（Token 验证用）
-    backend_url: str = "http://localhost:8080"
+    # Backend
+    backend_url: str = "http://localhost:8180"
     auth_fail_open: Optional[bool] = None
     cors_allow_origins: Optional[str] = None
 
     # LLM
     claude_api_key: Optional[str] = None
-    deepseek_api_key: Optional[str] = None
     openai_api_key: Optional[str] = None
     dashscope_api_key: Optional[str] = None
     dashscope_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    dashscope_multimodal_url: str = "https://dashscope.aliyuncs.com/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding"
+    dashscope_multimodal_url: str = (
+        "https://dashscope.aliyuncs.com/api/v1/services/embeddings/"
+        "multimodal-embedding/multimodal-embedding"
+    )
     default_llm_model: str = "dashscope/qwen-flash"
     fallback_llm_model: str = "dashscope/qwen-turbo"
+    ai_internal_service_token: Optional[str] = None
     embedding_model: str = "dashscope-multimodal/qwen3-vl-embedding"
     embedding_dimension: int = 1536
 
-    # Web search for time-sensitive public facts.
+    # Web search for time-sensitive public facts
     web_search_enabled: bool = True
     web_search_provider: str = "duckduckgo"
     web_search_timeout_seconds: float = 8.0
     web_search_max_results: int = 4
+    web_search_stream_metadata_timeout_seconds: float = 0.25
     tavily_api_key: Optional[str] = None
 
-    # AI cost and DoS protection.
+    # AI cost and DoS protection
     ai_max_message_chars: int = 8000
     ai_max_total_input_chars: int = 20000
     ai_max_output_tokens: int = 1800
@@ -54,7 +58,7 @@ class Settings(BaseSettings):
     ai_embedding_ip_rate_limit_per_minute: int = 240
     ai_embedding_timeout_seconds: float = 30.0
 
-    # 数据库
+    # Database
     db_host: str = "localhost"
     db_port: int = 5432
     db_name: str = "familyagent"
@@ -72,11 +76,11 @@ class Settings(BaseSettings):
     rabbitmq_user: str = "fa_user"
     rabbitmq_password: str = "fa_dev_pass"
 
-    # 数学执行沙箱
+    # Math sandbox
     math_sandbox_timeout: int = 5
     math_sandbox_max_memory_mb: int = 256
 
-    # 日志
+    # Logging
     log_level: str = "DEBUG"
 
     model_config = {
@@ -85,24 +89,58 @@ class Settings(BaseSettings):
         "extra": "ignore",
     }
 
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls,
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ):
+        # Keep ai-service/.env authoritative so stale shell values do not override AI config.
+        return init_settings, dotenv_settings, env_settings, file_secret_settings
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # LiteLLM needs API keys in OS environment
-        if self.deepseek_api_key and not os.environ.get("DEEPSEEK_API_KEY"):
-            os.environ["DEEPSEEK_API_KEY"] = self.deepseek_api_key
-        if self.claude_api_key and not os.environ.get("ANTHROPIC_API_KEY"):
+
+        # LiteLLM expects provider keys in OS environment variables.
+        if self.claude_api_key:
             os.environ["ANTHROPIC_API_KEY"] = self.claude_api_key
-        if self.openai_api_key and not os.environ.get("OPENAI_API_KEY"):
+        else:
+            os.environ.pop("ANTHROPIC_API_KEY", None)
+
+        if self.openai_api_key:
             os.environ["OPENAI_API_KEY"] = self.openai_api_key
-        if self.dashscope_api_key and not os.environ.get("DASHSCOPE_API_KEY"):
+        else:
+            os.environ.pop("OPENAI_API_KEY", None)
+
+        if self.dashscope_api_key:
             os.environ["DASHSCOPE_API_KEY"] = self.dashscope_api_key
+        else:
+            os.environ.pop("DASHSCOPE_API_KEY", None)
+
+        # LiteLLM's DashScope provider reads the compatible endpoint from env.
+        if self.dashscope_base_url:
+            os.environ["DASHSCOPE_API_BASE"] = self.dashscope_base_url
+        else:
+            os.environ.pop("DASHSCOPE_API_BASE", None)
 
     @property
     def auth_fail_open_enabled(self) -> bool:
-        """Only development defaults to fail-open; all other envs fail-closed."""
+        """Only development defaults to fail-open; all other environments fail-closed."""
         if self.auth_fail_open is not None:
             return self.auth_fail_open
         return self.app_env.lower() == "development"
+
+    @property
+    def internal_service_token(self) -> Optional[str]:
+        """Token used by the Java backend for service-to-service AI calls."""
+        if self.ai_internal_service_token:
+            return self.ai_internal_service_token
+        if self.app_env.lower() == "development":
+            return "familyagent-dev-internal-token"
+        return None
 
     @property
     def cors_origins(self) -> list[str]:
