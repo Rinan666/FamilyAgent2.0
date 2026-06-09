@@ -197,6 +197,14 @@ if [[ ! -x "$ROOT_DIR/ai-service/.venv/bin/python" ]]; then
   exit 1
 fi
 
+if [[ ! -x "$ROOT_DIR/frontend/node_modules/.bin/next" ]]; then
+  echo "[ERROR] Missing frontend dependencies: $ROOT_DIR/frontend/node_modules/.bin/next"
+  echo "        Install them with:"
+  echo "          cd frontend"
+  echo "          npm install"
+  exit 1
+fi
+
 echo "        All checks passed"
 
 load_env_file "$INFRA_ENV_FILE"

@@ -32,7 +32,7 @@ public class ChatSessionArchiveStorageService {
                                             @Value("${minio.bucket-name}") String bucketName,
                                             ObjectMapper objectMapper) {
         this.minioClient = MinioClient.builder()
-                .endpoint(endpoint)
+                .endpoint(normalizeEndpoint(endpoint))
                 .credentials(accessKey, secretKey)
                 .build();
         this.objectMapper = objectMapper;
@@ -81,5 +81,19 @@ public class ChatSessionArchiveStorageService {
         } catch (Exception error) {
             throw new BusinessException(ErrorCode.OSS_UPLOAD_FAILED, "Failed to prepare MinIO bucket: " + error.getMessage());
         }
+    }
+
+    private String normalizeEndpoint(String endpoint) {
+        if (endpoint == null || endpoint.isBlank()) {
+            throw new IllegalArgumentException("MinIO endpoint must not be blank");
+        }
+        String normalized = endpoint.trim();
+        if (!normalized.contains("://")) {
+            normalized = "http://" + normalized;
+        }
+        while (normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
     }
 }
