@@ -17,4 +17,7 @@ public class FamilyDatabaseSummary {
     private long failedSkillRunCount;
     private long readyEmbeddingCount;
     private long failedEmbeddingCount;
+    private Long ownerUserId;
+    private String ownerDisplayName;
+    private boolean ownerMissing;
 }

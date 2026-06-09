@@ -3,6 +3,7 @@ package com.familyagent.module.diary.service;
 import cn.dev33.satoken.stp.StpUtil;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
+import com.familyagent.common.response.PageResult;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.infra.ai.AIServiceClient;
 import com.familyagent.module.diary.dto.CreateDiaryEntryRequest;
@@ -33,6 +34,8 @@ public class DiaryEntryService {
 
     private static final int DEFAULT_LIMIT = 30;
     private static final int MAX_LIMIT = 80;
+    private static final int DEFAULT_PAGE_SIZE = 6;
+    private static final int MAX_PAGE_SIZE = 20;
     private static final int SINGLE_ENTRY_MAX_CHARS = 300;
     private static final int MERGED_ENTRY_MAX_CHARS = 600;
     private static final String MANUAL_DIARY_SOURCE = "DIARY_MANUAL";
@@ -112,6 +115,26 @@ public class DiaryEntryService {
                 familyId,
                 CurrentUserGuard.currentUserId(),
                 normalizeLimit(limit));
+    }
+
+    public PageResult<DiaryEntry> searchFamilyEntries(Long familyId, Long targetUserId, String keyword, int page, int pageSize) {
+        familyService.checkMembership(familyId);
+        Long viewerUserId = CurrentUserGuard.currentUserId();
+        int normalizedPageSize = normalizePageSize(pageSize);
+        String normalizedKeyword = normalizeKeyword(keyword);
+        long total = diaryRepository.countVisibleByFamilySearch(familyId, viewerUserId, targetUserId, normalizedKeyword);
+        long resolvedPage = resolvePage(page, normalizedPageSize, total);
+        long offset = (resolvedPage - 1L) * normalizedPageSize;
+        List<DiaryEntry> items = total == 0
+                ? List.of()
+                : diaryRepository.searchVisibleByFamily(
+                        familyId,
+                        viewerUserId,
+                        targetUserId,
+                        normalizedKeyword,
+                        normalizedPageSize,
+                        offset);
+        return PageResult.of(items, resolvedPage, normalizedPageSize, total);
     }
 
     @Transactional
@@ -233,6 +256,24 @@ public class DiaryEntryService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "日记可见范围不支持");
         }
         return normalized;
+    }
+
+    private static String normalizeKeyword(String keyword) {
+        return keyword == null || keyword.isBlank() ? null : keyword.trim();
+    }
+
+    private static int normalizePageSize(int pageSize) {
+        if (pageSize <= 0) return DEFAULT_PAGE_SIZE;
+        return Math.min(pageSize, MAX_PAGE_SIZE);
+    }
+
+    private static long resolvePage(int page, int pageSize, long total) {
+        long normalizedPage = Math.max(page, 1);
+        if (total <= 0) {
+            return normalizedPage;
+        }
+        long totalPages = (total + pageSize - 1L) / pageSize;
+        return Math.min(normalizedPage, totalPages);
     }
 
     private String compressDiaryContent(String currentContent, String incomingContent, int maxChars, String diaryDate) {

@@ -62,3 +62,7 @@ springdoc:
     path: /docs
   api-docs:
     path: /v3/api-docs
+
+familyagent:
+  session-schema:
+    auto-init: false

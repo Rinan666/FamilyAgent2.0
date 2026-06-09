@@ -1,8 +1,6 @@
--- ============================================
--- FamilyAgent 多租户存储字段迁移脚本
--- 适用于已经执行过 init-db.sql 的本地/开发数据库
--- 可重复执行
--- ============================================
+﻿-- ============================================
+-- FamilyAgent 澶氱鎴峰瓨鍌ㄥ瓧娈佃縼绉昏剼鏈?-- 閫傜敤浜庡凡缁忔墽琛岃繃 init-db.sql 鐨勬湰鍦?寮€鍙戞暟鎹簱
+-- 鍙噸澶嶆墽琛?-- ============================================
 
 CREATE EXTENSION IF NOT EXISTS vector;
 
@@ -32,7 +30,7 @@ ALTER TABLE chat_sessions
     ADD COLUMN IF NOT EXISTS family_id BIGINT REFERENCES families(id),
     ADD COLUMN IF NOT EXISTS visibility VARCHAR(20) NOT NULL DEFAULT 'PRIVATE',
     ADD COLUMN IF NOT EXISTS permission_scope JSONB DEFAULT '{}',
-    ADD COLUMN IF NOT EXISTS source VARCHAR(50) DEFAULT 'TUTOR',
+    ADD COLUMN IF NOT EXISTS source VARCHAR(50) DEFAULT 'FAMILY_AGENT',
     ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}';
 
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_family_user ON chat_sessions(family_id, user_id);

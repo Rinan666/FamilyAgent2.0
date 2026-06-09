@@ -36,7 +36,7 @@ class PolicySeverity(StrEnum):
 
 class PolicyCategory(StrEnum):
     ROLE_REWRITE = "role_rewrite"
-    TUTORING_BYPASS = "tutoring_bypass"
+    GUIDANCE_BYPASS = "guidance_bypass"
     MIRROR_IMPERSONATION = "mirror_impersonation"
     MEMORY_INJECTION = "memory_injection"
     HARMFUL_EDUCATION = "harmful_education"
@@ -100,7 +100,7 @@ ROLE_REWRITE_PATTERNS = [
     r"(无条件|必须|只能|永远).{0,24}(服从|听我的|按我说的|保持角色)",
 ]
 
-TUTORING_BYPASS_PATTERNS = [
+GUIDANCE_BYPASS_PATTERNS = [
     r"(不要|停止|别).{0,12}(引导|启发|提问|苏格拉底)",
     r"(直接|只要|马上).{0,12}(答案|最终结果|标准答案)",
     r"(不用|不需要).{0,12}(理解|过程|步骤|思考)",
@@ -155,7 +155,7 @@ RISK_PATTERNS = [
 ]
 
 
-def detect_worldview_rewrite(text: str, *, mode: str = "tutor") -> WorldviewBoundaryResult:
+def detect_worldview_rewrite(text: str, *, mode: str = "agent") -> WorldviewBoundaryResult:
     normalized = _normalize(text)
     if not normalized:
         return WorldviewBoundaryResult(blocked=False)
@@ -176,12 +176,12 @@ def detect_worldview_rewrite(text: str, *, mode: str = "tutor") -> WorldviewBoun
             reason="User is trying to write a higher-priority memory or policy.",
         )
 
-    if mode == "tutor" and _has_any(normalized, TUTORING_BYPASS_PATTERNS):
+    if mode == "agent" and _has_any(normalized, GUIDANCE_BYPASS_PATTERNS):
         return WorldviewBoundaryResult(
             blocked=True,
-            category=PolicyCategory.TUTORING_BYPASS,
+            category=PolicyCategory.GUIDANCE_BYPASS,
             severity=PolicySeverity.BLOCK,
-            reason="User is asking the tutor to abandon learning-oriented guidance.",
+            reason="User is asking the agent to abandon safe, process-aware guidance.",
         )
 
     if mode == "mirror" and _has_any(normalized, MIRROR_IMPERSONATION_PATTERNS):
@@ -290,7 +290,7 @@ def classify_memory_candidate(candidate: MemoryCandidate | str) -> MemoryPolicyR
     )
 
 
-def check_response_policy(response_text: str, *, mode: str = "tutor") -> ResponsePolicyResult:
+def check_response_policy(response_text: str, *, mode: str = "agent") -> ResponsePolicyResult:
     normalized = _normalize(response_text)
     findings: list[ResponsePolicyFinding] = []
 
@@ -321,15 +321,14 @@ def check_response_policy(response_text: str, *, mode: str = "tutor") -> Respons
             )
         )
 
-    if mode == "tutor" and _has_any(normalized, TUTORING_BYPASS_PATTERNS):
+    if mode == "agent" and _has_any(normalized, GUIDANCE_BYPASS_PATTERNS):
         findings.append(
             ResponsePolicyFinding(
-                category=PolicyCategory.TUTORING_BYPASS,
+                category=PolicyCategory.GUIDANCE_BYPASS,
                 severity=PolicySeverity.WARNING,
-                reason="Tutor response may over-prioritize answers over learning process.",
+                reason="Agent response may over-prioritize answers over process-aware guidance.",
             )
         )
 
     allowed = not any(finding.severity == PolicySeverity.BLOCK for finding in findings)
     return ResponsePolicyResult(allowed=allowed, findings=findings)
-

@@ -5,6 +5,7 @@ import com.familyagent.module.family.entity.Family;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
 
@@ -33,4 +34,12 @@ public interface FamilyRepository extends BaseMapper<Family> {
         </script>
         """)
     List<Family> findBasicByIds(@Param("ids") List<Long> ids);
+
+    @Update("""
+        UPDATE families
+        SET created_by = #{createdBy},
+            updated_at = NOW()
+        WHERE id = #{familyId}
+        """)
+    int updateCreatedBy(@Param("familyId") Long familyId, @Param("createdBy") Long createdBy);
 }

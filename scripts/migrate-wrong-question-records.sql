@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS wrong_question_records (
     test_record_id BIGINT NOT NULL REFERENCES test_records(id) ON DELETE CASCADE,
     question_id BIGINT NOT NULL REFERENCES questions(id),
     kp_id BIGINT REFERENCES knowledge_points(id),
-    student_answer TEXT,
+    member_answer TEXT,
     score DECIMAL(5,2),
     correct BOOLEAN NOT NULL DEFAULT false,
     error_type VARCHAR(100),
@@ -29,14 +29,14 @@ CREATE INDEX IF NOT EXISTS idx_wrong_question_records_user_status ON wrong_quest
 CREATE INDEX IF NOT EXISTS idx_wrong_question_records_created ON wrong_question_records(created_at DESC);
 
 INSERT INTO wrong_question_records
-(user_id, family_id, test_record_id, question_id, kp_id, student_answer, score, correct, status, created_at, updated_at)
+(user_id, family_id, test_record_id, question_id, kp_id, member_answer, score, correct, status, created_at, updated_at)
 SELECT
     source.user_id,
     source.family_id,
     source.test_record_id,
     source.question_id,
     q.kp_id,
-    source.student_answer,
+    source.member_answer,
     source.score,
     false AS correct,
     'OPEN' AS status,
@@ -48,7 +48,7 @@ FROM (
         tr.family_id,
         tr.id AS test_record_id,
         score.question_id::bigint AS question_id,
-        COALESCE(tr.answers ->> score.question_id, '') AS student_answer,
+        COALESCE(tr.answers ->> score.question_id, '') AS member_answer,
         score.score_value::numeric AS score,
         tr.created_at
     FROM test_records tr

@@ -1,5 +1,6 @@
 package com.familyagent.module.diary.controller;
 
+import com.familyagent.common.response.PageResult;
 import com.familyagent.common.response.Result;
 import com.familyagent.module.diary.dto.CreateDiaryEntryRequest;
 import com.familyagent.module.diary.dto.UpdateDiaryEntryRequest;
@@ -33,6 +34,17 @@ public class DiaryEntryController {
             @PathVariable Long familyId,
             @RequestParam(defaultValue = "30") int limit) {
         return Result.success(diaryService.listFamilyEntries(familyId, limit));
+    }
+
+    @Operation(summary = "Search visible diary entries in a family for member memory view")
+    @GetMapping("/family/{familyId}/search")
+    public Result<PageResult<DiaryEntry>> searchFamilyEntries(
+            @PathVariable Long familyId,
+            @RequestParam(required = false) Long targetUserId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "6") int pageSize) {
+        return Result.success(diaryService.searchFamilyEntries(familyId, targetUserId, keyword, page, pageSize));
     }
 
     @Operation(summary = "Update a diary entry")

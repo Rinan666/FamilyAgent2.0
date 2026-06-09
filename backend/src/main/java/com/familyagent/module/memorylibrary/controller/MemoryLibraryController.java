@@ -2,17 +2,21 @@ package com.familyagent.module.memorylibrary.controller;
 
 import com.familyagent.common.response.PageResult;
 import com.familyagent.common.response.Result;
+import com.familyagent.module.memorylibrary.dto.MemoryLibraryClassicalizeRequest;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryItem;
+import com.familyagent.module.memorylibrary.dto.MemoryLibraryMergeRequest;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryMaintenanceSuggestion;
 import com.familyagent.module.memorylibrary.dto.MemoryLibrarySearchRequest;
 import com.familyagent.module.memorylibrary.service.MemoryLibraryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -43,6 +47,25 @@ public class MemoryLibraryController {
     @GetMapping("/maintenance-suggestions")
     public Result<List<MemoryLibraryMaintenanceSuggestion>> maintenanceSuggestions(@ModelAttribute MemoryLibrarySearchRequest request) {
         return Result.success(memoryLibraryService.maintenanceSuggestions(request));
+    }
+
+    @Operation(summary = "Rewrite one family experience item into classical Chinese after preview confirmation")
+    @PostMapping("/classicalize")
+    public Result<Void> classicalize(@Valid @RequestBody MemoryLibraryClassicalizeRequest request) {
+        memoryLibraryService.classicalizeLibraryItem(
+                request.getFamilyId(),
+                request.getItemId(),
+                request.getClassicalText(),
+                request.getPlainSummary(),
+                request.getStyleNote());
+        return Result.success();
+    }
+
+    @Operation(summary = "Merge two family experience items after manual review")
+    @PostMapping("/merge")
+    public Result<Void> merge(@Valid @RequestBody MemoryLibraryMergeRequest request) {
+        memoryLibraryService.mergeLibraryItems(request.getFamilyId(), request.getPrimaryItemId(), request.getSecondaryItemId());
+        return Result.success();
     }
 
     @Operation(summary = "Archive a memory library item after manual review")

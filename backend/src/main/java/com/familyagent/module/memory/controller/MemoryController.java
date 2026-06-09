@@ -1,5 +1,6 @@
 package com.familyagent.module.memory.controller;
 
+import com.familyagent.common.response.PageResult;
 import com.familyagent.common.response.Result;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
@@ -30,13 +31,13 @@ public class MemoryController {
     private final MemoryEmbeddingService memoryEmbeddingService;
     private final AuthorizedMemoryRecallService authorizedMemoryRecallService;
 
-    @Operation(summary = "Create a learning memory")
+    @Operation(summary = "Create a memory")
     @PostMapping
     public Result<MemoryEntry> create(@Valid @RequestBody CreateMemoryEntryRequest request) {
         return Result.success(memoryService.createMemory(request));
     }
 
-    @Operation(summary = "List current user's learning memories")
+    @Operation(summary = "List current user's memories")
     @GetMapping("/me")
     public Result<List<MemoryEntry>> listMyMemories(@RequestParam(defaultValue = "20") int limit) {
         return Result.success(memoryService.listMyMemories(limit));
@@ -54,6 +55,17 @@ public class MemoryController {
             @PathVariable Long familyId,
             @RequestParam(defaultValue = "30") int limit) {
         return Result.success(memoryService.listFamilyMemories(familyId, limit));
+    }
+
+    @Operation(summary = "Search family heritage memories for member memory view")
+    @GetMapping("/family/{familyId}/search")
+    public Result<PageResult<MemoryEntry>> searchFamilyMemories(
+            @PathVariable Long familyId,
+            @RequestParam(required = false) Long targetUserId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "6") int pageSize) {
+        return Result.success(memoryService.searchFamilyMemories(familyId, targetUserId, keyword, page, pageSize));
     }
 
     @Operation(summary = "Vote a family heritage memory")
@@ -81,16 +93,6 @@ public class MemoryController {
                 request.getQuery(),
                 diaryLimit,
                 memoryLimit));
-    }
-
-    @Operation(summary = "Recall memories for tutor context")
-    @PostMapping("/recall")
-    public Result<List<MemoryEntry>> recall(@RequestBody(required = false) MemoryRecallRequest request) {
-        if (request == null) {
-            request = new MemoryRecallRequest();
-        }
-        int limit = request.getLimit() == null ? 8 : request.getLimit();
-        return Result.success(memoryService.recall(request.getSubject(), request.getKnowledgePointId(), limit));
     }
 
     @Operation(summary = "Rebuild family memory embeddings")

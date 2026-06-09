@@ -19,7 +19,7 @@ interface HeaderProps {
 
 export default function Header({
   user,
-  viewerRole = 'STUDENT',
+  viewerRole = 'MEMBER',
   families = [],
   activeFamilyId,
   activeMembership,

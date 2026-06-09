@@ -1,21 +1,36 @@
 package com.familyagent.module.session.service;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.session.dto.ChatSessionDetail;
+import com.familyagent.module.session.dto.ChatSessionMessagePage;
+import com.familyagent.module.session.dto.ChatSessionMessagePayload;
 import com.familyagent.module.session.entity.ChatSession;
+import com.familyagent.module.session.entity.ChatSessionArchive;
+import com.familyagent.module.session.entity.ChatSessionMessage;
+import com.familyagent.module.session.repository.ChatSessionArchiveRepository;
+import com.familyagent.module.session.repository.ChatSessionMessageRepository;
 import com.familyagent.module.session.repository.ChatSessionRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
@@ -26,105 +41,247 @@ import static org.mockito.Mockito.when;
 class ChatSessionServiceTest {
 
     @Mock private ChatSessionRepository sessionRepository;
+    @Mock private ChatSessionMessageRepository messageRepository;
+    @Mock private ChatSessionArchiveRepository archiveRepository;
     @Mock private FamilyService familyService;
+    @Mock private ChatSessionArchiveStorageService archiveStorageService;
+    @Mock private ChatSessionArchiveSummaryService archiveSummaryService;
 
     @Test
-    void endSession_shouldTransitionActiveSessionWithoutLegacyMemoryExtraction() {
-        ChatSession active = session(100L, 10L, "ACTIVE", null);
-        ChatSession ended = session(100L, 10L, "ENDED", LocalDateTime.now());
+    void endSession_shouldBeIdempotentAndRepairMissingEndedAt() {
+        ChatSession ended = sessionHeader(100L, 10L, "ENDED");
+        ended.setEndedAt(null);
 
-        when(sessionRepository.findStatusById(100L)).thenReturn(active, ended);
-        when(sessionRepository.endActiveSession(eq(100L), eq("done"), any(LocalDateTime.class))).thenReturn(1);
-
-        ChatSessionService service = new ChatSessionService(sessionRepository, familyService);
-
-        try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
-            stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
-
-            ChatSession result = service.endSession(100L, "done", "Bearer token");
-
-            assertEquals("ENDED", result.getStatus());
-            assertEquals("done", result.getSummary());
-            assertNotNull(result.getEndedAt());
-        }
-
-        verify(sessionRepository, never()).selectById(100L);
-    }
-
-    @Test
-    void endSession_shouldBeIdempotentWhenSessionAlreadyEnded() {
-        LocalDateTime endedAt = LocalDateTime.now().minusMinutes(5);
-        ChatSession ended = session(100L, 10L, "ENDED", endedAt);
-
-        when(sessionRepository.findStatusById(100L)).thenReturn(ended, ended);
+        when(sessionRepository.findHeaderById(100L)).thenReturn(ended, ended, ended);
         when(sessionRepository.endActiveSession(eq(100L), eq(null), any(LocalDateTime.class))).thenReturn(0);
+        when(sessionRepository.selectById(100L)).thenReturn(ended);
+        when(archiveRepository.findBySessionId(100L)).thenReturn(List.of());
 
-        ChatSessionService service = new ChatSessionService(sessionRepository, familyService);
-
-        try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
-            stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
-
-            ChatSession result = service.endSession(100L, null, "Bearer token");
-
-            assertEquals("ENDED", result.getStatus());
-            assertEquals(endedAt, result.getEndedAt());
-        }
-
-        verify(sessionRepository, never()).fillMissingEndedAt(any(), any());
-        verify(sessionRepository, never()).selectById(100L);
-    }
-
-    @Test
-    void endSession_shouldRepairEndedSessionWithoutEndedAt() {
-        ChatSession endedWithoutTime = session(100L, 10L, "ENDED", null);
-
-        when(sessionRepository.findStatusById(100L)).thenReturn(endedWithoutTime, endedWithoutTime);
-        when(sessionRepository.endActiveSession(eq(100L), eq(null), any(LocalDateTime.class))).thenReturn(0);
-
-        ChatSessionService service = new ChatSessionService(sessionRepository, familyService);
+        ChatSessionService service = service();
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
 
-            ChatSession result = service.endSession(100L, " ", null);
+            ChatSessionDetail result = service.endSession(100L, " ", null);
 
             assertEquals("ENDED", result.getStatus());
             assertNotNull(result.getEndedAt());
         }
 
         verify(sessionRepository).fillMissingEndedAt(eq(100L), any(LocalDateTime.class));
-        verify(sessionRepository, never()).selectById(100L);
+        verify(sessionRepository, never()).updateById(any(ChatSession.class));
     }
 
     @Test
-    void updateMessages_shouldUpdateOnlyMessages() {
-        ChatSession existing = session(100L, 10L, "ENDED", LocalDateTime.now());
-        List<Object> messages = List.of();
+    void updateMessages_shouldAppendOnlyNewTailMessages() {
+        ChatSession session = sessionHeader(100L, 10L, "ACTIVE");
+        session.setStartedAt(LocalDateTime.of(2026, 6, 9, 10, 0));
+        session.setLastMessageAt(session.getStartedAt());
+        session.setMessageCount(1);
+        session.setTokenCount(3);
+        session.setMetadata(Map.of("entry", "agent"));
 
-        when(sessionRepository.selectById(100L)).thenReturn(existing);
+        ChatSessionMessage first = message(1, "user", "hello");
+        ChatSessionMessage second = message(2, "assistant", "world");
 
-        ChatSessionService service = new ChatSessionService(sessionRepository, familyService);
+        when(sessionRepository.findHeaderById(100L)).thenReturn(session, session);
+        when(sessionRepository.selectById(100L)).thenReturn(session, session);
+        when(sessionRepository.updateById(any(ChatSession.class))).thenReturn(1);
+        when(messageRepository.findMaxSeqBySessionId(100L)).thenReturn(1);
+        when(messageRepository.findBySessionId(100L)).thenReturn(List.of(first, second));
+        when(archiveRepository.findBySessionId(100L)).thenReturn(List.of());
+
+        ChatSessionService service = service();
+
+        ChatSessionMessagePayload existing = payload("m1", "user", "hello");
+        ChatSessionMessagePayload appended = payload("m2", "assistant", "world");
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
 
-            ChatSession result = service.updateMessages(100L, messages);
+            ChatSessionDetail result = service.updateMessages(100L, List.of(existing, appended));
 
-            assertEquals(messages, result.getMessages());
-            assertEquals("ENDED", result.getStatus());
+            assertEquals(2, result.getMessageCount());
+            assertEquals("hello", result.getTitle());
         }
 
-        verify(sessionRepository).updateSessionMessages(100L, messages);
-        verify(sessionRepository, never()).updateById(any(ChatSession.class));
+        ArgumentCaptor<ChatSessionMessage> captor = ArgumentCaptor.forClass(ChatSessionMessage.class);
+        verify(messageRepository).insert(captor.capture());
+        assertEquals(2, captor.getValue().getSeq());
+        assertEquals("assistant", captor.getValue().getRole());
+        assertEquals("world", captor.getValue().getContent());
+        verify(messageRepository, never()).deleteSeqRange(anyLong(), anyInt(), anyInt());
     }
 
-    private static ChatSession session(Long id, Long userId, String status, LocalDateTime endedAt) {
+    @Test
+    void getSessionMessages_returnsOnlyLiveMessagesWhenNoArchivesExist() {
+        ChatSession session = sessionWithMessageCount(6);
+        List<ChatSessionMessage> liveMessages = List.of(
+                message(4, "user", "m4"),
+                message(5, "assistant", "m5"),
+                message(6, "user", "m6"));
+
+        when(sessionRepository.findHeaderById(100L)).thenReturn(session);
+        when(messageRepository.findPageBeforeSeq(100L, 7L, 3)).thenReturn(liveMessages);
+
+        ChatSessionService service = service();
+
+        ChatSessionMessagePage page = withUser(10L, () -> service.getSessionMessages(100L, null, 3));
+
+        assertEquals(List.of(4L, 5L, 6L), page.getItems().stream().map(item -> item.getSeq()).toList());
+        assertTrue(page.isHasMore());
+        assertEquals(4L, page.getNextBeforeSeq());
+        verify(archiveRepository, never()).findRangesBeforeSeqDesc(anyLong(), anyLong(), anyInt());
+    }
+
+    @Test
+    void getSessionMessages_returnsArchiveOnlyHistoryWhenEarlyMessagesWereArchived() {
+        ChatSession session = sessionWithMessageCount(6);
+        session.setArchivedBeforeSeq(4);
+        ChatSessionArchive archive = archive(1000L, 1, 4, "archive-1");
+
+        when(sessionRepository.findHeaderById(100L)).thenReturn(session);
+        when(messageRepository.findPageBeforeSeq(100L, 5L, 4)).thenReturn(List.of());
+        when(archiveRepository.findRangesBeforeSeqDesc(100L, 5L, 4)).thenReturn(List.of(archive));
+        when(archiveStorageService.readTranscript("archive-1")).thenReturn(List.of(
+                message(1, "user", "a1"),
+                message(2, "assistant", "a2"),
+                message(3, "user", "a3"),
+                message(4, "assistant", "a4")));
+
+        ChatSessionService service = service();
+
+        ChatSessionMessagePage page = withUser(10L, () -> service.getSessionMessages(100L, 5L, 4));
+
+        assertEquals(List.of(1L, 2L, 3L, 4L), page.getItems().stream().map(item -> item.getSeq()).toList());
+        assertFalse(page.isHasMore());
+        assertNull(page.getNextBeforeSeq());
+    }
+
+    @Test
+    void getSessionMessages_mergesLiveAndArchivedHistoryInAscendingSeqOrder() {
+        ChatSession session = sessionWithMessageCount(8);
+        session.setArchivedBeforeSeq(5);
+        ChatSessionArchive archive = archive(1001L, 1, 5, "archive-5");
+
+        when(sessionRepository.findHeaderById(100L)).thenReturn(session);
+        when(messageRepository.findPageBeforeSeq(100L, 9L, 5)).thenReturn(List.of(
+                message(8, "assistant", "m8"),
+                message(7, "user", "m7"),
+                message(6, "assistant", "m6")));
+        when(archiveRepository.findRangesBeforeSeqDesc(100L, 9L, 4)).thenReturn(List.of(archive));
+        when(archiveStorageService.readTranscript("archive-5")).thenReturn(List.of(
+                message(1, "user", "m1"),
+                message(2, "assistant", "m2"),
+                message(3, "user", "m3"),
+                message(4, "assistant", "m4"),
+                message(5, "user", "m5")));
+
+        ChatSessionService service = service();
+
+        ChatSessionMessagePage page = withUser(10L, () -> service.getSessionMessages(100L, null, 5));
+
+        assertEquals(List.of(4L, 5L, 6L, 7L, 8L), page.getItems().stream().map(item -> item.getSeq()).toList());
+        assertTrue(page.isHasMore());
+        assertEquals(4L, page.getNextBeforeSeq());
+    }
+
+    @Test
+    void getSessionMessages_computesHasMoreAcrossArchiveLiveBoundary() {
+        ChatSession session = sessionWithMessageCount(7);
+        session.setArchivedBeforeSeq(4);
+        ChatSessionArchive archive = archive(1002L, 1, 4, "archive-4");
+
+        when(sessionRepository.findHeaderById(100L)).thenReturn(session);
+        when(messageRepository.findPageBeforeSeq(100L, 6L, 3)).thenReturn(List.of(
+                message(5, "assistant", "m5")));
+        when(archiveRepository.findRangesBeforeSeqDesc(100L, 6L, 4)).thenReturn(List.of(archive));
+        when(archiveStorageService.readTranscript("archive-4")).thenReturn(List.of(
+                message(1, "user", "m1"),
+                message(2, "assistant", "m2"),
+                message(3, "user", "m3"),
+                message(4, "assistant", "m4")));
+
+        ChatSessionService service = service();
+
+        ChatSessionMessagePage page = withUser(10L, () -> service.getSessionMessages(100L, 6L, 3));
+
+        assertEquals(List.of(3L, 4L, 5L), page.getItems().stream().map(item -> item.getSeq()).toList());
+        assertTrue(page.isHasMore());
+        assertEquals(3L, page.getNextBeforeSeq());
+    }
+
+    private ChatSessionService service() {
+        return new ChatSessionService(
+                sessionRepository,
+                messageRepository,
+                archiveRepository,
+                familyService,
+                new ObjectMapper(),
+                archiveStorageService,
+                archiveSummaryService
+        );
+    }
+
+    private static <T> T withUser(Long userId, java.util.concurrent.Callable<T> action) {
+        try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
+            stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(userId);
+            return action.call();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static ChatSession sessionHeader(Long id, Long userId, String status) {
         ChatSession session = new ChatSession();
         session.setId(id);
         session.setUserId(userId);
-        session.setSubject("math");
+        session.setFamilyId(1L);
+        session.setSubject("FamilyAgent");
         session.setStatus(status);
-        session.setEndedAt(endedAt);
+        session.setStartedAt(LocalDateTime.now().minusMinutes(5));
+        session.setMessageCount(0);
+        session.setTokenCount(0);
+        session.setArchivedBeforeSeq(0);
+        session.setArchiveStatus("NONE");
         return session;
+    }
+
+    private static ChatSession sessionWithMessageCount(int messageCount) {
+        ChatSession session = sessionHeader(100L, 10L, "ACTIVE");
+        session.setMessageCount(messageCount);
+        session.setLastMessageAt(LocalDateTime.of(2026, 6, 9, 10, 8));
+        return session;
+    }
+
+    private static ChatSessionArchive archive(Long id, int startSeq, int endSeq, String objectKey) {
+        ChatSessionArchive archive = new ChatSessionArchive();
+        archive.setId(id);
+        archive.setSessionId(100L);
+        archive.setStartSeq(startSeq);
+        archive.setEndSeq(endSeq);
+        archive.setObjectKey(objectKey);
+        archive.setMessageCount(endSeq - startSeq + 1);
+        archive.setCreatedAt(LocalDateTime.of(2026, 6, 9, 9, 0));
+        return archive;
+    }
+
+    private static ChatSessionMessage message(int seq, String role, String content) {
+        ChatSessionMessage message = new ChatSessionMessage();
+        message.setSeq(seq);
+        message.setRole(role);
+        message.setContent(content);
+        message.setCreatedAt(LocalDateTime.of(2026, 6, 9, 10, seq));
+        message.setTokenCount(0);
+        return message;
+    }
+
+    private static ChatSessionMessagePayload payload(String id, String role, String content) {
+        ChatSessionMessagePayload payload = new ChatSessionMessagePayload();
+        payload.setId(id);
+        payload.setRole(role);
+        payload.setContent(content);
+        payload.setTimestamp("2026-06-09T10:00:00Z");
+        return payload;
     }
 }

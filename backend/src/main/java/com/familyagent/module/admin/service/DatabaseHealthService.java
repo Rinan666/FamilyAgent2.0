@@ -2,7 +2,9 @@ package com.familyagent.module.admin.service;
 
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
+import com.familyagent.common.response.PageResult;
 import com.familyagent.common.security.CurrentUserGuard;
+import com.familyagent.module.admin.dto.AdminUserSummary;
 import com.familyagent.module.admin.dto.DatabaseHealthResponse;
 import com.familyagent.module.admin.dto.DatabaseTableCount;
 import com.familyagent.module.admin.dto.EmbeddingStatusSummary;
@@ -11,7 +13,10 @@ import com.familyagent.module.admin.dto.FailedSkillRunSummary;
 import com.familyagent.module.admin.dto.FamilyDatabaseSummary;
 import com.familyagent.module.admin.dto.MemoryRecallDiagnosticRequest;
 import com.familyagent.module.admin.dto.MemoryRecallDiagnosticResponse;
+import com.familyagent.module.family.dto.FamilyMemberVO;
+import com.familyagent.module.family.repository.FamilyRepository;
 import com.familyagent.module.family.repository.FamilyMemberRepository;
+import com.familyagent.module.family.service.FamilyLifecycleService;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
 import com.familyagent.module.memory.service.AuthorizedMemoryRecallService;
 import com.familyagent.module.user.entity.User;
@@ -22,11 +27,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
 public class DatabaseHealthService {
+
+    private static final int DEFAULT_PAGE_SIZE = 10;
+    private static final int MAX_PAGE_SIZE = 50;
 
     private static final List<TableDefinition> TABLES = List.of(
             new TableDefinition("users", "Users", false),
@@ -52,7 +62,9 @@ public class DatabaseHealthService {
 
     private final JdbcTemplate jdbcTemplate;
     private final UserRepository userRepository;
+    private final FamilyRepository familyRepository;
     private final FamilyMemberRepository familyMemberRepository;
+    private final FamilyLifecycleService familyLifecycleService;
     private final AuthorizedMemoryRecallService memoryRecallService;
 
     @Transactional
@@ -71,6 +83,11 @@ public class DatabaseHealthService {
         if (target == null) {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
+        if ("ADMIN".equalsIgnoreCase(target.getRole())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Platform admin accounts cannot be deleted");
+        }
+
+        familyLifecycleService.prepareFamiliesForUserDeletion(userId);
 
         updateNullIfTableExists("families", "created_by", userId);
         updateNullIfTableExists("invite_codes", "created_by", userId);
@@ -109,6 +126,17 @@ public class DatabaseHealthService {
         if (deleted == 0) {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
+    }
+
+    public List<FamilyMemberVO> listFamilyMembers(Long familyId) {
+        requirePlatformAdmin();
+        if (familyId == null || familyId <= 0) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "familyId is required");
+        }
+        if (familyRepository.selectById(familyId) == null) {
+            throw new BusinessException(ErrorCode.FAMILY_NOT_FOUND);
+        }
+        return familyMemberRepository.findMemberViewsByFamilyId(familyId);
     }
 
     public DatabaseHealthResponse getHealth() {
@@ -150,6 +178,169 @@ public class DatabaseHealthService {
                 .recentFailedEmbeddings(queryRecentFailedEmbeddings())
                 .recentFailedSkillRuns(queryRecentFailedSkillRuns())
                 .build();
+    }
+
+    public List<AdminUserSummary> listUsers() {
+        requirePlatformAdmin();
+        if (!tableExists("users")) {
+            return List.of();
+        }
+
+        return jdbcTemplate.query("""
+                SELECT id, username, nickname, role, status
+                FROM users
+                ORDER BY id ASC
+                """, (rs, rowNum) -> AdminUserSummary.builder()
+                .id(rs.getLong("id"))
+                .username(rs.getString("username"))
+                .nickname(rs.getString("nickname"))
+                .role(rs.getString("role"))
+                .status(rs.getString("status"))
+                .build()).stream()
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    public PageResult<AdminUserSummary> searchUsers(String keyword, int page, int pageSize) {
+        requirePlatformAdmin();
+        if (!tableExists("users")) {
+            return PageResult.of(List.of(), 1, normalizePageSize(pageSize), 0);
+        }
+
+        String normalizedKeyword = normalizeKeyword(keyword);
+        StringBuilder fromSql = new StringBuilder("""
+                FROM users
+                WHERE 1 = 1
+                """);
+        List<Object> args = new ArrayList<>();
+        if (normalizedKeyword != null) {
+            String likeKeyword = likeKeyword(normalizedKeyword);
+            fromSql.append("""
+                    AND (
+                        CAST(id AS TEXT) ILIKE ?
+                        OR COALESCE(username, '') ILIKE ?
+                        OR COALESCE(nickname, '') ILIKE ?
+                        OR COALESCE(role, '') ILIKE ?
+                        OR COALESCE(status, '') ILIKE ?
+                    )
+                    """);
+            for (int i = 0; i < 5; i += 1) {
+                args.add(likeKeyword);
+            }
+        }
+
+        int normalizedPageSize = normalizePageSize(pageSize);
+        long total = queryCount("SELECT COUNT(*) " + fromSql, args);
+        long resolvedPage = resolvePage(page, normalizedPageSize, total);
+        long offset = (resolvedPage - 1L) * normalizedPageSize;
+
+        List<AdminUserSummary> items = total == 0
+                ? List.of()
+                : jdbcTemplate.query(
+                """
+                        SELECT id, username, nickname, role, status
+                        """
+                        + fromSql
+                        + """
+                        ORDER BY id ASC
+                        LIMIT ? OFFSET ?
+                        """,
+                (rs, rowNum) -> AdminUserSummary.builder()
+                        .id(rs.getLong("id"))
+                        .username(rs.getString("username"))
+                        .nickname(rs.getString("nickname"))
+                        .role(rs.getString("role"))
+                        .status(rs.getString("status"))
+                        .build(),
+                concatArgs(args, normalizedPageSize, offset)).stream()
+                .filter(Objects::nonNull)
+                .toList();
+
+        return PageResult.of(items, resolvedPage, normalizedPageSize, total);
+    }
+
+    public PageResult<FamilyDatabaseSummary> searchFamilies(String keyword, int page, int pageSize) {
+        requirePlatformAdmin();
+        if (!tableExists("families")) {
+            return PageResult.of(List.of(), 1, normalizePageSize(pageSize), 0);
+        }
+
+        String normalizedKeyword = normalizeKeyword(keyword);
+        StringBuilder fromSql = new StringBuilder("""
+                FROM families f
+                WHERE 1 = 1
+                """);
+        List<Object> args = new ArrayList<>();
+        if (normalizedKeyword != null) {
+            String likeKeyword = likeKeyword(normalizedKeyword);
+            fromSql.append("""
+                    AND (
+                        CAST(f.id AS TEXT) ILIKE ?
+                        OR COALESCE(f.name, '') ILIKE ?
+                    )
+                    """);
+            args.add(likeKeyword);
+            args.add(likeKeyword);
+        }
+
+        int normalizedPageSize = normalizePageSize(pageSize);
+        long total = queryCount("SELECT COUNT(*) " + fromSql, args);
+        long resolvedPage = resolvePage(page, normalizedPageSize, total);
+        long offset = (resolvedPage - 1L) * normalizedPageSize;
+
+        List<FamilyDatabaseSummary> items = total == 0
+                ? List.of()
+                : jdbcTemplate.query(
+                """
+                        SELECT
+                            f.id AS family_id,
+                            f.name AS family_name,
+                            owner.owner_user_id,
+                            owner.owner_display_name,
+                            COALESCE(owner.owner_count, 0) = 0 AS owner_missing,
+                            (SELECT COUNT(*) FROM family_members fm WHERE fm.family_id = f.id) AS member_count,
+                            (SELECT COUNT(*) FROM diary_entries de WHERE de.family_id = f.id) AS diary_count,
+                            (SELECT COUNT(*) FROM memory_entries me WHERE me.family_id = f.id) AS memory_count,
+                            (SELECT COUNT(*) FROM growth_guard_records gr WHERE gr.family_id = f.id) AS growth_record_count,
+                            (SELECT COUNT(*) FROM skill_runs sr WHERE sr.family_id = f.id) AS skill_run_count,
+                            (SELECT COUNT(*) FROM skill_runs sr WHERE sr.family_id = f.id AND sr.status = 'FAILED') AS failed_skill_run_count,
+                            (SELECT COUNT(*) FROM memory_embeddings em WHERE em.family_id = f.id AND em.status = 'READY') AS ready_embedding_count,
+                            (SELECT COUNT(*) FROM memory_embeddings em WHERE em.family_id = f.id AND em.status = 'FAILED') AS failed_embedding_count
+                        """
+                        + """
+                        LEFT JOIN LATERAL (
+                            SELECT
+                                MIN(fm.user_id) FILTER (WHERE UPPER(COALESCE(fm.role, '')) = 'OWNER') AS owner_user_id,
+                                MIN(COALESCE(NULLIF(u.nickname, ''), u.username)) FILTER (WHERE UPPER(COALESCE(fm.role, '')) = 'OWNER') AS owner_display_name,
+                                COUNT(*) FILTER (WHERE UPPER(COALESCE(fm.role, '')) = 'OWNER') AS owner_count
+                            FROM family_members fm
+                            LEFT JOIN users u ON u.id = fm.user_id
+                            WHERE fm.family_id = f.id
+                        ) owner ON TRUE
+                        """
+                        + fromSql
+                        + """
+                        ORDER BY f.updated_at DESC NULLS LAST, f.id DESC
+                        LIMIT ? OFFSET ?
+                        """,
+                (rs, rowNum) -> FamilyDatabaseSummary.builder()
+                        .familyId(rs.getLong("family_id"))
+                        .familyName(rs.getString("family_name"))
+                        .ownerUserId((Long) rs.getObject("owner_user_id"))
+                        .ownerDisplayName(rs.getString("owner_display_name"))
+                        .ownerMissing(rs.getBoolean("owner_missing"))
+                        .memberCount(rs.getLong("member_count"))
+                        .diaryCount(rs.getLong("diary_count"))
+                        .memoryCount(rs.getLong("memory_count"))
+                        .growthRecordCount(rs.getLong("growth_record_count"))
+                        .skillRunCount(rs.getLong("skill_run_count"))
+                        .failedSkillRunCount(rs.getLong("failed_skill_run_count"))
+                        .readyEmbeddingCount(rs.getLong("ready_embedding_count"))
+                        .failedEmbeddingCount(rs.getLong("failed_embedding_count"))
+                        .build(),
+                concatArgs(args, normalizedPageSize, offset));
+
+        return PageResult.of(items, resolvedPage, normalizedPageSize, total);
     }
 
     public MemoryRecallDiagnosticResponse diagnoseMemoryRecall(MemoryRecallDiagnosticRequest request) {
@@ -196,6 +387,50 @@ public class DatabaseHealthService {
             return fallback;
         }
         return Math.min(value, max);
+    }
+
+    private static int normalizePageSize(int pageSize) {
+        if (pageSize <= 0) {
+            return DEFAULT_PAGE_SIZE;
+        }
+        return Math.min(pageSize, MAX_PAGE_SIZE);
+    }
+
+    private static long resolvePage(int page, int pageSize, long total) {
+        long normalizedPage = Math.max(page, 1);
+        if (total <= 0) {
+            return normalizedPage;
+        }
+        long totalPages = (total + pageSize - 1L) / pageSize;
+        return Math.min(normalizedPage, totalPages);
+    }
+
+    private static String normalizeKeyword(String keyword) {
+        if (keyword == null) {
+            return null;
+        }
+        String normalized = keyword.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    private static String likeKeyword(String keyword) {
+        return "%" + keyword + "%";
+    }
+
+    private long queryCount(String sql, List<Object> args) {
+        Long total = jdbcTemplate.queryForObject(sql, Long.class, args.toArray());
+        return total == null ? 0 : total;
+    }
+
+    private static Object[] concatArgs(List<Object> args, Object... tail) {
+        Object[] result = new Object[args.size() + tail.length];
+        for (int i = 0; i < args.size(); i += 1) {
+            result[i] = args.get(i);
+        }
+        for (int i = 0; i < tail.length; i += 1) {
+            result[args.size() + i] = tail[i];
+        }
+        return result;
     }
 
     private String queryDatabaseName() {
@@ -286,6 +521,9 @@ public class DatabaseHealthService {
                 SELECT
                     f.id AS family_id,
                     f.name AS family_name,
+                    owner.owner_user_id,
+                    owner.owner_display_name,
+                    COALESCE(owner.owner_count, 0) = 0 AS owner_missing,
                     (SELECT COUNT(*) FROM family_members fm WHERE fm.family_id = f.id) AS member_count,
                     (SELECT COUNT(*) FROM diary_entries de WHERE de.family_id = f.id) AS diary_count,
                     (SELECT COUNT(*) FROM memory_entries me WHERE me.family_id = f.id) AS memory_count,
@@ -295,11 +533,23 @@ public class DatabaseHealthService {
                     (SELECT COUNT(*) FROM memory_embeddings em WHERE em.family_id = f.id AND em.status = 'READY') AS ready_embedding_count,
                     (SELECT COUNT(*) FROM memory_embeddings em WHERE em.family_id = f.id AND em.status = 'FAILED') AS failed_embedding_count
                 FROM families f
+                LEFT JOIN LATERAL (
+                    SELECT
+                        MIN(fm.user_id) FILTER (WHERE UPPER(COALESCE(fm.role, '')) = 'OWNER') AS owner_user_id,
+                        MIN(COALESCE(NULLIF(u.nickname, ''), u.username)) FILTER (WHERE UPPER(COALESCE(fm.role, '')) = 'OWNER') AS owner_display_name,
+                        COUNT(*) FILTER (WHERE UPPER(COALESCE(fm.role, '')) = 'OWNER') AS owner_count
+                    FROM family_members fm
+                    LEFT JOIN users u ON u.id = fm.user_id
+                    WHERE fm.family_id = f.id
+                ) owner ON TRUE
                 ORDER BY f.updated_at DESC NULLS LAST, f.id DESC
                 LIMIT 50
                 """, (rs, rowNum) -> FamilyDatabaseSummary.builder()
                 .familyId(rs.getLong("family_id"))
                 .familyName(rs.getString("family_name"))
+                .ownerUserId((Long) rs.getObject("owner_user_id"))
+                .ownerDisplayName(rs.getString("owner_display_name"))
+                .ownerMissing(rs.getBoolean("owner_missing"))
                 .memberCount(rs.getLong("member_count"))
                 .diaryCount(rs.getLong("diary_count"))
                 .memoryCount(rs.getLong("memory_count"))

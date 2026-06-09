@@ -1,15 +1,10 @@
-/**
- * 家族Agent 聊天 Hook
- *
- * @param getMastery - 根据知识点ID获取掌握等级（可选，默认返回'中'）
- * @param getKnowledgePoint - 根据知识点ID获取知识点名称（可选，默认返回空）
- */
 'use client';
 
 import { useCallback, useRef } from 'react';
 import { useChatStore } from '@/stores/chatStore';
-import { growthGuardApi, heritageTaskApi, memoryApi, memoryLibraryApi, tutorApi, type AIStreamHandle } from '@/lib/api';
-import type { ChatMessage, DiaryEntry, GrowthGuardRecord, HeritageTask, MemoryEntry, MemoryLibraryItem, Question } from '@/types';
+import { agentApi, growthGuardApi, heritageTaskApi, memoryApi, memoryLibraryApi, type AIStreamHandle } from '@/lib/api';
+import { enqueuePersistMessages } from '@/lib/sessionPersistence';
+import type { ChatMessage, DiaryEntry, GrowthGuardRecord, HeritageTask, MemoryEntry, MemoryLibraryItem } from '@/types';
 import type { ViewerRole } from '@/lib/roles';
 
 type MemoryContextResult = {
@@ -31,70 +26,94 @@ export type SessionSavedMemory = {
 };
 
 interface UseChatOptions {
-  /** 根据 kpId 获取学生对该知识点的掌握等级 */
-  getMastery?: (kpId: number) => string;
-  /** 根据 kpId 获取知识点名称 */
-  getKnowledgePoint?: (kpId: number) => string;
   viewerRole?: ViewerRole;
-  targetRole?: ViewerRole | 'STUDENT';
+  targetRole?: ViewerRole;
   activeFamilyId?: number | null;
-  persistMessages?: (messages: ChatMessage[], question: Question) => Promise<void> | void;
-  persistChatMessages?: (messages: ChatMessage[]) => Promise<void> | void;
-  onFreeChatDone?: (message: string) => void;
+  appendSessionMessages?: (messages: ChatMessage[]) => Promise<void>;
+  onChatDone?: (message: string) => void;
   onActivationSceneChange?: (scene: { label: string; instruction: string } | null) => void;
   viewerIdentityContext?: string;
   getSessionSavedMemories?: () => SessionSavedMemory[];
+  subject?: string;
+  contextLabel?: string;
 }
+
+type FamilyActivationScene = {
+  label: string;
+  searchKeywords: string[];
+  instruction: string;
+};
+
+const activationScenes: FamilyActivationScene[] = [
+  {
+    label: 'choice',
+    searchKeywords: ['choice', 'decision', 'major', 'school', 'career', '志愿', '升学', '选择'],
+    instruction: 'Prioritize family experiences about choices, tradeoffs, and long-term consequences.',
+  },
+  {
+    label: 'health',
+    searchKeywords: ['health', 'sleep', 'exercise', 'vision', 'tooth', 'screen', '健康', '睡眠', '视力', '牙', '屏幕'],
+    instruction: 'Prioritize observations, gentle reminders, and concrete follow-up actions. Do not overstate certainty.',
+  },
+  {
+    label: 'communication',
+    searchKeywords: ['family', 'parent', 'child', 'conflict', 'relationship', '沟通', '亲子', '关系'],
+    instruction: 'Prioritize communication patterns, misunderstandings, and calm follow-up suggestions.',
+  },
+  {
+    label: 'setback',
+    searchKeywords: ['failure', 'regret', 'setback', 'stress', '复盘', '失败', '后悔', '压力'],
+    instruction: 'Prioritize lessons, recovery, and the next small step.',
+  },
+];
+
+const familyContextTerms = [
+  'family', 'diary', 'memory', 'growth', 'parent', 'child', 'health', 'sleep',
+  'exercise', 'emotion', 'relationship', 'career', 'choice', 'record', 'save',
+  '家庭', '家族', '家人', '亲子', '沟通', '成长', '观察', '记录', '经验', '传承',
+  '健康', '睡眠', '视力', '牙', '屏幕', '情绪', '压力', '选择', '后悔', '复盘',
+];
 
 export function useChat(options: UseChatOptions = {}) {
   const {
     messages,
     isStreaming,
-    currentQuestion,
     addMessage,
+    removeMessageById,
     appendToLastMessage,
     mergeLastAssistantMetadata,
     setStreaming,
-    setCurrentQuestion,
     reset,
   } = useChatStore();
 
   const {
-    getMastery = () => 'medium',
-    getKnowledgePoint = () => '',
-    viewerRole = 'STUDENT',
-    targetRole = 'STUDENT',
+    viewerRole = 'MEMBER',
+    targetRole = 'MEMBER',
     activeFamilyId,
-    persistMessages,
-    persistChatMessages,
-    onFreeChatDone,
+    appendSessionMessages,
+    onChatDone,
     onActivationSceneChange,
     viewerIdentityContext,
     getSessionSavedMemories,
+    subject = 'FamilyAgent',
+    contextLabel = 'family_memory',
   } = options;
 
   const activeStreamRef = useRef<AIStreamHandle | null>(null);
   const streamRunIdRef = useRef(0);
+  const finalizedRunsRef = useRef<Set<number>>(new Set());
+  const stoppedRunsRef = useRef<Set<number>>(new Set());
+  const persistenceQueueRef = useRef<Promise<void>>(Promise.resolve());
 
-  const persistSafely = useCallback(
-    (question: Question) => {
-      void Promise.resolve(persistMessages?.(useChatStore.getState().messages, question))
-        .catch((error: unknown) => {
-          console.log('Chat session not persisted:', error);
-        });
-    },
-    [persistMessages],
-  );
-
-  const persistChatSafely = useCallback(
-    () => {
-      void Promise.resolve(persistChatMessages?.(useChatStore.getState().messages))
-        .catch((error: unknown) => {
-          console.log('Chat session not persisted:', error);
-        });
-    },
-    [persistChatMessages],
-  );
+  const enqueuePersist = useCallback((items: ChatMessage[]) => {
+    const { task, nextQueue } = enqueuePersistMessages({
+      queue: persistenceQueueRef.current,
+      messages: items,
+      persist: appendSessionMessages,
+    });
+    persistenceQueueRef.current = nextQueue;
+    return task;
+  }, [appendSessionMessages]);
 
   const clearActiveStream = useCallback((runId: number) => {
     if (streamRunIdRef.current === runId) {
@@ -104,378 +123,247 @@ export function useChat(options: UseChatOptions = {}) {
 
   const isRunActive = useCallback((runId: number) => streamRunIdRef.current === runId, []);
 
+  const flushFinalAssistantMessage = useCallback(async (runId: number, assistantMessageId: string) => {
+    if (finalizedRunsRef.current.has(runId)) return;
+    finalizedRunsRef.current.add(runId);
+    const targetAssistant = useChatStore.getState().messages
+      .find((message) => message.id === assistantMessageId);
+    if (targetAssistant?.role === 'assistant' && targetAssistant.content.trim()) {
+      try {
+        await enqueuePersist([targetAssistant]);
+      } catch {
+        // The page owns the visible error state for persistence failures.
+      }
+    }
+  }, [enqueuePersist]);
+
   const stopStreaming = useCallback(() => {
-    streamRunIdRef.current += 1;
+    const runId = streamRunIdRef.current;
+    if (runId > 0) {
+      stoppedRunsRef.current.add(runId);
+    }
     activeStreamRef.current?.abort();
     activeStreamRef.current = null;
     setStreaming(false);
   }, [setStreaming]);
 
-  const makeBody = useCallback(
-    (question: Question, studentMessage: string) => {
-      const history = messages
-        .filter((message) => message.role !== 'system')
-        .map((message) => ({ role: message.role, content: message.content }));
+  const discardStreaming = useCallback(() => {
+    const runId = streamRunIdRef.current;
+    if (runId > 0) {
+      finalizedRunsRef.current.add(runId);
+      stoppedRunsRef.current.delete(runId);
+      streamRunIdRef.current += 1;
+    }
+    activeStreamRef.current?.abort();
+    activeStreamRef.current = null;
+    setStreaming(false);
+  }, [setStreaming]);
 
-      return {
-        questionContent: question.content.stem,
-        answer: question.answer.value,
-        steps: question.answer.steps?.join('\n') || '',
-        studentMessage,
-        history,
-        subject: question.subject,
-        grade: question.grade,
-        knowledgePoint: getKnowledgePoint(question.kpId),
-        masteryLevel: getMastery(question.kpId),
-        viewerRole,
-        targetRole,
-      };
-    },
-    [messages, getKnowledgePoint, getMastery, targetRole, viewerRole],
-  );
+  const recallMemoryContext = useCallback(async (query: string) => {
+    try {
+      const allowFamilyContext = shouldRecallFamilyContext(query);
+      const activationScene = allowFamilyContext ? detectFamilyActivationScene(query) : null;
+      onActivationSceneChange?.(
+        activationScene
+          ? { label: activationScene.label, instruction: activationScene.instruction }
+          : null,
+      );
 
-  const recallMemoryContext = useCallback(
-    async (params: {
-      query: string;
-      subject?: string;
-      knowledgePointId?: number;
-    }) => {
-      try {
-        const allowFamilyContext = shouldRecallFamilyContext(params.query);
-        const activationScene = allowFamilyContext ? detectFamilyActivationScene(params.query) : null;
-        onActivationSceneChange?.(
-          activationScene
-            ? { label: activationScene.label, instruction: activationScene.instruction }
-            : null,
-        );
-        const libraryKeyword = activationScene
-          ? `${params.query} ${activationScene.label} ${activationScene.searchKeywords.join(' ')}`
-          : params.query;
-        const [familyRecall, libraryResult, growthRecords, heritageTasks] = await Promise.all([
-          activeFamilyId && allowFamilyContext
-            ? withTimeout(memoryApi.recallFamily(activeFamilyId, {
-                query: libraryKeyword,
-                scene: 'FAMILY_AGENT',
-                diaryLimit: 8,
-                memoryLimit: 8,
-              }), null, FAMILY_CONTEXT_TIMEOUT_MS).catch(() => null)
-            : Promise.resolve(null),
-          activeFamilyId && allowFamilyContext
-            ? withTimeout(memoryLibraryApi.search({
-                familyId: activeFamilyId,
-                keyword: libraryKeyword,
-                pageSize: 12,
-              }), null, FAMILY_CONTEXT_TIMEOUT_MS).catch(() => null)
-            : Promise.resolve(null),
-          activeFamilyId && allowFamilyContext
-            ? withTimeout(
-                growthGuardApi.listFamilyRecords(activeFamilyId, 8),
-                [] as GrowthGuardRecord[],
-                FAMILY_CONTEXT_TIMEOUT_MS,
-              ).catch(() => [] as GrowthGuardRecord[])
-            : Promise.resolve([] as GrowthGuardRecord[]),
-          activeFamilyId && allowFamilyContext
-            ? withTimeout(
-                heritageTaskApi.listFamilyTasks(activeFamilyId, 8),
-                [] as HeritageTask[],
-                FAMILY_CONTEXT_TIMEOUT_MS,
-              ).catch(() => [] as HeritageTask[])
-            : Promise.resolve([] as HeritageTask[]),
-        ]);
+      const libraryKeyword = activationScene
+        ? `${query} ${activationScene.label} ${activationScene.searchKeywords.join(' ')}`
+        : query;
 
-        const libraryItems = libraryResult?.items || [];
-        if (!allowFamilyContext) {
-          return { context: '' } satisfies MemoryContextResult;
-        }
+      const [familyRecall, libraryResult, growthRecords, heritageTasks] = await Promise.all([
+        activeFamilyId && allowFamilyContext
+          ? withTimeout(memoryApi.recallFamily(activeFamilyId, {
+              query: libraryKeyword,
+              scene: 'FAMILY_AGENT',
+              diaryLimit: 8,
+              memoryLimit: 8,
+            }), null, FAMILY_CONTEXT_TIMEOUT_MS).catch(() => null)
+          : Promise.resolve(null),
+        activeFamilyId && allowFamilyContext
+          ? withTimeout(memoryLibraryApi.search({
+              familyId: activeFamilyId,
+              keyword: libraryKeyword,
+              pageSize: 12,
+            }), null, FAMILY_CONTEXT_TIMEOUT_MS).catch(() => null)
+          : Promise.resolve(null),
+        activeFamilyId && allowFamilyContext
+          ? withTimeout(
+              growthGuardApi.listFamilyRecords(activeFamilyId, 8),
+              [] as GrowthGuardRecord[],
+              FAMILY_CONTEXT_TIMEOUT_MS,
+            ).catch(() => [] as GrowthGuardRecord[])
+          : Promise.resolve([] as GrowthGuardRecord[]),
+        activeFamilyId && allowFamilyContext
+          ? withTimeout(
+              heritageTaskApi.listFamilyTasks(activeFamilyId, 8),
+              [] as HeritageTask[],
+              FAMILY_CONTEXT_TIMEOUT_MS,
+            ).catch(() => [] as HeritageTask[])
+          : Promise.resolve([] as HeritageTask[]),
+      ]);
 
-        const context = formatMemoryContext({
-          libraryItems,
-          familyMemories: familyRecall?.memories || [],
-          diaryEntries: familyRecall?.diaries || [],
-          growthRecords: familyRecall?.growthRecords?.length ? familyRecall.growthRecords : growthRecords,
-          heritageTasks,
-          sessionSavedMemories: getSessionSavedMemories?.() || [],
-          retrievalMode: familyRecall?.retrievalMode,
-          embeddingReadyCount: familyRecall?.embeddingReadyCount,
-          viewerRole,
-          viewerIdentityContext,
-          activationScene,
-        });
-
-        return {
-          context,
-          metadata: familyRecall
-            ? {
-                rag: {
-                  retrievalMode: familyRecall.retrievalMode,
-                  embeddingReadyCount: familyRecall.embeddingReadyCount || 0,
-                  diaryCount: familyRecall.diaryCount ?? familyRecall.diaries?.length ?? 0,
-                  memoryCount: familyRecall.memoryCount ?? familyRecall.memories?.length ?? 0,
-                  growthRecordCount: familyRecall.growthRecordCount ?? familyRecall.growthRecords?.length ?? 0,
-                  sources: familyRecall.sources || [],
-                },
-              }
-            : undefined,
-        } satisfies MemoryContextResult;
-      } catch (error) {
-        console.log('Family context memories not loaded:', error);
+      if (!allowFamilyContext) {
         return { context: '' } satisfies MemoryContextResult;
       }
-    },
-    [activeFamilyId, getSessionSavedMemories, onActivationSceneChange, viewerIdentityContext, viewerRole],
-  );
 
-  const askQuestion = useCallback(
-    async (question: Question, studentMessage: string) => {
-      if (isStreaming) return;
-      const runId = ++streamRunIdRef.current;
-
-      setCurrentQuestion(question);
-      addMessage('user', studentMessage);
-      addMessage('assistant', '');
-      setStreaming(true);
-
-      const timeContext = currentTimeContext();
-      const memoryContext = await recallMemoryContext({
-        query: studentMessage,
-        subject: question.subject,
-        knowledgePointId: question.kpId || undefined,
+      const context = formatMemoryContext({
+        libraryItems: libraryResult?.items || [],
+        familyMemories: familyRecall?.memories || [],
+        diaryEntries: familyRecall?.diaries || [],
+        growthRecords: familyRecall?.growthRecords?.length ? familyRecall.growthRecords : growthRecords,
+        heritageTasks,
+        sessionSavedMemories: getSessionSavedMemories?.() || [],
+        retrievalMode: familyRecall?.retrievalMode,
+        embeddingReadyCount: familyRecall?.embeddingReadyCount,
+        viewerIdentityContext,
+        activationScene,
       });
 
-      if (!isRunActive(runId)) return;
+      return {
+        context,
+        metadata: familyRecall
+          ? {
+              rag: {
+                retrievalMode: familyRecall.retrievalMode,
+                embeddingReadyCount: familyRecall.embeddingReadyCount || 0,
+                diaryCount: familyRecall.diaryCount ?? familyRecall.diaries?.length ?? 0,
+                memoryCount: familyRecall.memoryCount ?? familyRecall.memories?.length ?? 0,
+                growthRecordCount: familyRecall.growthRecordCount ?? familyRecall.growthRecords?.length ?? 0,
+                sources: familyRecall.sources || [],
+              },
+            }
+          : undefined,
+      } satisfies MemoryContextResult;
+    } catch (error) {
+      console.log('Family context memories not loaded:', error);
+      return { context: '' } satisfies MemoryContextResult;
+    }
+  }, [activeFamilyId, getSessionSavedMemories, onActivationSceneChange, viewerIdentityContext]);
 
-      if (memoryContext.metadata) {
-        mergeLastAssistantMetadata(memoryContext.metadata);
-      }
+  const sendMessage = useCallback(async (message: string) => {
+    if (isStreaming) return;
+    const runId = ++streamRunIdRef.current;
+    finalizedRunsRef.current.delete(runId);
+    stoppedRunsRef.current.delete(runId);
 
-      const handle = tutorApi.explainStream(
-        { ...makeBody(question, studentMessage), memoryContext: memoryContext.context, ...timeContext },
-        (chunk) => {
-          if (!isRunActive(runId)) return;
-          appendToLastMessage(chunk);
-        },
-        () => {
-          if (!isRunActive(runId)) return;
-          clearActiveStream(runId);
+    const history = useChatStore.getState().messages
+      .filter((item) => item.role !== 'system')
+      .map((item) => ({ role: item.role, content: item.content }));
+
+    const userMessage = addMessage('user', message);
+    const assistantMessage = addMessage('assistant', '');
+    setStreaming(true);
+
+    try {
+      await enqueuePersist([userMessage]);
+    } catch (error) {
+      removeMessageById(assistantMessage.id);
+      setStreaming(false);
+      throw error;
+    }
+
+    const timeContext = currentTimeContext();
+    const memoryContext = await recallMemoryContext(message);
+
+    if (!isRunActive(runId) || stoppedRunsRef.current.has(runId)) {
+      removeMessageById(assistantMessage.id);
+      setStreaming(false);
+      return;
+    }
+
+    if (memoryContext.metadata) {
+      mergeLastAssistantMetadata(memoryContext.metadata);
+    }
+
+    const handle = agentApi.streamChat(
+      {
+        message,
+        history,
+        subject,
+        contextLabel,
+        memoryContext: memoryContext.context,
+        viewerRole,
+        targetRole,
+        ...timeContext,
+      },
+      (chunk) => {
+        if (!isRunActive(runId)) return;
+        appendToLastMessage(chunk);
+      },
+      () => {
+        if (!isRunActive(runId)) return;
+        stoppedRunsRef.current.delete(runId);
+        clearActiveStream(runId);
+        setStreaming(false);
+        onChatDone?.(message);
+        void flushFinalAssistantMessage(runId, assistantMessage.id);
+      },
+      (error) => {
+        if (!isRunActive(runId)) return;
+        stoppedRunsRef.current.delete(runId);
+        clearActiveStream(runId);
+        appendToLastMessage(`\n\n[Error] ${error}`);
+        setStreaming(false);
+        void flushFinalAssistantMessage(runId, assistantMessage.id);
+      },
+      (metadata) => {
+        if (!isRunActive(runId)) return;
+        mergeLastAssistantMetadata(normalizeAssistantMetadata(metadata));
+      },
+      () => {
+        const isCurrentRun = isRunActive(runId);
+        stoppedRunsRef.current.delete(runId);
+        clearActiveStream(runId);
+        if (isCurrentRun) {
           setStreaming(false);
-          persistSafely(question);
-        },
-        (error) => {
-          if (!isRunActive(runId)) return;
-          clearActiveStream(runId);
-          appendToLastMessage(`\n\n[Error] ${error}`);
-          setStreaming(false);
-          persistSafely(question);
-        },
-        (metadata) => {
-          if (!isRunActive(runId)) return;
-          mergeLastAssistantMetadata(normalizeAssistantMetadata(metadata));
-        },
-        () => {
-          if (!isRunActive(runId)) return;
-          clearActiveStream(runId);
-          setStreaming(false);
-        },
-      );
+          streamRunIdRef.current += 1;
+        }
+        const targetAssistant = useChatStore.getState().messages
+          .find((item) => item.id === assistantMessage.id);
+        if (targetAssistant?.role === 'assistant' && !targetAssistant.content.trim()) {
+          removeMessageById(assistantMessage.id);
+          return;
+        }
+        void flushFinalAssistantMessage(runId, assistantMessage.id);
+      },
+    );
 
-      if (!isRunActive(runId)) {
-        handle.abort();
-        return;
-      }
+    if (!isRunActive(runId)) {
+      handle.abort();
+      removeMessageById(assistantMessage.id);
+      setStreaming(false);
+      return;
+    }
 
-      activeStreamRef.current = handle;
-    },
-    [
-      addMessage,
-      appendToLastMessage,
-      clearActiveStream,
-      isRunActive,
-      isStreaming,
-      makeBody,
-      mergeLastAssistantMetadata,
-      persistSafely,
-      recallMemoryContext,
-      setCurrentQuestion,
-      setStreaming,
-    ],
-  );
-
-  const sendMessage = useCallback(
-    async (message: string) => {
-      if (isStreaming || !currentQuestion) return;
-      const runId = ++streamRunIdRef.current;
-
-      addMessage('user', message);
-      addMessage('assistant', '');
-      setStreaming(true);
-
-      const timeContext = currentTimeContext();
-      const memoryContext = await recallMemoryContext({
-        query: message,
-        subject: currentQuestion.subject,
-        knowledgePointId: currentQuestion.kpId || undefined,
-      });
-
-      if (!isRunActive(runId)) return;
-
-      if (memoryContext.metadata) {
-        mergeLastAssistantMetadata(memoryContext.metadata);
-      }
-
-      const handle = tutorApi.explainStream(
-        { ...makeBody(currentQuestion, message), memoryContext: memoryContext.context, ...timeContext },
-        (chunk) => {
-          if (!isRunActive(runId)) return;
-          appendToLastMessage(chunk);
-        },
-        () => {
-          if (!isRunActive(runId)) return;
-          clearActiveStream(runId);
-          setStreaming(false);
-          persistSafely(currentQuestion);
-        },
-        (error) => {
-          if (!isRunActive(runId)) return;
-          clearActiveStream(runId);
-          appendToLastMessage(`\n\n[Error] ${error}`);
-          setStreaming(false);
-          persistSafely(currentQuestion);
-        },
-        (metadata) => {
-          if (!isRunActive(runId)) return;
-          mergeLastAssistantMetadata(normalizeAssistantMetadata(metadata));
-        },
-        () => {
-          if (!isRunActive(runId)) return;
-          clearActiveStream(runId);
-          setStreaming(false);
-        },
-      );
-
-      if (!isRunActive(runId)) {
-        handle.abort();
-        return;
-      }
-
-      activeStreamRef.current = handle;
-    },
-    [
-      addMessage,
-      appendToLastMessage,
-      clearActiveStream,
-      currentQuestion,
-      isRunActive,
-      isStreaming,
-      makeBody,
-      mergeLastAssistantMetadata,
-      persistSafely,
-      recallMemoryContext,
-      setStreaming,
-    ],
-  );
-
-  const sendFreeMessage = useCallback(
-    async (message: string) => {
-      if (isStreaming) return;
-      const runId = ++streamRunIdRef.current;
-
-      const history = useChatStore.getState().messages
-        .filter((item) => item.role !== 'system')
-        .map((item) => ({ role: item.role, content: item.content }));
-
-      addMessage('user', message);
-      addMessage('assistant', '');
-      setStreaming(true);
-
-      const timeContext = currentTimeContext();
-      const memoryContext = await recallMemoryContext({
-        query: message,
-        subject: 'family',
-      });
-
-      if (!isRunActive(runId)) return;
-
-      if (memoryContext.metadata) {
-        mergeLastAssistantMetadata(memoryContext.metadata);
-      }
-
-      const handle = tutorApi.explainStream(
-        {
-          questionContent: '',
-          answer: '',
-          steps: '',
-          studentMessage: message,
-          history,
-          subject: 'FamilyAgent',
-          grade: '',
-          knowledgePoint: 'family_memory',
-          masteryLevel: 'medium',
-          mode: 'chat',
-          memoryContext: memoryContext.context,
-          viewerRole,
-          targetRole,
-          ...timeContext,
-        },
-        (chunk) => {
-          if (!isRunActive(runId)) return;
-          appendToLastMessage(chunk);
-        },
-        () => {
-          if (!isRunActive(runId)) return;
-          clearActiveStream(runId);
-          setStreaming(false);
-          onFreeChatDone?.(message);
-          persistChatSafely();
-        },
-        (error) => {
-          if (!isRunActive(runId)) return;
-          clearActiveStream(runId);
-          appendToLastMessage(`\n\n[Error] ${error}`);
-          setStreaming(false);
-          persistChatSafely();
-        },
-        (metadata) => {
-          if (!isRunActive(runId)) return;
-          mergeLastAssistantMetadata(normalizeAssistantMetadata(metadata));
-        },
-        () => {
-          if (!isRunActive(runId)) return;
-          clearActiveStream(runId);
-          setStreaming(false);
-        },
-      );
-
-      if (!isRunActive(runId)) {
-        handle.abort();
-        return;
-      }
-
-      activeStreamRef.current = handle;
-    },
-    [
-      addMessage,
-      appendToLastMessage,
-      clearActiveStream,
-      isRunActive,
-      isStreaming,
-      mergeLastAssistantMetadata,
-      onFreeChatDone,
-      persistChatSafely,
-      recallMemoryContext,
-      setStreaming,
-      targetRole,
-      viewerRole,
-    ],
-  );
+    activeStreamRef.current = handle;
+  }, [
+    addMessage,
+    appendToLastMessage,
+    clearActiveStream,
+    contextLabel,
+    flushFinalAssistantMessage,
+    isRunActive,
+    isStreaming,
+    mergeLastAssistantMetadata,
+    onChatDone,
+    enqueuePersist,
+    recallMemoryContext,
+    removeMessageById,
+    setStreaming,
+    subject,
+    targetRole,
+    viewerRole,
+  ]);
 
   return {
     messages,
     isStreaming,
-    currentQuestion,
-    askQuestion,
     sendMessage,
-    sendFreeMessage,
     stopStreaming,
+    discardStreaming,
     reset,
   };
 }
@@ -499,7 +387,6 @@ function formatMemoryContext({
   sessionSavedMemories,
   retrievalMode,
   embeddingReadyCount,
-  viewerRole,
   viewerIdentityContext,
   activationScene,
 }: {
@@ -511,283 +398,87 @@ function formatMemoryContext({
   sessionSavedMemories: SessionSavedMemory[];
   retrievalMode?: string;
   embeddingReadyCount?: number;
-  viewerRole: ViewerRole;
   viewerIdentityContext?: string;
   activationScene: FamilyActivationScene | null;
-}): string {
+}) {
   const sections: string[] = [];
-  if (viewerIdentityContext?.trim()) {
-    sections.push(`当前对话者身份：\n${viewerIdentityContext.trim()}`);
-  }
-  const visibleLibraryItems = libraryItems.filter((item) => item.body?.trim() || item.title?.trim());
-  sections.push(buildContextHitSummary({
-    libraryItems: visibleLibraryItems,
-    familyMemories,
-    diaryEntries,
-    growthRecords,
-    heritageTasks,
-    sessionSavedMemories,
-    retrievalMode,
-    embeddingReadyCount,
-  }));
+  const libraryHits = libraryItems
+    .filter((item) => item.title?.trim() || item.body?.trim())
+    .slice(0, 8)
+    .map((item, index) => {
+      const preview = (item.body || '').trim().slice(0, 220);
+      return `${index + 1}. [${item.sourceType}] ${item.title || 'Untitled'} ${preview}`;
+    });
 
-  const recentSavedMemories = sessionSavedMemories
-    .filter((memory) => memory.content.trim())
-    .slice(-5);
-  if (recentSavedMemories.length > 0) {
-    sections.push([
-      '本轮会话刚保存的家族记忆：',
-      recentSavedMemories.map((memory, index) => (
-        `${index + 1}. [${memory.label}；${memory.visibility || 'PRIVATE'}；保存时间：${memory.savedAt}] ${memory.title}：${memory.content.slice(0, 260)}${memory.reason ? `；保存理由：${memory.reason}` : ''}`
-      )).join('\n'),
-      '回答策略：这些是本轮对话刚刚沉淀的内容，索引可能还没重建，但你可以在后续回答中自然使用；不要逐条复述，只在相关时体现“我记得刚才保存过这件事”。',
-    ].join('\n'));
+  const memoryHits = familyMemories
+    .filter((item) => item.status === 'ACTIVE' && item.content?.trim())
+    .slice(0, 6)
+    .map((item, index) => `${index + 1}. [${item.type}] ${(item.summary || item.content).trim().slice(0, 220)}`);
+
+  const diaryHits = diaryEntries
+    .filter((item) => item.rawText?.trim())
+    .slice(0, 6)
+    .map((item, index) => `${index + 1}. [${item.structured?.entryType || 'DAILY'}] ${item.rawText.trim().slice(0, 220)}`);
+
+  const growthHits = growthRecords
+    .filter((item) => item.status === 'ACTIVE')
+    .slice(0, 6)
+    .map((item, index) => `${index + 1}. [${item.category || 'OTHER'} severity=${item.severity}] ${item.content.trim().slice(0, 220)}`);
+
+  const taskHits = heritageTasks
+    .filter((item) => item.status === 'PENDING' || item.status === 'DONE')
+    .slice(0, 5)
+    .map((item, index) => `${index + 1}. [${item.status}] ${item.title}: ${item.action}`);
+
+  if (viewerIdentityContext?.trim()) {
+    sections.push(`viewer_context:\n${viewerIdentityContext.trim()}`);
   }
+
+  sections.push(
+    `retrieval_summary: mode=${retrievalMode || 'TEXT_FALLBACK'} embedding_ready=${embeddingReadyCount ?? 0} library=${libraryHits.length} memories=${memoryHits.length} diaries=${diaryHits.length} growth=${growthHits.length} tasks=${taskHits.length} saved_this_session=${sessionSavedMemories.filter((item) => item.content.trim()).length}`,
+  );
 
   if (activationScene) {
-    sections.push([
-      `场景化激活：本轮问题可能属于「${activationScene.label}」。`,
-      activationScene.instruction,
-      '回答策略：优先把已授权经验沉淀转化为当前场景下的小判断或小行动；不要直接灌输，不要把长辈经验当成唯一正确答案，结尾尽量用一个问题激活用户继续思考。',
-    ].join('\n'));
+    sections.push(`activation_scene: ${activationScene.label}\n${activationScene.instruction}`);
   }
 
-  if (visibleLibraryItems.length > 0) {
-    sections.push(`本轮额外匹配的家族记忆片段：\n${visibleLibraryItems
-      .slice(0, 12)
-      .map((item, index) => {
-        const content = viewerRole === 'STUDENT'
-          ? item.body?.slice(0, 180)
-          : item.body?.slice(0, 280);
-        return `${index + 1}. [${memoryLibrarySourceLabel(item.sourceType)}；${item.memberName || '家族成员'}；${item.visibility}] ${item.title || '未命名片段'}：${content || ''}`;
-      })
-      .join('\n')}`);
+  if (libraryHits.length > 0) {
+    sections.push(`library_hits:\n${libraryHits.join('\n')}`);
+  }
+  if (memoryHits.length > 0) {
+    sections.push(`family_memory_hits:\n${memoryHits.join('\n')}`);
+  }
+  if (diaryHits.length > 0) {
+    sections.push(`diary_hits:\n${diaryHits.join('\n')}`);
+  }
+  if (growthHits.length > 0) {
+    sections.push(`growth_hits:\n${growthHits.join('\n')}`);
+  }
+  if (taskHits.length > 0) {
+    sections.push(`task_hits:\n${taskHits.join('\n')}`);
   }
 
-  if (visibleLibraryItems.length > 0) {
-    sections.push(`额外匹配片段时间线：\n${visibleLibraryItems
-      .slice(0, 12)
-      .map((item, index) => `${index + 1}. ${memoryLibrarySourceLabel(item.sourceType)}；归属：${item.memberName || '家族成员'}；创建：${item.createdAt || '未知'}；更新：${item.updatedAt || '未知'}；可见范围：${item.visibility || 'UNKNOWN'}`)
-      .join('\n')}`);
-  }
-
-  const activeFamilyMemories = visibleLibraryItems.length > 0
-    ? []
-    : familyMemories.filter((memory) => memory.status === 'ACTIVE' && memory.content?.trim());
-  if (activeFamilyMemories.length > 0) {
-    sections.push(`经验沉淀：\n${activeFamilyMemories
-      .map((memory, index) => {
-        const scenario = typeof memory.metadata?.scenario === 'string' ? `；场景：${memory.metadata.scenario}` : '';
-        const summary = memory.summary?.trim() || memory.content.trim();
-        return `${index + 1}. [${memory.type || 'FAMILY'}${scenario}] ${summary}`;
-      })
-      .join('\n')}`);
-  }
-
-  if (visibleLibraryItems.length === 0 && diaryEntries.length > 0) {
-    sections.push(`家族日记授权摘要：\n${diaryEntries
-      .filter((entry) => entry.rawText?.trim())
-      .map((entry, index) => {
-        const entryType = entry.structured?.entryType || 'DAILY';
-        const title = entry.structured?.title ? `《${entry.structured.title}》` : '';
-        const mood = entry.mood ? `；心情：${entry.mood}` : '';
-        const content = viewerRole === 'STUDENT'
-          ? entry.rawText.slice(0, 160)
-          : entry.rawText.slice(0, 260);
-        return `${index + 1}. [${entryType}] ${title}${content}${mood}`;
-      })
-      .join('\n')}`);
-  }
-
-  const activeGrowthRecords = visibleLibraryItems.length > 0
-    ? []
-    : growthRecords.filter((record) => record.status === 'ACTIVE');
-  if (activeGrowthRecords.length > 0) {
-    const lines = activeGrowthRecords.map((record, index) => {
-      const category = record.category || 'OTHER';
-      const status = String(record.metadata?.followUpStatus || 'PENDING');
-      const perspective = growthMetadataLabel(record.metadata?.observerPerspective, {
-        CAREGIVER: '照护者观察',
-        SELF: '本人自述',
-        ELDER: '长辈观察',
-        FAMILY_MEMBER: '家人补充',
-        OTHER: '其他来源',
-      });
-      const evidence = growthMetadataLabel(record.metadata?.evidenceType, {
-        OBSERVED_FACT: '可观察事实',
-        SELF_REPORT: '本人表达',
-        FEELING: '观察者感受',
-        INFERENCE: '初步猜测',
-      });
-      const confidence = growthMetadataLabel(record.metadata?.confidenceLevel, {
-        LOW: '低置信',
-        MEDIUM: '中等置信',
-        HIGH: '较高置信',
-      });
-      const selfConfirmed = growthMetadataLabel(record.metadata?.selfConfirmed, {
-        YES: '本人确认',
-        NO: '本人未确认',
-        UNKNOWN: '本人未确认/未知',
-      });
-      const metaNote = [perspective, evidence, confidence, selfConfirmed].filter(Boolean).join('；');
-      if (viewerRole === 'STUDENT') {
-        return `${index + 1}. [${category}] 家庭近期有一条成长观察信号，留意程度 ${record.severity}，跟进状态 ${status}${metaNote ? `；${metaNote}` : ''}。面向学习者时只可转化为温和、泛化、非指责的提醒，不要复述原文；如果不是本人自述或本人确认，不能推断其真实想法。`;
-      }
-      return `${index + 1}. [${category}] ${record.content}；留意程度 ${record.severity}；跟进状态 ${status}${metaNote ? `；${metaNote}` : ''}。请区分事实、感受和猜测，保留不确定性。`;
-    });
-    sections.push(`成长观察安全摘要：\n${lines.join('\n')}`);
-  }
-
-  const activeTasks = heritageTasks.filter((task) => task.status === 'PENDING' || task.status === 'DONE');
-  if (activeTasks.length > 0) {
-    const pendingTasks = activeTasks.filter((task) => task.status === 'PENDING').slice(0, 5);
-    const doneTasks = activeTasks.filter((task) => task.status === 'DONE' && task.completionNote?.trim()).slice(0, 3);
-    const taskLines: string[] = [];
-    for (const task of pendingTasks) {
-      const due = task.dueDate ? `；建议完成：${task.dueDate}` : '';
-      const target = task.targetLabel ? `；对象/场景：${task.targetLabel}` : '';
-      taskLines.push(`[待实践] ${task.title}：${task.action}${target}${due}`);
-    }
-    for (const task of doneTasks) {
-      taskLines.push(`[已完成] ${task.title}：${task.completionNote}`);
-    }
-    if (taskLines.length > 0) {
-      sections.push([
-        `家庭任务上下文：\n${taskLines.join('\n')}`,
-        '回答策略：如果用户谈到相关场景，可以温和提醒待实践任务或引导复盘已完成任务；不要催促、打卡化或制造压力。',
-      ].join('\n'));
-    }
+  const recentSavedMemories = sessionSavedMemories
+    .filter((item) => item.content.trim())
+    .slice(-5)
+    .map((item, index) => `${index + 1}. [${item.tool}] ${item.title}: ${item.content.slice(0, 220)}`);
+  if (recentSavedMemories.length > 0) {
+    sections.push(`recent_saved_memories:\n${recentSavedMemories.join('\n')}`);
   }
 
   return sections.join('\n\n');
 }
 
-function memoryLibrarySourceLabel(type: string) {
-  if (type === 'LIFE_RECORD') return '每日记录';
-  if (type === 'FAMILY_EXPERIENCE') return '经验沉淀';
-  if (type === 'GROWTH_OBSERVATION') return '成长观察';
-  if (type === 'AI_SUMMARY') return 'AI 摘要';
-  return '记忆片段';
-}
-
-function buildContextHitSummary({
-  libraryItems,
-  familyMemories,
-  diaryEntries,
-  growthRecords,
-  heritageTasks,
-  sessionSavedMemories,
-  retrievalMode,
-  embeddingReadyCount,
-}: {
-  libraryItems: MemoryLibraryItem[];
-  familyMemories: MemoryEntry[];
-  diaryEntries: DiaryEntry[];
-  growthRecords: GrowthGuardRecord[];
-  heritageTasks: HeritageTask[];
-  sessionSavedMemories: SessionSavedMemory[];
-  retrievalMode?: string;
-  embeddingReadyCount?: number;
-}) {
-  const libraryCounts = libraryItems.reduce<Record<string, number>>((acc, item) => {
-    const label = memoryLibrarySourceLabel(item.sourceType);
-    acc[label] = (acc[label] || 0) + 1;
-    return acc;
-  }, {});
-  const activeFamilyCount = familyMemories.filter((memory) => memory.status === 'ACTIVE' && memory.content?.trim()).length;
-  const diaryCount = diaryEntries.filter((entry) => entry.rawText?.trim()).length;
-  const growthCount = growthRecords.filter((record) => record.status === 'ACTIVE').length;
-  const taskCount = heritageTasks.filter((task) => task.status === 'PENDING').length;
-  const sessionSavedCount = sessionSavedMemories.filter((memory) => memory.content.trim()).length;
-
-  const parts = Object.entries(libraryCounts).map(([label, count]) => `${count} 条${label}`);
-  if (parts.length === 0) {
-    if (activeFamilyCount > 0) parts.push(`${activeFamilyCount} 条经验沉淀`);
-    if (diaryCount > 0) parts.push(`${diaryCount} 条每日记录`);
-    if (growthCount > 0) parts.push(`${growthCount} 条成长观察`);
-    if (taskCount > 0) parts.push(`${taskCount} 个家庭任务`);
-    if (sessionSavedCount > 0) parts.push(`${sessionSavedCount} 条刚保存记忆`);
-  } else if (taskCount > 0) {
-    parts.push(`${taskCount} 个家庭任务`);
-    if (sessionSavedCount > 0) parts.push(`${sessionSavedCount} 条刚保存记忆`);
-  } else if (sessionSavedCount > 0) {
-    parts.push(`${sessionSavedCount} 条刚保存记忆`);
-  }
-
-  if (parts.length === 0) {
-    return [
-      '本轮记忆命中摘要：没有命中明确的家族长期记忆。',
-      '回答策略：不要假装了解这个家族；可以温和说明资料不足，并建议补充一条每日记录、经验沉淀或成长观察。',
-    ].join('\n');
-  }
-
-  return [
-    `本轮记忆命中摘要：命中 ${parts.join('、')}。RAG 模式：${retrievalMode || 'TEXT_FALLBACK'}；可用向量索引：${embeddingReadyCount ?? 0} 条。`,
-    '回答策略：可以自然说明“我参考了这些授权家族记录”，但不要逐条罗列或复述原文；先给基于家族记录的判断，再给下一步小行动。',
-  ].join('\n');
-}
-
-const familyContextTerms = [
-  'family', 'diary', 'memory', 'growth', 'parent', 'child', 'study',
-  'tooth', 'teeth', 'dental', 'screen', 'sleep', 'health', 'exercise', 'emotion',
-  '家族', '家庭', '家人', '家里', '我家', '我们家', '家长', '爸', '妈', '爷', '奶', '外公', '外婆',
-  '孩子', '儿子', '女儿', '孙', '长辈', '亲子', '关系', '沟通', '日记', '记录',
-  '记忆', '经验', '沉淀', '传承', '故事', '成长', '观察', '情绪', '焦虑', '压力',
-  '学习', '作业', '考试', '升学', '志愿', '学校', '选择', '复盘', '后悔', '健康',
-  '牙', '刷牙', '视力', '睡眠', '运动', '体态', '手机', '屏幕', '习惯', '陪伴',
-  '教育', '保存', '记下来', '想起来',
-];
-
 function shouldRecallFamilyContext(query: string) {
-  const normalized = query.trim().toLowerCase().replace(/[，。！？；：“”‘’（）【】《》、,.!?;:'"()[\]{}<>]/g, ' ');
+  const normalized = query.trim().toLowerCase();
   if (!normalized) return true;
-  const compact = normalized.replace(/\s+/g, '');
-  return familyContextTerms.some((term) => normalized.includes(term) || compact.includes(term));
+  return familyContextTerms.some((term) => normalized.includes(term.toLowerCase()));
 }
-
-type FamilyActivationScene = {
-  label: string;
-  searchKeywords: string[];
-  instruction: string;
-};
-
-const activationScenes: FamilyActivationScene[] = [
-  {
-    label: '升学选择',
-    searchKeywords: ['升学', '志愿', '专业', '考研', '择校', '人生选择'],
-    instruction: '重点寻找家族里关于选择、取舍、长期后果、后悔和复盘的经验。',
-  },
-  {
-    label: '健康提醒',
-    searchKeywords: ['牙齿', '视力', '体态', '睡眠', '运动', '健康', '换牙期'],
-    instruction: '重点寻找牙齿、视力、体态、睡眠、运动等早期信号和可执行提醒，表达要温和，不制造焦虑。',
-  },
-  {
-    label: '亲子沟通',
-    searchKeywords: ['亲子', '沟通', '吵架', '误会', '青春期', '陪伴'],
-    instruction: '重点寻找家人沟通方式、误会复盘、表达边界和陪伴经验，避免站队或扩大冲突。',
-  },
-  {
-    label: '钱与工作',
-    searchKeywords: ['工作', '职业', '钱', '投资', '创业', '风险', '责任'],
-    instruction: '重点寻找职业选择、金钱观、风险承担、责任边界相关经验，帮助用户拆解判断条件。',
-  },
-  {
-    label: '失败复盘',
-    searchKeywords: ['失败', '后悔', '低谷', '挫折', '遗憾', '复盘'],
-    instruction: '重点寻找从失败、后悔、低谷中提炼出的教训，把情绪转成可执行的下一步。',
-  },
-];
 
 function detectFamilyActivationScene(query: string): FamilyActivationScene | null {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return null;
-  return activationScenes.find((scene) => scene.searchKeywords.some((keyword) => normalized.includes(keyword))) || null;
-}
-
-function growthMetadataLabel(value: unknown, labels: Record<string, string>) {
-  if (typeof value !== 'string') return '';
-  return labels[value] || '';
+  return activationScenes.find((scene) => scene.searchKeywords.some((keyword) => normalized.includes(keyword.toLowerCase()))) || null;
 }
 
 function normalizeAssistantMetadata(metadata: Record<string, unknown>): NonNullable<ChatMessage['metadata']> {
@@ -803,7 +494,7 @@ function normalizeAssistantMetadata(metadata: Record<string, unknown>): NonNulla
       sources: rawSources
         .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
         .map((item) => ({
-          title: typeof item.title === 'string' ? item.title : '未命名来源',
+          title: typeof item.title === 'string' ? item.title : 'Untitled',
           url: typeof item.url === 'string' ? item.url : '',
           snippet: typeof item.snippet === 'string' ? item.snippet : '',
         }))

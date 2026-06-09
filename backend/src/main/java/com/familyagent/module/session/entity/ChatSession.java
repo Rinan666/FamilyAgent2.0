@@ -7,7 +7,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 家教会话实体
+ * Chat session entity.
  */
 @Data
 @TableName(value = "chat_sessions", autoResultMap = true)
@@ -22,12 +22,19 @@ public class ChatSession {
     private String subject;
     private Long knowledgePointId;
 
+    @Deprecated
     @TableField(typeHandler = JacksonTypeHandler.class)
     private Object messages;
 
+    private String title;
     private String summary;
     private String status;
     private String visibility;
+    private LocalDateTime lastMessageAt;
+    private Integer messageCount;
+    private Integer tokenCount;
+    private Integer archivedBeforeSeq;
+    private String archiveStatus;
 
     @TableField(typeHandler = JacksonTypeHandler.class)
     private Object permissionScope;
@@ -36,6 +43,9 @@ public class ChatSession {
 
     @TableField(typeHandler = JacksonTypeHandler.class)
     private Object metadata;
+
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private Object archiveMetadata;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime startedAt;

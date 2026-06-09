@@ -7,7 +7,7 @@ import { heritageTaskApi, memoryApi } from '@/lib/api';
 import { useViewerRole } from '@/hooks/useViewerRole';
 import LegacyWorkpageNotice from '@/components/family/LegacyWorkpageNotice';
 import VoiceInputButton from '@/components/voice/VoiceInputButton';
-import type { FamilyMemoryCard, HeritageSaveJudge, HeritageTask, MemoryEntryType, MemoryScope } from '@/types';
+import type { FamilyMemoryCard, HeritageClassicalDraft, HeritageSaveJudge, HeritageTask, MemoryEntryType, MemoryScope } from '@/types';
 import {
   CheckCircle,
   RefreshCw,
@@ -157,11 +157,13 @@ export default function HeritagePage({ embedded = false }: HeritagePageProps) {
   const [atomThinking, setAtomThinking] = useState('');
   const [atomRedo, setAtomRedo] = useState('');
   const [draftCard, setDraftCard] = useState<FamilyMemoryCard | null>(null);
+  const [classicalDraft, setClassicalDraft] = useState<HeritageClassicalDraft | null>(null);
   const [organizedReason, setOrganizedReason] = useState('');
   const [saveJudge, setSaveJudge] = useState<HeritageSaveJudge | null>(null);
   const [organizingMode, setOrganizingMode] = useState<EntryMode | null>(null);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [classicalizing, setClassicalizing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [completingTaskId, setCompletingTaskId] = useState<number | null>(null);
   const [completionNotes, setCompletionNotes] = useState<Record<number, string>>({});
@@ -185,6 +187,7 @@ export default function HeritagePage({ embedded = false }: HeritagePageProps) {
 
   const resetFormalDerivedState = () => {
     setDraftCard(null);
+    setClassicalDraft(null);
     setSaveJudge(null);
     setOrganizedReason('');
   };
@@ -347,6 +350,36 @@ export default function HeritagePage({ embedded = false }: HeritagePageProps) {
     }
   };
 
+  const handleGenerateClassicalDraft = async () => {
+    const formalContent = content.trim();
+    if (!formalContent) return;
+    setClassicalizing(true);
+    setError('');
+    try {
+      const result = await memoryApi.createHeritageClassicalDraft({
+        content: formalContent,
+        memoryType,
+        scenario,
+        familyContext: selectedFamily?.description || selectedFamily?.name || '',
+      });
+      setClassicalDraft(result.data);
+      flashSuccess('已提炼出古文稿，可先预览再决定是否应用到正文');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '古文提炼失败');
+    } finally {
+      setClassicalizing(false);
+    }
+  };
+
+  const applyClassicalDraft = () => {
+    if (!classicalDraft?.classicalText) return;
+    setContent(classicalDraft.classicalText);
+    setDraftCard(null);
+    setSaveJudge(null);
+    setSourceMode('DIRECT');
+    setOrganizedReason('已将古文稿应用到正式保存内容，你可以继续润色后再保存。');
+  };
+
   const sourceMetadataValue = (mode: EntryMode) => {
     if (mode === 'INTERVIEW') return 'HERITAGE_INTERVIEW';
     if (mode === 'ATOM') return 'HERITAGE_ATOM';
@@ -416,6 +449,7 @@ export default function HeritagePage({ embedded = false }: HeritagePageProps) {
 
       setContent('');
       setDraftCard(null);
+      setClassicalDraft(null);
       setSaveJudge(null);
       setOrganizedReason('');
       setSourceMode('DIRECT');
@@ -470,82 +504,6 @@ export default function HeritagePage({ embedded = false }: HeritagePageProps) {
         >
           前往家族空间
         </Link>
-      </div>
-    );
-  }
-
-  if (viewerRole === 'STUDENT') {
-    return (
-      <div className="mx-auto w-full max-w-4xl">
-        {!embedded && <LegacyWorkpageNotice tab="heritage" label="经验沉淀" />}
-        <div className="space-y-4">
-          <section className="rounded-lg border border-gray-200 bg-white p-5 sm:p-6">
-            <div className="mb-3 flex items-center gap-2">
-              <ScrollText className="h-5 w-5 text-blue-600" />
-              <h1 className="text-xl font-bold text-gray-900">经验沉淀</h1>
-            </div>
-            <p className="text-sm leading-6 text-gray-500">
-              当前账号在这里使用只读视图。你可以查看自己有权限看到的经验沉淀结果与家庭任务进展；新增、整理和保存操作由家长或管理员处理。
-            </p>
-            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-              <Link
-                href={`/dashboard/family?tab=heritage${selectedFamilyId ? `&familyId=${selectedFamilyId}` : ''}`}
-                className="inline-flex h-10 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
-              >
-                回到家族空间查看
-              </Link>
-              <Link
-                href={`/dashboard/memory${selectedFamilyId ? `?familyId=${selectedFamilyId}` : ''}`}
-                className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium text-gray-600 hover:bg-gray-50"
-              >
-                去全部记忆
-              </Link>
-            </div>
-          </section>
-
-          <section className="rounded-lg border border-green-100 bg-green-50 p-4 sm:p-5">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Target className="h-4 w-4 text-green-700" />
-                <p className="text-sm font-semibold text-green-900">家庭任务结果</p>
-              </div>
-              <span className="text-xs text-green-700">{tasks.filter((task) => task.status === 'PENDING').length} 个待实践</span>
-            </div>
-
-            {loadingTasks ? (
-              <div className="flex h-16 items-center justify-center text-green-700">
-                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                加载任务...
-              </div>
-            ) : tasks.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-green-200 bg-white/70 px-3 py-4 text-center text-xs text-green-700">
-                暂时还没有你可查看的家庭任务。
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {tasks.slice(0, 6).map((task) => (
-                  <div key={task.id} className="rounded-lg border border-green-100 bg-white p-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium text-gray-900">{task.title}</span>
-                      <span className={`rounded px-2 py-0.5 text-[11px] font-medium ${
-                        task.status === 'DONE' ? 'bg-gray-100 text-gray-500' : 'bg-green-100 text-green-700'
-                      }`}>
-                        {task.status === 'DONE' ? '已完成' : '待实践'}
-                      </span>
-                      {task.dueDate && <span className="text-xs text-gray-400">截止 {task.dueDate}</span>}
-                    </div>
-                    <p className="mt-1 text-xs leading-5 text-gray-600">{task.action}</p>
-                    {task.completionNote ? (
-                      <p className="mt-2 rounded bg-gray-50 px-2 py-1.5 text-xs leading-5 text-gray-500">
-                        完成记录：{task.completionNote}
-                      </p>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-        </div>
       </div>
     );
   }
@@ -813,6 +771,15 @@ export default function HeritagePage({ embedded = false }: HeritagePageProps) {
               </button>
               <button
                 type="button"
+                onClick={handleGenerateClassicalDraft}
+                disabled={!content.trim() || classicalizing}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+              >
+                {classicalizing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <ScrollText className="h-4 w-4" />}
+                提炼成古文
+              </button>
+              <button
+                type="button"
                 onClick={handleSave}
                 disabled={!selectedFamilyId || !content.trim() || saving}
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
@@ -821,6 +788,28 @@ export default function HeritagePage({ embedded = false }: HeritagePageProps) {
                 保存经验
               </button>
             </div>
+
+            {classicalDraft && (
+              <div className="mt-4 rounded-lg border border-amber-100 bg-amber-50 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">{classicalDraft.title}</p>
+                    <p className="mt-1 text-xs leading-5 text-amber-800">{classicalDraft.styleNote}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={applyClassicalDraft}
+                    className="inline-flex h-9 items-center justify-center rounded-lg border border-amber-200 bg-white px-3 text-xs font-medium text-amber-800 hover:bg-amber-100"
+                  >
+                    应用到正文
+                  </button>
+                </div>
+                <p className="mt-3 rounded-lg border border-amber-100 bg-white px-3 py-3 text-sm leading-7 text-gray-800">
+                  {classicalDraft.classicalText}
+                </p>
+                <p className="mt-3 text-xs leading-5 text-gray-600">{classicalDraft.plainSummary}</p>
+              </div>
+            )}
 
             {draftCard && (
               <div className="mt-4 rounded-lg border border-purple-100 bg-purple-50 p-4">

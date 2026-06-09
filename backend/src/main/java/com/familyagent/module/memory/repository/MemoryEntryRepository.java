@@ -59,6 +59,105 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
             @Param("limit") int limit);
 
     @Select("""
+        SELECT COUNT(*)
+        FROM memory_entries
+        WHERE family_id = #{familyId}
+          AND status = 'ACTIVE'
+          AND type IN ('FAMILY_STORY', 'ELDER_ADVICE', 'HEALTH_REMINDER', 'GROWTH_RISK', 'VALUE')
+          AND (
+            CAST(#{targetUserId} AS BIGINT) IS NULL
+            OR user_id = CAST(#{targetUserId} AS BIGINT)
+          )
+          AND (
+            CAST(#{keyword} AS VARCHAR) IS NULL
+            OR content ILIKE CONCAT('%', CAST(#{keyword} AS VARCHAR), '%')
+            OR COALESCE(summary, '') ILIKE CONCAT('%', CAST(#{keyword} AS VARCHAR), '%')
+            OR COALESCE(metadata->>'scenario', '') ILIKE CONCAT('%', CAST(#{keyword} AS VARCHAR), '%')
+          )
+          AND (
+            scope = 'FAMILY_VISIBLE'
+            OR user_id = #{viewerUserId}
+            OR (
+              scope IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
+              AND EXISTS (
+                SELECT 1 FROM family_members fm
+                WHERE fm.family_id = memory_entries.family_id
+                  AND fm.user_id = #{viewerUserId}
+                  AND fm.role = 'OWNER'
+              )
+            )
+            OR (
+              scope IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
+              AND EXISTS (
+                SELECT 1 FROM care_authorizations ca
+                WHERE ca.family_id = memory_entries.family_id
+                  AND ca.subject_user_id = memory_entries.user_id
+                  AND ca.caregiver_user_id = #{viewerUserId}
+                  AND ca.status = 'ACTIVE'
+                  AND ca.scope IN ('ALL', 'DIARY', 'GROWTH_GUARD')
+                  AND (ca.expires_at IS NULL OR ca.expires_at > NOW())
+              )
+            )
+          )
+        """)
+    long countActiveFamilyMemoriesSearch(
+            @Param("familyId") Long familyId,
+            @Param("viewerUserId") Long viewerUserId,
+            @Param("targetUserId") Long targetUserId,
+            @Param("keyword") String keyword);
+
+    @Select("""
+        SELECT * FROM memory_entries
+        WHERE family_id = #{familyId}
+          AND status = 'ACTIVE'
+          AND type IN ('FAMILY_STORY', 'ELDER_ADVICE', 'HEALTH_REMINDER', 'GROWTH_RISK', 'VALUE')
+          AND (
+            CAST(#{targetUserId} AS BIGINT) IS NULL
+            OR user_id = CAST(#{targetUserId} AS BIGINT)
+          )
+          AND (
+            CAST(#{keyword} AS VARCHAR) IS NULL
+            OR content ILIKE CONCAT('%', CAST(#{keyword} AS VARCHAR), '%')
+            OR COALESCE(summary, '') ILIKE CONCAT('%', CAST(#{keyword} AS VARCHAR), '%')
+            OR COALESCE(metadata->>'scenario', '') ILIKE CONCAT('%', CAST(#{keyword} AS VARCHAR), '%')
+          )
+          AND (
+            scope = 'FAMILY_VISIBLE'
+            OR user_id = #{viewerUserId}
+            OR (
+              scope IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
+              AND EXISTS (
+                SELECT 1 FROM family_members fm
+                WHERE fm.family_id = memory_entries.family_id
+                  AND fm.user_id = #{viewerUserId}
+                  AND fm.role = 'OWNER'
+              )
+            )
+            OR (
+              scope IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
+              AND EXISTS (
+                SELECT 1 FROM care_authorizations ca
+                WHERE ca.family_id = memory_entries.family_id
+                  AND ca.subject_user_id = memory_entries.user_id
+                  AND ca.caregiver_user_id = #{viewerUserId}
+                  AND ca.status = 'ACTIVE'
+                  AND ca.scope IN ('ALL', 'DIARY', 'GROWTH_GUARD')
+                  AND (ca.expires_at IS NULL OR ca.expires_at > NOW())
+              )
+            )
+          )
+        ORDER BY created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+        """)
+    List<MemoryEntry> searchActiveFamilyMemories(
+            @Param("familyId") Long familyId,
+            @Param("viewerUserId") Long viewerUserId,
+            @Param("targetUserId") Long targetUserId,
+            @Param("keyword") String keyword,
+            @Param("limit") int limit,
+            @Param("offset") long offset);
+
+    @Select("""
         SELECT * FROM memory_entries
         WHERE id = #{memoryId}
           AND family_id = #{familyId}

@@ -215,8 +215,8 @@ export default function DiaryPage() {
   const relatedContextLabel = requestedRelatedMemberName
     || (requestedRelatedUserId ? `用户 ${requestedRelatedUserId}` : '');
 
-  const canViewGrowthTab = viewerRole !== 'STUDENT';
-  const activeTab: WriteRecordTab = canViewGrowthTab ? requestedTab : 'record';
+  const canViewGrowthTab = true;
+  const activeTab: WriteRecordTab = requestedTab;
 
   const selectedFamily = useMemo(
     () => families.find((family) => family.id === selectedFamilyId) || null,

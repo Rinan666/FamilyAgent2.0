@@ -78,7 +78,7 @@ function memberProfileLine(member: FamilyMember) {
 }
 
 export default function FamilyMembersPanel({
-  viewerRole = 'STUDENT',
+  viewerRole = 'MEMBER',
   families: externalFamilies,
   focusedFamilyId = null,
   onFocusedFamilyChange,
@@ -117,7 +117,7 @@ export default function FamilyMembersPanel({
     ? availableFamilies.filter((family) => family.id === focusedFamilyId)
     : availableFamilies;
   const currentFamilyId = focusedFamilyId ?? activeFamilyId;
-  const canManageSpace = viewerRole !== 'STUDENT';
+  const canManageSpace = viewerRole === 'MEMBER' || viewerRole === 'ADMIN';
 
   const showMsg = useCallback((message: string) => {
     setSuccessMsg(message);

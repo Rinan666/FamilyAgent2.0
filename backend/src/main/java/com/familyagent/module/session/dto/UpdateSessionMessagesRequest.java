@@ -7,12 +7,12 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 更新会话消息请求
+ * 鏇存柊浼氳瘽娑堟伅璇锋眰
  */
 @Data
 public class UpdateSessionMessagesRequest {
 
     @Valid
-    @NotNull(message = "消息列表不能为空")
-    private List<CreateChatSessionRequest.ChatMessagePayload> messages;
+    @NotNull(message = "娑堟伅鍒楄〃涓嶈兘涓虹┖")
+    private List<ChatSessionMessagePayload> messages;
 }

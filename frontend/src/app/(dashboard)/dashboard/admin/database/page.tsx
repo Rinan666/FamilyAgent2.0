@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   Bot,
@@ -14,15 +14,41 @@ import {
   Trash2,
   Users,
 } from 'lucide-react';
+import SearchPaginationControls from '@/components/family/SearchPaginationControls';
 import { adminApi } from '@/lib/api';
 import { isPlatformAdmin } from '@/lib/roles';
 import { useAuthStore } from '@/stores/authStore';
 import type {
+  AdminUserSummary,
   DatabaseHealthResponse,
   DatabaseTableCount,
   EmbeddingStatusSummary,
+  FamilyDatabaseSummary,
   MemoryRecallDiagnosticResponse,
+  PageResult,
 } from '@/types';
+
+const USER_PAGE_SIZE = 10;
+const FAMILY_PAGE_SIZE = 10;
+
+function createEmptyPage<T>(pageSize: number): PageResult<T> {
+  return {
+    items: [],
+    page: 1,
+    pageSize,
+    total: 0,
+    totalPages: 1,
+  };
+}
+
+function pageBounds(pageResult: PageResult<unknown>) {
+  if (pageResult.total === 0) {
+    return { start: 0, end: 0 };
+  }
+  const start = (pageResult.page - 1) * pageResult.pageSize + 1;
+  const end = Math.min(pageResult.page * pageResult.pageSize, pageResult.total);
+  return { start, end };
+}
 
 function formatDate(value?: string) {
   if (!value) return '暂无';
@@ -64,6 +90,23 @@ export default function AdminDatabaseHealthPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const [userLookupOpen, setUserLookupOpen] = useState(false);
+  const [userKeyword, setUserKeyword] = useState('');
+  const [userPage, setUserPage] = useState(1);
+  const [usersPageData, setUsersPageData] = useState<PageResult<AdminUserSummary>>(() =>
+    createEmptyPage(USER_PAGE_SIZE),
+  );
+  const [isUsersLoading, setIsUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState('');
+
+  const [familyKeyword, setFamilyKeyword] = useState('');
+  const [familyPage, setFamilyPage] = useState(1);
+  const [familiesPageData, setFamiliesPageData] = useState<PageResult<FamilyDatabaseSummary>>(() =>
+    createEmptyPage(FAMILY_PAGE_SIZE),
+  );
+  const [isFamiliesLoading, setIsFamiliesLoading] = useState(false);
+  const [familiesError, setFamiliesError] = useState('');
+
   const [diagnosticForm, setDiagnosticForm] = useState({
     familyId: '',
     viewerUserId: '',
@@ -81,6 +124,9 @@ export default function AdminDatabaseHealthPage() {
   const [deleteMessage, setDeleteMessage] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const deferredUserKeyword = useDeferredValue(userKeyword);
+  const deferredFamilyKeyword = useDeferredValue(familyKeyword);
+
   const embeddingHealth = useMemo(() => {
     if (!data || data.totalEmbeddings === 0) return 0;
     return Math.round((data.readyEmbeddings / data.totalEmbeddings) * 100);
@@ -95,6 +141,9 @@ export default function AdminDatabaseHealthPage() {
     return Array.from(groups.entries());
   }, [data]);
 
+  const userBounds = useMemo(() => pageBounds(usersPageData), [usersPageData]);
+  const familyBounds = useMemo(() => pageBounds(familiesPageData), [familiesPageData]);
+
   const loadHealth = useCallback(async () => {
     setIsLoading(true);
     setError('');
@@ -105,6 +154,40 @@ export default function AdminDatabaseHealthPage() {
       setData(null);
     } finally {
       setIsLoading(false);
+    }
+  }, []);
+
+  const loadUsers = useCallback(async (page: number, keyword: string) => {
+    setIsUsersLoading(true);
+    setUsersError('');
+    try {
+      setUsersPageData(await adminApi.listUsers({
+        keyword,
+        page,
+        pageSize: USER_PAGE_SIZE,
+      }));
+    } catch (err) {
+      setUsersError(err instanceof Error ? err.message : '用户 ID 对照表加载失败');
+      setUsersPageData(createEmptyPage(USER_PAGE_SIZE));
+    } finally {
+      setIsUsersLoading(false);
+    }
+  }, []);
+
+  const loadFamilies = useCallback(async (page: number, keyword: string) => {
+    setIsFamiliesLoading(true);
+    setFamiliesError('');
+    try {
+      setFamiliesPageData(await adminApi.listFamilies({
+        keyword,
+        page,
+        pageSize: FAMILY_PAGE_SIZE,
+      }));
+    } catch (err) {
+      setFamiliesError(err instanceof Error ? err.message : '家族数据概况加载失败');
+      setFamiliesPageData(createEmptyPage(FAMILY_PAGE_SIZE));
+    } finally {
+      setIsFamiliesLoading(false);
     }
   }, []);
 
@@ -144,7 +227,7 @@ export default function AdminDatabaseHealthPage() {
       setDeleteError('请输入 DELETE 作为二次确认');
       return;
     }
-    if (!window.confirm(`确认删除用户 #${userId} 吗？该操作会清理该用户的关联记录，且不可恢复。`)) {
+    if (!window.confirm(`确认删除用户 #${userId} 吗？这会清理关联记录且不可恢复。`)) {
       return;
     }
 
@@ -156,12 +239,26 @@ export default function AdminDatabaseHealthPage() {
       setDeleteMessage(`用户 #${userId} 已删除。`);
       setDeleteForm({ userId: '', confirmText: '' });
       await loadHealth();
+      await loadFamilies(familyPage, deferredFamilyKeyword);
+      if (userLookupOpen) {
+        await loadUsers(userPage, deferredUserKeyword);
+      }
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : '删除用户失败');
     } finally {
       setIsDeleting(false);
     }
-  }, [deleteForm, loadHealth]);
+  }, [
+    deleteForm,
+    deferredFamilyKeyword,
+    deferredUserKeyword,
+    familyPage,
+    loadFamilies,
+    loadHealth,
+    loadUsers,
+    userLookupOpen,
+    userPage,
+  ]);
 
   useEffect(() => {
     if (platformAdmin) {
@@ -171,12 +268,24 @@ export default function AdminDatabaseHealthPage() {
     }
   }, [loadHealth, platformAdmin]);
 
+  useEffect(() => {
+    if (!platformAdmin) return;
+    void loadFamilies(familyPage, deferredFamilyKeyword);
+  }, [deferredFamilyKeyword, familyPage, loadFamilies, platformAdmin]);
+
+  useEffect(() => {
+    if (!platformAdmin || !userLookupOpen) return;
+    void loadUsers(userPage, deferredUserKeyword);
+  }, [deferredUserKeyword, loadUsers, platformAdmin, userLookupOpen, userPage]);
+
   if (!platformAdmin) {
     return (
       <div className="mx-auto max-w-2xl rounded-2xl border border-gray-200 bg-white p-8 text-center">
         <Shield className="mx-auto mb-3 h-10 w-10 text-gray-300" />
         <h1 className="text-lg font-semibold text-gray-900">需要平台管理员权限</h1>
-        <p className="mt-2 text-sm text-gray-500">数据库健康页只展示给平台管理员，不对家族创建者开放。</p>
+        <p className="mt-2 text-sm text-gray-500">
+          数据库健康页仅对平台管理员开放，不向普通家庭成员展示。
+        </p>
       </div>
     );
   }
@@ -188,17 +297,17 @@ export default function AdminDatabaseHealthPage() {
           <div>
             <h1 className="text-xl font-bold text-gray-900">数据库健康</h1>
             <p className="mt-1 text-sm text-gray-500">
-              查看核心家族数据、历史兼容表和 RAG 向量状态。这里展示的是系统排查摘要，不展示私密原文。
+              查看核心家族数据、历史兼容表和 RAG 向量状态。这里仅展示排查摘要，不展示隐私原文。
             </p>
           </div>
           <button
             type="button"
-            onClick={loadHealth}
+            onClick={() => void loadHealth()}
             disabled={isLoading}
             className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
           >
             {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            刷新
+            刷新概览
           </button>
         </div>
       </section>
@@ -251,10 +360,11 @@ export default function AdminDatabaseHealthPage() {
               <div>
                 <h2 className="text-sm font-semibold text-gray-900">基础状态</h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  数据库：{data.databaseName}，pgvector：{data.pgvectorInstalled ? '已启用' : '未启用'}，生成时间：{formatDate(data.generatedAt)}
+                  数据库：{data.databaseName}，pgvector：{data.pgvectorInstalled ? '已启用' : '未启用'}，生成时间：
+                  {formatDate(data.generatedAt)}
                 </p>
               </div>
-              {(data.failedEmbeddings > 0 || (data.failedSkillRuns || 0) > 0) ? (
+              {data.failedEmbeddings > 0 || (data.failedSkillRuns || 0) > 0 ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700">
                   <AlertTriangle className="h-3.5 w-3.5" />
                   {data.failedEmbeddings} 条向量失败 / {data.failedSkillRuns || 0} 条技能失败
@@ -293,6 +403,100 @@ export default function AdminDatabaseHealthPage() {
             </div>
           </section>
 
+          <section className="mb-4 rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-gray-900">用户名 / ID 对照表</h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  方便删除用户、排查 family member 映射，或快速确认 viewerUserId 对应的是谁。
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {userLookupOpen ? (
+                  <button
+                    type="button"
+                    onClick={() => void loadUsers(userPage, deferredUserKeyword)}
+                    disabled={isUsersLoading}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                  >
+                    {isUsersLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                    刷新用户表
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setUserLookupOpen((open) => !open)}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-gray-900 px-4 text-sm font-medium text-white hover:bg-gray-800"
+                >
+                  <Users className="h-4 w-4" />
+                  {userLookupOpen ? '收起对照表' : '查看用户名 / ID 对照表'}
+                </button>
+              </div>
+            </div>
+
+            {userLookupOpen ? (
+              <div className="mt-4">
+                <SearchPaginationControls
+                  searchValue={userKeyword}
+                  onSearchChange={(value) => {
+                    setUserKeyword(value);
+                    setUserPage(1);
+                  }}
+                  searchPlaceholder="按 ID / username / nickname / role / status 搜索"
+                  itemLabel="个用户"
+                  currentPage={usersPageData.page}
+                  pageCount={Math.max(usersPageData.totalPages, 1)}
+                  onPageChange={setUserPage}
+                  startIndex={userBounds.start}
+                  endIndex={userBounds.end}
+                  filteredTotal={usersPageData.total}
+                  total={usersPageData.total}
+                  className="mb-4"
+                />
+
+                {usersError ? (
+                  <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-600">
+                    {usersError}
+                  </div>
+                ) : isUsersLoading && usersPageData.items.length === 0 ? (
+                  <div className="flex h-24 items-center justify-center text-sm text-gray-400">
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    正在加载用户名 / ID 对照表...
+                  </div>
+                ) : usersPageData.items.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-500">
+                    {userKeyword.trim() ? '没有匹配的用户。' : '当前没有可展示的用户。'}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-gray-100">
+                    <table className="min-w-full text-left text-sm">
+                      <thead className="border-b border-gray-100 bg-gray-50 text-xs text-gray-500">
+                        <tr>
+                          <th className="py-2.5 pl-4 pr-3 font-medium">ID</th>
+                          <th className="px-3 py-2.5 font-medium">Username</th>
+                          <th className="px-3 py-2.5 font-medium">昵称</th>
+                          <th className="px-3 py-2.5 font-medium">角色</th>
+                          <th className="px-3 py-2.5 font-medium">状态</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 bg-white">
+                        {usersPageData.items.map((item) => (
+                          <tr key={item.id}>
+                            <td className="py-3 pl-4 pr-3 font-mono text-gray-900">{item.id}</td>
+                            <td className="px-3 py-3 font-medium text-gray-900">{item.username}</td>
+                            <td className="px-3 py-3 text-gray-600">{item.nickname || '-'}</td>
+                            <td className="px-3 py-3 text-gray-600">{item.role || '-'}</td>
+                            <td className="px-3 py-3 text-gray-600">{item.status || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </section>
+
           <section className="mb-4 rounded-2xl border border-red-200 bg-white p-5">
             <div className="mb-4 flex items-start gap-3">
               <div className="rounded-xl bg-red-50 p-2 text-red-600">
@@ -302,6 +506,10 @@ export default function AdminDatabaseHealthPage() {
                 <h2 className="text-sm font-semibold text-gray-900">删除用户</h2>
                 <p className="mt-1 text-sm text-gray-500">
                   仅平台管理员可用。删除会清理该用户的会话、记录、成长观察、向量索引和家庭成员映射，且不可恢复。
+                </p>
+                <p className="mt-2 text-xs leading-5 text-red-700">
+                  Family dissolve 只会在这次显式删除流程中按“最后成员”规则触发；启动时的 family lifecycle
+                  现在仅做审计告警，不会自动删除 ownerless family。
                 </p>
               </div>
             </div>
@@ -326,7 +534,7 @@ export default function AdminDatabaseHealthPage() {
               />
               <button
                 type="button"
-                onClick={deleteUser}
+                onClick={() => void deleteUser()}
                 disabled={isDeleting}
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
               >
@@ -353,7 +561,7 @@ export default function AdminDatabaseHealthPage() {
               <div>
                 <h2 className="text-sm font-semibold text-gray-900">RAG 召回诊断</h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  以指定家族成员的权限视角模拟召回，帮助排查 Agent 为什么参考了某类记忆。
+                  以指定家庭成员的权限视角模拟召回，帮助排查 Agent 为什么参考了某类记忆。
                 </p>
               </div>
               <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
@@ -390,7 +598,7 @@ export default function AdminDatabaseHealthPage() {
               />
               <button
                 type="button"
-                onClick={runDiagnostic}
+                onClick={() => void runDiagnostic()}
                 disabled={isDiagnosing}
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-gray-900 px-4 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-60"
               >
@@ -445,7 +653,7 @@ export default function AdminDatabaseHealthPage() {
                         </div>
                         <p className="text-sm font-medium text-gray-900">{source.title}</p>
                         <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-600">{source.snippet}</p>
-                        {(source.topics?.length || source.scenes?.length) ? (
+                        {source.topics?.length || source.scenes?.length ? (
                           <div className="mt-2 flex flex-wrap gap-1.5">
                             {[...(source.topics || []), ...(source.scenes || [])].slice(0, 6).map((item) => (
                               <span key={item} className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500">
@@ -463,39 +671,92 @@ export default function AdminDatabaseHealthPage() {
           </section>
 
           <section className="mb-4 rounded-2xl border border-gray-200 bg-white p-5">
-            <h2 className="mb-3 text-sm font-semibold text-gray-900">家族数据概况</h2>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead className="border-b border-gray-100 text-xs text-gray-400">
-                  <tr>
-                    <th className="py-2 pr-4 font-medium">家族</th>
-                    <th className="py-2 pr-4 font-medium">成员</th>
-                    <th className="py-2 pr-4 font-medium">人生记录</th>
-                    <th className="py-2 pr-4 font-medium">经验</th>
-                    <th className="py-2 pr-4 font-medium">观察</th>
-                    <th className="py-2 pr-4 font-medium">技能运行</th>
-                    <th className="py-2 pr-4 font-medium">技能失败</th>
-                    <th className="py-2 pr-4 font-medium">READY</th>
-                    <th className="py-2 pr-4 font-medium">FAILED</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {data.families.map((family) => (
-                    <tr key={family.familyId}>
-                      <td className="py-3 pr-4 font-medium text-gray-900">{family.familyName}</td>
-                      <td className="py-3 pr-4 text-gray-600">{family.memberCount}</td>
-                      <td className="py-3 pr-4 text-gray-600">{family.diaryCount}</td>
-                      <td className="py-3 pr-4 text-gray-600">{family.memoryCount}</td>
-                      <td className="py-3 pr-4 text-gray-600">{family.growthRecordCount}</td>
-                      <td className="py-3 pr-4 text-violet-700">{family.skillRunCount || 0}</td>
-                      <td className="py-3 pr-4 text-red-700">{family.failedSkillRunCount || 0}</td>
-                      <td className="py-3 pr-4 text-green-700">{family.readyEmbeddingCount}</td>
-                      <td className="py-3 pr-4 text-red-700">{family.failedEmbeddingCount}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-gray-900">家族数据概况</h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  支持按家族 ID 或家族名搜索，并按页查看成员数、记录数和向量健康情况。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void loadFamilies(familyPage, deferredFamilyKeyword)}
+                disabled={isFamiliesLoading}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+              >
+                {isFamiliesLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                刷新家族概况
+              </button>
             </div>
+
+            <SearchPaginationControls
+              searchValue={familyKeyword}
+              onSearchChange={(value) => {
+                setFamilyKeyword(value);
+                setFamilyPage(1);
+              }}
+              searchPlaceholder="按 familyId 或家族名搜索"
+              itemLabel="个家族"
+              currentPage={familiesPageData.page}
+              pageCount={Math.max(familiesPageData.totalPages, 1)}
+              onPageChange={setFamilyPage}
+              startIndex={familyBounds.start}
+              endIndex={familyBounds.end}
+              filteredTotal={familiesPageData.total}
+              total={familiesPageData.total}
+              className="mb-4"
+            />
+
+            {familiesError ? (
+              <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+                {familiesError}
+              </div>
+            ) : isFamiliesLoading && familiesPageData.items.length === 0 ? (
+              <div className="flex h-32 items-center justify-center text-sm text-gray-400">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                正在加载家族数据概况...
+              </div>
+            ) : familiesPageData.items.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-500">
+                {familyKeyword.trim() ? '没有匹配的家族。' : '当前没有可展示的家族数据。'}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="border-b border-gray-100 text-xs text-gray-400">
+                    <tr>
+                      <th className="py-2 pr-4 font-medium">家族</th>
+                      <th className="py-2 pr-4 font-medium">成员</th>
+                      <th className="py-2 pr-4 font-medium">人生记录</th>
+                      <th className="py-2 pr-4 font-medium">经验</th>
+                      <th className="py-2 pr-4 font-medium">观察</th>
+                      <th className="py-2 pr-4 font-medium">技能运行</th>
+                      <th className="py-2 pr-4 font-medium">技能失败</th>
+                      <th className="py-2 pr-4 font-medium">READY</th>
+                      <th className="py-2 pr-4 font-medium">FAILED</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {familiesPageData.items.map((family) => (
+                      <tr key={family.familyId}>
+                        <td className="py-3 pr-4">
+                          <div className="font-medium text-gray-900">{family.familyName}</div>
+                          <div className="text-xs text-gray-400">Family #{family.familyId}</div>
+                        </td>
+                        <td className="py-3 pr-4 text-gray-600">{family.memberCount}</td>
+                        <td className="py-3 pr-4 text-gray-600">{family.diaryCount}</td>
+                        <td className="py-3 pr-4 text-gray-600">{family.memoryCount}</td>
+                        <td className="py-3 pr-4 text-gray-600">{family.growthRecordCount}</td>
+                        <td className="py-3 pr-4 text-violet-700">{family.skillRunCount || 0}</td>
+                        <td className="py-3 pr-4 text-red-700">{family.failedSkillRunCount || 0}</td>
+                        <td className="py-3 pr-4 text-green-700">{family.readyEmbeddingCount}</td>
+                        <td className="py-3 pr-4 text-red-700">{family.failedEmbeddingCount}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
 
           <section className="mb-4 grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr]">
@@ -536,7 +797,9 @@ export default function AdminDatabaseHealthPage() {
                       <div className="mb-1 flex flex-wrap items-center gap-2 text-xs font-medium text-red-700">
                         <span>#{item.id}</span>
                         <span>Family {item.familyId}</span>
-                        <span>{sourceLabel(item.sourceType)} {item.sourceId}</span>
+                        <span>
+                          {sourceLabel(item.sourceType)} {item.sourceId}
+                        </span>
                       </div>
                       <p className="line-clamp-2 text-xs leading-5 text-red-700">{item.error || '未知错误'}</p>
                       <p className="mt-1 text-[11px] text-red-500">{formatDate(item.updatedAt)}</p>

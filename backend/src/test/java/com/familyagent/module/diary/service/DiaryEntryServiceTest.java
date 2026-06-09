@@ -142,6 +142,26 @@ class DiaryEntryServiceTest {
         assertFalse(Boolean.TRUE.equals(metadata.get("autoMerged")));
     }
 
+    @Test
+    void searchFamilyEntries_shouldClampPageAndForwardFilters() {
+        DiaryEntryService service = new DiaryEntryService(diaryRepository, familyService, memoryEmbeddingService, aiServiceClient);
+        DiaryEntry entry = existingDiary(201L, "晨练后聊了学校里的事");
+        when(diaryRepository.countVisibleByFamilySearch(1L, 10L, 22L, "晨练")).thenReturn(7L);
+        when(diaryRepository.searchVisibleByFamily(1L, 10L, 22L, "晨练", 6, 6L)).thenReturn(List.of(entry));
+
+        try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
+            stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
+
+            var result = service.searchFamilyEntries(1L, 22L, " 晨练 ", 3, 0);
+
+            assertEquals(2L, result.getPage());
+            assertEquals(6L, result.getPageSize());
+            assertEquals(7L, result.getTotal());
+            assertEquals(1, result.getItems().size());
+            assertEquals(201L, result.getItems().get(0).getId());
+        }
+    }
+
     private static CreateDiaryEntryRequest manualRequest(Map<String, Object> metadata) {
         CreateDiaryEntryRequest request = new CreateDiaryEntryRequest();
         request.setFamilyId(1L);

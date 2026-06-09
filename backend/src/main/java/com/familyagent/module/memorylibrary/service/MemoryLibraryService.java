@@ -9,17 +9,26 @@ import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.repository.DiaryEntryRepository;
 import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.growth.dto.GrowthStalenessStats;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.entity.GrowthGuardReport;
 import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
 import com.familyagent.module.growth.repository.GrowthGuardReportRepository;
+import com.familyagent.module.growth.repository.GrowthGuardStalenessVoteRepository;
 import com.familyagent.module.growth.service.GrowthGuardService;
+import com.familyagent.module.memory.dto.MemoryVoteStats;
 import com.familyagent.module.memory.entity.MemoryEntry;
+import com.familyagent.module.memory.repository.MemoryEntryVoteRepository;
+import com.familyagent.module.memory.service.MemoryService;
+import com.familyagent.module.memory.service.MemoryEmbeddingService;
+import com.familyagent.module.memory.service.MemoryIndexMetadataBuilder;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
+import com.familyagent.module.memory.dto.CreateFamilyMemoryRequest;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryItem;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryMaintenanceSuggestion;
 import com.familyagent.module.memorylibrary.dto.MemoryLibrarySearchRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -53,9 +62,13 @@ public class MemoryLibraryService {
     private final ObjectMapper objectMapper;
     private final DiaryEntryRepository diaryEntryRepository;
     private final MemoryEntryRepository memoryEntryRepository;
+    private final MemoryEntryVoteRepository memoryEntryVoteRepository;
+    private final MemoryService memoryService;
+    private final MemoryEmbeddingService memoryEmbeddingService;
     private final GrowthGuardService growthGuardService;
     private final GrowthGuardRecordRepository growthRecordRepository;
     private final GrowthGuardReportRepository growthReportRepository;
+    private final GrowthGuardStalenessVoteRepository growthGuardStalenessVoteRepository;
 
     public PageResult<MemoryLibraryItem> search(MemoryLibrarySearchRequest request) {
         return search(request, false);
@@ -91,8 +104,9 @@ public class MemoryLibraryService {
         long total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM (" + query + ") items", Long.class, args);
         List<MemoryLibraryItem> items = jdbcTemplate.query(
                 "SELECT * FROM (" + query + ") items ORDER BY sort_time DESC, id DESC LIMIT ? OFFSET ?",
-                concat(args, pageSize, offset),
-                (rs, rowNum) -> mapItem(rs));
+                (rs, rowNum) -> mapItem(rs),
+                concat(args, pageSize, offset));
+        items.forEach(item -> attachDynamicSignals(item, viewerUserId));
         return PageResult.of(items, page, pageSize, total);
     }
 
@@ -136,6 +150,118 @@ public class MemoryLibraryService {
                 .sorted(Comparator.comparingInt(MemoryLibraryMaintenanceSuggestion::getScore).reversed())
                 .limit(12)
                 .toList();
+    }
+
+    @Transactional
+    public void classicalizeLibraryItem(
+            Long familyId,
+            String itemId,
+            String classicalText,
+            String plainSummary,
+            String styleNote) {
+        if (familyId == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "familyId 涓嶈兘涓虹┖");
+        }
+        familyService.checkMembership(familyId);
+        ParsedItemId parsed = parseItemId(itemId);
+        if (!"memory".equals(parsed.prefix())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "褰撳墠浠呮敮鎸佸瀹舵棌缁忛獙杩涜鍙ゆ枃鎻愮偧");
+        }
+
+        String normalizedClassicalText = blankToNull(classicalText);
+        if (normalizedClassicalText == null || normalizedClassicalText.length() < 8) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "鍙ゆ枃绋胯繃鐭紝鏃犳硶鍥炲啓");
+        }
+        String normalizedPlainSummary = blankToNull(plainSummary);
+        if (normalizedPlainSummary == null) {
+            normalizedPlainSummary = previewText(normalizedClassicalText, 120);
+        }
+        String normalizedStyleNote = blankToNull(styleNote);
+        if (normalizedStyleNote == null) {
+            normalizedStyleNote = "MEMORY_LIBRARY_CLASSICALIZE";
+        }
+
+        MemoryEntry entry = requireActiveFamilyExperienceMemory(familyId, parsed.id());
+        ensureCreatorOrFamilyOwner(familyId, entry.getUserId(), "只能改写自己创建的经验，或由家族创建者改写");
+
+        Map<String, Object> metadata = mutableMap(entry.getMetadata());
+        Map<String, Object> classicalization = mutableMap(metadata.get("classicalization"));
+        classicalization.putIfAbsent("originalContent", entry.getContent());
+        if (blankToNull(entry.getSummary()) != null) {
+            classicalization.putIfAbsent("originalSummary", entry.getSummary());
+        }
+        classicalization.put("plainSummary", normalizedPlainSummary);
+        classicalization.put("styleNote", normalizedStyleNote);
+        classicalization.put("classicalizedAt", LocalDateTime.now().toString());
+        classicalization.put("classicalizedBy", CurrentUserGuard.currentUserId());
+        classicalization.put("source", "MEMORY_LIBRARY_CLASSICALIZE");
+        metadata.put("classicalization", classicalization);
+
+        entry.setContent(normalizedClassicalText.trim());
+        entry.setSummary(truncateText(normalizedPlainSummary, 200));
+        entry.setMetadata(MemoryIndexMetadataBuilder.enrichFamilyMemory(
+                metadata,
+                entry.getContent(),
+                entry.getSummary(),
+                entry.getType(),
+                entry.getImportance() == null ? 3 : entry.getImportance()));
+        memoryEntryRepository.updateById(entry);
+        memoryEmbeddingService.indexMemoryAfterCommit(entry);
+    }
+
+    @Transactional
+    public void mergeLibraryItems(Long familyId, String primaryItemId, String secondaryItemId) {
+        if (familyId == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "familyId 不能为空");
+        }
+        if (primaryItemId == null || secondaryItemId == null || primaryItemId.equals(secondaryItemId)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "请选择两条不同的经验记录再合并");
+        }
+        familyService.checkMembership(familyId);
+
+        ParsedItemId primaryParsed = parseItemId(primaryItemId);
+        ParsedItemId secondaryParsed = parseItemId(secondaryItemId);
+        if (!"memory".equals(primaryParsed.prefix()) || !"memory".equals(secondaryParsed.prefix())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "当前仅支持合并家族经验类记忆");
+        }
+
+        MemoryEntry primary = requireActiveFamilyMemory(familyId, primaryParsed.id());
+        MemoryEntry secondary = requireActiveFamilyMemory(familyId, secondaryParsed.id());
+        ensureCreatorOrFamilyOwner(familyId, primary.getUserId(), "只能合并自己创建的经验，或由家族创建者合并");
+        ensureCreatorOrFamilyOwner(familyId, secondary.getUserId(), "只能合并自己创建的经验，或由家族创建者合并");
+
+        if (!primary.getType().equals(secondary.getType()) || !primary.getScope().equals(secondary.getScope())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "仅支持合并同类型、同可见范围的经验记录");
+        }
+
+        CreateFamilyMemoryRequest request = new CreateFamilyMemoryRequest();
+        request.setFamilyId(familyId);
+        request.setContent(secondary.getContent());
+        request.setType(secondary.getType());
+        request.setScope(secondary.getScope());
+        request.setSummary(secondary.getSummary());
+        request.setImportance(secondary.getImportance());
+        request.setMemoryCard(memoryCardFromMetadata(secondary.getMetadata()));
+        request.setMetadata(Map.of(
+                "source", "MEMORY_LIBRARY_MERGE",
+                "scenario", String.valueOf(mutableMap(secondary.getMetadata()).getOrDefault("scenario", ""))));
+
+        Map<String, Object> incomingMetadata = mutableMap(secondary.getMetadata());
+        incomingMetadata.put("source", "MEMORY_LIBRARY_MERGE");
+        incomingMetadata.put("mergedItemId", "memory-" + secondary.getId());
+        incomingMetadata.put("mergedItemPreview", previewText(secondary.getContent(), 80));
+
+        memoryService.mergeFamilyMemory(primary, request, incomingMetadata, CurrentUserGuard.currentUserId());
+
+        Map<String, Object> secondaryMetadata = mutableMap(secondary.getMetadata());
+        secondaryMetadata.put("archivedBy", CurrentUserGuard.currentUserId());
+        secondaryMetadata.put("archivedAt", LocalDateTime.now().toString());
+        secondaryMetadata.put("archiveSource", "MEMORY_LIBRARY_MERGE");
+        secondaryMetadata.put("mergedIntoItemId", "memory-" + primary.getId());
+        secondaryMetadata.put("mergedIntoSummary", previewText(primary.getSummary(), 120));
+        secondary.setMetadata(secondaryMetadata);
+        secondary.setStatus("ARCHIVED");
+        memoryEntryRepository.updateById(secondary);
     }
 
     public void archiveLibraryItem(Long familyId, String itemId) {
@@ -447,13 +573,52 @@ public class MemoryLibraryService {
                 .build();
     }
 
+    private void attachDynamicSignals(MemoryLibraryItem item, Long viewerUserId) {
+        if (item == null || item.getId() == null || item.getId().isBlank()) {
+            return;
+        }
+        ParsedItemId parsed = parseItemId(item.getId());
+        Map<String, Object> metadata = mutableMap(item.getMetadata());
+        if ("memory".equals(parsed.prefix()) && "FAMILY_EXPERIENCE".equals(item.getSourceType())) {
+            MemoryVoteStats stats = memoryEntryVoteRepository.statsByMemoryId(parsed.id(), viewerUserId);
+            if (stats == null) {
+                stats = new MemoryVoteStats(parsed.id(), 0, 0, 0, 1.0, null);
+            }
+            metadata.put("voteStats", Map.of(
+                    "memoryId", parsed.id(),
+                    "upVotes", stats.getUpVotes(),
+                    "downVotes", stats.getDownVotes(),
+                    "voteScore", stats.getVoteScore(),
+                    "consensusWeight", stats.getConsensusWeight(),
+                    "myVote", stats.getMyVote() == null ? "" : stats.getMyVote()));
+        }
+        if ("growth".equals(parsed.prefix()) && "GROWTH_OBSERVATION".equals(item.getSourceType())) {
+            GrowthStalenessStats stats = growthGuardStalenessVoteRepository.statsByRecordId(parsed.id(), viewerUserId);
+            if (stats == null) {
+                stats = new GrowthStalenessStats(parsed.id(), 0, 1.0, false);
+            }
+            metadata.put("stalenessStats", Map.of(
+                    "recordId", parsed.id(),
+                    "staleVotes", stats.getStaleVotes(),
+                    "stalenessWeight", stats.getStalenessWeight(),
+                    "myVoted", stats.isMyVoted()));
+        }
+        item.setMetadata(metadata);
+    }
+
     private List<MemoryLibraryMaintenanceSuggestion> mergeSuggestions(List<MemoryLibraryItem> items) {
         List<MemoryLibraryMaintenanceSuggestion> suggestions = new ArrayList<>();
         for (int i = 0; i < items.size(); i++) {
             MemoryLibraryItem left = items.get(i);
             for (int j = i + 1; j < items.size(); j++) {
                 MemoryLibraryItem right = items.get(j);
+                if (!isMergeCandidate(left) || !isMergeCandidate(right)) {
+                    continue;
+                }
                 if (!left.getSourceType().equals(right.getSourceType())) {
+                    continue;
+                }
+                if (!safeEquals(left.getType(), right.getType()) || !safeEquals(left.getVisibility(), right.getVisibility())) {
                     continue;
                 }
                 int score = similarityScore(left, right);
@@ -471,6 +636,67 @@ public class MemoryLibraryService {
             }
         }
         return suggestions;
+    }
+
+    private MemoryEntry requireActiveFamilyMemory(Long familyId, Long memoryId) {
+        MemoryEntry entry = memoryEntryRepository.selectById(memoryId);
+        if (entry == null || !familyId.equals(entry.getFamilyId()) || !"ACTIVE".equals(entry.getStatus())) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        if (!Set.of("FAMILY_STORY", "ELDER_ADVICE", "HEALTH_REMINDER", "GROWTH_RISK", "VALUE", "PLAN").contains(entry.getType())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "当前仅支持合并经验沉淀类记忆");
+        }
+        return entry;
+    }
+
+    private MemoryEntry requireActiveFamilyExperienceMemory(Long familyId, Long memoryId) {
+        MemoryEntry entry = requireActiveFamilyMemory(familyId, memoryId);
+        if (isAiSummaryMemory(entry)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "AI 摘要不能作为家族经验进行改写");
+        }
+        return entry;
+    }
+
+    private static boolean isMergeCandidate(MemoryLibraryItem item) {
+        return item != null
+                && item.getId() != null
+                && item.getId().startsWith("memory-")
+                && ("FAMILY_EXPERIENCE".equals(item.getSourceType()) || "AI_SUMMARY".equals(item.getSourceType()));
+    }
+
+    private static boolean isAiSummaryMemory(MemoryEntry entry) {
+        Map<String, Object> metadata = mutableMap(entry.getMetadata());
+        String source = asText(metadata.get("source")).toUpperCase(Locale.ROOT);
+        return source.equals("FAMILY_WEEKLY_DIGEST")
+                || source.contains("DIGEST")
+                || source.contains("SUMMARY");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> memoryCardFromMetadata(Object metadata) {
+        if (metadata instanceof Map<?, ?> map) {
+            Object card = map.get("memoryCard");
+            if (card instanceof Map<?, ?> cardMap) {
+                return objectMap((Map<String, Object>) cardMap);
+            }
+        }
+        return Map.of();
+    }
+
+    private static String previewText(String value, int maxLength) {
+        String text = asText(value);
+        if (text.length() <= maxLength) {
+            return text;
+        }
+        return text.substring(0, Math.max(0, maxLength - 1)).strip() + "…";
+    }
+
+    private static String truncateText(String value, int maxLength) {
+        String text = asText(value);
+        if (text.length() <= maxLength) {
+            return text;
+        }
+        return text.substring(0, maxLength);
     }
 
     private static MaintenanceScore maintenanceScore(MemoryLibraryItem item) {

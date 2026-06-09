@@ -6,6 +6,7 @@ import com.familyagent.module.family.entity.FamilyMember;
 import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
 
@@ -66,6 +67,16 @@ public interface FamilyMemberRepository extends BaseMapper<FamilyMember> {
     @Select("SELECT COUNT(*) FROM family_members WHERE family_id = #{familyId}")
     int countByFamilyId(Long familyId);
 
+    @Delete("DELETE FROM family_members WHERE family_id = #{familyId}")
+    int removeByFamilyId(Long familyId);
+
     @Delete("DELETE FROM family_members WHERE family_id = #{familyId} AND user_id = #{userId}")
     int removeMember(Long familyId, Long userId);
+
+    @Update("""
+        UPDATE family_members
+        SET role = #{role}
+        WHERE family_id = #{familyId} AND user_id = #{userId}
+        """)
+    int updateRole(Long familyId, Long userId, String role);
 }

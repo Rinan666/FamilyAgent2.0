@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from app.agents.family_skill_registry import family_skill_registry, get_family_skill
 from app.llm.client import llm_client
-from app.middleware.auth import verify_token
+from app.middleware.auth import verify_token, verify_token_or_internal_service
 from app.utils.input_guard import InputGuardError, enforce_input_guard
 from app.utils.privacy_guard import redact_with_note
 from app.utils.safety_limits import enforce_ai_concurrency, enforce_ai_rate_limit
@@ -20,6 +20,12 @@ logger = logging.getLogger("familyagent.ai.api.memory")
 
 router = APIRouter(dependencies=[
     Depends(verify_token),
+    Depends(enforce_ai_rate_limit),
+    Depends(enforce_ai_concurrency),
+])
+
+internal_router = APIRouter(dependencies=[
+    Depends(verify_token_or_internal_service),
     Depends(enforce_ai_rate_limit),
     Depends(enforce_ai_concurrency),
 ])
@@ -88,6 +94,21 @@ class HeritageSaveJudgeRequest(BaseModel):
     scenario: str = ""
     family_context: str = ""
     source_mode: str = ""
+
+
+class HeritageClassicalRequest(BaseModel):
+    content: str = Field(..., min_length=8)
+    memory_type: str = "ELDER_ADVICE"
+    scenario: str = ""
+    family_context: str = ""
+
+
+class SessionArchiveSummaryRequest(BaseModel):
+    session_id: int
+    session_title: str = ""
+    family_id: Optional[int] = None
+    subject: str = ""
+    messages: list[dict] = Field(default_factory=list)
 
 
 @router.get("/skills")
@@ -174,6 +195,24 @@ FAMILY_CARD_SCHEMA = {
                 "sensitivity",
                 "safety_note",
             ],
+        },
+    },
+}
+
+
+HERITAGE_CLASSICAL_SCHEMA = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "heritage_classical_draft",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "classical_text": {"type": "string"},
+                "plain_summary": {"type": "string"},
+                "style_note": {"type": "string"},
+            },
+            "required": ["title", "classical_text", "plain_summary", "style_note"],
         },
     },
 }
@@ -615,6 +654,54 @@ HERITAGE_TASK_DRAFT_SYSTEM_PROMPT = """你是 FamilyAgent 的经验沉淀活化�
 
 只输出 JSON。"""
 
+HERITAGE_CLASSICAL_SYSTEM_PROMPT = """你是 FamilyAgent 的古文提炼助手。
+你的任务是把一段家族经验改写成可读、可懂、可传承的古文稿，但不能伪造事实，也不能把普通经验写成故作艰深的空话。
+
+原则：
+- 只改写表达，不新增人物、时间、因果、诊断和结论。
+- 保留原经验里的教训、提醒、做法与分寸感。
+- 文风以简洁、稳重、可朗读为主，可接近家训、短箴、杂记，不必强行四言或骈文。
+- 避免生僻堆砌、避免假古文、避免网络戏仿腔。
+- 如涉及健康、未成年人、照护与情绪内容，只能写成生活提醒，不写成医疗判断。
+
+字段要求：
+- title：不超过 18 个字。
+- classical_text：80-220 字，正文用古文风表达。
+- plain_summary：40-120 字，用白话解释这段古文在提醒什么。
+- style_note：一句话说明采用的风格与适用场景。
+
+只输出 JSON。"""
+
+
+SESSION_ARCHIVE_SUMMARY_SCHEMA = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "session_archive_summary",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "summary": {"type": "string"},
+                "titleSuggestion": {"type": "string"},
+                "focusTopics": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
+                "confidence": {"type": "string"},
+            },
+            "required": ["summary", "titleSuggestion", "focusTopics", "confidence"],
+        },
+    },
+}
+
+SESSION_ARCHIVE_SUMMARY_SYSTEM_PROMPT = """You summarize an authorized FamilyAgent chat archive chunk for backend-only compression.
+Return JSON only.
+- summary: within 120 characters, focused on topic, key facts, suggestions, or follow-up.
+- titleSuggestion: 8-24 characters, concise session title.
+- focusTopics: 1-4 short topic labels.
+- confidence: LOW, MEDIUM, or HIGH.
+- Do not invent facts, identities, diagnoses, or motivations.
+"""
+
 
 @router.post("/extract")
 async def extract_memories(request: ExtractMemoryRequest):
@@ -661,6 +748,42 @@ async def create_family_memory_card(request: FamilyMemoryCardRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/heritage-classical")
+async def create_heritage_classical_draft(request: HeritageClassicalRequest):
+    try:
+        content = request.content.strip()
+        if len(content) < 8:
+            raise HTTPException(status_code=400, detail="内容太短，无法提炼为古文稿")
+
+        guarded_content = redact_with_note(content, max_length=4000).text
+        guarded_family_context = redact_with_note(request.family_context, max_length=1200).text
+
+        user_prompt = f"""经验类型：{request.memory_type or "未指定"}
+适用场景：{request.scenario or "未指定"}
+家庭背景：{guarded_family_context or "无"}
+
+原始内容：
+{guarded_content}
+
+请提炼为一版古文稿。"""
+        raw = await llm_client.chat(
+            messages=[
+                {"role": "system", "content": HERITAGE_CLASSICAL_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.25,
+            max_tokens=900,
+            response_format=HERITAGE_CLASSICAL_SCHEMA,
+        )
+        data = json.loads(raw)
+        return {"success": True, "data": _sanitize_heritage_classical_draft(data, content)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Heritage classical draft generation failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/save-plan")
 async def plan_agent_save_tool(request: SaveToolPlanRequest):
     try:
@@ -702,7 +825,7 @@ async def plan_agent_save_tool(request: SaveToolPlanRequest):
         return {"success": True, "data": _sanitize_save_tool_plan(data)}
     except InputGuardError:
         raise
-    except Exception as e:
+    except Exception:
         logger.error("Save tool planning failed", exc_info=True)
         return {"success": True, "data": _unavailable_save_tool_plan()}
 
@@ -890,6 +1013,38 @@ async def create_heritage_task_draft(request: HeritageTaskDraftRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@internal_router.post("/session-archive-summary")
+async def summarize_session_archive(request: SessionArchiveSummaryRequest):
+    messages = _compact_session_archive_messages(request.messages)
+    fallback = _local_session_archive_summary(request.session_title, messages)
+    if not messages:
+        return {"success": True, "data": fallback}
+
+    prompt = f"""session_id: {request.session_id}
+session_title: {request.session_title or "untitled"}
+family_id: {request.family_id if request.family_id is not None else "unknown"}
+subject: {request.subject or "FamilyAgent"}
+messages:
+{json.dumps(messages, ensure_ascii=False)}
+"""
+
+    try:
+        raw = await llm_client.chat(
+            messages=[
+                {"role": "system", "content": SESSION_ARCHIVE_SUMMARY_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.2,
+            max_tokens=500,
+            response_format=SESSION_ARCHIVE_SUMMARY_SCHEMA,
+        )
+        data = json.loads(raw)
+        return {"success": True, "data": _sanitize_session_archive_summary(data, fallback)}
+    except Exception as e:
+        logger.warning("Session archive summary failed: %s", e)
+        return {"success": True, "data": fallback}
+
+
 def _compact_transcript(messages: list[dict]) -> str:
     lines: list[str] = []
     for message in messages[-20:]:
@@ -901,6 +1056,78 @@ def _compact_transcript(messages: list[dict]) -> str:
             continue
         lines.append(f"{role}: {content[:600]}")
     return "\n".join(lines)[-6000:]
+
+
+def _compact_session_archive_messages(messages: list[dict]) -> list[dict]:
+    result: list[dict] = []
+    for item in messages[:60]:
+        role = str(item.get("role") or "user").strip().lower()
+        if role not in {"user", "assistant", "system"}:
+            role = "user"
+        content = redact_with_note(str(item.get("content") or ""), max_length=600).text.strip()
+        if not content:
+            continue
+        result.append({
+            "seq": item.get("seq"),
+            "role": role,
+            "content": content[:600],
+            "created_at": str(item.get("created_at") or "")[:40],
+        })
+    return result
+
+
+def _local_session_archive_summary(session_title: str, messages: list[dict]) -> dict:
+    summary = ""
+    for item in reversed(messages):
+        content = str(item.get("content") or "").strip()
+        if content:
+            summary = content[:120]
+            break
+    if not summary:
+        summary = "This archive chunk records a FamilyAgent conversation."
+
+    title = str(session_title or "").strip()[:24]
+    if not title:
+        for item in messages:
+            if str(item.get("role")) == "user":
+                title = str(item.get("content") or "").strip()[:24]
+                if title:
+                    break
+    if not title:
+        title = "Family chat archive"
+
+    focus_topics: list[str] = []
+    for item in messages:
+        content = str(item.get("content") or "")
+        for keyword in ["family", "growth", "memory", "health", "communication", "choice", "陪伴", "家族"]:
+            if keyword in content and keyword not in focus_topics:
+                focus_topics.append(keyword)
+            if len(focus_topics) >= 4:
+                break
+        if len(focus_topics) >= 4:
+            break
+    if not focus_topics:
+        focus_topics = ["family_chat"]
+
+    return {
+        "summary": summary,
+        "titleSuggestion": title,
+        "focusTopics": focus_topics,
+        "confidence": "MEDIUM",
+    }
+
+
+def _sanitize_session_archive_summary(data: dict, fallback: dict) -> dict:
+    summary = str(data.get("summary") or fallback["summary"]).strip()[:120] or fallback["summary"]
+    title = str(data.get("titleSuggestion") or data.get("title_suggestion") or fallback["titleSuggestion"]).strip()[:24]
+    topics = _compact_string_list(data.get("focusTopics") or data.get("focus_topics"), 4, 16) or fallback["focusTopics"]
+    confidence = _choice(data.get("confidence"), {"LOW", "MEDIUM", "HIGH"}, fallback["confidence"])
+    return {
+        "summary": summary,
+        "titleSuggestion": title or fallback["titleSuggestion"],
+        "focusTopics": topics,
+        "confidence": confidence,
+    }
 
 
 def _sanitize_memory(item: dict) -> dict | None:
@@ -925,6 +1152,37 @@ def _sanitize_memory(item: dict) -> dict | None:
         "importance": max(1, min(5, importance)),
         "confidence": max(0.0, min(1.0, confidence)),
     }
+
+
+def _sanitize_heritage_classical_draft(data: dict, source_content: str) -> dict:
+    title = str(data.get("title", "家训古文稿")).strip()[:18] or "家训古文稿"
+    classical_text = _clean_heritage_form_traces(str(data.get("classical_text", "")).strip())
+    plain_summary = str(data.get("plain_summary", "")).strip()[:120]
+    style_note = str(data.get("style_note", "")).strip()[:80]
+
+    if not classical_text or _looks_like_prompt_injection(classical_text) or _looks_garbled(classical_text):
+        classical_text = _local_heritage_classical_draft(source_content)
+    if not plain_summary or _looks_garbled(plain_summary):
+        plain_summary = "这版古文稿保留了原经验中的提醒、分寸与做法，适合先在家族内部传看，再按需要继续润色。"
+    if not style_note or _looks_garbled(style_note):
+        style_note = "采用简洁家训体，适合放在家族经验沉淀或传承卡片中。"
+
+    return {
+        "title": title,
+        "classical_text": classical_text[:260],
+        "plain_summary": plain_summary,
+        "style_note": style_note,
+    }
+
+
+def _local_heritage_classical_draft(source_content: str) -> str:
+    cleaned = re.sub(r"\s+", " ", str(source_content or "").strip())
+    cleaned = cleaned.replace("：", "，").replace(";", "，")
+    if len(cleaned) > 120:
+        cleaned = cleaned[:120].rstrip("，。；; ") + "。"
+    if not cleaned.endswith(("。", "！", "？")):
+        cleaned = cleaned + "。"
+    return f"家人处世，当念前事之得失；{cleaned}知所守，亦知所戒，则后人有所取法。"
 
 
 def _sanitize_family_card(data: dict) -> dict:

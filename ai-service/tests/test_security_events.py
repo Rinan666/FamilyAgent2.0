@@ -13,7 +13,7 @@ class FakeRequest:
     url = SimpleNamespace(path="/ai/agent/chat/stream")
 
     async def body(self):
-        return b'{"student_message":"secret family detail should not be logged"}'
+        return b'{"member_message":"secret family detail should not be logged"}'
 
 
 @pytest.mark.asyncio

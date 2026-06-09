@@ -54,7 +54,7 @@ class MemoryLibraryServiceTest {
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(101L);
             when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), any(Object[].class))).thenReturn(0L);
-            when(jdbcTemplate.query(anyString(), any(Object[].class), any(org.springframework.jdbc.core.RowMapper.class)))
+            when(jdbcTemplate.query(anyString(), any(org.springframework.jdbc.core.RowMapper.class), any(Object[].class)))
                     .thenReturn(List.of());
 
             MemoryLibrarySearchRequest request = new MemoryLibrarySearchRequest();
@@ -73,7 +73,7 @@ class MemoryLibraryServiceTest {
             ArgumentCaptor<Object[]> countArgs = ArgumentCaptor.forClass(Object[].class);
             ArgumentCaptor<Object[]> listArgs = ArgumentCaptor.forClass(Object[].class);
             verify(jdbcTemplate).queryForObject(anyString(), eq(Long.class), countArgs.capture());
-            verify(jdbcTemplate).query(anyString(), listArgs.capture(), any(org.springframework.jdbc.core.RowMapper.class));
+            verify(jdbcTemplate).query(anyString(), any(org.springframework.jdbc.core.RowMapper.class), listArgs.capture());
 
             assertPermissionSectionArgs(countArgs.getValue(), false);
             assertPermissionSectionArgs(listArgs.getValue(), true);

@@ -3,7 +3,7 @@ package com.familyagent.module.session.dto;
 import lombok.Data;
 
 /**
- * 结束家教会话请求
+ * End chat session request.
  */
 @Data
 public class EndChatSessionRequest {

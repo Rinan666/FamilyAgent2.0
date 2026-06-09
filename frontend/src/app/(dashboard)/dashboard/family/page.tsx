@@ -68,6 +68,14 @@ function shortDate(value?: string) {
   return date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
 }
 
+function familyLibraryItemHref(familyId: number, itemId: string) {
+  const params = new URLSearchParams();
+  params.set('tab', 'library');
+  params.set('familyId', String(familyId));
+  params.set('itemId', itemId);
+  return `/dashboard/family?${params.toString()}`;
+}
+
 function memberName(member?: FamilyMember | null) {
   if (!member) return '家族成员';
   return member.relationshipLabel?.trim() || member.nickname?.trim() || member.username?.trim() || `用户 ${member.userId}`;
@@ -238,11 +246,11 @@ export default function FamilyPage() {
         title: diaryTitle(entry),
         summary: diarySummary(entry),
         createdAt: entry.createdAt,
-        href: `/dashboard/diary?familyId=${familyId}`,
+        href: familyLibraryItemHref(familyId, `diary-${entry.id}`),
         sourceLabel: '记录',
         accentClass: 'bg-rose-50 text-rose-700',
-        actionHref: viewerRole === 'STUDENT' ? undefined : `/dashboard/heritage?familyId=${familyId}&type=ELDER_ADVICE`,
-        actionLabel: viewerRole === 'STUDENT' ? undefined : '整理为经验',
+        actionHref: `/dashboard/heritage?familyId=${familyId}&type=ELDER_ADVICE`,
+        actionLabel: '整理为经验',
       })),
       ...memories.map((memory) => ({
         id: `memory-${memory.id}`,
@@ -250,7 +258,7 @@ export default function FamilyPage() {
         title: memoryTitle(memory),
         summary: memorySummary(memory),
         createdAt: memory.createdAt,
-        href: `/dashboard/memory?familyId=${familyId}`,
+        href: familyLibraryItemHref(familyId, `memory-${memory.id}`),
         sourceLabel: '经验',
         accentClass: 'bg-amber-50 text-amber-700',
         actionHref: `/dashboard/memory?familyId=${familyId}`,
@@ -262,16 +270,16 @@ export default function FamilyPage() {
         title: growthTitle(record),
         summary: growthSummary(record),
         createdAt: record.createdAt,
-        href: `/dashboard/diary?familyId=${familyId}&tab=growth`,
+        href: familyLibraryItemHref(familyId, `growth-${record.id}`),
         sourceLabel: '守护',
         accentClass: 'bg-emerald-50 text-emerald-700',
-        actionHref: viewerRole === 'STUDENT' ? undefined : `/dashboard/heritage?familyId=${familyId}&type=GROWTH_RISK`,
-        actionLabel: viewerRole === 'STUDENT' ? undefined : '沉淀为提醒',
+        actionHref: `/dashboard/heritage?familyId=${familyId}&type=GROWTH_RISK`,
+        actionLabel: '沉淀为提醒',
       })),
     ];
 
     return nextItems.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [diaries, displayFamilyId, growthRecords, memories, viewerRole]);
+  }, [diaries, displayFamilyId, growthRecords, memories]);
 
   const visibleStreamItems = useMemo(() => {
     if (streamFilter === 'all') return streamItems;
@@ -579,7 +587,7 @@ export default function FamilyPage() {
                 <div>
                   <h2 className="text-xl font-semibold text-gray-900">家族记忆流</h2>
                   <p className="mt-1 text-sm text-gray-500">
-                    集中浏览最近的记录、经验与成长观察，并跳转到来源页继续处理。
+                    集中浏览最近的记录、经验与成长观察，并进入统一详情查看来源依据与后续动作。
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -652,7 +660,7 @@ export default function FamilyPage() {
                           href={item.href}
                           className="inline-flex h-8 items-center rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 hover:bg-gray-100"
                         >
-                          查看来源
+                          查看详情
                         </Link>
                         {item.actionHref && item.actionLabel && (
                           <Link
@@ -670,87 +678,7 @@ export default function FamilyPage() {
             </section>
           )}
 
-          {currentTab === 'heritage' && (
-            viewerRole === 'STUDENT' ? (
-              <section className="space-y-4">
-                <article className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
-                  <h2 className="text-xl font-semibold text-gray-900">经验沉淀</h2>
-                  <p className="mt-2 text-sm leading-6 text-gray-500">
-                    当前是只读视图，你可以查看自己有权限看到的经验内容与家庭任务结果；
-                    新增、整理与管理仍由成年人或管理员完成。
-                  </p>
-                </article>
-
-                <article className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900">可见经验卡</h3>
-                      <p className="text-sm text-gray-500">最近沉淀下来的经验与提醒。</p>
-                    </div>
-                    <Link
-                      href={`/dashboard/memory${displayFamilyId ? `?familyId=${displayFamilyId}` : ''}`}
-                      className="text-xs font-medium text-blue-600 hover:underline"
-                    >
-                      去全部记忆
-                    </Link>
-                  </div>
-                  <div className="space-y-3">
-                    {memories.slice(0, 6).map((memory) => (
-                      <div key={memory.id} className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-                        <p className="text-sm font-semibold text-gray-900">{memoryTitle(memory)}</p>
-                        <p className="mt-1 text-sm leading-6 text-gray-600">{memorySummary(memory)}</p>
-                        <p className="mt-2 text-[11px] text-gray-400">{shortDate(memory.createdAt)}</p>
-                      </div>
-                    ))}
-                    {memories.length === 0 && (
-                      <p className="rounded-xl border border-dashed border-gray-200 px-3 py-8 text-center text-sm text-gray-400">
-                        暂时还没有可展示的经验内容。
-                      </p>
-                    )}
-                  </div>
-                </article>
-
-                <article className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900">家庭任务结果</h3>
-                      <p className="text-sm text-gray-500">查看已完成和进行中的任务进展。</p>
-                    </div>
-                    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-600">
-                      {tasks.filter((task) => task.status === 'PENDING').length} 个待实践
-                    </span>
-                  </div>
-                  <div className="space-y-3">
-                    {tasks.slice(0, 6).map((task) => (
-                      <div key={task.id} className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-semibold text-gray-900">{task.title}</p>
-                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                            task.status === 'DONE' ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'
-                          }`}>
-                            {taskStatusLabel(task)}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-sm leading-6 text-gray-600">{task.action}</p>
-                        {task.completionNote && (
-                          <p className="mt-2 rounded-lg bg-white px-3 py-2 text-xs leading-5 text-gray-500">
-                            完成记录：{task.completionNote}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                    {tasks.length === 0 && (
-                      <p className="rounded-xl border border-dashed border-gray-200 px-3 py-8 text-center text-sm text-gray-400">
-                        还没有可展示的家庭任务。
-                      </p>
-                    )}
-                  </div>
-                </article>
-              </section>
-            ) : (
-              <HeritagePage embedded />
-            )
-          )}
+          {currentTab === 'heritage' && <HeritagePage embedded />}
 
           {currentTab === 'library' && <MemoryLibraryPage embedded />}
 

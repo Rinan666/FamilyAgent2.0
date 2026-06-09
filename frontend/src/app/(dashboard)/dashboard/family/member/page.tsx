@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -15,12 +15,30 @@ import {
   UserRound,
   Users,
 } from 'lucide-react';
+import SearchPaginationControls from '@/components/family/SearchPaginationControls';
 import { diaryApi, familyApi, growthGuardApi, memoryApi, mirrorApi } from '@/lib/api';
 import { useViewerRole } from '@/hooks/useViewerRole';
 import { familyRoleLabel } from '@/lib/roles';
-import type { DiaryEntry, FamilyMember, GrowthGuardRecord, MemoryEntry, MirrorContextResponse } from '@/types';
+import type {
+  DiaryEntry,
+  FamilyMember,
+  GrowthGuardRecord,
+  MemoryEntry,
+  MirrorContextResponse,
+  PageResult,
+} from '@/types';
 
-const FETCH_LIMIT = 120;
+const PAGE_SIZE = 6;
+
+function createEmptyPage<T>(): PageResult<T> {
+  return {
+    items: [],
+    page: 1,
+    pageSize: PAGE_SIZE,
+    total: 0,
+    totalPages: 1,
+  };
+}
 
 function memberDisplayName(member?: FamilyMember | null) {
   if (!member) return '家族成员';
@@ -106,9 +124,89 @@ function shortDate(value?: string) {
   return date.toLocaleDateString('zh-CN');
 }
 
-function relatedUserId(entry: DiaryEntry) {
-  const value = Number(entry.metadata?.relatedUserId);
-  return Number.isFinite(value) && value > 0 ? value : null;
+function pageBounds(pageResult: PageResult<unknown>) {
+  if (pageResult.total === 0) {
+    return { start: 0, end: 0 };
+  }
+  const start = (pageResult.page - 1) * pageResult.pageSize + 1;
+  const end = Math.min(pageResult.page * pageResult.pageSize, pageResult.total);
+  return { start, end };
+}
+
+type RecordSectionProps<T> = {
+  icon: ReactNode;
+  title: string;
+  itemLabel: string;
+  searchPlaceholder: string;
+  query: string;
+  onQueryChange: (value: string) => void;
+  data: PageResult<T>;
+  loading: boolean;
+  error: string;
+  onPageChange: (page: number) => void;
+  emptyText: string;
+  renderItem: (item: T) => ReactNode;
+};
+
+function RecordSection<T>({
+  icon,
+  title,
+  itemLabel,
+  searchPlaceholder,
+  query,
+  onQueryChange,
+  data,
+  loading,
+  error,
+  onPageChange,
+  emptyText,
+  renderItem,
+}: RecordSectionProps<T>) {
+  const { start, end } = pageBounds(data);
+
+  return (
+    <section className="rounded-2xl border border-gray-200 bg-white p-5">
+      <div className="mb-4 flex items-center gap-2">
+        {icon}
+        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
+        {loading && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
+      </div>
+
+      <SearchPaginationControls
+        searchValue={query}
+        onSearchChange={onQueryChange}
+        searchPlaceholder={searchPlaceholder}
+        itemLabel={itemLabel}
+        currentPage={data.page}
+        pageCount={Math.max(data.totalPages, 1)}
+        onPageChange={onPageChange}
+        startIndex={start}
+        endIndex={end}
+        filteredTotal={data.total}
+        total={data.total}
+        className="mb-4"
+      />
+
+      {error ? (
+        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+          {error}
+        </div>
+      ) : loading && data.items.length === 0 ? (
+        <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-gray-200 text-sm text-gray-400">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          正在加载列表...
+        </div>
+      ) : data.items.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-gray-200 px-3 py-8 text-center text-sm text-gray-400">
+          {emptyText}
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {data.items.map((item) => renderItem(item))}
+        </div>
+      )}
+    </section>
+  );
 }
 
 export default function FamilyMemberMemoryPage() {
@@ -118,12 +216,31 @@ export default function FamilyMemberMemoryPage() {
   const [selectedFamilyId, setSelectedFamilyId] = useState<number | null>(null);
   const [targetUserId, setTargetUserId] = useState<number | null>(null);
   const [members, setMembers] = useState<FamilyMember[]>([]);
-  const [diaries, setDiaries] = useState<DiaryEntry[]>([]);
-  const [memories, setMemories] = useState<MemoryEntry[]>([]);
-  const [growthRecords, setGrowthRecords] = useState<GrowthGuardRecord[]>([]);
   const [mirrorContext, setMirrorContext] = useState<MirrorContextResponse | null>(null);
   const [loadingData, setLoadingData] = useState(false);
   const [error, setError] = useState('');
+
+  const [diaryQuery, setDiaryQuery] = useState('');
+  const [diaryPage, setDiaryPage] = useState(1);
+  const [diaryResults, setDiaryResults] = useState<PageResult<DiaryEntry>>(createEmptyPage());
+  const [loadingDiaries, setLoadingDiaries] = useState(false);
+  const [diaryError, setDiaryError] = useState('');
+
+  const [memoryQuery, setMemoryQuery] = useState('');
+  const [memoryPage, setMemoryPage] = useState(1);
+  const [memoryResults, setMemoryResults] = useState<PageResult<MemoryEntry>>(createEmptyPage());
+  const [loadingMemories, setLoadingMemories] = useState(false);
+  const [memoryError, setMemoryError] = useState('');
+
+  const [growthQuery, setGrowthQuery] = useState('');
+  const [growthPage, setGrowthPage] = useState(1);
+  const [growthResults, setGrowthResults] = useState<PageResult<GrowthGuardRecord>>(createEmptyPage());
+  const [loadingGrowthRecords, setLoadingGrowthRecords] = useState(false);
+  const [growthError, setGrowthError] = useState('');
+
+  const deferredDiaryQuery = useDeferredValue(diaryQuery);
+  const deferredMemoryQuery = useDeferredValue(memoryQuery);
+  const deferredGrowthQuery = useDeferredValue(growthQuery);
 
   const requestedFamilyId = useMemo(() => {
     const value = Number(searchParams.get('familyId'));
@@ -155,9 +272,7 @@ export default function FamilyMemberMemoryPage() {
   useEffect(() => {
     if (!selectedFamilyId) {
       setMembers([]);
-      setDiaries([]);
-      setMemories([]);
-      setGrowthRecords([]);
+      setTargetUserId(null);
       setMirrorContext(null);
       return;
     }
@@ -166,19 +281,11 @@ export default function FamilyMemberMemoryPage() {
     setLoadingData(true);
     setError('');
 
-    Promise.all([
-      familyApi.getMembers(selectedFamilyId).catch(() => [] as FamilyMember[]),
-      diaryApi.listFamilyEntries(selectedFamilyId, FETCH_LIMIT).catch(() => [] as DiaryEntry[]),
-      memoryApi.listFamilyMemories(selectedFamilyId, FETCH_LIMIT).catch(() => [] as MemoryEntry[]),
-      growthGuardApi.listFamilyRecords(selectedFamilyId, FETCH_LIMIT).catch(() => [] as GrowthGuardRecord[]),
-    ])
-      .then(([memberList, diaryList, memoryList, growthList]) => {
+    familyApi.getMembers(selectedFamilyId)
+      .then((memberList) => {
         if (!active) return;
         const nextMembers = Array.isArray(memberList) ? memberList : [];
         setMembers(nextMembers);
-        setDiaries(Array.isArray(diaryList) ? diaryList : []);
-        setMemories(Array.isArray(memoryList) ? memoryList : []);
-        setGrowthRecords(Array.isArray(growthList) ? growthList : []);
         setTargetUserId((current) => {
           if (requestedUserId) {
             return nextMembers.some((member) => member.userId === requestedUserId)
@@ -193,7 +300,9 @@ export default function FamilyMemberMemoryPage() {
       })
       .catch((err) => {
         if (!active) return;
-        setError(err instanceof Error ? err.message : '加载成员记忆失败');
+        setError(err instanceof Error ? err.message : '加载成员记忆视图失败');
+        setMembers([]);
+        setTargetUserId(null);
       })
       .finally(() => {
         if (active) setLoadingData(false);
@@ -224,6 +333,135 @@ export default function FamilyMemberMemoryPage() {
     };
   }, [selectedFamilyId, targetUserId]);
 
+  useEffect(() => {
+    setDiaryPage(1);
+  }, [selectedFamilyId, targetUserId, diaryQuery]);
+
+  useEffect(() => {
+    setMemoryPage(1);
+  }, [selectedFamilyId, targetUserId, memoryQuery]);
+
+  useEffect(() => {
+    setGrowthPage(1);
+  }, [selectedFamilyId, targetUserId, growthQuery]);
+
+  useEffect(() => {
+    if (!selectedFamilyId || !targetUserId) {
+      setDiaryResults(createEmptyPage());
+      setDiaryError('');
+      return;
+    }
+
+    let active = true;
+    setLoadingDiaries(true);
+    setDiaryError('');
+
+    diaryApi.searchFamilyEntries({
+      familyId: selectedFamilyId,
+      targetUserId,
+      keyword: deferredDiaryQuery,
+      page: diaryPage,
+      pageSize: PAGE_SIZE,
+    })
+      .then((pageResult) => {
+        if (!active) return;
+        setDiaryResults(pageResult);
+        if (pageResult.page !== diaryPage) {
+          setDiaryPage(pageResult.page);
+        }
+      })
+      .catch((err) => {
+        if (!active) return;
+        setDiaryError(err instanceof Error ? err.message : '加载相关记录失败');
+        setDiaryResults(createEmptyPage());
+      })
+      .finally(() => {
+        if (active) setLoadingDiaries(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [deferredDiaryQuery, diaryPage, selectedFamilyId, targetUserId]);
+
+  useEffect(() => {
+    if (!selectedFamilyId || !targetUserId) {
+      setMemoryResults(createEmptyPage());
+      setMemoryError('');
+      return;
+    }
+
+    let active = true;
+    setLoadingMemories(true);
+    setMemoryError('');
+
+    memoryApi.searchFamilyMemories({
+      familyId: selectedFamilyId,
+      targetUserId,
+      keyword: deferredMemoryQuery,
+      page: memoryPage,
+      pageSize: PAGE_SIZE,
+    })
+      .then((pageResult) => {
+        if (!active) return;
+        setMemoryResults(pageResult);
+        if (pageResult.page !== memoryPage) {
+          setMemoryPage(pageResult.page);
+        }
+      })
+      .catch((err) => {
+        if (!active) return;
+        setMemoryError(err instanceof Error ? err.message : '加载相关经验失败');
+        setMemoryResults(createEmptyPage());
+      })
+      .finally(() => {
+        if (active) setLoadingMemories(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [deferredMemoryQuery, memoryPage, selectedFamilyId, targetUserId]);
+
+  useEffect(() => {
+    if (!selectedFamilyId || !targetUserId) {
+      setGrowthResults(createEmptyPage());
+      setGrowthError('');
+      return;
+    }
+
+    let active = true;
+    setLoadingGrowthRecords(true);
+    setGrowthError('');
+
+    growthGuardApi.searchFamilyRecords({
+      familyId: selectedFamilyId,
+      targetUserId,
+      keyword: deferredGrowthQuery,
+      page: growthPage,
+      pageSize: PAGE_SIZE,
+    })
+      .then((pageResult) => {
+        if (!active) return;
+        setGrowthResults(pageResult);
+        if (pageResult.page !== growthPage) {
+          setGrowthPage(pageResult.page);
+        }
+      })
+      .catch((err) => {
+        if (!active) return;
+        setGrowthError(err instanceof Error ? err.message : '加载成长观察失败');
+        setGrowthResults(createEmptyPage());
+      })
+      .finally(() => {
+        if (active) setLoadingGrowthRecords(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [deferredGrowthQuery, growthPage, selectedFamilyId, targetUserId]);
+
   const selectedFamily = useMemo(
     () => families.find((family) => family.id === selectedFamilyId) || null,
     [families, selectedFamilyId],
@@ -239,29 +477,7 @@ export default function FamilyMemberMemoryPage() {
   const targetMember = useMemo(() => {
     if (missingRequestedUser) return null;
     return members.find((member) => member.userId === targetUserId) || mirrorContext?.targetMember || null;
-  }, [members, mirrorContext, missingRequestedUser, targetUserId]);
-
-  const targetDiaries = useMemo(
-    () => diaries
-      .filter((entry) => entry.userId === targetUserId || relatedUserId(entry) === targetUserId)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    [diaries, targetUserId],
-  );
-
-  const targetMemories = useMemo(() => {
-    const contextMemories = mirrorContext?.memories || [];
-    if (contextMemories.length > 0) return contextMemories;
-    return memories
-      .filter((memory) => !targetUserId || memory.userId === targetUserId)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [memories, mirrorContext?.memories, targetUserId]);
-
-  const targetGrowthRecords = useMemo(
-    () => growthRecords
-      .filter((record) => record.targetUserId === targetUserId)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    [growthRecords, targetUserId],
-  );
+  }, [members, mirrorContext?.targetMember, missingRequestedUser, targetUserId]);
 
   if (loadingFamilies) {
     return (
@@ -323,7 +539,9 @@ export default function FamilyMemberMemoryPage() {
           <div className="w-full max-w-xs rounded-xl border border-gray-100 bg-gray-50 p-4">
             <p className="text-xs font-medium text-gray-500">当前家族</p>
             <p className="mt-1 text-sm font-semibold text-gray-900">{selectedFamily?.name || '未选择'}</p>
-            <p className="mt-2 text-xs text-gray-500">{selectedFamily?.description || '这里展示当前成员所属的家族空间。'}</p>
+            <p className="mt-2 text-xs text-gray-500">
+              {selectedFamily?.description || '这里展示当前成员所属的家族空间。'}
+            </p>
           </div>
         </div>
       </section>
@@ -367,15 +585,15 @@ export default function FamilyMemberMemoryPage() {
               <h2 className="text-base font-semibold text-gray-900">资料概况</h2>
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <div className="rounded-xl bg-rose-50 px-4 py-3">
-                  <p className="text-2xl font-bold text-rose-700">{targetDiaries.length}</p>
+                  <p className="text-2xl font-bold text-rose-700">{diaryResults.total}</p>
                   <p className="text-xs text-rose-600">相关记录</p>
                 </div>
                 <div className="rounded-xl bg-amber-50 px-4 py-3">
-                  <p className="text-2xl font-bold text-amber-700">{targetMemories.length}</p>
+                  <p className="text-2xl font-bold text-amber-700">{memoryResults.total}</p>
                   <p className="text-xs text-amber-600">相关经验</p>
                 </div>
                 <div className="rounded-xl bg-emerald-50 px-4 py-3">
-                  <p className="text-2xl font-bold text-emerald-700">{targetGrowthRecords.length}</p>
+                  <p className="text-2xl font-bold text-emerald-700">{growthResults.total}</p>
                   <p className="text-xs text-emerald-600">成长观察</p>
                 </div>
                 <div className="rounded-xl bg-purple-50 px-4 py-3">
@@ -409,74 +627,74 @@ export default function FamilyMemberMemoryPage() {
           )}
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <section className="rounded-2xl border border-gray-200 bg-white p-5">
-              <div className="mb-4 flex items-center gap-2">
-                <BookHeart className="h-4 w-4 text-rose-500" />
-                <h2 className="text-base font-semibold text-gray-900">相关记录</h2>
-              </div>
-              <div className="space-y-3">
-                {targetDiaries.slice(0, 6).map((entry) => (
-                  <article key={entry.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                    <p className="text-sm font-medium text-gray-900">{diaryTitle(entry)}</p>
-                    <p className="mt-1 line-clamp-3 text-sm leading-6 text-gray-600">{entry.rawText}</p>
-                    <p className="mt-2 text-[11px] text-gray-400">{shortDate(entry.createdAt)}</p>
-                  </article>
-                ))}
-                {targetDiaries.length === 0 && (
-                  <p className="rounded-xl border border-dashed border-gray-200 px-3 py-8 text-center text-sm text-gray-400">
-                    暂无该成员相关记录。
-                  </p>
-                )}
-              </div>
-            </section>
+            <RecordSection
+              icon={<BookHeart className="h-4 w-4 text-rose-500" />}
+              title="相关记录"
+              itemLabel="条记录"
+              searchPlaceholder="搜索标题、摘要或正文"
+              query={diaryQuery}
+              onQueryChange={setDiaryQuery}
+              data={diaryResults}
+              loading={loadingDiaries}
+              error={diaryError}
+              onPageChange={setDiaryPage}
+              emptyText="暂无该成员相关记录。"
+              renderItem={(entry) => (
+                <article key={entry.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                  <p className="text-sm font-medium text-gray-900">{diaryTitle(entry)}</p>
+                  <p className="mt-1 line-clamp-3 text-sm leading-6 text-gray-600">{entry.rawText}</p>
+                  <p className="mt-2 text-[11px] text-gray-400">{shortDate(entry.createdAt)}</p>
+                </article>
+              )}
+            />
 
-            <section className="rounded-2xl border border-gray-200 bg-white p-5">
-              <div className="mb-4 flex items-center gap-2">
-                <ScrollText className="h-4 w-4 text-amber-500" />
-                <h2 className="text-base font-semibold text-gray-900">相关经验</h2>
-              </div>
-              <div className="space-y-3">
-                {targetMemories.slice(0, 6).map((memory) => (
-                  <article key={memory.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                    <p className="text-sm font-medium text-gray-900">{memoryTitle(memory)}</p>
-                    <p className="mt-1 line-clamp-3 text-sm leading-6 text-gray-600">
-                      {memory.summary || memory.content}
-                    </p>
-                    <p className="mt-2 text-[11px] text-gray-400">{shortDate(memory.createdAt)}</p>
-                  </article>
-                ))}
-                {targetMemories.length === 0 && (
-                  <p className="rounded-xl border border-dashed border-gray-200 px-3 py-8 text-center text-sm text-gray-400">
-                    暂无该成员相关经验。
+            <RecordSection
+              icon={<ScrollText className="h-4 w-4 text-amber-500" />}
+              title="相关经验"
+              itemLabel="条经验"
+              searchPlaceholder="搜索摘要、场景或正文"
+              query={memoryQuery}
+              onQueryChange={setMemoryQuery}
+              data={memoryResults}
+              loading={loadingMemories}
+              error={memoryError}
+              onPageChange={setMemoryPage}
+              emptyText="暂无该成员相关经验。"
+              renderItem={(memory) => (
+                <article key={memory.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                  <p className="text-sm font-medium text-gray-900">{memoryTitle(memory)}</p>
+                  <p className="mt-1 line-clamp-3 text-sm leading-6 text-gray-600">
+                    {memory.summary || memory.content}
                   </p>
-                )}
-              </div>
-            </section>
+                  <p className="mt-2 text-[11px] text-gray-400">{shortDate(memory.createdAt)}</p>
+                </article>
+              )}
+            />
 
-            <section className="rounded-2xl border border-gray-200 bg-white p-5">
-              <div className="mb-4 flex items-center gap-2">
-                <HeartPulse className="h-4 w-4 text-emerald-500" />
-                <h2 className="text-base font-semibold text-gray-900">成长观察</h2>
-              </div>
-              <div className="space-y-3">
-                {targetGrowthRecords.slice(0, 6).map((record) => (
-                  <article key={record.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
-                        {growthCategoryLabel(record.category)}
-                      </span>
-                      <span className="text-[11px] text-gray-400">{shortDate(record.observedAt || record.createdAt)}</span>
-                    </div>
-                    <p className="mt-2 line-clamp-3 text-sm leading-6 text-gray-600">{record.content}</p>
-                  </article>
-                ))}
-                {targetGrowthRecords.length === 0 && (
-                  <p className="rounded-xl border border-dashed border-gray-200 px-3 py-8 text-center text-sm text-gray-400">
-                    暂无该成员成长观察。
-                  </p>
-                )}
-              </div>
-            </section>
+            <RecordSection
+              icon={<HeartPulse className="h-4 w-4 text-emerald-500" />}
+              title="成长观察"
+              itemLabel="条观察"
+              searchPlaceholder="搜索观察内容或类别"
+              query={growthQuery}
+              onQueryChange={setGrowthQuery}
+              data={growthResults}
+              loading={loadingGrowthRecords}
+              error={growthError}
+              onPageChange={setGrowthPage}
+              emptyText="暂无该成员成长观察。"
+              renderItem={(record) => (
+                <article key={record.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                      {growthCategoryLabel(record.category)}
+                    </span>
+                    <span className="text-[11px] text-gray-400">{shortDate(record.observedAt || record.createdAt)}</span>
+                  </div>
+                  <p className="mt-2 line-clamp-3 text-sm leading-6 text-gray-600">{record.content}</p>
+                </article>
+              )}
+            />
           </div>
 
           <section className="mt-4 rounded-2xl border border-gray-200 bg-white p-5">

@@ -90,6 +90,36 @@ class MemoryServiceTest {
         verify(memoryRepository).insert(any(MemoryEntry.class));
     }
 
+    @Test
+    void searchFamilyMemories_shouldClampPageAndAttachVoteStats() {
+        MemoryService service = new MemoryService(memoryRepository, voteRepository, familyService, memoryEmbeddingService);
+        MemoryEntry entry = new MemoryEntry();
+        entry.setId(301L);
+        entry.setFamilyId(1L);
+        entry.setUserId(22L);
+        entry.setType("ELDER_ADVICE");
+        entry.setScope("FAMILY_VISIBLE");
+        entry.setStatus("ACTIVE");
+        entry.setContent("坚持晨读");
+        entry.setMetadata(Map.of());
+
+        when(memoryRepository.countActiveFamilyMemoriesSearch(1L, 10L, 22L, "晨读")).thenReturn(9L);
+        when(memoryRepository.searchActiveFamilyMemories(1L, 10L, 22L, "晨读", 6, 6L)).thenReturn(List.of(entry));
+        when(voteRepository.statsByMemoryId(301L, 10L)).thenReturn(null);
+
+        try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
+            stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
+
+            var result = service.searchFamilyMemories(1L, 22L, " 晨读 ", 4, 0);
+
+            assertEquals(2L, result.getPage());
+            assertEquals(6L, result.getPageSize());
+            assertEquals(9L, result.getTotal());
+            assertEquals(1, result.getItems().size());
+            assertTrue(((Map<?, ?>) result.getItems().get(0).getMetadata()).containsKey("voteStats"));
+        }
+    }
+
     private static CreateFamilyMemoryRequest requestWithMetadata(Map<String, Object> metadata) {
         CreateFamilyMemoryRequest request = new CreateFamilyMemoryRequest();
         request.setFamilyId(1L);

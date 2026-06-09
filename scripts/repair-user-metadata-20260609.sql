@@ -35,12 +35,12 @@ SET metadata = CASE username
         'profileType', 'ADULT_MEMBER',
         'inviteSource', 'seed-family-003'
     )
-    WHEN 'family003_student' THEN jsonb_build_object(
+    WHEN 'family003_member' THEN jsonb_build_object(
         'seed', 'FAMILY003',
         'grade', '七年级',
         'relation', '孩子',
         'inviteCode', 'FAMILY003',
-        'profileType', 'LEARNER',
+        'profileType', 'MEMBER',
         'inviteSource', 'seed-family-003'
     )
     WHEN '郭008' THEN jsonb_build_object(
@@ -93,7 +93,7 @@ WHERE username IN (
     'family003_mother',
     'family003_father',
     'family003_aunt',
-    'family003_student',
+    'family003_member',
     '郭008',
     '周001',
     '韦525',

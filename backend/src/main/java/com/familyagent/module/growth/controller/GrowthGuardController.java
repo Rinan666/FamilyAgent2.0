@@ -1,5 +1,6 @@
 package com.familyagent.module.growth.controller;
 
+import com.familyagent.common.response.PageResult;
 import com.familyagent.common.response.Result;
 import com.familyagent.module.growth.dto.CreateGrowthGuardRecordRequest;
 import com.familyagent.module.growth.dto.CreateGrowthGuardReportRequest;
@@ -35,6 +36,17 @@ public class GrowthGuardController {
             @PathVariable Long familyId,
             @RequestParam(defaultValue = "30") int limit) {
         return Result.success(growthGuardService.listFamilyRecords(familyId, limit));
+    }
+
+    @Operation(summary = "Search visible growth guard records in a family for member memory view")
+    @GetMapping("/family/{familyId}/search")
+    public Result<PageResult<GrowthGuardRecord>> searchFamilyRecords(
+            @PathVariable Long familyId,
+            @RequestParam(required = false) Long targetUserId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "6") int pageSize) {
+        return Result.success(growthGuardService.searchFamilyRecords(familyId, targetUserId, keyword, page, pageSize));
     }
 
     @Operation(summary = "Create a weekly growth guard report")

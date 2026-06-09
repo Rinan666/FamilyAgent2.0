@@ -9,6 +9,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -31,9 +32,8 @@ class AIServiceClientTest {
         AtomicReference<String> receivedToken = new AtomicReference<>();
         server = startServer("/ai/embedding/embed", exchange -> {
             receivedToken.set(exchange.getRequestHeaders().getFirst("X-Internal-Service-Token"));
-            respond(exchange, "application/json", 200, """
-                    {"success":true,"embedding":[0.1,0.2],"model":"local/test","privacy_categories":[]}
-                    """);
+            respond(exchange, "application/json", 200,
+                    "{\"success\":true,\"embedding\":[0.1,0.2],\"model\":\"local/test\",\"privacy_categories\":[]}");
         });
 
         AIServiceClient client = new AIServiceClient(baseUrl(), 5, "secret-token");
@@ -49,9 +49,8 @@ class AIServiceClientTest {
         AtomicReference<String> receivedToken = new AtomicReference<>();
         server = startServer("/ai/embedding/embed", exchange -> {
             receivedToken.set(exchange.getRequestHeaders().getFirst("X-Internal-Service-Token"));
-            respond(exchange, "application/json", 200, """
-                    {"success":true,"embedding":[0.1,0.2],"model":"local/test","privacy_categories":[]}
-                    """);
+            respond(exchange, "application/json", 200,
+                    "{\"success\":true,\"embedding\":[0.1,0.2],\"model\":\"local/test\",\"privacy_categories\":[]}");
         });
 
         AIServiceClient client = new AIServiceClient(baseUrl(), 5, " ");
@@ -63,23 +62,41 @@ class AIServiceClientTest {
     }
 
     @Test
-    void proxyExplainStream_shouldForwardRawSseFramesAndHeaders() throws Exception {
+    void proxyChatStream_shouldForwardRawSseFramesAndHeaders() throws Exception {
         AtomicReference<String> acceptHeader = new AtomicReference<>();
         AtomicReference<String> authorizationHeader = new AtomicReference<>();
         server = startServer("/ai/agent/chat/stream", exchange -> {
             acceptHeader.set(exchange.getRequestHeaders().getFirst("Accept"));
             authorizationHeader.set(exchange.getRequestHeaders().getFirst("Authorization"));
-            respond(exchange, "text/event-stream", 200, ": connected\n\ndata: {\"content\":\"你好\"}\n\ndata: {\"done\":true}\n\n");
+            respond(exchange, "text/event-stream", 200, ": connected\n\ndata: {\"content\":\"hello\"}\n\ndata: {\"done\":true}\n\n");
         });
 
         AIServiceClient client = new AIServiceClient(baseUrl(), 5, "secret-token");
         ByteArrayOutputStream downstream = new ByteArrayOutputStream();
 
-        client.proxyExplainStream(Map.of("student_message", "讲一下"), downstream, "Bearer demo-token");
+        client.proxyChatStream(Map.of("member_message", "tell me one thing"), downstream, "Bearer demo-token");
 
         assertEquals("text/event-stream", acceptHeader.get());
         assertEquals("Bearer demo-token", authorizationHeader.get());
-        assertEquals(": connected\n\ndata: {\"content\":\"你好\"}\n\ndata: {\"done\":true}\n\n", downstream.toString(StandardCharsets.UTF_8));
+        assertEquals(": connected\n\ndata: {\"content\":\"hello\"}\n\ndata: {\"done\":true}\n\n",
+                downstream.toString(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void summarizeSessionArchive_shouldSendInternalServiceToken() throws Exception {
+        AtomicReference<String> receivedToken = new AtomicReference<>();
+        server = startServer("/ai/memory/session-archive-summary", exchange -> {
+            receivedToken.set(exchange.getRequestHeaders().getFirst("X-Internal-Service-Token"));
+            respond(exchange, "application/json", 200,
+                    "{\"success\":true,\"data\":{\"summary\":\"archive summary\",\"titleSuggestion\":\"family title\",\"confidence\":\"HIGH\"}}");
+        });
+
+        AIServiceClient client = new AIServiceClient(baseUrl(), 5, "secret-token");
+
+        Map<String, Object> response = client.summarizeSessionArchive(Map.of("session_id", 1, "messages", List.of()));
+
+        assertEquals("secret-token", receivedToken.get());
+        assertEquals(Boolean.TRUE, response.get("success"));
     }
 
     private HttpServer startServer(String path, ExchangeHandler handler) throws IOException {

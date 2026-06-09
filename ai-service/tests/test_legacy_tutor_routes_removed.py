@@ -10,7 +10,7 @@ def test_removed_legacy_tutor_routes_return_404():
         "/ai/tutor/grade",
         "/ai/tutor/grade/quick",
         "/ai/tutor/generate",
-        "/ai/tutor/math/verify?expected=4&student_answer=4",
+        "/ai/tutor/math/verify?expected=4&member_answer=4",
     ]
 
     for path in legacy_paths:

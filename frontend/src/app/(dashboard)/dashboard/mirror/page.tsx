@@ -4,11 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Bot, CheckCircle, Loader2, RefreshCw, Send, UserRound, Users, XCircle } from 'lucide-react';
-import MathRenderer from '@/components/tutor/MathRenderer';
-import { diaryApi, familyApi, growthGuardApi, memoryApi, mirrorApi, skillRunApi, tutorApi, type AIStreamHandle } from '@/lib/api';
-import { memberAge } from '@/lib/roles';
+import MathRenderer from '@/components/agent/MathRenderer';
+import { agentApi, diaryApi, familyApi, growthGuardApi, memoryApi, mirrorApi, skillRunApi, type AIStreamHandle } from '@/lib/api';
 import { useViewerRole } from '@/hooks/useViewerRole';
-import WebSearchBadge from '@/components/tutor/WebSearchBadge';
+import WebSearchBadge from '@/components/agent/WebSearchBadge';
 import VoiceInputButton from '@/components/voice/VoiceInputButton';
 import type {
   AgentSaveToolPlan,
@@ -69,10 +68,6 @@ type MirrorSaveResult = {
 function memberName(member?: FamilyMember | null) {
   if (!member) return '家族成员';
   return member.relationshipLabel?.trim() || member.nickname?.trim() || member.username?.trim() || `用户 ${member.userId}`;
-}
-
-function agentRoleFromMember(member?: FamilyMember | null): 'PARENT' | 'STUDENT' {
-  return memberAge(member) < 18 ? 'STUDENT' : 'PARENT';
 }
 
 function diaryTitle(entry: DiaryEntry) {
@@ -223,6 +218,56 @@ function requiresSaveConfirmation(plan: AgentSaveToolPlan) {
   return plan.tool !== 'DIARY'
     || visibility !== 'PRIVATE'
     || (scope !== '' && scope !== 'PRIVATE');
+}
+
+function AnswerEvidenceDisclosure({ message }: { message: MirrorChatMessage }) {
+  if (!message.sourceRefs?.length && !message.insufficientSources) return null;
+
+  const sourceCount = message.sourceRefs?.length || 0;
+  const summaryText = message.insufficientSources
+    ? '资料偏少，回答仅供参考'
+    : `已参考 ${sourceCount} 条授权资料`;
+
+  return (
+    <details className="mt-2 overflow-hidden rounded-lg border border-purple-100 bg-white/80 text-xs text-gray-600">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2">
+        <span className="inline-flex items-center gap-1.5">
+          <Bot className="h-3.5 w-3.5 text-purple-600" />
+          <span className="font-medium text-gray-700">查看回答依据</span>
+        </span>
+        <span className="text-[11px] text-gray-500">{summaryText}</span>
+      </summary>
+      <div className="space-y-2 border-t border-purple-100 px-3 py-3">
+        {message.sourceSummary && (
+          <p className="leading-5 text-gray-600">{message.sourceSummary}</p>
+        )}
+        {message.retrievalQuery && (
+          <p className="rounded-md bg-purple-50 px-2 py-1.5 text-[11px] leading-5 text-purple-700">
+            本轮按“{message.retrievalQuery}”召回相关资料。
+          </p>
+        )}
+        {message.insufficientSources && (
+          <p className="rounded-md bg-amber-50 px-2 py-1.5 text-[11px] leading-5 text-amber-700">
+            资料偏少，回答仅供参考，不视为当事人原话。
+          </p>
+        )}
+        {(message.sourceRefs || []).slice(0, 5).map((source) => (
+          <div key={`${message.id}-${source.code}`} className="rounded-md bg-gray-50 px-2.5 py-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded bg-white px-1.5 py-0.5 font-medium text-gray-500 ring-1 ring-gray-200">
+                {source.code}
+              </span>
+              <span className={`rounded-full px-2 py-0.5 ${source.toneClass}`}>
+                {source.sourceLabel}
+              </span>
+              <span className="text-[11px] text-gray-400">{source.temporalLabel}</span>
+            </div>
+            <p className="mt-1 text-sm text-gray-700">{source.title}</p>
+          </div>
+        ))}
+      </div>
+    </details>
+  );
 }
 
 export default function MirrorPage() {
@@ -689,21 +734,15 @@ export default function MirrorPage() {
       message.id === assistantMessage.id ? { ...message, ...buildAnswerSourceMetadata(contextForAnswer) } : message
     )));
 
-    const handle = tutorApi.explainStream(
+    const handle = agentApi.streamChat(
       {
-        questionContent: '',
-        answer: '',
-        steps: '',
-        studentMessage: `请以“${memberName(targetMember)}的镜像参考”模式回答：${content}`,
+        message: `请以“${memberName(targetMember)}的镜像参考”模式回答：${content}`,
         history,
-        subject: '家族记忆',
-        grade: '',
-        knowledgePoint: '镜像 Agent',
-        masteryLevel: '中',
-        mode: 'chat',
+        subject: 'MirrorAgent',
+        contextLabel: 'mirror_agent',
         memoryContext: contextForAnswer?.memoryContext || '',
         viewerRole,
-        targetRole: agentRoleFromMember(targetMember),
+        targetRole: 'MEMBER',
       },
       (chunk) => {
         if (streamRunIdRef.current !== runId) return;
@@ -1109,15 +1148,8 @@ export default function MirrorPage() {
                         </div>
                       </div>
                     )}
-                    {message.role === 'assistant' && !message.toolResult && !message.pendingTool && (message.sourceRefs?.length || message.insufficientSources) && (
-                      <div className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full bg-white/70 px-2.5 py-1 text-[11px] text-gray-500">
-                        <Bot className="h-3 w-3 text-purple-600" />
-                        <span>
-                          {message.insufficientSources
-                            ? '资料偏少，请谨慎看待'
-                            : `已参考 ${message.sourceRefs?.length || 0} 条授权资料`}
-                        </span>
-                      </div>
+                    {message.role === 'assistant' && !message.toolResult && !message.pendingTool && (
+                      <AnswerEvidenceDisclosure message={message} />
                     )}
                   </div>
                 </div>

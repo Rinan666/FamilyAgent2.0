@@ -72,6 +72,13 @@ public class FamilyController {
         return Result.success(familyService.updateMemberRole(familyId, userId, role));
     }
 
+    @Operation(summary = "杞Щ瀹舵棌鍒涘缓鑰?")
+    @PutMapping("/{familyId}/owner/{targetUserId}")
+    public Result<Void> transferOwner(@PathVariable Long familyId, @PathVariable Long targetUserId) {
+        familyService.transferOwner(familyId, targetUserId);
+        return Result.success();
+    }
+
     @Operation(summary = "获取当前用户对家族成员的称呼")
     @GetMapping("/{familyId}/relationships/my-labels")
     public Result<List<FamilyRelationshipVO>> getMyRelationshipLabels(@PathVariable Long familyId) {

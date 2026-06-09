@@ -1,33 +1,25 @@
-/**
- * 家教聊天状态管理
- */
 import { create } from 'zustand';
-import type { ChatMessage, Question } from '@/types';
+import type { ChatMessage } from '@/types';
 import { generateId } from '@/lib/utils';
 
 interface ChatState {
-  // 当前会话
   sessionId: number | null;
   messages: ChatMessage[];
   isStreaming: boolean;
-  currentQuestion: Question | null;
-
-  // 操作
   setSessionId: (id: number | null) => void;
   setMessages: (messages: ChatMessage[]) => void;
-  addMessage: (role: 'user' | 'assistant', content: string) => void;
+  addMessage: (role: 'user' | 'assistant' | 'system', content: string) => ChatMessage;
+  removeMessageById: (id: string) => void;
   appendToLastMessage: (content: string) => void;
   mergeLastAssistantMetadata: (metadata: NonNullable<ChatMessage['metadata']>) => void;
   setStreaming: (streaming: boolean) => void;
-  setCurrentQuestion: (question: Question | null) => void;
   reset: () => void;
 }
 
-export const useChatStore = create<ChatState>((set, get) => ({
+export const useChatStore = create<ChatState>((set) => ({
   sessionId: null,
   messages: [],
   isStreaming: false,
-  currentQuestion: null,
 
   setSessionId: (sessionId) => set({ sessionId }),
 
@@ -42,6 +34,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
     };
     set((state) => ({
       messages: [...state.messages, message],
+    }));
+    return message;
+  },
+
+  removeMessageById: (id) => {
+    set((state) => ({
+      messages: state.messages.filter((message) => message.id !== id),
     }));
   },
 
@@ -79,13 +78,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   setStreaming: (isStreaming) => set({ isStreaming }),
 
-  setCurrentQuestion: (currentQuestion) => set({ currentQuestion }),
-
   reset: () =>
     set({
       sessionId: null,
       messages: [],
       isStreaming: false,
-      currentQuestion: null,
     }),
 }));

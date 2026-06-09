@@ -2,6 +2,12 @@ package com.familyagent.module.session.controller;
 
 import com.familyagent.common.response.Result;
 import com.familyagent.common.security.CurrentUserGuard;
+import com.familyagent.module.session.dto.AppendSessionMessagesRequest;
+import com.familyagent.module.session.dto.ChatSessionArchiveDetail;
+import com.familyagent.module.session.dto.ChatSessionArchiveSummary;
+import com.familyagent.module.session.dto.ChatSessionDetail;
+import com.familyagent.module.session.dto.ChatSessionMessagePage;
+import com.familyagent.module.session.dto.ChatSessionSummary;
 import com.familyagent.module.session.dto.CreateChatSessionRequest;
 import com.familyagent.module.session.dto.EndChatSessionRequest;
 import com.familyagent.module.session.dto.UpdateSessionMessagesRequest;
@@ -16,9 +22,9 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * 会话控制器
+ * Chat session controller.
  */
-@Tag(name = "家教会话")
+@Tag(name = "FamilyAgent 会话")
 @RestController
 @RequestMapping("/api/sessions")
 @RequiredArgsConstructor
@@ -26,33 +32,49 @@ public class ChatSessionController {
 
     private final ChatSessionService sessionService;
 
-    @Operation(summary = "创建家教会话")
+    @Operation(summary = "创建 FamilyAgent 会话")
     @PostMapping
-    public Result<ChatSession> createSession(@Valid @RequestBody CreateChatSessionRequest request) {
+    public Result<ChatSessionDetail> createSession(@Valid @RequestBody CreateChatSessionRequest request) {
         ChatSession session = new ChatSession();
         session.setFamilyId(request.getFamilyId());
         session.setQuestionId(request.getQuestionId());
         session.setSubject(request.getSubject());
         session.setKnowledgePointId(request.getKnowledgePointId());
-        session.setMessages(request.getMessages());
+        session.setTitle(request.getTitle());
+        session.setSummary(request.getSummary());
         session.setVisibility(request.getVisibility());
         session.setPermissionScope(request.getPermissionScope());
         session.setSource(request.getSource());
         session.setMetadata(request.getMetadata());
-        return Result.success(sessionService.createSession(session));
+        return Result.success(sessionService.createSession(session, request.getMessages()));
     }
 
     @Operation(summary = "获取会话详情")
     @GetMapping("/{id}")
-    public Result<ChatSession> getSession(@PathVariable Long id) {
-        ChatSession session = sessionService.getSession(id);
-        CurrentUserGuard.requireSelf(session.getUserId());
-        return Result.success(session);
+    public Result<ChatSessionDetail> getSession(@PathVariable Long id) {
+        return Result.success(sessionService.getSessionDetail(id));
     }
 
-    @Operation(summary = "更新会话消息")
+    @Operation(summary = "分页获取会话消息")
+    @GetMapping("/{id}/messages")
+    public Result<ChatSessionMessagePage> getSessionMessages(
+            @PathVariable Long id,
+            @RequestParam(required = false) Long beforeSeq,
+            @RequestParam(defaultValue = "40") int limit) {
+        return Result.success(sessionService.getSessionMessages(id, beforeSeq, limit));
+    }
+
+    @Operation(summary = "追加会话消息")
+    @PostMapping("/{id}/messages")
+    public Result<ChatSessionDetail> appendMessages(
+            @PathVariable Long id,
+            @Valid @RequestBody AppendSessionMessagesRequest request) {
+        return Result.success(sessionService.appendMessages(id, request.getMessages()));
+    }
+
+    @Operation(summary = "兼容旧版的尾部消息追加")
     @PutMapping("/{id}/messages")
-    public Result<ChatSession> updateMessages(
+    public Result<ChatSessionDetail> updateMessages(
             @PathVariable Long id,
             @Valid @RequestBody UpdateSessionMessagesRequest request) {
         return Result.success(sessionService.updateMessages(id, request.getMessages()));
@@ -60,7 +82,7 @@ public class ChatSessionController {
 
     @Operation(summary = "结束会话")
     @PostMapping("/{id}/end")
-    public Result<ChatSession> endSession(
+    public Result<ChatSessionDetail> endSession(
             @PathVariable Long id,
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @RequestBody(required = false) EndChatSessionRequest request) {
@@ -75,31 +97,44 @@ public class ChatSessionController {
         return Result.success();
     }
 
+    @Operation(summary = "获取会话归档摘要")
+    @GetMapping("/{id}/archives")
+    public Result<List<ChatSessionArchiveSummary>> getArchives(@PathVariable Long id) {
+        return Result.success(sessionService.listArchives(id));
+    }
 
-    @Operation(summary = "获取用户会话列表")
+    @Operation(summary = "获取会话归档原文")
+    @GetMapping("/{id}/archives/{archiveId}")
+    public Result<ChatSessionArchiveDetail> getArchiveDetail(
+            @PathVariable Long id,
+            @PathVariable Long archiveId) {
+        return Result.success(sessionService.getArchiveDetail(id, archiveId));
+    }
+
+    @Operation(summary = "获取当前用户会话列表")
     @GetMapping("/user/me")
-    public Result<List<ChatSession>> getMySessions(@RequestParam(defaultValue = "20") int limit) {
+    public Result<List<ChatSessionSummary>> getMySessions(@RequestParam(defaultValue = "20") int limit) {
         return Result.success(sessionService.getUserSessions(CurrentUserGuard.currentUserId(), limit));
     }
 
-    @Operation(summary = "获取用户会话列表")
+    @Operation(summary = "获取指定用户会话列表")
     @GetMapping("/user/{userId}")
-    public Result<List<ChatSession>> getUserSessions(
+    public Result<List<ChatSessionSummary>> getUserSessions(
             @PathVariable Long userId,
             @RequestParam(defaultValue = "20") int limit) {
         CurrentUserGuard.requireSelf(userId);
         return Result.success(sessionService.getUserSessions(userId, limit));
     }
 
-    @Operation(summary = "获取活跃会话")
+    @Operation(summary = "获取当前用户活跃会话")
     @GetMapping("/active/me")
-    public Result<List<ChatSession>> getMyActiveSessions() {
+    public Result<List<ChatSessionSummary>> getMyActiveSessions() {
         return Result.success(sessionService.getActiveSessions(CurrentUserGuard.currentUserId()));
     }
 
-    @Operation(summary = "获取活跃会话")
+    @Operation(summary = "获取指定用户活跃会话")
     @GetMapping("/active/{userId}")
-    public Result<List<ChatSession>> getActiveSessions(@PathVariable Long userId) {
+    public Result<List<ChatSessionSummary>> getActiveSessions(@PathVariable Long userId) {
         CurrentUserGuard.requireSelf(userId);
         return Result.success(sessionService.getActiveSessions(userId));
     }

@@ -3,6 +3,7 @@ package com.familyagent.module.growth.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
+import com.familyagent.common.response.PageResult;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.family.entity.FamilyMember;
 import com.familyagent.module.family.repository.FamilyMemberRepository;
@@ -36,6 +37,8 @@ public class GrowthGuardService {
 
     private static final int DEFAULT_LIMIT = 20;
     private static final int MAX_LIMIT = 60;
+    private static final int DEFAULT_PAGE_SIZE = 6;
+    private static final int MAX_PAGE_SIZE = 20;
     private static final Set<String> CATEGORIES = Set.of(
             "POSTURE", "DENTAL", "VISION", "SLEEP", "EXERCISE", "SCREEN_TIME", "EMOTION", "COMMUNICATION", "OTHER");
     private static final Set<String> VISIBILITIES = Set.of("PRIVATE", "PARENT_VISIBLE", "CARE_VISIBLE", "FAMILY_VISIBLE");
@@ -91,6 +94,27 @@ public class GrowthGuardService {
         List<GrowthGuardRecord> records = recordRepository.findVisibleByFamily(familyId, viewerUserId, normalizeLimit(limit));
         records.forEach(record -> attachStalenessStats(record, viewerUserId));
         return records;
+    }
+
+    public PageResult<GrowthGuardRecord> searchFamilyRecords(Long familyId, Long targetUserId, String keyword, int page, int pageSize) {
+        familyService.checkMembership(familyId);
+        Long viewerUserId = CurrentUserGuard.currentUserId();
+        int normalizedPageSize = normalizePageSize(pageSize);
+        String normalizedKeyword = normalizeKeyword(keyword);
+        long total = recordRepository.countVisibleByFamilySearch(familyId, viewerUserId, targetUserId, normalizedKeyword);
+        long resolvedPage = resolvePage(page, normalizedPageSize, total);
+        long offset = (resolvedPage - 1L) * normalizedPageSize;
+        List<GrowthGuardRecord> items = total == 0
+                ? List.of()
+                : recordRepository.searchVisibleByFamily(
+                        familyId,
+                        viewerUserId,
+                        targetUserId,
+                        normalizedKeyword,
+                        normalizedPageSize,
+                        offset);
+        items.forEach(record -> attachStalenessStats(record, viewerUserId));
+        return PageResult.of(items, resolvedPage, normalizedPageSize, total);
     }
 
     @Transactional
@@ -193,6 +217,24 @@ public class GrowthGuardService {
     private static int normalizeLimit(int limit) {
         if (limit <= 0) return DEFAULT_LIMIT;
         return Math.min(limit, MAX_LIMIT);
+    }
+
+    private static String normalizeKeyword(String keyword) {
+        return keyword == null || keyword.isBlank() ? null : keyword.trim();
+    }
+
+    private static int normalizePageSize(int pageSize) {
+        if (pageSize <= 0) return DEFAULT_PAGE_SIZE;
+        return Math.min(pageSize, MAX_PAGE_SIZE);
+    }
+
+    private static long resolvePage(int page, int pageSize, long total) {
+        long normalizedPage = Math.max(page, 1);
+        if (total <= 0) {
+            return normalizedPage;
+        }
+        long totalPages = (total + pageSize - 1L) / pageSize;
+        return Math.min(normalizedPage, totalPages);
     }
 
     private static String normalizeCategory(String category) {

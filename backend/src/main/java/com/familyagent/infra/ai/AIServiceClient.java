@@ -110,14 +110,6 @@ public class AIServiceClient {
         }
     }
 
-    /**
-     * Legacy alias kept while /api/tutor/explain callers are phased out.
-     */
-    @Deprecated
-    public void proxyExplainStream(Map<String, Object> request, OutputStream downstream, String authorization) {
-        proxyChatStream(request, downstream, authorization);
-    }
-
     private String readResponseBody(HttpURLConnection conn) {
         InputStream errorStream = conn.getErrorStream();
         if (errorStream == null) {
@@ -138,7 +130,7 @@ public class AIServiceClient {
     }
 
     /**
-     * Extract learning memories from a finished tutor session.
+     * Extract memory candidates from a finished Agent session.
      */
     @SuppressWarnings("unchecked")
     public Map<String, Object> extractMemories(Map<String, Object> request, String authorization) {
@@ -196,6 +188,28 @@ public class AIServiceClient {
             return response.getBody();
         } catch (Exception e) {
             log.warn("Embedding service call failed: {}", e.getMessage());
+            return Map.of("success", false, "error", e.getMessage());
+        }
+    }
+
+    /**
+     * Summarize a session archive chunk via the AI service using the internal service token.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> summarizeSessionArchive(Map<String, Object> request) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            if (internalToken != null && !internalToken.isBlank()) {
+                headers.set(INTERNAL_SERVICE_TOKEN_HEADER, internalToken);
+            }
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+
+            ResponseEntity<Map> response = restTemplate.postForEntity(
+                    baseUrl + "/ai/memory/session-archive-summary", entity, Map.class);
+            return response.getBody();
+        } catch (Exception e) {
+            log.warn("Session archive summary call failed: {}", e.getMessage());
             return Map.of("success", false, "error", e.getMessage());
         }
     }

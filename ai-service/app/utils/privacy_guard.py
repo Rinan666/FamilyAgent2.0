@@ -89,7 +89,7 @@ def redact_ai_bound_text(text: str, max_length: int = 12000) -> PrivacyGuardResu
     Redact sensitive information before content is sent to an LLM.
 
     The goal is to protect family and minor data while preserving enough
-    semantic context for tutoring, mirror reference, and memory-card tasks.
+    semantic context for family companionship, mirror reference, and memory-card tasks.
     """
     if not text:
         return PrivacyGuardResult(text="")

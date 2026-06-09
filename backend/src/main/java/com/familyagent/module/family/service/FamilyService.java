@@ -26,7 +26,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * 家族服务
+ * Family service.
  */
 @Slf4j
 @Service
@@ -36,6 +36,7 @@ public class FamilyService {
     private final FamilyRepository familyRepository;
     private final FamilyMemberRepository memberRepository;
     private final FamilyRelationshipRepository relationshipRepository;
+    private final FamilyLifecycleService familyLifecycleService;
     private final UserService userService;
     private static final Set<String> MUTABLE_FAMILY_ROLES = Set.of("MEMBER");
 
@@ -51,14 +52,14 @@ public class FamilyService {
         family.setInviteCode(generateInviteCode());
         familyRepository.insert(family);
 
-        // 创建者为族长
+        // 鍒涘缓鑰呬负鏃忛暱
         FamilyMember member = new FamilyMember();
         member.setFamilyId(family.getId());
         member.setUserId(currentUser.getId());
         member.setRole("OWNER");
         memberRepository.insert(member);
 
-        log.info("家族创建成功: name={}, id={}, owner={}", family.getName(), family.getId(), currentUser.getId());
+        log.info("瀹舵棌鍒涘缓鎴愬姛: name={}, id={}, owner={}", family.getName(), family.getId(), currentUser.getId());
         return family;
     }
 
@@ -71,13 +72,13 @@ public class FamilyService {
             throw new BusinessException(ErrorCode.INVALID_INVITE_CODE);
         }
 
-        // 检查是否已是成员
+        // 妫€鏌ユ槸鍚﹀凡鏄垚鍛?
         FamilyMember existing = memberRepository.findByFamilyAndUser(family.getId(), currentUser.getId());
         if (existing != null) {
             throw new BusinessException(ErrorCode.ALREADY_MEMBER);
         }
 
-        // 检查人数上限
+        // 妫€鏌ヤ汉鏁颁笂闄?
         int count = memberRepository.countByFamilyId(family.getId());
         if (count >= family.getMaxMembers()) {
             throw new BusinessException(ErrorCode.FAMILY_FULL);
@@ -89,7 +90,7 @@ public class FamilyService {
         member.setRole("MEMBER");
         memberRepository.insert(member);
 
-        log.info("用户加入家族: userId={}, familyId={}, role=MEMBER", currentUser.getId(), family.getId());
+        log.info("鐢ㄦ埛鍔犲叆瀹舵棌: userId={}, familyId={}, role=MEMBER", currentUser.getId(), family.getId());
         return member;
     }
 
@@ -98,7 +99,7 @@ public class FamilyService {
         if (family == null) {
             throw new BusinessException(ErrorCode.FAMILY_NOT_FOUND);
         }
-        // 验证是否为成员
+        // 楠岃瘉鏄惁涓烘垚鍛?
         checkMembership(familyId);
         return family;
     }
@@ -156,35 +157,17 @@ public class FamilyService {
             throw new BusinessException(ErrorCode.INSUFFICIENT_PERMISSION, "不能修改自己的家庭角色");
         }
         if ("OWNER".equalsIgnoreCase(targetMember.getRole())) {
-            throw new BusinessException(ErrorCode.INSUFFICIENT_PERMISSION, "创建者角色不能在此处修改");
+            throw new BusinessException(ErrorCode.INSUFFICIENT_PERMISSION, "鍒涘缓鑰呰鑹蹭笉鑳藉湪姝ゅ淇敼");
         }
         targetMember.setRole(nextRole);
         memberRepository.updateById(targetMember);
-        log.info("家庭成员角色更新: familyId={}, operator={}, target={}, role={}",
+        log.info("瀹跺涵鎴愬憳瑙掕壊鏇存柊: familyId={}, operator={}, target={}, role={}",
                 familyId, currentUser.getId(), userId, nextRole);
         FamilyMemberVO updated = memberRepository.findMemberViewByFamilyAndUser(familyId, userId);
         attachRelationshipLabels(familyId, currentUser.getId(), List.of(updated));
         return updated;
     }
 
-    public void checkCanViewLearningReport(Long targetUserId) {
-        User currentUser = userService.getCurrentUser();
-        if (currentUser.getId().equals(targetUserId) || "ADMIN".equalsIgnoreCase(currentUser.getRole())) {
-            return;
-        }
-
-        List<FamilyMember> memberships = memberRepository.findByUserId(currentUser.getId());
-        for (FamilyMember membership : memberships) {
-            if (!canViewLearnerReportFromRole(membership.getRole())) {
-                continue;
-            }
-            FamilyMember targetMember = memberRepository.findByFamilyAndUser(membership.getFamilyId(), targetUserId);
-            if (targetMember != null) {
-                return;
-            }
-        }
-        throw new BusinessException(ErrorCode.FORBIDDEN, "无权查看该学习者报告");
-    }
 
     public void checkMembership(Long familyId) {
         User currentUser = userService.getCurrentUser();
@@ -202,14 +185,33 @@ public class FamilyService {
         }
     }
 
+    @Transactional
+    public void transferOwner(Long familyId, Long targetUserId) {
+        User currentUser = userService.getCurrentUser();
+        Family family = familyRepository.selectById(familyId);
+        if (family == null) {
+            throw new BusinessException(ErrorCode.FAMILY_NOT_FOUND);
+        }
+
+        boolean platformAdmin = "ADMIN".equalsIgnoreCase(currentUser.getRole());
+        if (!platformAdmin) {
+            FamilyMember currentMember = memberRepository.findByFamilyAndUser(familyId, currentUser.getId());
+            if (currentMember == null || !isOwner(currentMember.getRole())) {
+                throw new BusinessException(ErrorCode.INSUFFICIENT_PERMISSION);
+            }
+        }
+
+        familyLifecycleService.transferOwner(familyId, targetUserId, currentUser.getId());
+    }
+
     private String normalizeFamilyRole(String role) {
         String normalized = role == null ? "" : role.trim().toUpperCase(Locale.ROOT);
         if ("ADMIN".equals(normalized) || "GUARDIAN".equals(normalized)
-                || "STUDENT".equals(normalized) || "GUEST".equals(normalized)) {
+                || "MEMBER".equals(normalized) || "GUEST".equals(normalized)) {
             return "MEMBER";
         }
         if (!MUTABLE_FAMILY_ROLES.contains(normalized)) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "家庭角色只能是 MEMBER，创建者角色不可在此处修改");
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "瀹跺涵瑙掕壊鍙兘鏄?MEMBER锛屽垱寤鸿€呰鑹蹭笉鍙湪姝ゅ淇敼");
         }
         return normalized;
     }
@@ -218,9 +220,6 @@ public class FamilyService {
         return "OWNER".equalsIgnoreCase(role);
     }
 
-    private boolean canViewLearnerReportFromRole(String role) {
-        return "OWNER".equalsIgnoreCase(role);
-    }
 
     private String generateInviteCode() {
         String code;

@@ -1,6 +1,6 @@
 import type { FamilyMember, User } from '@/types';
 
-export type ViewerRole = 'STUDENT' | 'PARENT' | 'ADMIN';
+export type ViewerRole = 'MEMBER' | 'ADMIN';
 
 export function isPlatformAdmin(user?: User | null) {
   return (user?.role || '').toUpperCase() === 'ADMIN';
@@ -12,7 +12,6 @@ export function familyRoleLabel(role?: string) {
 
 export function viewerRoleLabel(role: ViewerRole) {
   if (role === 'ADMIN') return '管理员视图';
-  if (role === 'PARENT') return '成年人视图';
   return '成员视图';
 }
 
@@ -26,14 +25,12 @@ export function deriveViewerRole(
   const activeMembership = activeFamilyId
     ? memberships.find((member) => member.familyId === activeFamilyId)
     : memberships[0];
-  const role = (activeMembership?.role || '').toUpperCase();
 
-  if (role === 'OWNER') return 'PARENT';
-  return isMinor(activeMembership) ? 'STUDENT' : 'PARENT';
+  return activeMembership ? 'MEMBER' : 'MEMBER';
 }
 
 export function canViewParentReports(role: ViewerRole) {
-  return role === 'PARENT' || role === 'ADMIN';
+  return role === 'MEMBER' || role === 'ADMIN';
 }
 
 export function canMaintainSystem(role: ViewerRole) {
@@ -70,8 +67,4 @@ export function memberAge(member?: FamilyMember | null) {
   }
 
   return 20;
-}
-
-function isMinor(member?: FamilyMember | null) {
-  return memberAge(member) < 18;
 }

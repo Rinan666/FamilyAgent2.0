@@ -3,6 +3,7 @@ package com.familyagent.module.memory.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
+import com.familyagent.common.response.PageResult;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.family.service.FamilyService;
 import com.familyagent.module.memory.dto.CreateFamilyMemoryRequest;
@@ -31,6 +32,8 @@ public class MemoryService {
 
     private static final int DEFAULT_LIMIT = 10;
     private static final int MAX_LIMIT = 30;
+    private static final int DEFAULT_PAGE_SIZE = 6;
+    private static final int MAX_PAGE_SIZE = 20;
     private static final Set<String> FAMILY_MEMORY_TYPES = Set.of(
             "FAMILY_STORY", "ELDER_ADVICE", "HEALTH_REMINDER", "GROWTH_RISK", "VALUE", "PLAN");
     private static final Set<String> FAMILY_MEMORY_SCOPES = Set.of(
@@ -180,6 +183,27 @@ public class MemoryService {
                 .toList();
     }
 
+    public PageResult<MemoryEntry> searchFamilyMemories(Long familyId, Long targetUserId, String keyword, int page, int pageSize) {
+        familyService.checkMembership(familyId);
+        Long viewerUserId = CurrentUserGuard.currentUserId();
+        int normalizedPageSize = normalizePageSize(pageSize);
+        String normalizedKeyword = normalizeKeyword(keyword);
+        long total = memoryRepository.countActiveFamilyMemoriesSearch(familyId, viewerUserId, targetUserId, normalizedKeyword);
+        long resolvedPage = resolvePage(page, normalizedPageSize, total);
+        long offset = (resolvedPage - 1L) * normalizedPageSize;
+        List<MemoryEntry> items = total == 0
+                ? List.of()
+                : memoryRepository.searchActiveFamilyMemories(
+                        familyId,
+                        viewerUserId,
+                        targetUserId,
+                        normalizedKeyword,
+                        normalizedPageSize,
+                        offset);
+        items.forEach(entry -> attachVoteStats(entry, viewerUserId));
+        return PageResult.of(items, resolvedPage, normalizedPageSize, total);
+    }
+
     @Transactional
     public MemoryEntry voteFamilyMemory(Long memoryId, String voteType) {
         Long viewerUserId = CurrentUserGuard.currentUserId();
@@ -235,6 +259,24 @@ public class MemoryService {
     private int normalizeLimit(int limit) {
         if (limit <= 0) return DEFAULT_LIMIT;
         return Math.min(limit, MAX_LIMIT);
+    }
+
+    private static String normalizeKeyword(String keyword) {
+        return keyword == null || keyword.isBlank() ? null : keyword.trim();
+    }
+
+    private static int normalizePageSize(int pageSize) {
+        if (pageSize <= 0) return DEFAULT_PAGE_SIZE;
+        return Math.min(pageSize, MAX_PAGE_SIZE);
+    }
+
+    private static long resolvePage(int page, int pageSize, long total) {
+        long normalizedPage = Math.max(page, 1);
+        if (total <= 0) {
+            return normalizedPage;
+        }
+        long totalPages = (total + pageSize - 1L) / pageSize;
+        return Math.min(normalizedPage, totalPages);
     }
 
     private static String defaultString(String value, String fallback) {

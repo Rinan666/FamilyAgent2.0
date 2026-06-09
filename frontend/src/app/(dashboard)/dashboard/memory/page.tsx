@@ -16,15 +16,18 @@ import {
   ScrollText,
   Search,
   Shield,
+  ThumbsDown,
+  ThumbsUp,
   Trash2,
   X,
 } from 'lucide-react';
-import { familyApi, memoryApi, memoryLibraryApi } from '@/lib/api';
+import { familyApi, growthGuardApi, memoryApi, memoryLibraryApi } from '@/lib/api';
 import LegacyWorkpageNotice from '@/components/family/LegacyWorkpageNotice';
 import { useViewerRole } from '@/hooks/useViewerRole';
 import type {
   AuthorizedMemoryRecallResult,
   FamilyMember,
+  HeritageClassicalDraft,
   MemoryLibraryItem,
   MemoryLibraryItemType,
   MemoryMaintenanceSuggestion,
@@ -78,6 +81,54 @@ const typeMeta: Record<LibraryItemType, {
   },
 };
 
+function parseLibraryItemNumericId(itemId: string | undefined, expectedPrefix: string) {
+  if (!itemId || !itemId.startsWith(`${expectedPrefix}-`)) return null;
+  const numericId = Number(itemId.slice(expectedPrefix.length + 1));
+  return Number.isFinite(numericId) && numericId > 0 ? numericId : null;
+}
+
+function metadataObject(item: MemoryLibraryItem, key: string) {
+  const value = item.metadata?.[key];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function metadataNumber(source: Record<string, unknown> | null, key: string) {
+  const value = source?.[key];
+  return typeof value === 'number' ? value : Number(value || 0) || 0;
+}
+
+function metadataBoolean(source: Record<string, unknown> | null, key: string) {
+  const value = source?.[key];
+  return value === true || value === 'true';
+}
+
+function familyExperienceVoteStats(item: MemoryLibraryItem) {
+  const stats = metadataObject(item, 'voteStats');
+  return {
+    upVotes: metadataNumber(stats, 'upVotes'),
+    downVotes: metadataNumber(stats, 'downVotes'),
+    voteScore: metadataNumber(stats, 'voteScore'),
+    myVote: typeof stats?.myVote === 'string' ? stats.myVote.toUpperCase() : '',
+  };
+}
+
+function growthObservationStalenessStats(item: MemoryLibraryItem) {
+  const stats = metadataObject(item, 'stalenessStats');
+  return {
+    staleVotes: metadataNumber(stats, 'staleVotes'),
+    myVoted: metadataBoolean(stats, 'myVoted'),
+  };
+}
+
+function canVoteFamilyExperience(item: MemoryLibraryItem) {
+  return item.sourceType === 'FAMILY_EXPERIENCE' && parseLibraryItemNumericId(item.id, 'memory') !== null;
+}
+
+function canMarkGrowthObservationStale(item: MemoryLibraryItem) {
+  return item.sourceType === 'GROWTH_OBSERVATION' && parseLibraryItemNumericId(item.id, 'growth') !== null;
+}
+
 function formatDate(value?: string) {
   if (!value) return '';
   const date = new Date(value);
@@ -126,6 +177,35 @@ function originLabel(item: MemoryLibraryItem) {
   if (source.includes('DIGEST') || source.includes('SUMMARY')) return 'AI 摘要生成';
   if (item.sourceType === 'AI_SUMMARY') return 'AI 摘要生成';
   return '手动录入或来源页面保存';
+}
+
+function evidenceDescription(item: MemoryLibraryItem) {
+  const scenario = metadataText(item, 'scenario');
+  const followUpStatus = metadataText(item, 'followUpStatus');
+  const isCoreMemory = item.metadata?.coreMemory === true || item.tags?.includes('鏍稿績璁板繂');
+
+  let description = '来自已授权并按家庭权限过滤的资料，可继续用于整理、回顾和权限范围内召回。';
+  if (item.sourceType === 'LIFE_RECORD') {
+    description = '来自已授权的人生记录，适合保留事件经过、当时语境和家庭视角。';
+  } else if (item.sourceType === 'FAMILY_EXPERIENCE') {
+    description = '来自家族经验沉淀，适合在家庭陪伴、传承和镜像参考场景中复用。';
+  } else if (item.sourceType === 'GROWTH_OBSERVATION') {
+    description = '来自成长观察记录，适合照护跟进和后续复核，不构成诊断或医疗结论。';
+  } else if (item.sourceType === 'AI_SUMMARY') {
+    description = '来自 AI 对家族资料的整理摘要，可作为快速参考，但关键细节应回看原始记录确认。';
+  }
+
+  if (scenario) {
+    description += ` 当前已补充的适用场景：${scenario}。`;
+  }
+  if (followUpStatus) {
+    description += ` 当前跟进状态：${followUpStatus}。`;
+  }
+  if (isCoreMemory) {
+    description += ' 这条内容已被家庭标记为核心记忆，适合长期保留。';
+  }
+
+  return description;
 }
 
 function aiUsageLabels(item: MemoryLibraryItem) {
@@ -191,7 +271,7 @@ function activationHref(item: MemoryLibraryItem, familyId?: number | null) {
   const params = new URLSearchParams();
   params.set('prompt', activationPrompt(item));
   if (familyId) params.set('familyId', String(familyId));
-  return `/dashboard/tutor?${params.toString()}`;
+  return `/dashboard/agent?${params.toString()}`;
 }
 
 function memberDisplayName(member?: FamilyMember) {
@@ -271,6 +351,7 @@ export default function MemoryLibraryPage({ embedded = false }: MemoryLibraryPag
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<LibraryItemType | 'ALL'>('ALL');
@@ -285,14 +366,27 @@ export default function MemoryLibraryPage({ embedded = false }: MemoryLibraryPag
   const [recallError, setRecallError] = useState('');
   const [maintenanceSuggestions, setMaintenanceSuggestions] = useState<MemoryMaintenanceSuggestion[]>([]);
   const [loadingMaintenance, setLoadingMaintenance] = useState(false);
+  const [mergingSuggestionKey, setMergingSuggestionKey] = useState('');
+  const [classicalDraftPreview, setClassicalDraftPreview] = useState<HeritageClassicalDraft | null>(null);
+  const [classicalizingItemId, setClassicalizingItemId] = useState('');
+  const [applyingClassicalItemId, setApplyingClassicalItemId] = useState('');
+  const [votingActionKey, setVotingActionKey] = useState('');
+  const [staleActionItemId, setStaleActionItemId] = useState('');
   const [archivingItemId, setArchivingItemId] = useState('');
   const [restoringItemId, setRestoringItemId] = useState('');
   const [deletingItemId, setDeletingItemId] = useState('');
   const [viewMode, setViewMode] = useState<LibraryViewMode>('ACTIVE');
+  const [itemOpenNotice, setItemOpenNotice] = useState('');
+  const [resolvedRequestedItemKey, setResolvedRequestedItemKey] = useState('');
+  const [resetRequestedItemKey, setResetRequestedItemKey] = useState('');
 
   const requestedFamilyId = useMemo(() => {
     const value = Number(searchParams.get('familyId'));
     return Number.isFinite(value) && value > 0 ? value : null;
+  }, [searchParams]);
+  const requestedItemId = useMemo(() => {
+    const value = searchParams.get('itemId');
+    return typeof value === 'string' ? value.trim() : '';
   }, [searchParams]);
 
   const memberOptions = useMemo(
@@ -315,7 +409,12 @@ export default function MemoryLibraryPage({ embedded = false }: MemoryLibraryPag
   const pageEnd = Math.min(pageData.page * pageData.pageSize, pageData.total);
   const totalPages = Math.max(1, pageData.totalPages || 1);
   const canManageLibrary = activeMembership?.role === 'OWNER' || viewerRole === 'ADMIN';
-  const canUseRecallDebug = viewerRole !== 'STUDENT';
+  const canUseRecallDebug = viewerRole === 'MEMBER' || viewerRole === 'ADMIN';
+  const requestedItemKey = requestedItemId && activeFamilyId ? `${activeFamilyId}:${requestedItemId}` : '';
+  const canClassicalizeSelectedItem = viewMode === 'ACTIVE'
+    && !!selectedItem
+    && selectedItem.sourceType === 'FAMILY_EXPERIENCE'
+    && selectedItem.id.startsWith('memory-');
 
   useEffect(() => {
     const queryFamily = requestedFamilyId && families.some((family) => family.id === requestedFamilyId)
@@ -424,6 +523,70 @@ export default function MemoryLibraryPage({ embedded = false }: MemoryLibraryPag
     setCurrentPage(1);
   };
 
+  const resetFiltersForRequestedItem = useCallback(() => {
+    setQuery('');
+    setDebouncedQuery('');
+    setTypeFilter('ALL');
+    setMemberFilter('ALL');
+    setVisibilityFilter('ALL');
+    setViewMode('ACTIVE');
+    setCurrentPage(1);
+    setSelectedItemId('');
+    setItemOpenNotice('');
+  }, []);
+
+  useEffect(() => {
+    setItemOpenNotice('');
+    setResolvedRequestedItemKey('');
+    setResetRequestedItemKey('');
+  }, [requestedItemKey]);
+
+  useEffect(() => {
+    if (!requestedItemKey || !requestedItemId || !activeFamilyId || isLoading) return;
+    if (resolvedRequestedItemKey === requestedItemKey) return;
+
+    if (pageData.items.some((item) => item.id === requestedItemId)) {
+      setSelectedItemId(requestedItemId);
+      setResolvedRequestedItemKey(requestedItemKey);
+      setItemOpenNotice('');
+      return;
+    }
+
+    const needsReset = viewMode !== 'ACTIVE'
+      || currentPage !== 1
+      || query.trim().length > 0
+      || debouncedQuery.trim().length > 0
+      || typeFilter !== 'ALL'
+      || memberFilter !== 'ALL'
+      || visibilityFilter !== 'ALL';
+
+    if (needsReset && resetRequestedItemKey !== requestedItemKey) {
+      setResetRequestedItemKey(requestedItemKey);
+      resetFiltersForRequestedItem();
+      return;
+    }
+
+    setSelectedItemId('');
+    setResolvedRequestedItemKey(requestedItemKey);
+    setItemOpenNotice('当前条目暂时无法在记忆库中打开，可以直接去原始页面补充或检查权限范围。');
+  }, [
+    activeFamilyId,
+    currentPage,
+    debouncedQuery,
+    isLoading,
+    memberFilter,
+    pageData.items,
+    query,
+    requestedItemId,
+    requestedItemKey,
+    resetFiltersForRequestedItem,
+    resetRequestedItemKey,
+    resolvedRequestedItemKey,
+    typeFilter,
+    viewMode,
+    visibilityFilter,
+  ]);
+
   const runRecallDebug = async () => {
     if (!activeFamilyId || !recallQuery.trim()) return;
     setIsRecalling(true);
@@ -484,6 +647,115 @@ export default function MemoryLibraryPage({ embedded = false }: MemoryLibraryPag
     }
   };
 
+  const handleMergeSuggestion = async (suggestion: MemoryMaintenanceSuggestion) => {
+    if (!activeFamilyId) return;
+    const mergeItems = (suggestion.items || []).slice(0, 2);
+    if (mergeItems.length < 2) return;
+    const [primaryItem, secondaryItem] = mergeItems;
+    const confirmed = window.confirm('确认将这两条经验合并为一条更凝练的家族记忆吗？合并后第二条会进入归档箱。');
+    if (!confirmed) return;
+
+    const suggestionKey = `${primaryItem.id}-${secondaryItem.id}`;
+    setMergingSuggestionKey(suggestionKey);
+    setError('');
+    try {
+      await memoryLibraryApi.mergeItems(activeFamilyId, primaryItem.id, secondaryItem.id);
+      setSelectedItemId(primaryItem.id);
+      await Promise.all([
+        loadData(),
+        loadMaintenanceSuggestions(),
+      ]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '合并失败');
+    } finally {
+      setMergingSuggestionKey('');
+    }
+  };
+
+  const handleGenerateClassicalDraft = async (item: MemoryLibraryItem) => {
+    if (!canClassicalizeSelectedItem || !item.body?.trim()) return;
+    setClassicalizingItemId(item.id);
+    setClassicalDraftPreview(null);
+    setError('');
+    setSuccess('');
+    try {
+      const result = await memoryApi.createHeritageClassicalDraft({
+        content: item.body.trim(),
+        memoryType: item.type,
+        scenario: metadataText(item, 'scenario'),
+        familyContext: activeFamily?.description || activeFamily?.name || '',
+      });
+      setClassicalDraftPreview(result.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '古文提炼失败');
+    } finally {
+      setClassicalizingItemId('');
+    }
+  };
+
+  const handleApplyClassicalDraft = async (item: MemoryLibraryItem) => {
+    if (!activeFamilyId || !classicalDraftPreview) return;
+    setApplyingClassicalItemId(item.id);
+    setError('');
+    setSuccess('');
+    try {
+      await memoryLibraryApi.classicalizeItem(
+        activeFamilyId,
+        item.id,
+        classicalDraftPreview.classicalText,
+        classicalDraftPreview.plainSummary,
+        classicalDraftPreview.styleNote,
+      );
+      await Promise.all([
+        loadData(),
+        loadMaintenanceSuggestions(),
+      ]);
+      setClassicalDraftPreview(null);
+      setSuccess('已将古文稿覆盖回这条经验，原内容已保留在元数据中。');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '古文覆盖失败');
+    } finally {
+      setApplyingClassicalItemId('');
+    }
+  };
+
+  const handleVoteExperience = async (item: MemoryLibraryItem, voteType: 'UP' | 'DOWN') => {
+    const memoryId = parseLibraryItemNumericId(item.id, 'memory');
+    if (!memoryId) return;
+    const actionKey = `${item.id}-${voteType}`;
+    setVotingActionKey(actionKey);
+    setError('');
+    try {
+      await memoryApi.voteFamilyMemory(memoryId, voteType);
+      await Promise.all([
+        loadData(),
+        loadMaintenanceSuggestions(),
+      ]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '反馈提交失败');
+    } finally {
+      setVotingActionKey('');
+    }
+  };
+
+  const handleMarkObservationStale = async (item: MemoryLibraryItem) => {
+    const recordId = parseLibraryItemNumericId(item.id, 'growth');
+    if (!recordId) return;
+    setStaleActionItemId(item.id);
+    setError('');
+    try {
+      await growthGuardApi.markStale(recordId);
+      await Promise.all([
+        loadData(),
+        loadMaintenanceSuggestions(),
+      ]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '标记失败');
+    } finally {
+      setStaleActionItemId('');
+    }
+  };
+
   const handleArchiveItem = async (item: MemoryLibraryItem) => {
     if (!canManageLibrary) {
       setError('只有家族创建者可以归档家族记录');
@@ -537,6 +809,12 @@ export default function MemoryLibraryPage({ embedded = false }: MemoryLibraryPag
       setCurrentPage(pageData.totalPages);
     }
   }, [currentPage, pageData.totalPages]);
+
+  useEffect(() => {
+    setClassicalDraftPreview(null);
+    setClassicalizingItemId('');
+    setApplyingClassicalItemId('');
+  }, [selectedItemId, viewMode]);
 
   if (loadingFamilies) {
     return (
@@ -646,6 +924,18 @@ export default function MemoryLibraryPage({ embedded = false }: MemoryLibraryPag
         </div>
       )}
 
+      {success && (
+        <div className="mb-4 rounded-lg border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-700">
+          {success}
+        </div>
+      )}
+
+      {itemOpenNotice && (
+        <div className="mb-4 rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {itemOpenNotice}
+        </div>
+      )}
+
       {viewMode === 'ACTIVE' && canManageLibrary && (
       <section className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
         <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -680,6 +970,8 @@ export default function MemoryLibraryPage({ embedded = false }: MemoryLibraryPag
             {maintenanceSuggestions.slice(0, 6).map((suggestion, index) => {
               const meta = maintenanceActionMeta(suggestion.action);
               const firstItem = suggestion.items?.[0];
+              const secondItem = suggestion.items?.[1];
+              const suggestionKey = firstItem && secondItem ? `${firstItem.id}-${secondItem.id}` : '';
               return (
                 <article key={`${suggestion.action}-${index}-${firstItem?.id || 'item'}`} className={`rounded-lg border p-3 ${meta.tone}`}>
                   <div className="mb-2 flex items-start justify-between gap-2">
@@ -718,6 +1010,17 @@ export default function MemoryLibraryPage({ embedded = false }: MemoryLibraryPag
                       </div>
                     ))}
                   </div>
+                  {suggestion.action === 'MERGE_REVIEW' && (
+                    <button
+                      type="button"
+                      onClick={() => { void handleMergeSuggestion(suggestion); }}
+                      disabled={!suggestionKey || mergingSuggestionKey === suggestionKey}
+                      className="mt-3 inline-flex h-7 items-center gap-1 rounded-md border border-blue-200 bg-white px-2.5 text-[11px] font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-60"
+                    >
+                      {mergingSuggestionKey === suggestionKey && <Loader2 className="h-3 w-3 animate-spin" />}
+                      确认合并
+                    </button>
+                  )}
                 </article>
               );
             })}
@@ -900,6 +1203,8 @@ export default function MemoryLibraryPage({ embedded = false }: MemoryLibraryPag
               const status = assetStatus(item);
               const missing = missingInfoLabels(item);
               const usages = aiUsageLabels(item);
+              const voteStats = familyExperienceVoteStats(item);
+              const stalenessStats = growthObservationStalenessStats(item);
               return (
                 <article key={item.id} className="p-4 transition-colors hover:bg-gray-50 sm:p-5">
                   <div className="flex items-start gap-3">
@@ -941,6 +1246,63 @@ export default function MemoryLibraryPage({ embedded = false }: MemoryLibraryPag
                           </span>
                         ))}
                       </div>
+                      {viewMode === 'ACTIVE' && (canVoteFamilyExperience(item) || canMarkGrowthObservationStale(item)) && (
+                        <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
+                          {canVoteFamilyExperience(item) && (
+                            <>
+                              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700">
+                                赞 {voteStats.upVotes} · 踩 {voteStats.downVotes}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => { void handleVoteExperience(item, 'UP'); }}
+                                disabled={votingActionKey === `${item.id}-UP`}
+                                className={`inline-flex h-7 items-center gap-1 rounded-md border px-2.5 font-medium disabled:opacity-60 ${
+                                  voteStats.myVote === 'UP'
+                                    ? 'border-amber-200 bg-amber-100 text-amber-800'
+                                    : 'border-amber-200 bg-white text-amber-700 hover:bg-amber-50'
+                                }`}
+                              >
+                                {votingActionKey === `${item.id}-UP` ? <Loader2 className="h-3 w-3 animate-spin" /> : <ThumbsUp className="h-3 w-3" />}
+                                点赞
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { void handleVoteExperience(item, 'DOWN'); }}
+                                disabled={votingActionKey === `${item.id}-DOWN`}
+                                className={`inline-flex h-7 items-center gap-1 rounded-md border px-2.5 font-medium disabled:opacity-60 ${
+                                  voteStats.myVote === 'DOWN'
+                                    ? 'border-rose-200 bg-rose-100 text-rose-800'
+                                    : 'border-rose-200 bg-white text-rose-700 hover:bg-rose-50'
+                                }`}
+                              >
+                                {votingActionKey === `${item.id}-DOWN` ? <Loader2 className="h-3 w-3 animate-spin" /> : <ThumbsDown className="h-3 w-3" />}
+                                点踩
+                              </button>
+                            </>
+                          )}
+                          {canMarkGrowthObservationStale(item) && (
+                            <>
+                              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700">
+                                过时票 {stalenessStats.staleVotes}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => { void handleMarkObservationStale(item); }}
+                                disabled={staleActionItemId === item.id || stalenessStats.myVoted}
+                                className={`inline-flex h-7 items-center gap-1 rounded-md border px-2.5 font-medium disabled:opacity-60 ${
+                                  stalenessStats.myVoted
+                                    ? 'border-emerald-200 bg-emerald-100 text-emerald-800'
+                                    : 'border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50'
+                                }`}
+                              >
+                                {staleActionItemId === item.id && <Loader2 className="h-3 w-3 animate-spin" />}
+                                {stalenessStats.myVoted ? '已标记可能过时' : '标记可能过时'}
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
                       <button
@@ -988,13 +1350,6 @@ export default function MemoryLibraryPage({ embedded = false }: MemoryLibraryPag
                               归档
                             </button>
                           )}
-                          <Link
-                            href={sourceHref(item, activeFamilyId)}
-                            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 hover:bg-gray-50"
-                          >
-                            <CheckCircle className="h-3.5 w-3.5" />
-                            查看来源
-                          </Link>
                         </>
                       )}
                     </div>
@@ -1106,6 +1461,96 @@ export default function MemoryLibraryPage({ embedded = false }: MemoryLibraryPag
                 </div>
               )}
 
+              {canClassicalizeSelectedItem && selectedItem && (
+                <div className="mb-4 rounded-lg border border-purple-100 bg-purple-50 p-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-purple-900">古文提炼</p>
+                      <p className="mt-1 text-sm text-purple-800">
+                        先生成古文稿预览，确认后再覆盖原正文，原经验内容会保留在元数据里。
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { void handleGenerateClassicalDraft(selectedItem); }}
+                      disabled={classicalizingItemId === selectedItem.id || applyingClassicalItemId === selectedItem.id}
+                      className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-white px-3 text-xs font-medium text-purple-700 ring-1 ring-purple-100 hover:bg-purple-100 disabled:opacity-60"
+                    >
+                      {classicalizingItemId === selectedItem.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ScrollText className="h-3.5 w-3.5" />}
+                      提炼成古文
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {viewMode === 'ACTIVE' && canVoteFamilyExperience(selectedItem) && (
+                <div className="mb-4 rounded-lg border border-amber-100 bg-amber-50 p-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-amber-900">家族反馈</p>
+                      <p className="mt-1 text-sm text-amber-800">
+                        当前赞 {familyExperienceVoteStats(selectedItem).upVotes}，踩 {familyExperienceVoteStats(selectedItem).downVotes}，
+                        净支持度 {familyExperienceVoteStats(selectedItem).voteScore}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { void handleVoteExperience(selectedItem, 'UP'); }}
+                        disabled={votingActionKey === `${selectedItem.id}-UP`}
+                        className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-medium disabled:opacity-60 ${
+                          familyExperienceVoteStats(selectedItem).myVote === 'UP'
+                            ? 'bg-amber-100 text-amber-800 ring-1 ring-amber-200'
+                            : 'bg-white text-amber-700 ring-1 ring-amber-100 hover:bg-amber-100'
+                        }`}
+                      >
+                        {votingActionKey === `${selectedItem.id}-UP` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ThumbsUp className="h-3.5 w-3.5" />}
+                        点赞这条经验
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { void handleVoteExperience(selectedItem, 'DOWN'); }}
+                        disabled={votingActionKey === `${selectedItem.id}-DOWN`}
+                        className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-medium disabled:opacity-60 ${
+                          familyExperienceVoteStats(selectedItem).myVote === 'DOWN'
+                            ? 'bg-rose-100 text-rose-800 ring-1 ring-rose-200'
+                            : 'bg-white text-rose-700 ring-1 ring-rose-100 hover:bg-rose-50'
+                        }`}
+                      >
+                        {votingActionKey === `${selectedItem.id}-DOWN` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ThumbsDown className="h-3.5 w-3.5" />}
+                        点踩这条经验
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {viewMode === 'ACTIVE' && canMarkGrowthObservationStale(selectedItem) && (
+                <div className="mb-4 rounded-lg border border-emerald-100 bg-emerald-50 p-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-emerald-900">观察复核</p>
+                      <p className="mt-1 text-sm text-emerald-800">
+                        已有 {growthObservationStalenessStats(selectedItem).staleVotes} 人认为这条观察可能过时，需要新证据复核。
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { void handleMarkObservationStale(selectedItem); }}
+                      disabled={staleActionItemId === selectedItem.id || growthObservationStalenessStats(selectedItem).myVoted}
+                      className={`inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-medium disabled:opacity-60 ${
+                        growthObservationStalenessStats(selectedItem).myVoted
+                          ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200'
+                          : 'bg-white text-emerald-700 ring-1 ring-emerald-100 hover:bg-emerald-100'
+                      }`}
+                    >
+                      {staleActionItemId === selectedItem.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                      {growthObservationStalenessStats(selectedItem).myVoted ? '你已标记可能过时' : '标记这条观察可能过时'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {viewMode === 'ARCHIVED' && canManageLibrary && (
                 <div className="mb-4 rounded-lg border border-amber-100 bg-amber-50 p-3">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1172,11 +1617,107 @@ export default function MemoryLibraryPage({ embedded = false }: MemoryLibraryPag
                 </div>
               </div>
 
+              <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-blue-900">来源依据</p>
+                  <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-blue-700">
+                    {sourceLabel(selectedItem)}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-blue-900/90">
+                  {evidenceDescription(selectedItem)}
+                </p>
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg bg-white/80 p-3">
+                    <p className="text-xs font-medium text-gray-400">内容类型</p>
+                    <p className="mt-1 text-sm text-gray-800">{sourceLabel(selectedItem)}</p>
+                  </div>
+                  <div className="rounded-lg bg-white/80 p-3">
+                    <p className="text-xs font-medium text-gray-400">保存来源</p>
+                    <p className="mt-1 text-sm text-gray-800">{originLabel(selectedItem)}</p>
+                  </div>
+                  <div className="rounded-lg bg-white/80 p-3">
+                    <p className="text-xs font-medium text-gray-400">关联成员</p>
+                    <p className="mt-1 text-sm text-gray-800">{selectedItem.memberName}</p>
+                  </div>
+                  <div className="rounded-lg bg-white/80 p-3">
+                    <p className="text-xs font-medium text-gray-400">记录时间</p>
+                    <p className="mt-1 text-sm text-gray-800">{formatDate(selectedItem.createdAt) || '未知'}</p>
+                  </div>
+                  <div className="rounded-lg bg-white/80 p-3 sm:col-span-2">
+                    <p className="text-xs font-medium text-gray-400">可见范围</p>
+                    <p className="mt-1 text-sm text-gray-800">{visibilityLabel(selectedItem.visibility)}</p>
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <p className="mb-1 text-xs font-medium text-gray-400">AI 参考范围</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {aiUsageLabels(selectedItem).map((usage) => (
+                      <span key={`detail-${selectedItem.id}-${usage}`} className="rounded-full bg-white px-2 py-0.5 text-[11px] text-blue-700 ring-1 ring-blue-100">
+                        {usage}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <p className="mb-1 text-xs font-medium text-gray-400">可补充信息</p>
+                  {missingInfoLabels(selectedItem).length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {missingInfoLabels(selectedItem).map((label) => (
+                        <span key={`missing-${selectedItem.id}-${label}`} className="rounded-full bg-yellow-50 px-2 py-0.5 text-[11px] text-yellow-700">
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-green-700">基础信息较完整，可以被 AI 更稳定地召回和活化。</p>
+                  )}
+                </div>
+              </div>
+
               <div className="rounded-lg bg-gray-50 p-4">
                 <p className="whitespace-pre-wrap text-sm leading-7 text-gray-700">
                   {selectedItem.body || '暂无正文内容。'}
                 </p>
               </div>
+
+              {canClassicalizeSelectedItem && classicalDraftPreview && selectedItem && (
+                <div className="mt-4 rounded-lg border border-purple-100 bg-purple-50 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">{classicalDraftPreview.title}</p>
+                      <p className="mt-1 text-xs leading-5 text-purple-800">{classicalDraftPreview.styleNote}</p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { void handleApplyClassicalDraft(selectedItem); }}
+                        disabled={applyingClassicalItemId === selectedItem.id}
+                        className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-white px-3 text-xs font-medium text-purple-700 ring-1 ring-purple-100 hover:bg-purple-100 disabled:opacity-60"
+                      >
+                        {applyingClassicalItemId === selectedItem.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
+                        确认覆盖原文
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setClassicalDraftPreview(null)}
+                        disabled={applyingClassicalItemId === selectedItem.id}
+                        className="inline-flex h-8 items-center justify-center rounded-lg bg-white px-3 text-xs font-medium text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50 disabled:opacity-60"
+                      >
+                        取消
+                      </button>
+                    </div>
+                  </div>
+                  <div className="mt-3 rounded-lg border border-purple-100 bg-white px-3 py-3">
+                    <p className="whitespace-pre-wrap text-sm leading-7 text-gray-800">
+                      {classicalDraftPreview.classicalText}
+                    </p>
+                  </div>
+                  <div className="mt-3 rounded-lg border border-white/70 bg-white/70 px-3 py-2 text-xs leading-6 text-gray-600">
+                    {classicalDraftPreview.plainSummary}
+                  </div>
+                </div>
+              )}
 
               <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-3">
                 <p className="mb-2 text-xs font-medium text-blue-700">继续探索</p>
@@ -1213,29 +1754,6 @@ export default function MemoryLibraryPage({ embedded = false }: MemoryLibraryPag
                   >
                     同权限：{visibilityLabel(selectedItem.visibility)}
                   </button>
-                </div>
-              </div>
-
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="rounded-lg border border-gray-100 p-3">
-                  <p className="text-xs font-medium text-gray-400">内容类型</p>
-                  <p className="mt-1 text-sm text-gray-800">{sourceLabel(selectedItem)}</p>
-                </div>
-                <div className="rounded-lg border border-gray-100 p-3">
-                  <p className="text-xs font-medium text-gray-400">保存来源</p>
-                  <p className="mt-1 text-sm text-gray-800">{originLabel(selectedItem)}</p>
-                </div>
-                <div className="rounded-lg border border-gray-100 p-3">
-                  <p className="text-xs font-medium text-gray-400">关联成员</p>
-                  <p className="mt-1 text-sm text-gray-800">{selectedItem.memberName}</p>
-                </div>
-                <div className="rounded-lg border border-gray-100 p-3">
-                  <p className="text-xs font-medium text-gray-400">记录时间</p>
-                  <p className="mt-1 text-sm text-gray-800">{formatDate(selectedItem.createdAt) || '未知'}</p>
-                </div>
-                <div className="rounded-lg border border-gray-100 p-3">
-                  <p className="text-xs font-medium text-gray-400">可见范围</p>
-                  <p className="mt-1 text-sm text-gray-800">{visibilityLabel(selectedItem.visibility)}</p>
                 </div>
               </div>
 

@@ -1,13 +1,13 @@
 ﻿-- ============================================
--- FamilyAgent 鏁版嵁搴撳垵濮嬪寲鑴氭湰
--- 鍦?PostgreSQL 瀹瑰櫒棣栨鍚姩鏃惰嚜鍔ㄦ墽琛?-- ============================================
+-- FamilyAgent 閺佺増宓佹惔鎾冲灥婵瀵查懘姘拱
+-- 閸?PostgreSQL 鐎圭懓娅掓＃鏍偧閸氼垰濮╅弮鎯板殰閸斻劍澧界悰?-- ============================================
 
--- 鍚敤 pgvector 鎵╁睍
+-- 閸氼垳鏁?pgvector 閹碘晛鐫?
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ============================================
--- 1. 鐢ㄦ埛琛?-- ============================================
+-- 1. 閻劍鍩涚悰?-- ============================================
 CREATE TABLE IF NOT EXISTS users (
     id BIGSERIAL PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
@@ -28,7 +28,7 @@ CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 
 -- ============================================
--- 2. 瀹舵棌琛?-- ============================================
+-- 2. 鐎硅埖妫岀悰?-- ============================================
 CREATE TABLE IF NOT EXISTS families (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS families (
 CREATE INDEX IF NOT EXISTS idx_families_invite_code ON families(invite_code);
 
 -- ============================================
--- 2.1 Beta 邀请码表
+-- 2.1 Beta 閭€璇风爜琛?
 -- ============================================
 CREATE TABLE IF NOT EXISTS invite_codes (
     id BIGSERIAL PRIMARY KEY,
@@ -68,20 +68,20 @@ CREATE INDEX IF NOT EXISTS idx_invite_codes_status ON invite_codes(status);
 
 INSERT INTO invite_codes (code, source, description, max_uses)
 VALUES
-    ('FAMILY001', 'seed-family-001', '第一批内测家庭 001', 5),
-    ('FAMILY002', 'seed-family-002', '第一批内测家庭 002', 5),
-    ('FAMILY003', 'seed-family-003', '第一批内测家庭 003', 5),
-    ('FAMILY004', 'seed-family-004', '第一批内测家庭 004', 5),
-    ('FAMILY005', 'seed-family-005', '第一批内测家庭 005', 5),
-    ('FAMILY006', 'seed-family-006', '第一批内测家庭 006', 5),
-    ('FAMILY007', 'seed-family-007', '第一批内测家庭 007', 5),
-    ('FAMILY008', 'seed-family-008', '第一批内测家庭 008', 5),
-    ('FAMILY009', 'seed-family-009', '第一批内测家庭 009', 5),
-    ('FAMILY010', 'seed-family-010', '第一批内测家庭 010', 5)
+    ('FAMILY001', 'seed-family-001', '绗竴鎵瑰唴娴嬪搴?001', 5),
+    ('FAMILY002', 'seed-family-002', '绗竴鎵瑰唴娴嬪搴?002', 5),
+    ('FAMILY003', 'seed-family-003', '绗竴鎵瑰唴娴嬪搴?003', 5),
+    ('FAMILY004', 'seed-family-004', '绗竴鎵瑰唴娴嬪搴?004', 5),
+    ('FAMILY005', 'seed-family-005', '绗竴鎵瑰唴娴嬪搴?005', 5),
+    ('FAMILY006', 'seed-family-006', '绗竴鎵瑰唴娴嬪搴?006', 5),
+    ('FAMILY007', 'seed-family-007', '绗竴鎵瑰唴娴嬪搴?007', 5),
+    ('FAMILY008', 'seed-family-008', '绗竴鎵瑰唴娴嬪搴?008', 5),
+    ('FAMILY009', 'seed-family-009', '绗竴鎵瑰唴娴嬪搴?009', 5),
+    ('FAMILY010', 'seed-family-010', '绗竴鎵瑰唴娴嬪搴?010', 5)
 ON CONFLICT (code) DO NOTHING;
 
 -- ============================================
--- 3. 瀹舵棌鎴愬憳琛?-- ============================================
+-- 3. 鐎硅埖妫岄幋鎰喅鐞?-- ============================================
 CREATE TABLE IF NOT EXISTS family_members (
     id BIGSERIAL PRIMARY KEY,
     family_id BIGINT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
@@ -96,7 +96,7 @@ CREATE INDEX IF NOT EXISTS idx_family_members_family ON family_members(family_id
 CREATE INDEX IF NOT EXISTS idx_family_members_user ON family_members(user_id);
 
 -- ============================================
--- 4. 鐭ヨ瘑鐐规爲
+-- 4. 閻儴鐦戦悙瑙勭埐
 -- ============================================
 CREATE TABLE IF NOT EXISTS knowledge_points (
     id BIGSERIAL PRIMARY KEY,
@@ -117,7 +117,7 @@ CREATE INDEX IF NOT EXISTS idx_kp_parent ON knowledge_points(parent_id);
 CREATE INDEX IF NOT EXISTS idx_kp_level ON knowledge_points(level);
 
 -- ============================================
--- 5. 棰樺簱琛?-- ============================================
+-- 5. 妫版ê绨辩悰?-- ============================================
 CREATE TABLE IF NOT EXISTS questions (
     id BIGSERIAL PRIMARY KEY,
     family_id BIGINT REFERENCES families(id) ON DELETE CASCADE,
@@ -151,7 +151,7 @@ CREATE INDEX IF NOT EXISTS idx_questions_tags ON questions USING GIN(tags);
 CREATE INDEX IF NOT EXISTS idx_questions_visibility ON questions(visibility);
 
 -- ============================================
--- 6. 娴嬭瘯璁板綍琛?-- ============================================
+-- 6. 濞村鐦拋鏉跨秿鐞?-- ============================================
 CREATE TABLE IF NOT EXISTS test_records (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES users(id),
@@ -184,7 +184,7 @@ CREATE TABLE IF NOT EXISTS wrong_question_records (
     test_record_id BIGINT NOT NULL REFERENCES test_records(id) ON DELETE CASCADE,
     question_id BIGINT NOT NULL REFERENCES questions(id),
     kp_id BIGINT REFERENCES knowledge_points(id),
-    student_answer TEXT,
+    member_answer TEXT,
     score DECIMAL(5,2),
     correct BOOLEAN NOT NULL DEFAULT false,
     error_type VARCHAR(100),
@@ -204,7 +204,7 @@ CREATE INDEX IF NOT EXISTS idx_wrong_question_records_user_status ON wrong_quest
 CREATE INDEX IF NOT EXISTS idx_wrong_question_records_created ON wrong_question_records(created_at DESC);
 
 -- ============================================
--- 7. 瀛﹀姏妗ｆ琛?-- ============================================
+-- 7. 鐎涳箑濮忓锝嗩攳鐞?-- ============================================
 CREATE TABLE IF NOT EXISTS ability_profiles (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES users(id),
@@ -227,7 +227,7 @@ CREATE INDEX IF NOT EXISTS idx_ability_family_user ON ability_profiles(family_id
 CREATE INDEX IF NOT EXISTS idx_ability_mastery ON ability_profiles(mastery_probability);
 
 -- ============================================
--- 8. 瀹舵暀浼氳瘽琛?-- ============================================
+-- 8. 鐎硅埖鏆€娴兼俺鐦界悰?-- ============================================
 CREATE TABLE IF NOT EXISTS chat_sessions (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES users(id),
@@ -236,12 +236,19 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
     subject VARCHAR(50),
     knowledge_point_id BIGINT REFERENCES knowledge_points(id),
     messages JSONB DEFAULT '[]',
+    title VARCHAR(120),
     summary TEXT,
     status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
     visibility VARCHAR(20) NOT NULL DEFAULT 'PRIVATE',
     permission_scope JSONB DEFAULT '{}',
-    source VARCHAR(50) DEFAULT 'TUTOR',
+    source VARCHAR(50) DEFAULT 'FAMILY_AGENT',
     metadata JSONB DEFAULT '{}',
+    last_message_at TIMESTAMP,
+    message_count INTEGER NOT NULL DEFAULT 0,
+    token_count INTEGER NOT NULL DEFAULT 0,
+    archived_before_seq INTEGER NOT NULL DEFAULT 0,
+    archive_status VARCHAR(20) NOT NULL DEFAULT 'NONE',
+    archive_metadata JSONB DEFAULT '{}',
     started_at TIMESTAMP NOT NULL DEFAULT NOW(),
     ended_at TIMESTAMP
 );
@@ -250,6 +257,42 @@ CREATE INDEX IF NOT EXISTS idx_chat_sessions_user ON chat_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_family_user ON chat_sessions(family_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_status ON chat_sessions(status);
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_started ON chat_sessions(started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_last_message ON chat_sessions(last_message_at DESC, started_at DESC);
+
+CREATE TABLE IF NOT EXISTS chat_session_messages (
+    id BIGSERIAL PRIMARY KEY,
+    session_id BIGINT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    seq INTEGER NOT NULL,
+    client_message_id VARCHAR(64),
+    role VARCHAR(20) NOT NULL,
+    content TEXT NOT NULL,
+    tool_name VARCHAR(80),
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    token_count INTEGER NOT NULL DEFAULT 0,
+    CONSTRAINT uk_chat_session_messages_session_seq UNIQUE (session_id, seq)
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_session_messages_session_seq
+    ON chat_session_messages(session_id, seq);
+CREATE INDEX IF NOT EXISTS idx_chat_session_messages_session_created
+    ON chat_session_messages(session_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS chat_session_archives (
+    id BIGSERIAL PRIMARY KEY,
+    session_id BIGINT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    start_seq INTEGER NOT NULL,
+    end_seq INTEGER NOT NULL,
+    summary TEXT,
+    object_key VARCHAR(500),
+    message_count INTEGER NOT NULL DEFAULT 0,
+    token_count INTEGER NOT NULL DEFAULT 0,
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_session_archives_session_start
+    ON chat_session_archives(session_id, start_seq);
 
 -- ============================================
 -- 8.1 Learning memory entries
@@ -281,7 +324,7 @@ CREATE INDEX IF NOT EXISTS idx_memory_entries_status ON memory_entries(status);
 CREATE INDEX IF NOT EXISTS idx_memory_entries_created ON memory_entries(created_at DESC);
 
 -- ============================================
--- 9. 鏃ヨ琛紙Phase 2 棰勭暀锛?-- ============================================
+-- 9. 閺冦儴顔囩悰顭掔礄Phase 2 妫板嫮鏆€閿?-- ============================================
 CREATE TABLE IF NOT EXISTS diary_entries (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES users(id),
@@ -309,7 +352,7 @@ CREATE INDEX IF NOT EXISTS idx_diary_tags ON diary_entries USING GIN(tags);
 CREATE INDEX IF NOT EXISTS idx_diary_created ON diary_entries(created_at DESC);
 
 -- ============================================
--- 10. 瀹舵棌鐭ヨ瘑搴撹〃锛圥hase 2 棰勭暀锛?-- ============================================
+-- 10. 鐎硅埖妫岄惌銉ㄧ槕鎼存捁銆冮敍鍦ase 2 妫板嫮鏆€閿?-- ============================================
 CREATE TABLE IF NOT EXISTS family_knowledge (
     id BIGSERIAL PRIMARY KEY,
     family_id BIGINT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
@@ -333,7 +376,7 @@ CREATE INDEX IF NOT EXISTS idx_fk_type ON family_knowledge(type);
 CREATE INDEX IF NOT EXISTS idx_fk_tags ON family_knowledge USING GIN(tags);
 
 -- ============================================
--- 11. 闀滃儚Agent鏁版嵁琛紙Phase 3 棰勭暀锛?-- ============================================
+-- 11. 闂€婊冨剼Agent閺佺増宓佺悰顭掔礄Phase 3 妫板嫮鏆€閿?-- ============================================
 CREATE TABLE IF NOT EXISTS mirror_agent_data (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -353,7 +396,7 @@ CREATE TABLE IF NOT EXISTS mirror_agent_data (
 CREATE INDEX IF NOT EXISTS idx_mirror_primary_family ON mirror_agent_data(primary_family_id);
 
 -- ============================================
--- 12. 绉熸埛瀛樺偍璺敱琛紙Phase 4 棰勭暀锛?-- ============================================
+-- 12. 缁夌喐鍩涚€涙ê鍋嶇捄顖滄暠鐞涱煉绱橮hase 4 妫板嫮鏆€閿?-- ============================================
 CREATE TABLE IF NOT EXISTS tenant_storage_routes (
     id BIGSERIAL PRIMARY KEY,
     family_id BIGINT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
@@ -374,115 +417,115 @@ CREATE TABLE IF NOT EXISTS tenant_storage_routes (
 CREATE INDEX IF NOT EXISTS idx_tenant_storage_tier ON tenant_storage_routes(storage_tier);
 
 -- ============================================
--- 鎻掑叆榛樿鏁版嵁锛氬垵涓暟瀛︾煡璇嗙偣绀轰緥
+-- 閹绘帒鍙嗘妯款吇閺佺増宓侀敍姘灥娑擃厽鏆熺€涳妇鐓＄拠鍡欏仯缁€杞扮伐
 -- ============================================
 INSERT INTO knowledge_points (id, parent_id, subject, grade, name, description, level, sort_order) VALUES
-(1, NULL, 'math', 'grade7', '鏁颁笌寮?, '鍒濅腑鏁板鍩虹锛氭暟涓庝唬鏁板紡', 1, 1),
-(2, 1, 'math', 'grade7', '鏈夌悊鏁?, '姝ｈ礋鏁般€佹暟杞淬€佺粷瀵瑰€?, 2, 1),
-(3, 1, 'math', 'grade7', '鏁村紡鐨勫姞鍑?, '浠ｆ暟寮忕殑鍔犲噺杩愮畻', 2, 2),
-(4, 1, 'math', 'grade8', '鏁村紡鐨勪箻闄?, '浠ｆ暟寮忕殑涔橀櫎涓庡洜寮忓垎瑙?, 2, 3),
-(5, NULL, 'math', 'grade7', '鏂圭▼涓庝笉绛夊紡', '涓€鍏冧竴娆℃柟绋嬩笌涓嶇瓑寮?, 1, 2),
-(6, 5, 'math', 'grade7', '涓€鍏冧竴娆℃柟绋?, '鍚湁涓€涓湭鐭ユ暟鐨勪竴娆℃柟绋?, 2, 1),
-(7, 5, 'math', 'grade7', '涓€鍏冧竴娆′笉绛夊紡', '鍚湁涓€涓湭鐭ユ暟鐨勪竴娆′笉绛夊紡', 2, 2),
-(8, 5, 'math', 'grade8', '浜屽厓涓€娆℃柟绋嬬粍', '涓や釜鏈煡鏁扮殑鏂圭▼缁勬眰瑙?, 2, 3),
-(9, NULL, 'math', 'grade8', '鍑犱綍鍒濇', '骞抽潰鍑犱綍鍩虹姒傚康', 1, 3),
-(10, 9, 'math', 'grade7', '绾挎涓庤', '绾挎銆佽鐨勫害閲忎笌鍏崇郴', 2, 1),
-(11, 9, 'math', 'grade8', '涓夎褰?, '涓夎褰㈢殑鎬ц川銆佸叏绛変笌鐩镐技', 2, 2),
-(12, 9, 'math', 'grade8', '鍥涜竟褰?, '骞宠鍥涜竟褰€佺煩褰€佽彵褰?, 2, 3),
-(13, NULL, 'math', 'grade8', '鍑芥暟鍩虹', '鍑芥暟姒傚康涓庝竴娆″嚱鏁?, 1, 4),
-(14, 13, 'math', 'grade8', '骞抽潰鐩磋鍧愭爣绯?, '鍧愭爣绯荤殑姒傚康涓庡簲鐢?, 2, 1),
-(15, 13, 'math', 'grade8', '涓€娆″嚱鏁?, 'y=kx+b鐨勫浘鍍忎笌鎬ц川', 2, 2);
+(1, NULL, 'math', 'grade7', '閺侀绗屽?, '閸掓繀鑵戦弫鏉款劅閸╄櫣顢呴敍姘殶娑撳簼鍞弫鏉跨础', 1, 1),
+(2, 1, 'math', 'grade7', '閺堝鎮婇弫?, '濮濓綀绀嬮弫鑸偓浣规殶鏉炴番鈧胶绮风€电懓鈧?, 2, 1),
+(3, 1, 'math', 'grade7', '閺佹潙绱￠惃鍕閸?, '娴狅絾鏆熷蹇曟畱閸旂姴鍣烘潻鎰暬', 2, 2),
+(4, 1, 'math', 'grade8', '閺佹潙绱￠惃鍕闂?, '娴狅絾鏆熷蹇曟畱娑旀﹢娅庢稉搴℃礈瀵繐鍨庣憴?, 2, 3),
+(5, NULL, 'math', 'grade7', '閺傚湱鈻兼稉搴濈瑝缁涘绱?, '娑撯偓閸忓啩绔村▎鈩冩煙缁嬪绗屾稉宥囩搼瀵?, 1, 2),
+(6, 5, 'math', 'grade7', '娑撯偓閸忓啩绔村▎鈩冩煙缁?, '閸氼偅婀佹稉鈧稉顏呮弓閻儲鏆熼惃鍕濞嗏剝鏌熺粙?, 2, 1),
+(7, 5, 'math', 'grade7', '娑撯偓閸忓啩绔村▎鈥茬瑝缁涘绱?, '閸氼偅婀佹稉鈧稉顏呮弓閻儲鏆熼惃鍕濞嗏€茬瑝缁涘绱?, 2, 2),
+(8, 5, 'math', 'grade8', '娴滃苯鍘撴稉鈧▎鈩冩煙缁嬪绮?, '娑撱倓閲滈張顏嗙叀閺佹壆娈戦弬鍦柤缂佸嫭鐪扮憴?, 2, 3),
+(9, NULL, 'math', 'grade8', '閸戠姳缍嶉崚婵囶劄', '楠炴娊娼伴崙鐘辩秿閸╄櫣顢呭鍌氬悍', 1, 3),
+(10, 9, 'math', 'grade7', '缁炬寧顔屾稉搴ゎ潡', '缁炬寧顔岄妴浣筋潡閻ㄥ嫬瀹抽柌蹇庣瑢閸忓磭閮?, 2, 1),
+(11, 9, 'math', 'grade8', '娑撳顫楄ぐ?, '娑撳顫楄ぐ銏㈡畱閹嗗窛閵嗕礁鍙忕粵澶夌瑢閻╅晲鎶€', 2, 2),
+(12, 9, 'math', 'grade8', '閸ユ稖绔熻ぐ?, '楠炲疇顢戦崶娑滅珶瑜邦潿鈧胶鐓╄ぐ顫偓浣藉降瑜?, 2, 3),
+(13, NULL, 'math', 'grade8', '閸戣姤鏆熼崺铏诡攨', '閸戣姤鏆熷鍌氬悍娑撳簼绔村▎鈥冲毐閺?, 1, 4),
+(14, 13, 'math', 'grade8', '楠炴娊娼伴惄纾嬵潡閸ф劖鐖ｇ化?, '閸ф劖鐖ｇ化鑽ゆ畱濮掑倸搴锋稉搴＄安閻?, 2, 1),
+(15, 13, 'math', 'grade8', '娑撯偓濞嗏€冲毐閺?, 'y=kx+b閻ㄥ嫬娴橀崓蹇庣瑢閹嗗窛', 2, 2);
 
--- 閲嶇疆搴忓垪
+-- 闁插秶鐤嗘惔蹇撳灙
 SELECT setval('knowledge_points_id_seq', (SELECT MAX(id) FROM knowledge_points));
 
 -- ============================================
--- 鎻掑叆榛樿鏁版嵁锛氬垵涓暟瀛︽祴璇曢搴撶ず渚?-- 鐢ㄤ簬 AI瀹舵暀鎶介銆佹祴璇曟ā寮忋€侀敊棰樻湰鍜屽鍔涜瘎浼伴棴鐜?-- ============================================
+-- 閹绘帒鍙嗘妯款吇閺佺増宓侀敍姘灥娑擃厽鏆熺€涳附绁寸拠鏇㈩暯鎼存挾銇氭笟?-- 閻劋绨?AI鐎硅埖鏆€閹朵粙顣介妴浣圭ゴ鐠囨洘膩瀵繈鈧線鏁婃０妯绘拱閸滃苯顒熼崝娑滅槑娴间即妫撮悳?-- ============================================
 INSERT INTO questions
 (id, kp_id, subject, grade, type, difficulty, content, answer, tags, source, status)
 VALUES
 (1, 6, 'math', 'grade7', 'CALCULATION', 1,
- '{"stem":"瑙ｆ柟绋嬶細x + 7 = 12"}'::jsonb,
- '{"value":"x = 5","steps":["绛夊紡涓よ竟鍚屾椂鍑忓幓 7锛歺 = 12 - 7","璁＄畻寰楀埌 x = 5"],"explanation":"瑙ｄ竴鍏冧竴娆℃柟绋嬬殑鐩爣鏄妸鏈煡鏁板崟鐙暀鍦ㄧ瓑寮忎竴杈广€?}'::jsonb,
- ARRAY['涓€鍏冧竴娆℃柟绋?,'绛夊紡鎬ц川'], 'SEED', 'ACTIVE'),
+ '{"stem":"鐟欙絾鏌熺粙瀣剁窗x + 7 = 12"}'::jsonb,
+ '{"value":"x = 5","steps":["缁涘绱℃稉銈堢珶閸氬本妞傞崙蹇撳箵 7閿涙 = 12 - 7","鐠侊紕鐣诲妤€鍩?x = 5"],"explanation":"鐟欙絼绔撮崗鍐х濞嗏剝鏌熺粙瀣畱閻╊喗鐖ｉ弰顖涘Ω閺堫亞鐓￠弫鏉垮礋閻欘剛鏆€閸︺劎鐡戝蹇庣鏉堝箍鈧?}'::jsonb,
+ ARRAY['娑撯偓閸忓啩绔村▎鈩冩煙缁?,'缁涘绱￠幀褑宸?], 'SEED', 'ACTIVE'),
 (2, 6, 'math', 'grade7', 'CALCULATION', 2,
- '{"stem":"瑙ｆ柟绋嬶細2x + 5 = 13"}'::jsonb,
- '{"value":"x = 4","steps":["绛夊紡涓よ竟鍚屾椂鍑忓幓 5锛?x = 8","绛夊紡涓よ竟鍚屾椂闄や互 2锛歺 = 4"],"explanation":"鍏堢Щ甯告暟椤癸紝鍐嶆妸鏈煡鏁扮郴鏁板寲涓?1銆?}'::jsonb,
- ARRAY['涓€鍏冧竴娆℃柟绋?,'绉婚」'], 'SEED', 'ACTIVE'),
+ '{"stem":"鐟欙絾鏌熺粙瀣剁窗2x + 5 = 13"}'::jsonb,
+ '{"value":"x = 4","steps":["缁涘绱℃稉銈堢珶閸氬本妞傞崙蹇撳箵 5閿?x = 8","缁涘绱℃稉銈堢珶閸氬本妞傞梽銈勪簰 2閿涙 = 4"],"explanation":"閸忓牏些鐢憡鏆熸い鐧哥礉閸愬秵濡搁張顏嗙叀閺佹壆閮撮弫鏉垮娑?1閵?}'::jsonb,
+ ARRAY['娑撯偓閸忓啩绔村▎鈩冩煙缁?,'缁夊銆?], 'SEED', 'ACTIVE'),
 (3, 6, 'math', 'grade7', 'CALCULATION', 3,
- '{"stem":"瑙ｆ柟绋嬶細3(x - 2) = 2x + 5"}'::jsonb,
- '{"value":"x = 11","steps":["灞曞紑宸﹁竟锛?x - 6 = 2x + 5","绛夊紡涓よ竟鍚屾椂鍑忓幓 2x锛歺 - 6 = 5","绛夊紡涓よ竟鍚屾椂鍔?6锛歺 = 11"],"explanation":"鍚嫭鍙风殑涓€鍏冧竴娆℃柟绋嬮€氬父鍏堝幓鎷彿锛屽啀绉婚」鍚堝苟銆?}'::jsonb,
- ARRAY['涓€鍏冧竴娆℃柟绋?,'鍘绘嫭鍙?,'绉婚」'], 'SEED', 'ACTIVE'),
+ '{"stem":"鐟欙絾鏌熺粙瀣剁窗3(x - 2) = 2x + 5"}'::jsonb,
+ '{"value":"x = 11","steps":["鐏炴洖绱戝锕佺珶閿?x - 6 = 2x + 5","缁涘绱℃稉銈堢珶閸氬本妞傞崙蹇撳箵 2x閿涙 - 6 = 5","缁涘绱℃稉銈堢珶閸氬本妞傞崝?6閿涙 = 11"],"explanation":"閸氼偅瀚崣椋庢畱娑撯偓閸忓啩绔村▎鈩冩煙缁嬪鈧艾鐖堕崗鍫濆箵閹奉剙褰块敍灞藉晙缁夊銆嶉崥鍫濊嫙閵?}'::jsonb,
+ ARRAY['娑撯偓閸忓啩绔村▎鈩冩煙缁?,'閸樼粯瀚崣?,'缁夊銆?], 'SEED', 'ACTIVE'),
 (4, 6, 'math', 'grade7', 'CALCULATION', 4,
- '{"stem":"瑙ｆ柟绋嬶細(x + 1)/3 + (x - 2)/2 = 4"}'::jsonb,
- '{"value":"x = 28/5","steps":["绛夊紡涓よ竟鍚屾椂涔樹互 6锛?(x + 1) + 3(x - 2) = 24","灞曞紑锛?x + 2 + 3x - 6 = 24","鍚堝苟鍚岀被椤癸細5x - 4 = 24","瑙ｅ緱锛?x = 28锛寈 = 28/5"],"explanation":"杩欓鐨勯噸鐐规槸鍏堝幓鍒嗘瘝锛屽啀鍘绘嫭鍙枫€佸悎骞跺悓绫婚」銆?}'::jsonb,
- ARRAY['涓€鍏冧竴娆℃柟绋?,'鍘诲垎姣?], 'SEED', 'ACTIVE'),
+ '{"stem":"鐟欙絾鏌熺粙瀣剁窗(x + 1)/3 + (x - 2)/2 = 4"}'::jsonb,
+ '{"value":"x = 28/5","steps":["缁涘绱℃稉銈堢珶閸氬本妞傛稊妯逛簰 6閿?(x + 1) + 3(x - 2) = 24","鐏炴洖绱戦敍?x + 2 + 3x - 6 = 24","閸氬牆鑻熼崥宀€琚い鐧哥窗5x - 4 = 24","鐟欙絽绶遍敍?x = 28閿涘瘓 = 28/5"],"explanation":"鏉╂瑩顣介惃鍕櫢閻愯妲搁崗鍫濆箵閸掑棙鐦濋敍灞藉晙閸樼粯瀚崣鏋偓浣告値楠炶泛鎮撶猾濠氥€嶉妴?}'::jsonb,
+ ARRAY['娑撯偓閸忓啩绔村▎鈩冩煙缁?,'閸樿鍨庡В?], 'SEED', 'ACTIVE'),
 (5, 7, 'math', 'grade7', 'CALCULATION', 1,
- '{"stem":"瑙ｄ笉绛夊紡锛歺 + 3 > 8"}'::jsonb,
- '{"value":"x > 5","steps":["涓嶇瓑寮忎袱杈瑰悓鏃跺噺鍘?3锛歺 > 5"],"explanation":"涓嶇瓑寮忎袱杈瑰悓鏃跺姞鍑忓悓涓€涓暟锛屼笉绛夊彿鏂瑰悜涓嶅彉銆?}'::jsonb,
- ARRAY['涓€鍏冧竴娆′笉绛夊紡'], 'SEED', 'ACTIVE'),
+ '{"stem":"鐟欙絼绗夌粵澶婄础閿涙 + 3 > 8"}'::jsonb,
+ '{"value":"x > 5","steps":["娑撳秶鐡戝蹇庤⒈鏉堢懓鎮撻弮璺哄櫤閸?3閿涙 > 5"],"explanation":"娑撳秶鐡戝蹇庤⒈鏉堢懓鎮撻弮璺哄閸戝繐鎮撴稉鈧稉顏呮殶閿涘奔绗夌粵澶婂娇閺傜懓鎮滄稉宥呭綁閵?}'::jsonb,
+ ARRAY['娑撯偓閸忓啩绔村▎鈥茬瑝缁涘绱?], 'SEED', 'ACTIVE'),
 (6, 7, 'math', 'grade7', 'CHOICE', 2,
- '{"stem":"涓嶇瓑寮?2x - 3 > 5 鐨勮В闆嗘槸锛?,"options":["x > 4","x < 4","x > 1","x < 1"]}'::jsonb,
- '{"value":"x > 4","steps":["涓よ竟鍚屾椂鍔?3锛?x > 8","涓よ竟鍚屾椂闄や互 2锛歺 > 4"],"explanation":"姝ｆ暟闄ゆ硶涓嶄細鏀瑰彉涓嶇瓑鍙锋柟鍚戙€?}'::jsonb,
- ARRAY['涓€鍏冧竴娆′笉绛夊紡','閫夋嫨棰?], 'SEED', 'ACTIVE'),
+ '{"stem":"娑撳秶鐡戝?2x - 3 > 5 閻ㄥ嫯袙闂嗗棙妲搁敍?,"options":["x > 4","x < 4","x > 1","x < 1"]}'::jsonb,
+ '{"value":"x > 4","steps":["娑撱倛绔熼崥灞炬閸?3閿?x > 8","娑撱倛绔熼崥灞炬闂勩倓浜?2閿涙 > 4"],"explanation":"濮濓絾鏆熼梽銈嗙《娑撳秳绱伴弨鐟板綁娑撳秶鐡戦崣閿嬫煙閸氭垯鈧?}'::jsonb,
+ ARRAY['娑撯偓閸忓啩绔村▎鈥茬瑝缁涘绱?,'闁瀚ㄦ０?], 'SEED', 'ACTIVE'),
 (7, 7, 'math', 'grade7', 'CALCULATION', 3,
- '{"stem":"瑙ｄ笉绛夊紡锛?3x + 6 <= 12"}'::jsonb,
- '{"value":"x >= -2","steps":["涓よ竟鍚屾椂鍑忓幓 6锛?3x <= 6","涓よ竟鍚屾椂闄や互 -3锛屼笉绛夊彿鏂瑰悜鏀瑰彉锛歺 >= -2"],"explanation":"涓嶇瓑寮忎袱杈瑰悓鏃朵箻闄よ礋鏁版椂锛屼笉绛夊彿鏂瑰悜瑕佹敼鍙樸€?}'::jsonb,
- ARRAY['涓€鍏冧竴娆′笉绛夊紡','璐熸暟'], 'SEED', 'ACTIVE'),
+ '{"stem":"鐟欙絼绗夌粵澶婄础閿?3x + 6 <= 12"}'::jsonb,
+ '{"value":"x >= -2","steps":["娑撱倛绔熼崥灞炬閸戝繐骞?6閿?3x <= 6","娑撱倛绔熼崥灞炬闂勩倓浜?-3閿涘奔绗夌粵澶婂娇閺傜懓鎮滈弨鐟板綁閿涙 >= -2"],"explanation":"娑撳秶鐡戝蹇庤⒈鏉堢懓鎮撻弮鏈电闂勩倛绀嬮弫鐗堟閿涘奔绗夌粵澶婂娇閺傜懓鎮滅憰浣规暭閸欐ǜ鈧?}'::jsonb,
+ ARRAY['娑撯偓閸忓啩绔村▎鈥茬瑝缁涘绱?,'鐠愮喐鏆?], 'SEED', 'ACTIVE'),
 (8, 3, 'math', 'grade7', 'CALCULATION', 1,
- '{"stem":"鍖栫畝锛?a + 2a - 5a"}'::jsonb,
- '{"value":"0","steps":["鍚堝苟鍚岀被椤癸細(3 + 2 - 5)a","璁＄畻绯绘暟锛?a = 0"],"explanation":"鍚岀被椤瑰悎骞舵椂锛屽彧鍚堝苟绯绘暟锛屽瓧姣嶉儴鍒嗕笉鍙樸€?}'::jsonb,
- ARRAY['鏁村紡鐨勫姞鍑?,'鍚堝苟鍚岀被椤?], 'SEED', 'ACTIVE'),
+ '{"stem":"閸栨牜鐣濋敍?a + 2a - 5a"}'::jsonb,
+ '{"value":"0","steps":["閸氬牆鑻熼崥宀€琚い鐧哥窗(3 + 2 - 5)a","鐠侊紕鐣荤化缁樻殶閿?a = 0"],"explanation":"閸氬瞼琚い鐟版値楠炶埖妞傞敍灞藉涧閸氬牆鑻熺化缁樻殶閿涘苯鐡уВ宥夊劥閸掑棔绗夐崣妯糕偓?}'::jsonb,
+ ARRAY['閺佹潙绱￠惃鍕閸?,'閸氬牆鑻熼崥宀€琚い?], 'SEED', 'ACTIVE'),
 (9, 3, 'math', 'grade7', 'CALCULATION', 2,
- '{"stem":"鍖栫畝锛?(3x - 4) - (x + 5)"}'::jsonb,
- '{"value":"5x - 13","steps":["鍘绘嫭鍙凤細6x - 8 - x - 5","鍚堝苟鍚岀被椤癸細5x - 13"],"explanation":"鎷彿鍓嶆槸璐熷彿鏃讹紝鍘绘嫭鍙峰悗鎷彿鍐呭悇椤归兘瑕佸彉鍙枫€?}'::jsonb,
- ARRAY['鏁村紡鐨勫姞鍑?,'鍘绘嫭鍙?], 'SEED', 'ACTIVE'),
+ '{"stem":"閸栨牜鐣濋敍?(3x - 4) - (x + 5)"}'::jsonb,
+ '{"value":"5x - 13","steps":["閸樼粯瀚崣鍑ょ窗6x - 8 - x - 5","閸氬牆鑻熼崥宀€琚い鐧哥窗5x - 13"],"explanation":"閹奉剙褰块崜宥嗘Ц鐠愮喎褰块弮璁圭礉閸樼粯瀚崣宄版倵閹奉剙褰块崘鍛倗妞ゅ綊鍏樼憰浣稿綁閸欐灚鈧?}'::jsonb,
+ ARRAY['閺佹潙绱￠惃鍕閸?,'閸樼粯瀚崣?], 'SEED', 'ACTIVE'),
 (10, 4, 'math', 'grade8', 'CALCULATION', 2,
- '{"stem":"璁＄畻锛?2x)^2 路 3x"}'::jsonb,
- '{"value":"12x^3","steps":["鍏堢畻涔樻柟锛?2x)^2 = 4x^2","鍐嶄箻 3x锛?x^2 路 3x = 12x^3"],"explanation":"鍚屽簳鏁板箓鐩镐箻锛屾寚鏁扮浉鍔犮€?}'::jsonb,
- ARRAY['鏁村紡鐨勪箻闄?,'骞傝繍绠?], 'SEED', 'ACTIVE'),
+ '{"stem":"鐠侊紕鐣婚敍?2x)^2 璺?3x"}'::jsonb,
+ '{"value":"12x^3","steps":["閸忓牏鐣绘稊妯绘煙閿?2x)^2 = 4x^2","閸愬秳绠?3x閿?x^2 璺?3x = 12x^3"],"explanation":"閸氬苯绨抽弫鏉跨畵閻╅晲绠婚敍灞惧瘹閺佹壆娴夐崝鐘偓?}'::jsonb,
+ ARRAY['閺佹潙绱￠惃鍕闂?,'楠炲倽绻嶇粻?], 'SEED', 'ACTIVE'),
 (11, 4, 'math', 'grade8', 'CALCULATION', 3,
- '{"stem":"鍥犲紡鍒嗚В锛歺^2 - 9"}'::jsonb,
- '{"value":"(x + 3)(x - 3)","steps":["璇嗗埆骞虫柟宸細x^2 - 9 = x^2 - 3^2","濂楃敤鍏紡 a^2 - b^2 = (a + b)(a - b)","寰楀埌 (x + 3)(x - 3)"],"explanation":"骞虫柟宸叕寮忔槸鍒濅腑鍥犲紡鍒嗚В鐨勫父鐢ㄥ伐鍏枫€?}'::jsonb,
- ARRAY['鍥犲紡鍒嗚В','骞虫柟宸?], 'SEED', 'ACTIVE'),
+ '{"stem":"閸ョ姴绱￠崚鍡毿掗敍姝篰2 - 9"}'::jsonb,
+ '{"value":"(x + 3)(x - 3)","steps":["鐠囧棗鍩嗛獮铏煙瀹割噯绱皒^2 - 9 = x^2 - 3^2","婵傛鏁ら崗顒€绱?a^2 - b^2 = (a + b)(a - b)","瀵版鍩?(x + 3)(x - 3)"],"explanation":"楠炶櫕鏌熷顔煎彆瀵繑妲搁崚婵呰厬閸ョ姴绱￠崚鍡毿掗惃鍕埗閻劌浼愰崗鏋偓?}'::jsonb,
+ ARRAY['閸ョ姴绱￠崚鍡毿?,'楠炶櫕鏌熷?], 'SEED', 'ACTIVE'),
 (12, 8, 'math', 'grade8', 'CALCULATION', 2,
- '{"stem":"瑙ｆ柟绋嬬粍锛歺 + y = 7锛寈 - y = 1"}'::jsonb,
- '{"value":"x = 4, y = 3","steps":["涓ゅ紡鐩稿姞锛?x = 8","瑙ｅ緱 x = 4","浠ｅ叆 x + y = 7锛屽緱 y = 3"],"explanation":"鍔犲噺娑堝厓閫傚悎绯绘暟浜掍负鐩稿弽鏁版垨鐩稿悓鐨勬柟绋嬬粍銆?}'::jsonb,
- ARRAY['浜屽厓涓€娆℃柟绋嬬粍','鍔犲噺娑堝厓'], 'SEED', 'ACTIVE'),
+ '{"stem":"鐟欙絾鏌熺粙瀣矋閿涙 + y = 7閿涘瘓 - y = 1"}'::jsonb,
+ '{"value":"x = 4, y = 3","steps":["娑撱倕绱￠惄绋垮閿?x = 8","鐟欙絽绶?x = 4","娴狅絽鍙?x + y = 7閿涘苯绶?y = 3"],"explanation":"閸旂姴鍣哄☉鍫濆帗闁倸鎮庣化缁樻殶娴滄帊璐熼惄绋垮冀閺佺増鍨ㄩ惄绋挎倱閻ㄥ嫭鏌熺粙瀣矋閵?}'::jsonb,
+ ARRAY['娴滃苯鍘撴稉鈧▎鈩冩煙缁嬪绮?,'閸旂姴鍣哄☉鍫濆帗'], 'SEED', 'ACTIVE'),
 (13, 8, 'math', 'grade8', 'CALCULATION', 3,
- '{"stem":"瑙ｆ柟绋嬬粍锛?x + y = 9锛寈 + 2y = 8"}'::jsonb,
- '{"value":"x = 10/3, y = 7/3","steps":["鐢?2x + y = 9 寰?y = 9 - 2x","浠ｅ叆 x + 2y = 8锛歺 + 2(9 - 2x) = 8","瑙ｅ緱 -3x = -10锛屾墍浠?x = 10/3","浠ｅ洖寰?y = 7/3"],"explanation":"浠ｅ叆娑堝厓鐨勬牳蹇冩槸鐢ㄤ竴涓湭鐭ユ暟琛ㄧず鍙︿竴涓湭鐭ユ暟銆?}'::jsonb,
- ARRAY['浜屽厓涓€娆℃柟绋嬬粍','浠ｅ叆娑堝厓'], 'SEED', 'ACTIVE'),
+ '{"stem":"鐟欙絾鏌熺粙瀣矋閿?x + y = 9閿涘瘓 + 2y = 8"}'::jsonb,
+ '{"value":"x = 10/3, y = 7/3","steps":["閻?2x + y = 9 瀵?y = 9 - 2x","娴狅絽鍙?x + 2y = 8閿涙 + 2(9 - 2x) = 8","鐟欙絽绶?-3x = -10閿涘本澧嶆禒?x = 10/3","娴狅絽娲栧?y = 7/3"],"explanation":"娴狅絽鍙嗗☉鍫濆帗閻ㄥ嫭鐗宠箛鍐╂Ц閻劋绔存稉顏呮弓閻儲鏆熺悰銊с仛閸欙缚绔存稉顏呮弓閻儲鏆熼妴?}'::jsonb,
+ ARRAY['娴滃苯鍘撴稉鈧▎鈩冩煙缁嬪绮?,'娴狅絽鍙嗗☉鍫濆帗'], 'SEED', 'ACTIVE'),
 (14, 10, 'math', 'grade7', 'CALCULATION', 1,
- '{"stem":"宸茬煡 鈭燗 = 35掳锛屸垹B 涓?鈭燗 浜掍綑锛屾眰 鈭燘銆?}'::jsonb,
- '{"value":"55掳","steps":["浜掍綑鐨勪袱涓鍜屼负 90掳","鈭燘 = 90掳 - 35掳 = 55掳"],"explanation":"浜掍綑鐪?90掳锛屼簰琛ョ湅 180掳銆?}'::jsonb,
- ARRAY['绾挎涓庤','浜掍綑'], 'SEED', 'ACTIVE'),
+ '{"stem":"瀹歌尙鐓?閳嚄 = 35鎺抽敍灞稿灩B 娑?閳嚄 娴滄帊缍戦敍灞剧湴 閳嚇閵?}'::jsonb,
+ '{"value":"55鎺?,"steps":["娴滄帊缍戦惃鍕⒈娑擃亣顫楅崪灞艰礋 90鎺?,"閳嚇 = 90鎺?- 35鎺?= 55鎺?],"explanation":"娴滄帊缍戦惇?90鎺抽敍灞肩鞍鐞涖儳婀?180鎺抽妴?}'::jsonb,
+ ARRAY['缁炬寧顔屾稉搴ゎ潡','娴滄帊缍?], 'SEED', 'ACTIVE'),
 (15, 10, 'math', 'grade7', 'CALCULATION', 2,
- '{"stem":"宸茬煡 鈭燗 = 120掳锛屸垹B 涓?鈭燗 浜掕ˉ锛屾眰 鈭燘銆?}'::jsonb,
- '{"value":"60掳","steps":["浜掕ˉ鐨勪袱涓鍜屼负 180掳","鈭燘 = 180掳 - 120掳 = 60掳"],"explanation":"鍒ゆ柇浜掕ˉ鏃舵姄浣忔€诲拰 180掳銆?}'::jsonb,
- ARRAY['绾挎涓庤','浜掕ˉ'], 'SEED', 'ACTIVE'),
+ '{"stem":"瀹歌尙鐓?閳嚄 = 120鎺抽敍灞稿灩B 娑?閳嚄 娴滄帟藟閿涘本鐪?閳嚇閵?}'::jsonb,
+ '{"value":"60鎺?,"steps":["娴滄帟藟閻ㄥ嫪琚辨稉顏囶潡閸滃奔璐?180鎺?,"閳嚇 = 180鎺?- 120鎺?= 60鎺?],"explanation":"閸掋倖鏌囨禍鎺曀夐弮鑸靛娴ｅ繑鈧鎷?180鎺抽妴?}'::jsonb,
+ ARRAY['缁炬寧顔屾稉搴ゎ潡','娴滄帟藟'], 'SEED', 'ACTIVE'),
 (16, 11, 'math', 'grade8', 'CHOICE', 2,
- '{"stem":"涓夎褰袱杈归暱鍒嗗埆涓?3 鍜?5锛岀涓夎竟鍙兘鏄紵","options":["1","2","7","9"]}'::jsonb,
- '{"value":"7","steps":["涓夎褰㈢涓夎竟 c 婊¤冻 |5 - 3| < c < 5 + 3","鍗?2 < c < 8","閫夐」涓彧鏈?7 婊¤冻"],"explanation":"涓夎褰换鎰忎袱杈逛箣鍜屽ぇ浜庣涓夎竟锛屼换鎰忎袱杈逛箣宸皬浜庣涓夎竟銆?}'::jsonb,
- ARRAY['涓夎褰?,'涓夎竟鍏崇郴'], 'SEED', 'ACTIVE'),
+ '{"stem":"娑撳顫楄ぐ顫⒈鏉堝綊鏆遍崚鍡楀焼娑?3 閸?5閿涘瞼顑囨稉澶庣珶閸欘垵鍏橀弰顖ょ吹","options":["1","2","7","9"]}'::jsonb,
+ '{"value":"7","steps":["娑撳顫楄ぐ銏㈩儑娑撳绔?c 濠娐ゅ喕 |5 - 3| < c < 5 + 3","閸?2 < c < 8","闁銆嶆稉顓炲涧閺?7 濠娐ゅ喕"],"explanation":"娑撳顫楄ぐ顫崲閹板繋琚辨潏閫涚閸滃苯銇囨禍搴ｎ儑娑撳绔熼敍灞兼崲閹板繋琚辨潏閫涚瀹割喖鐨禍搴ｎ儑娑撳绔熼妴?}'::jsonb,
+ ARRAY['娑撳顫楄ぐ?,'娑撳绔熼崗宕囬兇'], 'SEED', 'ACTIVE'),
 (17, 11, 'math', 'grade8', 'CALCULATION', 3,
- '{"stem":"涓€涓笁瑙掑舰涓変釜鍐呰涔嬫瘮涓?2:3:4锛屾眰鏈€澶ц銆?}'::jsonb,
- '{"value":"80掳","steps":["涓夎褰㈠唴瑙掑拰涓?180掳","鎬讳唤鏁?2 + 3 + 4 = 9","姣忎唤涓?180掳 / 9 = 20掳","鏈€澶ц涓?4 浠斤細80掳"],"explanation":"姣斾緥闂鍏堟眰鎬讳唤鏁帮紝鍐嶆眰姣忎唤澶у皬銆?}'::jsonb,
- ARRAY['涓夎褰?,'鍐呰鍜?], 'SEED', 'ACTIVE'),
+ '{"stem":"娑撯偓娑擃亙绗佺憴鎺戣埌娑撳閲滈崘鍛邦潡娑斿鐦稉?2:3:4閿涘本鐪伴張鈧径褑顫楅妴?}'::jsonb,
+ '{"value":"80鎺?,"steps":["娑撳顫楄ぐ銏犲敶鐟欐帒鎷版稉?180鎺?,"閹鍞ら弫?2 + 3 + 4 = 9","濮ｅ繋鍞ゆ稉?180鎺?/ 9 = 20鎺?,"閺堚偓婢堆嗩潡娑?4 娴犳枻绱?0鎺?],"explanation":"濮ｆ柧绶ラ梻顕€顣介崗鍫熺湴閹鍞ら弫甯礉閸愬秵鐪板В蹇庡敜婢堆冪毈閵?}'::jsonb,
+ ARRAY['娑撳顫楄ぐ?,'閸愬懓顫楅崪?], 'SEED', 'ACTIVE'),
 (18, 14, 'math', 'grade8', 'CALCULATION', 1,
- '{"stem":"鐐?A(3, -2) 鍦ㄧ鍑犺薄闄愶紵"}'::jsonb,
- '{"value":"绗洓璞￠檺","steps":["妯潗鏍?x = 3 > 0","绾靛潗鏍?y = -2 < 0","妯绾佃礋鐨勭偣鍦ㄧ鍥涜薄闄?],"explanation":"璞￠檺鍒ゆ柇鐪嬫í绾靛潗鏍囩殑姝ｈ礋銆?}'::jsonb,
- ARRAY['骞抽潰鐩磋鍧愭爣绯?,'璞￠檺'], 'SEED', 'ACTIVE'),
+ '{"stem":"閻?A(3, -2) 閸︺劎顑囬崙鐘鸿杽闂勬劧绱?}'::jsonb,
+ '{"value":"缁楊剙娲撶挒锟犳","steps":["濡亜娼楅弽?x = 3 > 0","缁鹃潧娼楅弽?y = -2 < 0","濡亝顒滅痪浣冪閻ㄥ嫮鍋ｉ崷銊ь儑閸ユ稖钖勯梽?],"explanation":"鐠烇繝妾洪崚銈嗘焽閻铆缁鹃潧娼楅弽鍥╂畱濮濓綀绀嬮妴?}'::jsonb,
+ ARRAY['楠炴娊娼伴惄纾嬵潡閸ф劖鐖ｇ化?,'鐠烇繝妾?], 'SEED', 'ACTIVE'),
 (19, 15, 'math', 'grade8', 'CALCULATION', 2,
- '{"stem":"涓€娆″嚱鏁?y = 2x + 1锛屽綋 x = 3 鏃讹紝y 鐨勫€兼槸澶氬皯锛?}'::jsonb,
- '{"value":"7","steps":["鎶?x = 3 浠ｅ叆 y = 2x + 1","y = 2 脳 3 + 1 = 7"],"explanation":"姹傚嚱鏁板€煎氨鏄妸鑷彉閲忎唬鍏ヨВ鏋愬紡銆?}'::jsonb,
- ARRAY['涓€娆″嚱鏁?,'鍑芥暟鍊?], 'SEED', 'ACTIVE'),
+ '{"stem":"娑撯偓濞嗏€冲毐閺?y = 2x + 1閿涘苯缍?x = 3 閺冭绱漼 閻ㄥ嫬鈧吋妲告径姘毌閿?}'::jsonb,
+ '{"value":"7","steps":["閹?x = 3 娴狅絽鍙?y = 2x + 1","y = 2 鑴?3 + 1 = 7"],"explanation":"濮瑰倸鍤遍弫鏉库偓鐓庢皑閺勵垱濡搁懛顏勫綁闁插繋鍞崗銉ㄐ掗弸鎰础閵?}'::jsonb,
+ ARRAY['娑撯偓濞嗏€冲毐閺?,'閸戣姤鏆熼崐?], 'SEED', 'ACTIVE'),
 (20, 15, 'math', 'grade8', 'CALCULATION', 3,
- '{"stem":"宸茬煡涓€娆″嚱鏁?y = kx + 2 缁忚繃鐐?(3, 8)锛屾眰 k銆?}'::jsonb,
- '{"value":"k = 2","steps":["鎶婄偣 (3, 8) 浠ｅ叆 y = kx + 2","寰楀埌 8 = 3k + 2","瑙ｅ緱 3k = 6锛屾墍浠?k = 2"],"explanation":"鍑芥暟鍥惧儚缁忚繃鏌愮偣锛岃鏄庤鐐瑰潗鏍囨弧瓒冲嚱鏁拌В鏋愬紡銆?}'::jsonb,
- ARRAY['涓€娆″嚱鏁?,'寰呭畾绯绘暟娉?], 'SEED', 'ACTIVE')
+ '{"stem":"瀹歌尙鐓℃稉鈧▎鈥冲毐閺?y = kx + 2 缂佸繗绻冮悙?(3, 8)閿涘本鐪?k閵?}'::jsonb,
+ '{"value":"k = 2","steps":["閹跺﹦鍋?(3, 8) 娴狅絽鍙?y = kx + 2","瀵版鍩?8 = 3k + 2","鐟欙絽绶?3k = 6閿涘本澧嶆禒?k = 2"],"explanation":"閸戣姤鏆熼崶鎯у剼缂佸繗绻冮弻鎰仯閿涘矁顕╅弰搴ゎ嚉閻愮懓娼楅弽鍥ㄥ姬鐡掑啿鍤遍弫鎷屝掗弸鎰础閵?}'::jsonb,
+ ARRAY['娑撯偓濞嗏€冲毐閺?,'瀵板懎鐣剧化缁樻殶濞?], 'SEED', 'ACTIVE')
 ON CONFLICT (id) DO NOTHING;
 
--- 閲嶇疆棰樺簱搴忓垪
+-- 闁插秶鐤嗘０妯虹氨鎼村繐鍨?
 SELECT setval('questions_id_seq', (SELECT MAX(id) FROM questions));
 

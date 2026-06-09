@@ -3,35 +3,34 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { cn } from '@/lib/utils';
-import {
-  Users,
-  Database,
-  Settings,
-  BookHeart,
-  Bot,
-  Menu,
-  Sparkles,
-  X,
-} from 'lucide-react';
+import { BookHeart, Bot, Database, Menu, Settings, Sparkles, Users, X } from 'lucide-react';
 import type { ViewerRole } from '@/lib/roles';
+import { cn } from '@/lib/utils';
 
-const navItems = [
-  { href: '/dashboard/tutor', label: '家族Agent', icon: Sparkles, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
-  { href: '/dashboard/mirror', label: '镜像 Agent', icon: Bot, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
-  { href: '/dashboard/diary', label: '写记录', icon: BookHeart, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
-  { href: '/dashboard/family', label: '家族空间', icon: Users, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
+type NavItem = {
+  href: string;
+  label: string;
+  icon: typeof Sparkles;
+  roles: readonly ViewerRole[];
+  platformAdminOnly?: boolean;
+};
+
+const navItems: readonly NavItem[] = [
+  { href: '/dashboard/agent', label: '家族Agent', icon: Sparkles, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/dashboard/mirror', label: '镜像 Agent', icon: Bot, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/dashboard/diary', label: '写记录', icon: BookHeart, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/dashboard/family', label: '家族空间', icon: Users, roles: ['MEMBER', 'ADMIN'] },
   { href: '/dashboard/admin/database', label: '数据库健康', icon: Database, roles: ['ADMIN'], platformAdminOnly: true },
-  { href: '/dashboard/settings', label: '设置', icon: Settings, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
-];
+  { href: '/dashboard/settings', label: '设置', icon: Settings, roles: ['MEMBER', 'ADMIN'] },
+] as const;
 
-const mobilePrimaryNav = [
-  { href: '/dashboard/tutor', label: 'Agent', icon: Sparkles, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
-  { href: '/dashboard/mirror', label: '镜像', icon: Bot, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
-  { href: '/dashboard/diary', label: '记录', icon: BookHeart, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
-  { href: '/dashboard/family', label: '空间', icon: Users, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
-  { href: '/dashboard/settings', label: '设置', icon: Settings, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
-];
+const mobilePrimaryNav: readonly NavItem[] = [
+  { href: '/dashboard/agent', label: 'Agent', icon: Sparkles, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/dashboard/mirror', label: '镜像', icon: Bot, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/dashboard/diary', label: '记录', icon: BookHeart, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/dashboard/family', label: '空间', icon: Users, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/dashboard/settings', label: '设置', icon: Settings, roles: ['MEMBER', 'ADMIN'] },
+] as const;
 
 interface SidebarProps {
   viewerRole?: ViewerRole;
@@ -44,7 +43,7 @@ function isActivePath(pathname: string, href: string) {
 }
 
 function NavigationLinks({
-  viewerRole = 'STUDENT',
+  viewerRole = 'MEMBER',
   isPlatformAdmin = false,
   onNavigate,
 }: {
@@ -59,8 +58,8 @@ function NavigationLinks({
       {navItems
         .filter((item) => item.roles.includes(viewerRole) && (!item.platformAdminOnly || isPlatformAdmin))
         .map((item) => {
-          const isActive = isActivePath(pathname, item.href);
           const Icon = item.icon;
+          const isActive = isActivePath(pathname, item.href);
 
           return (
             <Link
@@ -83,7 +82,7 @@ function NavigationLinks({
 }
 
 export function MobileBottomNav({
-  viewerRole = 'STUDENT',
+  viewerRole = 'MEMBER',
 }: {
   viewerRole?: ViewerRole;
 }) {
@@ -117,11 +116,11 @@ export function MobileBottomNav({
   );
 }
 
-export default function Sidebar({ viewerRole = 'STUDENT', isPlatformAdmin = false, className }: SidebarProps) {
+export default function Sidebar({ viewerRole = 'MEMBER', isPlatformAdmin = false, className }: SidebarProps) {
   return (
-    <aside className={cn('hidden w-60 shrink-0 flex-col border-r border-gray-200 bg-white xl:w-64 lg:flex', className)}>
+    <aside className={cn('hidden w-60 shrink-0 flex-col border-r border-gray-200 bg-white lg:flex xl:w-64', className)}>
       <div className="flex h-16 items-center border-b border-gray-200 px-6">
-        <Link href="/dashboard/tutor" className="flex items-center gap-2">
+        <Link href="/dashboard/agent" className="flex items-center gap-2">
           <BookHeart className="h-6 w-6 text-blue-600" />
           <span className="text-lg font-bold text-gray-900">FamilyAgent</span>
         </Link>
@@ -132,14 +131,14 @@ export default function Sidebar({ viewerRole = 'STUDENT', isPlatformAdmin = fals
       </nav>
 
       <div className="border-t border-gray-200 p-4">
-        <p className="text-xs text-gray-400">v0.1.0 · 内测版</p>
+        <p className="text-xs text-gray-400">v0.1.0 内测版</p>
       </div>
     </aside>
   );
 }
 
 export function MobileNav({
-  viewerRole = 'STUDENT',
+  viewerRole = 'MEMBER',
   isPlatformAdmin = false,
 }: {
   viewerRole?: ViewerRole;
@@ -168,7 +167,7 @@ export function MobileNav({
           />
           <div className="absolute inset-y-0 left-0 flex w-[min(20rem,86vw)] flex-col bg-white shadow-xl">
             <div className="flex h-16 items-center justify-between border-b border-gray-200 px-4">
-              <Link href="/dashboard/tutor" onClick={() => setOpen(false)} className="flex items-center gap-2">
+              <Link href="/dashboard/agent" onClick={() => setOpen(false)} className="flex items-center gap-2">
                 <BookHeart className="h-6 w-6 text-blue-600" />
                 <span className="text-lg font-bold text-gray-900">FamilyAgent</span>
               </Link>
@@ -183,11 +182,15 @@ export function MobileNav({
             </div>
 
             <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 py-4">
-              <NavigationLinks viewerRole={viewerRole} isPlatformAdmin={isPlatformAdmin} onNavigate={() => setOpen(false)} />
+              <NavigationLinks
+                viewerRole={viewerRole}
+                isPlatformAdmin={isPlatformAdmin}
+                onNavigate={() => setOpen(false)}
+              />
             </nav>
 
             <div className="border-t border-gray-200 p-4">
-              <p className="text-xs text-gray-400">v0.1.0 · 内测版</p>
+              <p className="text-xs text-gray-400">v0.1.0 内测版</p>
             </div>
           </div>
         </div>

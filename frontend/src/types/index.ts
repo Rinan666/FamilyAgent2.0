@@ -1,8 +1,8 @@
-// ============================================
-// FamilyAgent - 前端类型定义
+﻿// ============================================
+// FamilyAgent - 鍓嶇绫诲瀷瀹氫箟
 // ============================================
 
-// --- 用户 ---
+// --- 鐢ㄦ埛 ---
 export interface User {
   id: number;
   username: string;
@@ -52,7 +52,7 @@ export interface RegisterRequest {
   email?: string;
 }
 
-// --- 家族 ---
+// --- 瀹舵棌 ---
 export interface Family {
   id: number;
   name: string;
@@ -73,7 +73,7 @@ export interface FamilyMember {
   username?: string;
   nickname?: string;
   avatarUrl?: string;
-  role: 'OWNER' | 'ADMIN' | 'GUARDIAN' | 'MEMBER' | 'STUDENT' | 'GUEST';
+  role: 'OWNER' | 'ADMIN' | 'GUARDIAN' | 'MEMBER' | 'GUEST';
   relationshipLabel?: string;
   reverseRelationshipLabel?: string;
   birthDate?: string;
@@ -109,7 +109,7 @@ export interface CareAuthorization {
   updatedAt: string;
 }
 
-// --- 家族日记 / 人生记录 ---
+// --- 瀹舵棌鏃ヨ / 浜虹敓璁板綍 ---
 export type DiaryEntryType =
   | 'DAILY'
   | 'IMPORTANT_EVENT'
@@ -153,147 +153,6 @@ export interface CreateDiaryEntryRequest {
 
 export type UpdateDiaryEntryRequest = Omit<CreateDiaryEntryRequest, 'familyId'>;
 
-// --- 题库 ---
-export interface KnowledgePoint {
-  id: number;
-  parentId?: number;
-  subject: string;
-  grade: string;
-  name: string;
-  description?: string;
-  level: number;
-  sortOrder: number;
-  metadata?: TextbookMetadata;
-  children?: KnowledgePoint[];
-}
-
-export interface TextbookMetadata {
-  textbookVersion?: string;
-  textbookName?: string;
-  volume?: string;
-  chapterCode?: string;
-  chapterName?: string;
-  sectionName?: string;
-  lessonOrder?: number;
-  [key: string]: unknown;
-}
-
-export interface Question {
-  id: number;
-  familyId?: number;
-  kpId: number;
-  subject: string;
-  grade: string;
-  type: 'CHOICE' | 'FILL' | 'CALCULATION' | 'PROOF';
-  difficulty: number;
-  content: QuestionContent;
-  answer: QuestionAnswer;
-  tags?: string[];
-  source?: string;
-  visibility?: string;
-  usageCount?: number;
-  correctRate?: number;
-}
-
-export interface QuestionContent {
-  stem: string;
-  options?: string[];
-  figures?: string[];
-}
-
-export interface QuestionAnswer {
-  value: string;
-  steps?: string[];
-  explanation?: string;
-}
-
-export interface CreateQuestionRequest {
-  kpId?: number;
-  subject: string;
-  grade?: string;
-  type: Question['type'];
-  difficulty: number;
-  content: QuestionContent;
-  answer: QuestionAnswer;
-  tags?: string[];
-  source?: string;
-}
-
-// --- 评估 ---
-export interface AbilityProfile {
-  id: number;
-  userId: number;
-  familyId?: number;
-  kpId: number;
-  masteryProbability: number;
-  totalAttempts: number;
-  correctAttempts: number;
-  consecutiveCorrect: number;
-  visibility?: string;
-  lastAttemptAt?: string;
-}
-
-export interface TestRecord {
-  id: number;
-  userId: number;
-  familyId?: number;
-  questionIds: number[];
-  answers: Record<string, string>;
-  scores: Record<string, number>;
-  timeSpent: number[];
-  totalScore: number;
-  totalTime?: number;
-  status: string;
-  source?: string;
-  visibility?: string;
-  createdAt: string;
-}
-
-export interface TestRecordDetailItem {
-  questionId: number;
-  kpId?: number;
-  question?: Question;
-  studentAnswer: string;
-  correctAnswer?: QuestionAnswer | unknown;
-  score: number;
-  correct: boolean;
-  timeSpent?: number;
-  wrong: boolean;
-  wrongRecordId?: number;
-  wrongStatus?: string;
-  errorType?: string;
-  feedback?: string;
-  parentExplanation?: string;
-  nextSuggestion?: string;
-}
-
-export interface TestRecordDetail {
-  record: TestRecord;
-  items: TestRecordDetailItem[];
-}
-
-export interface SubmitTestQuestionResult {
-  questionId: number;
-  kpId: number;
-  answer: string;
-  score: number;
-  correct: boolean;
-  errorType?: string;
-  feedback?: string;
-  parentExplanation?: string;
-  nextSuggestion?: string;
-  timeSpent?: number;
-}
-
-export interface SubmitTestRequest {
-  userId?: number;
-  familyId?: number;
-  results: SubmitTestQuestionResult[];
-  totalTime?: number;
-  source?: string;
-}
-
-// --- 家教 ---
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -317,21 +176,65 @@ export interface ChatMessage {
   } & Record<string, unknown>;
 }
 
-export interface ChatSession {
+export interface ChatSessionSummary {
   id: number;
   userId: number;
   familyId?: number;
   questionId?: number;
   subject?: string;
   knowledgePointId?: number;
-  messages: ChatMessage[];
+  title?: string;
   summary?: string;
   status: 'ACTIVE' | 'ENDED';
   visibility?: string;
   source?: string;
+  messageCount?: number;
+  tokenCount?: number;
+  lastMessageAt?: string;
   metadata?: Record<string, unknown>;
   startedAt: string;
   endedAt?: string;
+}
+
+export interface ChatSessionArchiveSummary {
+  id: number;
+  sessionId: number;
+  startSeq: number;
+  endSeq: number;
+  summary?: string;
+  objectKey?: string;
+  messageCount?: number;
+  tokenCount?: number;
+  createdAt: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ChatSessionDetail extends ChatSessionSummary {
+  archivedBeforeSeq?: number;
+  archiveStatus?: string;
+  archiveMetadata?: Record<string, unknown>;
+  archives?: ChatSessionArchiveSummary[];
+}
+
+export interface ChatSessionMessageItem {
+  seq?: number;
+  id?: string;
+  role: ChatMessage['role'] | string;
+  content: string;
+  toolName?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  tokenCount?: number;
+}
+
+export interface ChatSessionMessagePage {
+  items: ChatSessionMessageItem[];
+  hasMore: boolean;
+  nextBeforeSeq?: number;
+}
+
+export interface ChatSessionArchiveDetail extends ChatSessionArchiveSummary {
+  transcript: ChatSessionMessageItem[];
 }
 
 export interface MemoryEntry {
@@ -450,6 +353,13 @@ export interface FamilyMemoryCard {
   suitable_for: string[];
   sensitivity: 'LOW' | 'MEDIUM' | 'HIGH' | string;
   safety_note: string;
+}
+
+export interface HeritageClassicalDraft {
+  title: string;
+  classicalText: string;
+  plainSummary: string;
+  styleNote: string;
 }
 
 export type HeritageTaskStatus = 'PENDING' | 'DONE' | 'ARCHIVED' | string;
@@ -711,112 +621,8 @@ export interface MirrorContextResponse {
   missingRecordSuggestions?: string[];
 }
 
-export interface TutorExtractResult {
-  filename: string;
-  sourceType: string;
-  contentType: string;
-  text: string;
-  structuredText: string;
-  detectedQuestions: string[];
-  detectedAnswers: string[];
-  detectedSteps: string[];
-  supported: boolean;
-  message: string;
-}
 
-// --- 批改 ---
-export interface GradeResult {
-  overallScore: number;
-  isCorrect: boolean;
-  stepGrades: StepGrade[];
-  errorAnalysis: ErrorAnalysis;
-  overallFeedback: string;
-}
-
-export interface StepGrade {
-  stepNumber: number;
-  stepName: string;
-  studentWork?: string;
-  isCorrect: boolean;
-  score: number;
-  maxScore: number;
-  errorType?: string;
-  feedback: string;
-}
-
-export interface ErrorAnalysis {
-  primaryErrorType: string;
-  knowledgeGaps: string[];
-  suggestion: string;
-  parentExplanation?: string;
-  nextSuggestion?: string;
-}
-
-// --- Skill Workflows ---
-export interface MistakeReviewResult {
-  error_category: string;
-  correct_solution_summary: string;
-  correction_note: string;
-  error_pattern: string;
-  similar_question_suggestions: string[];
-  spaced_review_plan: { day_offset: number; action: string }[];
-  parent_explanation: string;
-  missing_info: string[];
-}
-
-export interface DailyPracticeResult {
-  daily_goal: string;
-  warmup_prompt: string;
-  questions: {
-    stem: string;
-    answer: string;
-    explanation: string;
-    difficulty: number;
-    error_tags: string[];
-  }[];
-  self_check: string[];
-  next_review_action: string;
-  missing_info: string[];
-}
-
-export interface ExamReviewResult {
-  diagnosis: string;
-  priority_weak_points: {
-    knowledge_point: string;
-    priority: '高' | '中' | '低';
-    reason: string;
-  }[];
-  daily_plan: {
-    day: number;
-    focus: string;
-    tasks: string[];
-  }[];
-  timed_practice: string[];
-  mistake_review_actions: string[];
-  next_retest: string;
-  risks: string[];
-  missing_info: string[];
-}
-
-export interface StudyPlanResult {
-  plan_goal: string;
-  priorities: {
-    item: string;
-    priority: '高' | '中' | '低';
-    reason: string;
-  }[];
-  daily_tasks: {
-    day: number;
-    focus: string;
-    tasks: string[];
-    check_method: string;
-  }[];
-  review_questions: string[];
-  parent_support: string[];
-  missing_info: string[];
-}
-
-// --- 管理员数据库健康 ---
+// --- 绠＄悊鍛樻暟鎹簱鍋ュ悍 ---
 export interface DatabaseTableCount {
   tableName: string;
   label: string;
@@ -835,6 +641,9 @@ export interface EmbeddingStatusSummary {
 export interface FamilyDatabaseSummary {
   familyId: number;
   familyName: string;
+  ownerUserId?: number;
+  ownerDisplayName?: string;
+  ownerMissing: boolean;
   memberCount: number;
   diaryCount: number;
   memoryCount: number;
@@ -863,6 +672,14 @@ export interface FailedSkillRunSummary {
   inputSummary?: string;
   outputSummary?: string;
   updatedAt?: string;
+}
+
+export interface AdminUserSummary {
+  id: number;
+  username: string;
+  nickname?: string;
+  role?: string;
+  status?: string;
 }
 
 export interface DatabaseHealthResponse {
@@ -904,7 +721,7 @@ export interface MemoryRecallDiagnosticResponse {
   sources: RagRecallSource[];
 }
 
-// --- API响应 ---
+// --- API鍝嶅簲 ---
 export interface ApiResult<T> {
   code: number;
   message: string;

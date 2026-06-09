@@ -12,15 +12,13 @@ import type {
   ApiResult,
   LoginRequest, LoginResponse, RegisterRequest, ChangePasswordRequest, UpdateProfileRequest,
   User, Family, FamilyMember, FamilyRelationship, CareAuthorization, DiaryEntry, CreateDiaryEntryRequest, UpdateDiaryEntryRequest,
-  Question, KnowledgePoint, QuestionAnswer, QuestionContent,
-  AbilityProfile, TestRecord, TestRecordDetail,
-  ChatMessage, ChatSession, MemoryEntry, MemoryLibraryItem, MemoryLibraryItemType, MemoryMaintenanceSuggestion, PageResult, SubmitTestRequest, CreateQuestionRequest,
-  TutorExtractResult, CreateFamilyMemoryRequest, FamilyMemoryCard, MemoryEntryType, MemoryVoteType,
+  ChatMessage, ChatSessionArchiveDetail, ChatSessionArchiveSummary, ChatSessionDetail, ChatSessionMessageItem, ChatSessionMessagePage, ChatSessionSummary, MemoryEntry, MemoryLibraryItem, MemoryLibraryItemType, MemoryMaintenanceSuggestion, PageResult,
+  CreateFamilyMemoryRequest, FamilyMemoryCard, HeritageClassicalDraft, MemoryEntryType, MemoryVoteType,
   HeritageTask, CreateHeritageTaskRequest, HeritageTaskDraft,
   CreateGrowthGuardRecordRequest, GrowthGuardRecord, CreateGrowthGuardReportRequest, GrowthGuardReport, WeeklyGrowthReport,
-  GrowthFollowUpStatus, MirrorContextResponse, MistakeReviewResult, DailyPracticeResult, ExamReviewResult, StudyPlanResult,
+  GrowthFollowUpStatus, MirrorContextResponse,
   AgentDraftScene, AgentOrganizedDraft, AgentSaveToolPlan, HeritageSaveJudge, AuthorizedMemoryRecallResult, FamilyWeeklyDigest, RebuildMemoryIndexResult,
-  DatabaseHealthResponse, MemoryRecallDiagnosticRequest, MemoryRecallDiagnosticResponse,
+  DatabaseHealthResponse, MemoryRecallDiagnosticRequest, MemoryRecallDiagnosticResponse, AdminUserSummary, FamilyDatabaseSummary,
   SkillRun, CreateSkillRunRequest, UpdateSkillRunRequest,
 } from '@/types';
 import type { ViewerRole } from '@/lib/roles';
@@ -192,99 +190,46 @@ function normalizeStringArray(value: unknown): string[] {
   return [];
 }
 
-function normalizeQuestionAnswer(rawAnswer: unknown, rawQuestion: Record<string, unknown>): QuestionAnswer {
-  const parsed = parseJsonField<unknown>(rawAnswer, rawAnswer);
-  const answerObject = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-    ? parsed as Record<string, unknown>
-    : {};
-
-  const value = [
-    answerObject.value,
-    answerObject.answer,
-    answerObject.final_answer,
-    answerObject.finalAnswer,
-    answerObject.standard_answer,
-    answerObject.standardAnswer,
-    answerObject.result,
-    rawQuestion.answer_value,
-    rawQuestion.answerValue,
-    rawQuestion.final_answer,
-    rawQuestion.finalAnswer,
-    rawQuestion.standard_answer,
-    rawQuestion.standardAnswer,
-    rawQuestion.result,
-    typeof parsed === 'string' ? parsed : undefined,
-  ].map(toText).find(Boolean) || '';
-
-  const steps = normalizeStringArray(answerObject.steps).length > 0
-    ? normalizeStringArray(answerObject.steps)
-    : normalizeStringArray(answerObject.solution_steps ?? rawQuestion.steps ?? rawQuestion.solution_steps ?? rawQuestion.solutionSteps);
-
-  const explanation = [
-    answerObject.explanation,
-    answerObject.analysis,
-    answerObject.solution,
-    rawQuestion.explanation,
-    rawQuestion.analysis,
-    rawQuestion.solution,
-  ].map(toText).find(Boolean);
-
-  return { value, steps, explanation };
-}
-
-function normalizeQuestion(raw: Question): Question {
-  const rawRecord = raw as unknown as Record<string, unknown>;
-  const content = parseJsonField<QuestionContent>(raw.content, { stem: '' });
-  const answer = normalizeQuestionAnswer(raw.answer, rawRecord);
-  const tags = normalizeTags((raw as Question & { tags?: unknown }).tags);
-  const kpId = Number(raw.kpId ?? rawRecord.kp_id ?? rawRecord.kpId);
-  const stem = [
-    content.stem,
-    rawRecord.stem,
-    rawRecord.question,
-    rawRecord.title,
-    raw.content,
-  ].map(toText).find(Boolean) || '';
-
+function normalizeSessionSummary(raw: ChatSessionSummary): ChatSessionSummary {
   return {
     ...raw,
-    kpId: Number.isFinite(kpId) ? kpId : raw.kpId,
-    content: {
-      stem,
-      options: Array.isArray(content.options) ? content.options : undefined,
-      figures: Array.isArray(content.figures) ? content.figures : undefined,
-    },
-    answer: {
-      value: answer.value || '',
-      steps: Array.isArray(answer.steps) ? answer.steps : [],
-      explanation: answer.explanation,
-    },
-    tags,
+    metadata: parseJsonField<Record<string, unknown>>(raw.metadata, {}),
   };
 }
 
-function normalizeTags(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.map(String).map((tag) => tag.trim()).filter(Boolean);
-  }
-  if (typeof value === 'string') {
-    return value
-      .replace(/^\{|\}$/g, '')
-      .split(',')
-      .map((tag) => tag.trim().replace(/^"|"$/g, ''))
-      .filter(Boolean);
-  }
-  return [];
-}
-
-function normalizeQuestions(questions: Question[] | undefined | null): Question[] {
-  return (questions || []).map(normalizeQuestion);
-}
-
-function normalizeSession(raw: ChatSession): ChatSession {
+function normalizeSessionArchiveSummary(raw: ChatSessionArchiveSummary): ChatSessionArchiveSummary {
   return {
     ...raw,
-    messages: parseJsonField<ChatMessage[]>(raw.messages, []),
+    metadata: parseJsonField<Record<string, unknown>>(raw.metadata, {}),
+  };
+}
+
+function normalizeSessionMessageItem(raw: ChatSessionMessageItem): ChatSessionMessageItem {
+  return {
+    ...raw,
+    metadata: parseJsonField<Record<string, unknown>>(raw.metadata, {}),
+  };
+}
+
+function normalizeSessionMessagePage(raw: ChatSessionMessagePage): ChatSessionMessagePage {
+  return {
+    ...raw,
+    items: (raw.items || []).map(normalizeSessionMessageItem),
+  };
+}
+
+function normalizeSessionArchiveDetail(raw: ChatSessionArchiveDetail): ChatSessionArchiveDetail {
+  return {
+    ...normalizeSessionArchiveSummary(raw),
+    transcript: (raw.transcript || []).map(normalizeSessionMessageItem),
+  };
+}
+
+function normalizeSessionDetail(raw: ChatSessionDetail): ChatSessionDetail {
+  return {
+    ...normalizeSessionSummary(raw),
+    archiveMetadata: parseJsonField<Record<string, unknown>>(raw.archiveMetadata, {}),
+    archives: (raw.archives || []).map(normalizeSessionArchiveSummary),
   };
 }
 
@@ -349,78 +294,28 @@ function normalizeFamilyMembers(members: FamilyMember[] | undefined | null): Fam
   return (members || []).map(normalizeFamilyMember);
 }
 
-function normalizeSessions(sessions: ChatSession[] | undefined | null): ChatSession[] {
-  return (sessions || []).map(normalizeSession);
+function normalizeSessionSummaries(sessions: ChatSessionSummary[] | undefined | null): ChatSessionSummary[] {
+  return (sessions || []).map(normalizeSessionSummary);
 }
 
-function normalizeNumberArray(value: unknown): number[] {
-  const parsed = parseJsonField<unknown>(value, []);
-  if (!Array.isArray(parsed)) return [];
-  return parsed
-    .map((item) => Number(item))
-    .filter((item) => Number.isFinite(item));
-}
-
-function normalizeStringRecord(value: unknown): Record<string, string> {
-  const parsed = parseJsonField<unknown>(value, {});
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-  return Object.fromEntries(
-    Object.entries(parsed as Record<string, unknown>).map(([key, item]) => [key, item == null ? '' : String(item)]),
-  );
-}
-
-function normalizeNumberRecord(value: unknown): Record<string, number> {
-  const parsed = parseJsonField<unknown>(value, {});
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-  return Object.fromEntries(
-    Object.entries(parsed as Record<string, unknown>).map(([key, item]) => {
-      const score = Number(item);
-      return [key, Number.isFinite(score) ? score : 0];
-    }),
-  );
-}
-
-function normalizeTestRecord(raw: TestRecord): TestRecord {
-  const totalScore = Number(raw.totalScore);
-  const totalTime = raw.totalTime == null ? undefined : Number(raw.totalTime);
-
+function toSessionMessagePayload(message: ChatMessage) {
   return {
-    ...raw,
-    questionIds: normalizeNumberArray((raw as TestRecord & { questionIds?: unknown }).questionIds),
-    answers: normalizeStringRecord((raw as TestRecord & { answers?: unknown }).answers),
-    scores: normalizeNumberRecord((raw as TestRecord & { scores?: unknown }).scores),
-    timeSpent: normalizeNumberArray((raw as TestRecord & { timeSpent?: unknown }).timeSpent),
-    totalScore: Number.isFinite(totalScore) ? totalScore : 0,
-    totalTime: Number.isFinite(totalTime) ? totalTime : undefined,
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    timestamp: message.timestamp,
+    metadata: message.metadata || {},
   };
 }
 
-function normalizeTestRecords(records: TestRecord[] | undefined | null): TestRecord[] {
-  return (records || []).map(normalizeTestRecord);
-}
-
-function normalizeTestRecordDetail(raw: TestRecordDetail): TestRecordDetail {
+export function sessionMessageItemToChatMessage(item: ChatSessionMessageItem): ChatMessage {
   return {
-    ...raw,
-    record: normalizeTestRecord(raw.record),
-    items: (raw.items || []).map((item) => ({
-      ...item,
-      question: item.question ? normalizeQuestion(item.question) : undefined,
-      studentAnswer: item.studentAnswer == null ? '' : String(item.studentAnswer),
-      score: safeNumber(item.score),
-      correct: Boolean(item.correct),
-      wrong: Boolean(item.wrong),
-      errorType: item.errorType == null ? undefined : String(item.errorType),
-      feedback: item.feedback == null ? undefined : String(item.feedback),
-      parentExplanation: item.parentExplanation == null ? undefined : String(item.parentExplanation),
-      nextSuggestion: item.nextSuggestion == null ? undefined : String(item.nextSuggestion),
-    })),
+    id: item.id || `session-message-${item.seq || item.createdAt}`,
+    role: (item.role === 'assistant' || item.role === 'system') ? item.role : 'user',
+    content: item.content,
+    timestamp: item.createdAt,
+    metadata: item.metadata as ChatMessage['metadata'],
   };
-}
-
-function safeNumber(value: unknown): number {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : 0;
 }
 
 function normalizeWeeklyGrowthReport(value: unknown): WeeklyGrowthReport {
@@ -649,6 +544,10 @@ export const familyApi = {
     request<FamilyMember>(`/families/${familyId}/members/${userId}/role?role=${encodeURIComponent(role)}`, {
       method: 'PUT',
     }),
+  transferOwner: (familyId: number, targetUserId: number) =>
+    request<void>(`/families/${familyId}/owner/${targetUserId}`, {
+      method: 'PUT',
+    }),
 };
 
 export const diaryApi = {
@@ -658,91 +557,73 @@ export const diaryApi = {
     request<DiaryEntry>(`/diaries/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   listFamilyEntries: (familyId: number, limit = 30) =>
     request<DiaryEntry[]>(`/diaries/family/${familyId}?limit=${limit}`),
+  searchFamilyEntries: (params: {
+    familyId: number;
+    targetUserId?: number;
+    keyword?: string;
+    page?: number;
+    pageSize?: number;
+  }) => {
+    const sp = new URLSearchParams();
+    if (params.targetUserId) sp.set('targetUserId', String(params.targetUserId));
+    if (params.keyword?.trim()) sp.set('keyword', params.keyword.trim());
+    if (params.page) sp.set('page', String(params.page));
+    if (params.pageSize) sp.set('pageSize', String(params.pageSize));
+    return request<PageResult<DiaryEntry>>(`/diaries/family/${params.familyId}/search?${sp}`);
+  },
   deleteEntry: (id: number) => request<void>(`/diaries/${id}`, { method: 'DELETE' }),
 };
 
 // ============================================
 // 题库
 // ============================================
-export const questionApi = {
-  getKnowledgeTree: () => request<KnowledgePoint[]>('/questions/knowledge-points/tree'),
-  getChildren: (parentId: number) => request<KnowledgePoint[]>(`/questions/knowledge-points/${parentId}/children`),
-  getKnowledgePoint: (id: number) => request<KnowledgePoint>(`/questions/knowledge-points/${id}`),
-  getQuestion: (id: number) => request<Question>(`/questions/${id}`).then(normalizeQuestion),
-  listQuestions: async (params: {
-    page?: number; size?: number; subject?: string; grade?: string; kpId?: number; kpIds?: number[];
-    difficulty?: number; type?: string; tag?: string;
-  }) => {
-    const sp = new URLSearchParams();
-    Object.entries(params).forEach(([k, v]) => {
-      if (v === undefined) return;
-      if (Array.isArray(v)) {
-        v.forEach((item) => sp.append(k, String(item)));
-        return;
-      }
-      sp.set(k, String(v));
-    });
-    const page = await request<PageResult<Question>>(`/questions?${sp}`);
-    return { ...page, items: normalizeQuestions(page.items) };
-  },
-  createQuestion: (data: CreateQuestionRequest) =>
-    request<Question>('/questions', { method: 'POST', body: JSON.stringify(data) }).then(normalizeQuestion),
-  batchCreateQuestions: (data: CreateQuestionRequest[]) =>
-    request<Question[]>('/questions/batch', { method: 'POST', body: JSON.stringify(data) }).then(normalizeQuestions),
-  deleteQuestion: (id: number) => request<void>(`/questions/${id}`, { method: 'DELETE' }),
-  selectForTest: (params: { kpId?: number; subject?: string; difficulty?: number; type?: string; limit?: number }) => {
-    const sp = new URLSearchParams();
-    Object.entries(params).forEach(([k, v]) => { if (v !== undefined) sp.set(k, String(v)); });
-    return request<Question[]>(`/questions/select?${sp}`, { method: 'POST' }).then(normalizeQuestions);
-  },
-  adaptiveSelect: (_userId?: number, limit = 5) =>
-    request<Question[]>(`/questions/adaptive-select/me?limit=${limit}`, { method: 'POST' }).then(normalizeQuestions),
-  getWrongQuestions: (_userId?: number, limit = 10) =>
-    request<Question[]>(`/questions/wrong/me?limit=${limit}`).then(normalizeQuestions),
-};
 
 // ============================================
 // 评估
 // ============================================
-export const assessmentApi = {
-  getProfiles: (_userId?: number) => request<AbilityProfile[]>('/assessment/profiles/me'),
-  getProfilesForUser: (userId: number) => request<AbilityProfile[]>(`/assessment/profiles/${userId}`),
-  getZPD: (_userId?: number) => request<AbilityProfile[]>('/assessment/zpd/me'),
-  getZPDForUser: (userId: number) => request<AbilityProfile[]>(`/assessment/zpd/${userId}`),
-  getHistory: (_userId?: number, limit = 20) =>
-    request<TestRecord[]>(`/assessment/history/me?limit=${limit}`).then(normalizeTestRecords),
-  getHistoryForUser: (userId: number, limit = 20) =>
-    request<TestRecord[]>(`/assessment/history/${userId}?limit=${limit}`).then(normalizeTestRecords),
-  getTestDetail: (id: number) =>
-    request<TestRecordDetail>(`/assessment/tests/${id}/detail`).then(normalizeTestRecordDetail),
-  getTestDetailForUser: (userId: number, id: number) =>
-    request<TestRecordDetail>(`/assessment/users/${userId}/tests/${id}/detail`).then(normalizeTestRecordDetail),
-  submitTest: (data: SubmitTestRequest) =>
-    request<TestRecord>('/assessment/tests', { method: 'POST', body: JSON.stringify(data) }).then(normalizeTestRecord),
-};
-
 // ============================================
 // 会话
 // ============================================
 export const sessionApi = {
   createSession: (data: {
     familyId?: number; questionId?: number; subject?: string; knowledgePointId?: number;
-    messages?: ChatMessage[]; visibility?: string; source?: string; metadata?: Record<string, unknown>;
-  }) => request<ChatSession>('/sessions', { method: 'POST', body: JSON.stringify(data) }).then(normalizeSession),
-  getSession: (id: number) => request<ChatSession>(`/sessions/${id}`).then(normalizeSession),
+    title?: string; summary?: string; messages?: ChatMessage[]; visibility?: string; source?: string; metadata?: Record<string, unknown>;
+  }) => request<ChatSessionDetail>('/sessions', {
+    method: 'POST',
+    body: JSON.stringify({
+      ...data,
+      messages: (data.messages || []).map(toSessionMessagePayload),
+    }),
+  }).then(normalizeSessionDetail),
+  getSession: (id: number) => request<ChatSessionDetail>(`/sessions/${id}`).then(normalizeSessionDetail),
   getUserSessions: (_userId?: number, limit = 20) =>
-    request<ChatSession[]>(`/sessions/user/me?limit=${limit}`).then(normalizeSessions),
-  getActiveSessions: (_userId?: number) => request<ChatSession[]>('/sessions/active/me').then(normalizeSessions),
+    request<ChatSessionSummary[]>(`/sessions/user/me?limit=${limit}`).then(normalizeSessionSummaries),
+  getActiveSessions: (_userId?: number) => request<ChatSessionSummary[]>('/sessions/active/me').then(normalizeSessionSummaries),
+  getSessionMessages: (id: number, beforeSeq?: number, limit = 40) => {
+    const params = new URLSearchParams();
+    if (beforeSeq != null) params.set('beforeSeq', String(beforeSeq));
+    params.set('limit', String(limit));
+    return request<ChatSessionMessagePage>(`/sessions/${id}/messages?${params}`).then(normalizeSessionMessagePage);
+  },
+  appendMessages: (id: number, messages: ChatMessage[]) =>
+    request<ChatSessionDetail>(`/sessions/${id}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ messages: messages.map(toSessionMessagePayload) }),
+    }).then(normalizeSessionDetail),
   updateMessages: (id: number, messages: ChatMessage[]) =>
-    request<ChatSession>(`/sessions/${id}/messages`, {
+    request<ChatSessionDetail>(`/sessions/${id}/messages`, {
       method: 'PUT',
-      body: JSON.stringify({ messages }),
-    }).then(normalizeSession),
+      body: JSON.stringify({ messages: messages.map(toSessionMessagePayload) }),
+    }).then(normalizeSessionDetail),
   endSession: (id: number, summary?: string) =>
-    request<ChatSession>(`/sessions/${id}/end`, {
+    request<ChatSessionDetail>(`/sessions/${id}/end`, {
       method: 'POST',
       body: JSON.stringify({ summary }),
-    }).then(normalizeSession),
+    }).then(normalizeSessionDetail),
+  getSessionArchives: (id: number) =>
+    request<ChatSessionArchiveSummary[]>(`/sessions/${id}/archives`).then((items) => (items || []).map(normalizeSessionArchiveSummary)),
+  getSessionArchive: (id: number, archiveId: number) =>
+    request<ChatSessionArchiveDetail>(`/sessions/${id}/archives/${archiveId}`).then(normalizeSessionArchiveDetail),
   deleteSession: (id: number) => request<void>(`/sessions/${id}`, { method: 'DELETE' }),
 };
 
@@ -750,6 +631,20 @@ export const memoryApi = {
   listMyMemories: (limit = 20) => request<MemoryEntry[]>(`/memories/me?limit=${limit}`),
   listFamilyMemories: (familyId: number, limit = 30) =>
     request<MemoryEntry[]>(`/memories/family/${familyId}?limit=${limit}`),
+  searchFamilyMemories: (params: {
+    familyId: number;
+    targetUserId?: number;
+    keyword?: string;
+    page?: number;
+    pageSize?: number;
+  }) => {
+    const sp = new URLSearchParams();
+    if (params.targetUserId) sp.set('targetUserId', String(params.targetUserId));
+    if (params.keyword?.trim()) sp.set('keyword', params.keyword.trim());
+    if (params.page) sp.set('page', String(params.page));
+    if (params.pageSize) sp.set('pageSize', String(params.pageSize));
+    return request<PageResult<MemoryEntry>>(`/memories/family/${params.familyId}/search?${sp}`);
+  },
   createFamilyMemory: (data: CreateFamilyMemoryRequest) =>
     request<MemoryEntry>('/memories/family', { method: 'POST', body: JSON.stringify(data) }),
   voteFamilyMemory: (memoryId: number, voteType: MemoryVoteType) =>
@@ -768,6 +663,18 @@ export const memoryApi = {
       memory_type: body.memoryType || 'ELDER_ADVICE',
       family_context: body.familyContext || '',
       target: body.target || '',
+    }),
+  createHeritageClassicalDraft: (body: {
+    content: string;
+    memoryType?: MemoryEntryType;
+    scenario?: string;
+    familyContext?: string;
+  }) =>
+    aiRequest<{ success: boolean; data: HeritageClassicalDraft }>('/memory/heritage-classical', {
+      content: body.content,
+      memory_type: body.memoryType || 'ELDER_ADVICE',
+      scenario: body.scenario || '',
+      family_context: body.familyContext || '',
     }),
   planSaveTool: (body: {
     message: string;
@@ -886,6 +793,22 @@ export const memoryLibraryApi = {
   },
   maintenanceSuggestions: (familyId: number) =>
     request<MemoryMaintenanceSuggestion[]>(`/memory-library/maintenance-suggestions?familyId=${familyId}`),
+  classicalizeItem: (
+    familyId: number,
+    itemId: string,
+    classicalText: string,
+    plainSummary: string,
+    styleNote: string,
+  ) =>
+    request<void>('/memory-library/classicalize', {
+      method: 'POST',
+      body: JSON.stringify({ familyId, itemId, classicalText, plainSummary, styleNote }),
+    }),
+  mergeItems: (familyId: number, primaryItemId: string, secondaryItemId: string) =>
+    request<void>('/memory-library/merge', {
+      method: 'POST',
+      body: JSON.stringify({ familyId, primaryItemId, secondaryItemId }),
+    }),
   archived: (params: {
     familyId: number;
     page?: number;
@@ -927,6 +850,22 @@ export const memoryLibraryApi = {
 
 export const adminApi = {
   getDatabaseHealth: () => request<DatabaseHealthResponse>('/admin/database/health'),
+  listUsers: (params?: { keyword?: string; page?: number; pageSize?: number }) => {
+    const sp = new URLSearchParams();
+    if (params?.keyword?.trim()) sp.set('keyword', params.keyword.trim());
+    if (params?.page) sp.set('page', String(params.page));
+    if (params?.pageSize) sp.set('pageSize', String(params.pageSize));
+    return request<PageResult<AdminUserSummary>>(`/admin/database/users?${sp}`);
+  },
+  listFamilies: (params?: { keyword?: string; page?: number; pageSize?: number }) => {
+    const sp = new URLSearchParams();
+    if (params?.keyword?.trim()) sp.set('keyword', params.keyword.trim());
+    if (params?.page) sp.set('page', String(params.page));
+    if (params?.pageSize) sp.set('pageSize', String(params.pageSize));
+    return request<PageResult<FamilyDatabaseSummary>>(`/admin/database/families?${sp}`);
+  },
+  listFamilyMembers: (familyId: number) =>
+    request<FamilyMember[]>(`/admin/database/families/${familyId}/members`).then(normalizeFamilyMembers),
   deleteUser: (userId: number) =>
     request<void>(`/admin/database/users/${userId}`, {
       method: 'DELETE',
@@ -953,6 +892,20 @@ export const heritageTaskApi = {
 export const growthGuardApi = {
   listFamilyRecords: (familyId: number, limit = 30) =>
     request<GrowthGuardRecord[]>(`/growth-guards/family/${familyId}?limit=${limit}`),
+  searchFamilyRecords: (params: {
+    familyId: number;
+    targetUserId?: number;
+    keyword?: string;
+    page?: number;
+    pageSize?: number;
+  }) => {
+    const sp = new URLSearchParams();
+    if (params.targetUserId) sp.set('targetUserId', String(params.targetUserId));
+    if (params.keyword?.trim()) sp.set('keyword', params.keyword.trim());
+    if (params.page) sp.set('page', String(params.page));
+    if (params.pageSize) sp.set('pageSize', String(params.pageSize));
+    return request<PageResult<GrowthGuardRecord>>(`/growth-guards/family/${params.familyId}/search?${sp}`);
+  },
   createRecord: (data: CreateGrowthGuardRecordRequest) =>
     request<GrowthGuardRecord>('/growth-guards', { method: 'POST', body: JSON.stringify(data) }),
   updateFollowUpStatus: (id: number, followUpStatus: GrowthFollowUpStatus) =>
@@ -1003,133 +956,35 @@ export const mirrorApi = {
 // ============================================
 // 家族Agent（直连 Python AI 服务）
 // ============================================
-export const tutorApi = {
-  extractContent: (file: File) =>
-    aiFileRequest<{
-      success: boolean;
-      data: {
-        filename: string;
-        source_type: string;
-        content_type: string;
-        text: string;
-        structured_text?: string;
-        detected_questions?: string[];
-        detected_answers?: string[];
-        detected_steps?: string[];
-        supported: boolean;
-        message: string;
-      };
-    }>('/tutor/extract', file).then((result) => ({
-      success: result.success,
-      data: {
-        filename: result.data.filename,
-        sourceType: result.data.source_type,
-        contentType: result.data.content_type,
-        text: result.data.text,
-        structuredText: result.data.structured_text || result.data.text,
-        detectedQuestions: Array.isArray(result.data.detected_questions) ? result.data.detected_questions : [],
-        detectedAnswers: Array.isArray(result.data.detected_answers) ? result.data.detected_answers : [],
-        detectedSteps: Array.isArray(result.data.detected_steps) ? result.data.detected_steps : [],
-        supported: result.data.supported,
-        message: result.data.message,
-      } satisfies TutorExtractResult,
-    })),
-
-  explainStream: (
-    body: { questionContent: string; answer: string; steps: string; studentMessage: string;
-            history?: { role: string; content: string }[]; grade?: string; subject?: string;
-            knowledgePoint?: string; masteryLevel?: string;
-            mode?: 'explain' | 'chat'; memoryContext?: string;
-            viewerRole?: ViewerRole; targetRole?: ViewerRole | 'STUDENT';
-            clientTimestamp?: string; clientTimezone?: string; },
-    onChunk: (chunk: string) => void, onDone: () => void, onError: (error: string) => void,
+export const agentApi = {
+  streamChat: (
+    body: {
+      message: string;
+      history?: { role: string; content: string }[];
+      subject?: string;
+      contextLabel?: string;
+      memoryContext?: string;
+      viewerRole?: ViewerRole;
+      targetRole?: ViewerRole;
+      clientTimestamp?: string;
+      clientTimezone?: string;
+    },
+    onChunk: (chunk: string) => void,
+    onDone: () => void,
+    onError: (error: string) => void,
     onMetadata?: (metadata: Record<string, unknown>) => void,
     onAbort?: () => void,
   ) => sseStreamRequest('/agent/chat/stream', {
-    question_content: body.questionContent,
-    answer: body.answer,
-    steps: body.steps,
-    student_message: body.studentMessage,
-    history: body.history,
-    grade: body.grade || '',
-    subject: body.subject || '数学',
-    knowledge_point: body.knowledgePoint || '',
-    mastery_level: body.masteryLevel || '中',
-    mode: body.mode || 'chat',
+    member_message: body.message,
+    history: body.history || [],
+    subject: body.subject || 'FamilyAgent',
+    knowledge_point: body.contextLabel || '',
     memory_context: body.memoryContext || '',
-    viewer_role: body.viewerRole || 'STUDENT',
-    target_role: body.targetRole || 'STUDENT',
+    viewer_role: body.viewerRole || 'MEMBER',
+    target_role: body.targetRole || 'MEMBER',
     client_timestamp: body.clientTimestamp || new Date().toISOString(),
     client_timezone: body.clientTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
   }, onChunk, onDone, onError, onMetadata, onAbort),
-
-  mistakeReview: (body: {
-    questionContent: string; answer: string; studentAnswer: string; steps?: string;
-    gradeResult?: Record<string, unknown>; grade?: string; subject?: string;
-    knowledgePoint?: string; weakPoints?: string[];
-  }) =>
-    aiRequest<{ success: boolean; skill: 'mistake_review'; data: MistakeReviewResult }>('/tutor/skills/mistake-review', {
-      question_content: body.questionContent,
-      answer: body.answer,
-      student_answer: body.studentAnswer,
-      steps: body.steps || '',
-      grade_result: body.gradeResult || null,
-      grade: body.grade || '初中',
-      subject: body.subject || '数学',
-      knowledge_point: body.knowledgePoint || '未知',
-      weak_points: body.weakPoints || [],
-    }),
-
-  dailyPractice: (body: {
-    knowledgePoint: string; grade?: string; subject?: string; masteryLevel?: string;
-    availableMinutes?: number; difficulty?: string; questionCount?: number;
-    weakPoints?: string[]; scenario?: string;
-  }) =>
-    aiRequest<{ success: boolean; skill: 'daily_practice'; data: DailyPracticeResult }>('/tutor/skills/daily-practice', {
-      knowledge_point: body.knowledgePoint,
-      grade: body.grade || '初中',
-      subject: body.subject || '数学',
-      mastery_level: body.masteryLevel || '中',
-      available_minutes: body.availableMinutes || 15,
-      difficulty: body.difficulty || '标准',
-      question_count: body.questionCount || 5,
-      weak_points: body.weakPoints || [],
-      scenario: body.scenario || '学生自练',
-    }),
-
-  examReview: (body: {
-    examGoal?: string; scoreSummary: string; grade?: string; subject?: string;
-    profiles?: Record<string, unknown>; weakPoints?: string[];
-    recentMistakes?: Record<string, unknown>[]; availableMinutes?: number; reviewDays?: number;
-  }) =>
-    aiRequest<{ success: boolean; skill: 'exam_review'; data: ExamReviewResult }>('/tutor/skills/exam-review', {
-      exam_goal: body.examGoal || '阶段测评提升',
-      score_summary: body.scoreSummary,
-      grade: body.grade || '初中',
-      subject: body.subject || '数学',
-      profiles: body.profiles || {},
-      weak_points: body.weakPoints || [],
-      recent_mistakes: body.recentMistakes || [],
-      available_minutes: body.availableMinutes || 30,
-      review_days: body.reviewDays || 7,
-    }),
-
-  studyPlan: (body: {
-    learningGoal: string; grade?: string; subject?: string;
-    profiles?: Record<string, unknown>; weakPoints?: string[];
-    availableMinutes?: number; planDays?: number; constraints?: string;
-  }) =>
-    aiRequest<{ success: boolean; skill: 'study_plan'; data: StudyPlanResult }>('/tutor/skills/study-plan', {
-      learning_goal: body.learningGoal,
-      grade: body.grade || '初中',
-      subject: body.subject || '数学',
-      profiles: body.profiles || {},
-      weak_points: body.weakPoints || [],
-      available_minutes: body.availableMinutes || 30,
-      plan_days: body.planDays || 7,
-      constraints: body.constraints || '无',
-    }),
-
 };
 
 export { ApiError };
