@@ -35,6 +35,8 @@ public class DiaryEntryService {
     private static final int MAX_LIMIT = 80;
     private static final int SINGLE_ENTRY_MAX_CHARS = 300;
     private static final int MERGED_ENTRY_MAX_CHARS = 600;
+    private static final String MANUAL_DIARY_SOURCE = "DIARY_MANUAL";
+    private static final String MERGE_POLICY = "MANUAL_SELF_SINGLE_CANDIDATE";
     private static final Set<String> VISIBILITIES = Set.of(
             "PRIVATE", "FAMILY_VISIBLE", "CARE_VISIBLE", "PARENT_VISIBLE", "LEGACY_VISIBLE");
     private static final Set<String> ENTRY_TYPES = Set.of(
@@ -53,11 +55,7 @@ public class DiaryEntryService {
         String diaryDate = resolveDiaryDate(request);
         String incomingContent = compressDiaryContent("", request.getContent().trim(), SINGLE_ENTRY_MAX_CHARS, diaryDate);
         Map<String, Object> requestMetadata = buildMetadata(request, diaryDate);
-        DiaryEntry existing = diaryRepository.findSameDayMergeCandidate(
-                request.getFamilyId(),
-                userId,
-                visibility,
-                diaryDate);
+        DiaryEntry existing = findEligibleMergeCandidate(request, userId, visibility, diaryDate, requestMetadata);
         if (existing != null) {
             String mergedContent = compressDiaryContent(
                     existing.getRawText(),
@@ -96,7 +94,7 @@ public class DiaryEntryService {
         entry.setVisibility(visibility);
         entry.setPrivacyLevel(visibility);
         entry.setPermissionScope(Map.of());
-        entry.setSource("USER_INPUT");
+        entry.setSource(resolveEntrySource(requestMetadata));
         entry.setMetadata(MemoryIndexMetadataBuilder.enrichDiary(
                 requestMetadata,
                 entry.getRawText(),
@@ -170,10 +168,53 @@ public class DiaryEntryService {
         metadata.putIfAbsent("status", "ACTIVE");
         metadata.put("sourceModule", "DIARY");
         metadata.put("diaryDate", diaryDate);
-        metadata.putIfAbsent("mergePolicy", "SAME_USER_FAMILY_DATE_VISIBILITY");
+        metadata.putIfAbsent("mergePolicy", MERGE_POLICY);
+        metadata.putIfAbsent("source", MANUAL_DIARY_SOURCE);
         metadata.putIfAbsent("singleMaxChars", SINGLE_ENTRY_MAX_CHARS);
         metadata.putIfAbsent("mergedMaxChars", MERGED_ENTRY_MAX_CHARS);
         return metadata;
+    }
+
+    private DiaryEntry findEligibleMergeCandidate(
+            CreateDiaryEntryRequest request,
+            Long userId,
+            String visibility,
+            String diaryDate,
+            Map<String, Object> metadata) {
+        if (!shouldAutoMerge(request, metadata)) {
+            return null;
+        }
+        List<DiaryEntry> candidates = diaryRepository.findSameDayMergeCandidates(
+                request.getFamilyId(),
+                userId,
+                visibility,
+                diaryDate);
+        return candidates.size() == 1 ? candidates.get(0) : null;
+    }
+
+    private static boolean shouldAutoMerge(CreateDiaryEntryRequest request, Map<String, Object> metadata) {
+        if (hasRelatedUser(metadata)) {
+            return false;
+        }
+        if (!MANUAL_DIARY_SOURCE.equals(resolveEntrySource(metadata))) {
+            return false;
+        }
+        return "DAILY".equals(normalizeEntryType(request.getEntryType()));
+    }
+
+    private static boolean hasRelatedUser(Map<String, Object> metadata) {
+        Object relatedUserId = metadata == null ? null : metadata.get("relatedUserId");
+        if (relatedUserId == null) {
+            return false;
+        }
+        String text = String.valueOf(relatedUserId).trim();
+        return !text.isEmpty() && !"0".equals(text);
+    }
+
+    private static String resolveEntrySource(Map<String, Object> metadata) {
+        Object source = metadata == null ? null : metadata.get("source");
+        String normalized = source == null ? "" : String.valueOf(source).trim().toUpperCase(Locale.ROOT);
+        return normalized.isEmpty() ? MANUAL_DIARY_SOURCE : normalized;
     }
 
     private static Map<String, Object> mergeMetadata(Object currentMetadata, Map<String, Object> nextMetadata) {

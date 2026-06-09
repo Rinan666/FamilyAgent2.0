@@ -180,7 +180,7 @@ function completenessProfile(
   const missing = [
     selfDiaries.length < 3 ? '本人记录不足 3 条' : '',
     relatedDiaries.length < 1 ? '缺少家人补充视角' : '',
-    growthRecords.length < 1 ? '缺少成长观察' : '',
+    growthRecords.length < 1 ? '缺少守护观察' : '',
     memoryCount < 2 ? '可见经验沉淀偏少' : '',
     hasMirrorProfile(context) ? '' : '未形成授权镜像画像摘要',
   ].filter(Boolean);
@@ -201,7 +201,7 @@ function completenessProfile(
       label: '可谨慎参考',
       className: 'bg-blue-50 text-blue-700',
       barClassName: 'bg-blue-500',
-      hint: '能提供初步参考，建议继续补充关键选择、家人留言或成长观察。',
+      hint: '能提供初步参考，建议继续补充关键选择、家人留言或守护观察。',
       missing,
     };
   }
@@ -406,7 +406,7 @@ export default function FamilyMemberMemoryPage() {
             返回家族空间
           </Link>
           <h1 className="text-xl font-bold text-gray-900">成员记忆视图</h1>
-          <p className="mt-1 text-sm text-gray-500">查看某位成员在当前家族中的可见记录、成长观察与镜像资料完整度。</p>
+              <p className="mt-1 text-sm text-gray-500">查看某位成员在当前家族中的可见记录、守护观察与镜像资料完整度。</p>
         </div>
         <div className="grid gap-2 sm:grid-cols-1">
           <select
@@ -467,11 +467,11 @@ export default function FamilyMemberMemoryPage() {
           <div className="grid grid-cols-4 gap-2 text-center">
             <div className="rounded-lg bg-rose-50 px-3 py-2">
               <p className="text-lg font-bold text-rose-700">{memberLifeRecords.length}</p>
-              <p className="text-[11px] text-rose-600">人生记录</p>
+                  <p className="text-[11px] text-rose-600">记录</p>
             </div>
             <div className="rounded-lg bg-emerald-50 px-3 py-2">
               <p className="text-lg font-bold text-emerald-700">{targetGrowthRecords.length}</p>
-              <p className="text-[11px] text-emerald-600">成长观察</p>
+                  <p className="text-[11px] text-emerald-600">守护观察</p>
             </div>
             <div className="rounded-lg bg-amber-50 px-3 py-2">
               <p className="text-lg font-bold text-amber-700">{mirrorMemoryCount}</p>
@@ -506,7 +506,7 @@ export default function FamilyMemberMemoryPage() {
         <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-500 sm:grid-cols-5">
           <div className="rounded-lg bg-gray-50 p-2">本人记录：{targetDiaries.length}/3</div>
           <div className="rounded-lg bg-gray-50 p-2">家人补充：{relatedDiaries.length}/1</div>
-          <div className="rounded-lg bg-gray-50 p-2">成长观察：{targetGrowthRecords.length}/1</div>
+          <div className="rounded-lg bg-gray-50 p-2">守护观察：{targetGrowthRecords.length}/1</div>
           <div className="rounded-lg bg-gray-50 p-2">经验沉淀：{mirrorMemoryCount}/2</div>
           <div className="rounded-lg bg-gray-50 p-2">镜像画像：{hasMirrorProfile(mirrorContext) ? '有' : '无'}</div>
         </div>
@@ -535,11 +535,11 @@ export default function FamilyMemberMemoryPage() {
           <span className="text-sm font-semibold">补家人留言</span>
         </Link>
         <Link
-          href={`/dashboard/growth?category=VISION${targetUserId ? `&targetUserId=${targetUserId}` : ''}${selectedFamilyId ? `&familyId=${selectedFamilyId}` : ''}`}
+          href={`/dashboard/diary?tab=growth&category=VISION${targetUserId ? `&targetUserId=${targetUserId}` : ''}${selectedFamilyId ? `&familyId=${selectedFamilyId}` : ''}`}
           className="flex min-h-20 flex-col justify-between rounded-lg bg-emerald-50 p-3 text-emerald-700 hover:bg-emerald-100"
         >
           <HeartPulse className="h-5 w-5" />
-          <span className="text-sm font-semibold">补成长观察</span>
+          <span className="text-sm font-semibold">补守护观察</span>
         </Link>
         <Link
           href={`/dashboard/heritage?type=ELDER_ADVICE&scenario=${encodeURIComponent(memberName(targetMember))}${selectedFamilyId ? `&familyId=${selectedFamilyId}` : ''}`}
@@ -595,7 +595,7 @@ export default function FamilyMemberMemoryPage() {
                       {promotedBy && <span>沉淀人：{promotedBy}</span>}
                       <span>{shortDate(promotedAt || memory.updatedAt || memory.createdAt)}</span>
                       {sourceDiaryId && (
-                        <Link href="/dashboard/diary" className="text-purple-700 hover:underline">
+                        <Link href="/dashboard/diary?tab=record" className="text-purple-700 hover:underline">
                           来源日记 #{sourceDiaryId}
                         </Link>
                       )}
@@ -609,7 +609,7 @@ export default function FamilyMemberMemoryPage() {
 
         <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-900">最近人生记录</h2>
+            <h2 className="text-sm font-semibold text-gray-900">最近记录</h2>
             <span className="text-xs text-gray-400">后端权限过滤后可见</span>
           </div>
           <div className="space-y-3">
@@ -637,7 +637,7 @@ export default function FamilyMemberMemoryPage() {
             })}
             {memberLifeRecords.length === 0 && (
               <div className="rounded-lg border border-dashed border-gray-200 p-8 text-center text-sm text-gray-400">
-                暂无该成员本人或相关可见人生记录。
+                暂无该成员本人或相关可见记录。
               </div>
             )}
           </div>
@@ -688,8 +688,8 @@ export default function FamilyMemberMemoryPage() {
 
         <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-900">成长观察</h2>
-            <Link href={`/dashboard/growth${selectedFamilyId ? `?familyId=${selectedFamilyId}` : ''}`} className="text-xs text-blue-600 hover:underline">
+            <h2 className="text-sm font-semibold text-gray-900">守护观察</h2>
+            <Link href={`/dashboard/diary?tab=growth${selectedFamilyId ? `&familyId=${selectedFamilyId}` : ''}${targetUserId ? `&targetUserId=${targetUserId}` : ''}`} className="text-xs text-blue-600 hover:underline">
               查看全部
             </Link>
           </div>
@@ -713,7 +713,7 @@ export default function FamilyMemberMemoryPage() {
             ))}
             {targetGrowthRecords.length === 0 && (
               <div className="rounded-lg border border-dashed border-gray-200 p-8 text-center text-sm text-gray-400">
-                暂无该成员成长观察。
+                暂无该成员守护观察。
               </div>
             )}
           </div>
@@ -755,7 +755,7 @@ export default function FamilyMemberMemoryPage() {
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <p className="rounded-lg bg-gray-50 p-3 text-xs leading-5 text-gray-500">补 2-3 条关键选择：让 AI 理解 TA 遇事时如何判断取舍。</p>
           <p className="rounded-lg bg-gray-50 p-3 text-xs leading-5 text-gray-500">补 1 条给家人的话：让镜像参考更接近真实表达方式。</p>
-          <p className="rounded-lg bg-gray-50 p-3 text-xs leading-5 text-gray-500">补 1 条成长观察：让家庭建议能连接到具体生活细节。</p>
+          <p className="rounded-lg bg-gray-50 p-3 text-xs leading-5 text-gray-500">补 1 条守护观察：让家庭建议能连接到具体生活细节。</p>
         </div>
       </section>
     </div>

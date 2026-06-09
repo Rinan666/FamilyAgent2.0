@@ -53,6 +53,16 @@ Windows 一键启动：
 start-all.bat
 ```
 
+配置约定：
+- 根目录 `.env.infra.local` 只负责 PostgreSQL、Redis、RabbitMQ、MinIO 等本地基础设施配置
+- 前端配置放在 `frontend/.env.local`
+- AI 服务配置放在 `ai-service/.env`
+- 不再把根目录配置视为“全项目统一 .env”
+
+说明：
+- `start-all.bat` / `start-all.ps1` 会优先使用 `backend/mvnw.cmd` 和 `ai-service/.venv`
+- 首次在新机器启动前，先完成下面的本地环境初始化，避免全局 `mvn` / `python` 混用
+
 停止服务：
 
 ```text
@@ -62,31 +72,36 @@ stop-all.bat
 手动启动：
 
 ```bash
-docker-compose up -d
+docker compose --env-file .env.infra.local up -d
 
 cd backend
-mvn spring-boot:run -Dspring-boot.run.profiles=dev
+.\mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=dev
 
 cd ai-service
-pip install -r requirements.txt
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\start.bat
 
 cd frontend
 npm install
 npm run dev
 ```
 
+推荐：
+- `backend` 不要直接使用裸 `mvn`，统一使用 `.\mvnw.cmd`
+- `ai-service` 不要直接使用裸 `python`、`pip`、`pytest`、`uvicorn`，统一使用 `.venv` 或 `start.bat`
+
 访问：
 
 - 前端：http://localhost:3000
-- 后端：http://localhost:8080
-- AI 文档：http://localhost:8000/docs
+- 后端：http://localhost:8180
+- AI 文档：http://localhost:8090/docs
 
 ## 常用检查
 
 ```bash
-cd backend && mvn test
-cd ai-service && python -m pytest tests/ -v
+cd backend && .\mvnw.cmd test
+cd ai-service && .\.venv\Scripts\python.exe -m pytest tests/ -v
 cd ai-service && ruff check app/
 cd frontend && npm run lint
 cd frontend && npx tsc --noEmit

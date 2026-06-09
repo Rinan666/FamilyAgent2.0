@@ -9,7 +9,6 @@ import {
   BookOpen,
   Database,
   Settings,
-  HeartPulse,
   BookHeart,
   ScrollText,
   Bot,
@@ -22,11 +21,10 @@ import type { ViewerRole } from '@/lib/roles';
 const navItems = [
   { href: '/dashboard/tutor', label: '家族Agent', icon: Sparkles, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
   { href: '/dashboard/mirror', label: '镜像 Agent', icon: Bot, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
-  { href: '/dashboard/diary', label: '每日记录', icon: BookHeart, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
-  { href: '/dashboard/growth', label: '成长观察', icon: HeartPulse, roles: ['PARENT', 'ADMIN'] },
-  { href: '/dashboard/heritage', label: '经验沉淀', icon: ScrollText, roles: ['PARENT', 'ADMIN'] },
+  { href: '/dashboard/diary', label: '写记录', icon: BookHeart, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
+  { href: '/dashboard/heritage', label: '沉淀经验', icon: ScrollText, roles: ['PARENT', 'ADMIN'] },
   { href: '/dashboard/family', label: '家族空间', icon: Users, roles: ['PARENT', 'ADMIN'] },
-  { href: '/dashboard/memory', label: '家族知识库', icon: BookOpen, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
+  { href: '/dashboard/memory', label: '家族记忆库', icon: BookOpen, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
   { href: '/dashboard/admin/database', label: '数据库健康', icon: Database, roles: ['ADMIN'], platformAdminOnly: true },
   { href: '/dashboard/settings', label: '设置', icon: Settings, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
 ];
@@ -34,11 +32,10 @@ const navItems = [
 const mobilePrimaryNav = [
   { href: '/dashboard/tutor', label: 'Agent', icon: Sparkles, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
   { href: '/dashboard/mirror', label: '镜像', icon: Bot, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
-  { href: '/dashboard/diary', label: '记录', icon: BookHeart, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
-  { href: '/dashboard/growth', label: '观察', icon: HeartPulse, roles: ['PARENT', 'ADMIN'] },
+  { href: '/dashboard/diary', label: '写记录', icon: BookHeart, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
   { href: '/dashboard/heritage', label: '经验', icon: ScrollText, roles: ['PARENT', 'ADMIN'] },
   { href: '/dashboard/family', label: '空间', icon: Users, roles: ['PARENT', 'ADMIN'] },
-  { href: '/dashboard/memory', label: '知识', icon: BookOpen, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
+  { href: '/dashboard/memory', label: '记忆', icon: BookOpen, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
   { href: '/dashboard/settings', label: '设置', icon: Settings, roles: ['STUDENT', 'PARENT', 'ADMIN'] },
 ];
 

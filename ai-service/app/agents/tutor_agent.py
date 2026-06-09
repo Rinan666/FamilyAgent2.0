@@ -1,11 +1,14 @@
 """
 讲题Agent — 苏格拉底式引导教学
 """
+import asyncio
+from contextlib import suppress
 from typing import AsyncIterator, Optional
 
 from app.agents.base import BaseAgent
+from app.config import settings
 from app.llm.client import llm_client
-from app.llm.prompts import tutor as tutor_prompts
+from app.llm.prompts import family_agent as family_agent_prompts
 from app.services.web_search import build_web_context, build_web_search_context
 from app.utils.safety_limits import (
     validate_no_prompt_leak_attempt,
@@ -20,7 +23,7 @@ class TutorAgent(BaseAgent):
     def __init__(self):
         super().__init__(
             name="TutorAgent",
-            system_prompt=tutor_prompts.SYSTEM_PROMPT,
+            system_prompt=family_agent_prompts.SYSTEM_PROMPT,
         )
 
     def _build_context(
@@ -43,9 +46,9 @@ class TutorAgent(BaseAgent):
     ) -> str:
         """构建讲题上下文"""
         style_instruction = (
-            tutor_prompts.DIRECT_STYLE_INSTRUCTION
+            family_agent_prompts.DIRECT_STYLE_INSTRUCTION
             if teaching_style == "direct"
-            else tutor_prompts.GUIDED_STYLE_INSTRUCTION
+            else family_agent_prompts.GUIDED_STYLE_INSTRUCTION
         )
         context = self.system_prompt.format(
             grade=grade,
@@ -63,9 +66,9 @@ class TutorAgent(BaseAgent):
             public_web_context=public_web_context or "未触发联网搜索。",
         )
         if teaching_style == "direct":
-            context += tutor_prompts.DIRECT_STYLE_OVERRIDE
+            context += family_agent_prompts.DIRECT_STYLE_OVERRIDE
         else:
-            context += tutor_prompts.GUIDED_STYLE_OVERRIDE
+            context += family_agent_prompts.GUIDED_STYLE_OVERRIDE
         return context
 
     def _build_chat_context(
@@ -84,7 +87,7 @@ class TutorAgent(BaseAgent):
     ) -> str:
         """构建普通对话上下文"""
         if self._is_mirror_mode(subject, knowledge_point):
-            return tutor_prompts.MIRROR_CHAT_SYSTEM_PROMPT.format(
+            return family_agent_prompts.MIRROR_CHAT_SYSTEM_PROMPT.format(
                 subject=subject or "家族记忆",
                 knowledge_point=knowledge_point or "镜像 Agent",
                 mastery_level=mastery_level,
@@ -93,7 +96,7 @@ class TutorAgent(BaseAgent):
                 current_time_context=self._current_time_context(client_timestamp, client_timezone),
                 public_web_context=public_web_context or "未触发联网搜索。",
             )
-        return tutor_prompts.CHAT_SYSTEM_PROMPT.format(
+        return family_agent_prompts.CHAT_SYSTEM_PROMPT.format(
             grade=grade or "未设置",
             subject=subject,
             knowledge_point=knowledge_point,
@@ -219,13 +222,7 @@ class TutorAgent(BaseAgent):
             )
 
             # 每次请求都携带完整题目上下文，避免历史对话续聊时丢失题目和讲题风格。
-            if teaching_style == "direct":
-                messages = [
-                    {"role": "system", "content": context},
-                    {"role": "system", "content": tutor_prompts.DIRECT_STYLE_OVERRIDE},
-                    {"role": "user", "content": student_message},
-                ]
-            elif not history:
+            if not history:
                 messages = [
                     {"role": "system", "content": context},
                     {"role": "user", "content": student_message},
@@ -275,85 +272,91 @@ class TutorAgent(BaseAgent):
             "memory_context": memory_context,
         }, label="tutor stream request")
 
-        if mode == "chat":
-            web_search_context = await build_web_search_context(student_message)
-            public_web_context = web_search_context.prompt_context
-            yield {
-                "type": "metadata",
-                "web_search": {
-                    "needed": web_search_context.needed,
-                    "used": len(web_search_context.results) > 0,
-                    "result_count": len(web_search_context.results),
-                    "sources": [
-                        {
-                            "title": item.title,
-                            "url": item.url,
-                            "snippet": item.snippet,
-                        }
-                        for item in web_search_context.results
-                    ],
-                },
-            }
-            context = self._build_chat_context(
-                grade, subject, knowledge_point,
-                mastery_level, common_errors, memory_context,
-                viewer_role, target_role,
-                client_timestamp, client_timezone,
-                public_web_context,
-            )
-            messages = [{"role": "system", "content": context}]
-            if history:
-                messages.extend(history)
-            messages.append({"role": "user", "content": student_message})
-        else:
-            web_search_context = await build_web_search_context(student_message)
-            public_web_context = web_search_context.prompt_context
-            yield {
-                "type": "metadata",
-                "web_search": {
-                    "needed": web_search_context.needed,
-                    "used": len(web_search_context.results) > 0,
-                    "result_count": len(web_search_context.results),
-                    "sources": [
-                        {
-                            "title": item.title,
-                            "url": item.url,
-                            "snippet": item.snippet,
-                        }
-                        for item in web_search_context.results
-                    ],
-                },
-            }
-            context = self._build_context(
-                question_content, answer, steps,
-                grade, subject, knowledge_point,
-                mastery_level, common_errors, teaching_style,
-                memory_context,
-                viewer_role, target_role,
-                client_timestamp, client_timezone,
-                public_web_context,
-            )
+        web_search_task = asyncio.create_task(build_web_search_context(student_message))
+        web_search_context = None
 
-            if teaching_style == "direct":
-                messages = [
-                    {"role": "system", "content": context},
-                    {"role": "system", "content": tutor_prompts.DIRECT_STYLE_OVERRIDE},
-                    {"role": "user", "content": student_message},
-                ]
-            elif not history:
-                messages = [
-                    {"role": "system", "content": context},
-                    {"role": "user", "content": student_message},
-                ]
+        try:
+            try:
+                web_search_context = await asyncio.wait_for(
+                    asyncio.shield(web_search_task),
+                    timeout=settings.web_search_stream_metadata_timeout_seconds,
+                )
+            except asyncio.TimeoutError:
+                yield {
+                    "type": "metadata",
+                    "web_search": {
+                        "needed": False,
+                        "used": False,
+                        "pending": True,
+                        "result_count": 0,
+                        "sources": [],
+                    },
+                }
+
+            if web_search_context is None:
+                web_search_context = await web_search_task
+
+            yield {
+                "type": "metadata",
+                "web_search": {
+                    "needed": web_search_context.needed,
+                    "used": len(web_search_context.results) > 0,
+                    "pending": False,
+                    "result_count": len(web_search_context.results),
+                    "sources": [
+                        {
+                            "title": item.title,
+                            "url": item.url,
+                            "snippet": item.snippet,
+                        }
+                        for item in web_search_context.results
+                    ],
+                },
+            }
+
+            public_web_context = web_search_context.prompt_context
+            if mode == "chat":
+                context = self._build_chat_context(
+                    grade, subject, knowledge_point,
+                    mastery_level, common_errors, memory_context,
+                    viewer_role, target_role,
+                    client_timestamp, client_timezone,
+                    public_web_context,
+                )
+                messages = [{"role": "system", "content": context}]
+                if history:
+                    messages.extend(history)
+                messages.append({"role": "user", "content": student_message})
             else:
-                messages = [
-                    {"role": "system", "content": context},
-                    *history,
-                    {"role": "user", "content": student_message},
-                ]
+                context = self._build_context(
+                    question_content, answer, steps,
+                    grade, subject, knowledge_point,
+                    mastery_level, common_errors, teaching_style,
+                    memory_context,
+                    viewer_role, target_role,
+                    client_timestamp, client_timezone,
+                    public_web_context,
+                )
 
-        async for chunk in llm_client.chat_stream(messages, temperature=0.7):
-            yield {"type": "content", "content": chunk}
+                if not history:
+                    messages = [
+                        {"role": "system", "content": context},
+                        {"role": "user", "content": student_message},
+                    ]
+                else:
+                    messages = [
+                        {"role": "system", "content": context},
+                        *history,
+                        {"role": "user", "content": student_message},
+                    ]
+
+            async for chunk in llm_client.chat_stream(messages, temperature=0.7):
+                yield {"type": "content", "content": chunk}
+        finally:
+            if not web_search_task.done():
+                web_search_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await web_search_task
 
 
 # 全局单例

@@ -44,17 +44,23 @@ Windows 一键启动：
 start-all.bat
 ```
 
+约定：
+- `backend` 统一使用 `.\mvnw.cmd`
+- `ai-service` 统一使用项目内 `.venv`
+- 避免直接使用全局 `mvn`、`python`、`pip`、`pytest`、`uvicorn`
+
 手动启动：
 
 ```bash
-docker-compose up -d
+docker compose --env-file .env.infra.local up -d
 
 cd backend
-mvn spring-boot:run -Dspring-boot.run.profiles=dev
+.\mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=dev
 
 cd ai-service
-pip install -r requirements.txt
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\start.bat
 
 cd frontend
 npm install
@@ -64,8 +70,8 @@ npm run dev
 ## Test Commands
 
 ```bash
-cd backend && mvn test
-cd ai-service && python -m pytest tests/ -v
+cd backend && .\mvnw.cmd test
+cd ai-service && .\.venv\Scripts\python.exe -m pytest tests/ -v
 cd ai-service && ruff check app/
 cd frontend && npm run lint
 cd frontend && npx tsc --noEmit

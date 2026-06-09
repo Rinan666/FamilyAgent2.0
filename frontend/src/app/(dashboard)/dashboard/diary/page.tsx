@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { BookHeart, CheckCircle, Edit3, Lightbulb, Lock, RefreshCw, Save, ScrollText, Sparkles, Trash2, Users, X } from 'lucide-react';
 import { diaryApi, memoryApi } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { useViewerRole } from '@/hooks/useViewerRole';
 import VoiceInputButton from '@/components/voice/VoiceInputButton';
+import GrowthPage from '@/app/(dashboard)/dashboard/growth/page';
 import type { DiaryEntry, DiaryEntryType, DiaryVisibility, MemoryEntryType, MemoryScope } from '@/types';
 
 const entryTypeOptions: { value: DiaryEntryType; label: string }[] = [
@@ -104,6 +105,7 @@ interface DiaryDraft {
 
 const DRAFT_VERSION = 'v1';
 const entryPageSizeOptions = [3, 6, 9];
+type WriteRecordTab = 'record' | 'growth';
 
 function draftKey(userId?: number, familyId?: number | null, relatedUserId?: number | null) {
   if (!userId || !familyId) return '';
@@ -237,9 +239,11 @@ function aiUsageNote(entry: DiaryEntry) {
 }
 
 export default function DiaryPage() {
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const user = useAuthStore((state) => state.user);
-  const { families, activeFamilyId, setActiveFamilyId, isLoading: loadingFamilies } = useViewerRole();
+  const { families, activeFamilyId, setActiveFamilyId, viewerRole, isLoading: loadingFamilies } = useViewerRole();
   const [selectedFamilyId, setSelectedFamilyId] = useState<number | null>(null);
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
   const [entryType, setEntryType] = useState<DiaryEntryType>('DAILY');
@@ -300,8 +304,14 @@ export default function DiaryPage() {
     tags: searchParams.get('prefillTags')?.trim() || '',
     visibility: searchParams.get('prefillVisibility')?.trim() as DiaryVisibility | '',
   }), [searchParams]);
+  const requestedTab = useMemo(() => {
+    const value = searchParams.get('tab');
+    return value === 'growth' ? 'growth' : 'record';
+  }, [searchParams]);
   const relatedContextLabel = requestedRelatedMemberName
     || (requestedRelatedUserId ? `用户 ${requestedRelatedUserId}` : '');
+  const canViewGrowthTab = viewerRole !== 'STUDENT';
+  const activeTab: WriteRecordTab = canViewGrowthTab ? requestedTab : 'record';
 
   const appendVoiceTranscript = useCallback((text: string) => {
     setContent((current) => (current.trim() ? `${current.trim()}\n${text}` : text));
@@ -625,6 +635,7 @@ export default function DiaryPage() {
         tags: formatTags(tagText),
         visibility,
         metadata: {
+          source: 'DIARY_MANUAL',
           authorName: user?.nickname || user?.username,
           qualityLevel: quality.level,
           qualityLabel: quality.label,
@@ -654,7 +665,7 @@ export default function DiaryPage() {
       setSelectedEntryId(saved.id);
       setEntryPage(1);
       const merged = Boolean(saved.metadata?.autoMerged);
-      flashSuccess(merged ? `已合并到今天的日记：${diaryTitle(saved)}` : `人生记录已保存：${quality.label}`);
+      flashSuccess(merged ? `已合并到今天的记录：${diaryTitle(saved)}` : `记录已保存：${quality.label}`);
       setSaveStatus('');
       void loadEntries(selectedFamilyId).catch((err) => {
         setError(err instanceof Error ? `记录已保存，但列表刷新失败：${err.message}` : '记录已保存，但列表刷新失败');
@@ -817,7 +828,7 @@ export default function DiaryPage() {
       }
       flashSuccess(isCoreMemory ? '已沉淀为核心家族记忆，可在家族记忆库中检索。' : `已沉淀为${memoryTypeName(memoryType)}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '沉淀为家族经验失败');
+      setError(err instanceof Error ? err.message : '整理成经验失败');
     } finally {
       setPromotingId(null);
     }
@@ -850,6 +861,17 @@ export default function DiaryPage() {
     });
   };
 
+  const handleTabChange = useCallback((tab: WriteRecordTab) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (tab === 'record') {
+      params.delete('tab');
+    } else {
+      params.set('tab', 'growth');
+    }
+    const next = params.toString();
+    router.replace(next ? `${pathname}?${next}` : pathname);
+  }, [pathname, router, searchParams]);
+
   if (loadingFamilies) {
     return (
       <div className="flex h-60 items-center justify-center text-gray-400">
@@ -879,11 +901,42 @@ export default function DiaryPage() {
     <div className="mx-auto w-full max-w-6xl">
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">家族日记</h1>
-          <p className="mt-1 text-sm text-gray-500">保存某个时间点的经历、感受和想法。日记会随时间淡化，适合保留当时语境，再由 AI 或家人筛选出值得长期沉淀的内容。</p>
+          <h1 className="text-xl font-bold text-gray-900">写记录</h1>
+          <p className="mt-1 text-sm text-gray-500">先把当下发生的事记下来，再决定哪些内容要继续跟进，哪些值得沉淀成长期经验。</p>
         </div>
       </div>
 
+      {canViewGrowthTab && (
+        <div className="mb-4 rounded-xl border border-gray-200 bg-white p-2">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => handleTabChange('record')}
+              className={`rounded-lg px-4 py-3 text-left transition-colors ${
+                activeTab === 'record' ? 'bg-blue-50 text-blue-700' : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-800'
+              }`}
+            >
+              <p className="text-sm font-semibold">当下记录</p>
+              <p className="mt-1 text-xs leading-5">保存经历、情绪、留言和当时的判断。</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTabChange('growth')}
+              className={`rounded-lg px-4 py-3 text-left transition-colors ${
+                activeTab === 'growth' ? 'bg-emerald-50 text-emerald-700' : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-800'
+              }`}
+            >
+              <p className="text-sm font-semibold">守护观察</p>
+              <p className="mt-1 text-xs leading-5">记录照护线索、复核时间和后续改善情况。</p>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'growth' ? (
+        <GrowthPage embedded />
+      ) : (
+        <>
       {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">{error}</div>}
       {success && (
         <div className="mb-4 flex items-center gap-2 rounded-lg bg-green-50 px-4 py-2 text-sm text-green-700">
@@ -896,9 +949,9 @@ export default function DiaryPage() {
         <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 p-4">
           <div className="mb-3 flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-gray-900">提出沉淀为家族经验</h2>
+              <h2 className="text-sm font-semibold text-gray-900">整理成家庭经验</h2>
               <p className="mt-1 text-xs leading-5 text-blue-700">
-                这会先作为“待确认”的经验沉淀进入家族知识库；AI 会知道它是由当前成员提出，而不是全家共同定论。
+                这会先作为“待确认”的经验沉淀进入家族记忆库；AI 会知道它是由当前成员提出，而不是全家共同定论。
               </p>
             </div>
             <button
@@ -918,7 +971,7 @@ export default function DiaryPage() {
             <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">{promotionEntry.rawText}</p>
           </div>
           <label className="block text-xs font-medium text-gray-600">
-            为什么这条记录值得沉淀为家族经验？
+            为什么这条记录值得整理成家庭经验？
             <textarea
               name="promotionReason"
               value={promotionReason}
@@ -959,7 +1012,7 @@ export default function DiaryPage() {
             <div>
               <h2 className="text-sm font-semibold text-gray-900">标为核心家族记忆</h2>
               <p className="mt-1 text-xs leading-5 text-purple-700">
-                核心记忆不是独立入口，会进入家族知识库并作为高优先级家族经验，后续镜像 Agent 在权限允许时会更优先参考。
+                核心记忆不是独立入口，会进入家族记忆库并作为高优先级家族经验，后续镜像 Agent 在权限允许时会更优先参考。
               </p>
             </div>
             <button
@@ -1018,7 +1071,7 @@ export default function DiaryPage() {
         <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-5">
           <div className="mb-4 flex items-center gap-2">
             <BookHeart className="h-5 w-5 text-purple-600" />
-            <h2 className="text-sm font-semibold text-gray-900">新增每日记录</h2>
+            <h2 className="text-sm font-semibold text-gray-900">新增记录</h2>
           </div>
 
           {relatedContextLabel && (
@@ -1426,7 +1479,7 @@ export default function DiaryPage() {
                       className="inline-flex h-9 items-center gap-1 rounded-lg border border-purple-200 bg-white px-3 text-xs font-medium text-purple-700 hover:bg-purple-50 disabled:text-green-600 disabled:opacity-80"
                     >
                       {promotingId === selectedEntry.id ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <ScrollText className="h-3.5 w-3.5" />}
-                      {promotedDiaryIds.has(selectedEntry.id) ? '已沉淀为家族经验' : '沉淀为家族经验'}
+                      {promotedDiaryIds.has(selectedEntry.id) ? '已整理成经验' : '整理成经验'}
                     </button>
                     <button
                       type="button"
@@ -1451,7 +1504,7 @@ export default function DiaryPage() {
           ) : entries.length === 0 ? (
             <div className="rounded-lg border border-dashed border-gray-200 p-8 text-center">
               <BookHeart className="mx-auto mb-2 h-8 w-8 text-gray-300" />
-              <p className="text-sm text-gray-500">这个家族还没有可见的人生记录。</p>
+              <p className="text-sm text-gray-500">这个家族还没有可见记录。</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -1524,7 +1577,7 @@ export default function DiaryPage() {
                             ) : (
                               <ScrollText className="h-3.5 w-3.5" />
                             )}
-                            {isPromoted ? '已沉淀' : '沉淀为家族经验'}
+                            {isPromoted ? '已整理' : '整理成经验'}
                           </button>
                           <button
                             type="button"
@@ -1595,6 +1648,8 @@ export default function DiaryPage() {
           )}
         </section>
       </div>
+        </>
+      )}
     </div>
   );
 }

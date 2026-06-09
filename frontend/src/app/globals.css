@@ -35,9 +35,4 @@
       opacity: 0;
     }
   }
-
-  /* 数学公式样式 */
-  .katex {
-    font-size: 1.1em;
-  }
 }

@@ -35,6 +35,8 @@ public class MemoryService {
             "FAMILY_STORY", "ELDER_ADVICE", "HEALTH_REMINDER", "GROWTH_RISK", "VALUE", "PLAN");
     private static final Set<String> FAMILY_MEMORY_SCOPES = Set.of(
             "PRIVATE", "PARENT_VISIBLE", "CARE_VISIBLE", "FAMILY_VISIBLE");
+    private static final Set<String> MANUAL_HERITAGE_SOURCES = Set.of(
+            "HERITAGE_ENTRY", "HERITAGE_INTERVIEW", "HERITAGE_ATOM");
     private static final int SIMILAR_MEMORY_SCAN_LIMIT = 30;
 
     private final MemoryEntryRepository memoryRepository;
@@ -57,6 +59,7 @@ public class MemoryService {
         familyService.checkMembership(request.getFamilyId());
 
         Map<String, Object> metadata = buildFamilyMemoryMetadata(request);
+        validateManualHeritageSaveJudge(request.getMetadata());
         Object sourceDiaryId = metadata.get("sourceDiaryId");
         if ("DIARY_PROMOTION".equals(metadata.get("source")) && sourceDiaryId != null) {
             MemoryEntry existing = memoryRepository.findActiveBySourceDiaryId(
@@ -527,6 +530,24 @@ public class MemoryService {
             return "言有余地，心有回声";
         }
         return "事经一回，智留一寸";
+    }
+
+    private static void validateManualHeritageSaveJudge(Map<String, Object> metadata) {
+        if (metadata == null) {
+            return;
+        }
+        Object source = metadata.get("source");
+        if (!MANUAL_HERITAGE_SOURCES.contains(String.valueOf(source))) {
+            return;
+        }
+        Object saveJudgeValue = metadata.get("saveJudge");
+        if (!(saveJudgeValue instanceof Map<?, ?> saveJudge)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "请先完成家族经验保存价值判断");
+        }
+        Object shouldSave = saveJudge.get("shouldSave");
+        if (!(shouldSave instanceof Boolean allowed) || !allowed) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "请先完成家族经验保存价值判断");
+        }
     }
 
     private static Map<String, Object> buildFamilyMemoryMetadata(CreateFamilyMemoryRequest request) {

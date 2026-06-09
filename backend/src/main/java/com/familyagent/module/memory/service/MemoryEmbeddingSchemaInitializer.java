@@ -49,6 +49,7 @@ public class MemoryEmbeddingSchemaInitializer {
             ON memory_embeddings USING ivfflat (embedding vector_cosine_ops)
             WHERE embedding IS NOT NULL
             """);
+        cleanupSupersededPendingEmbeddings();
     }
 
     private void migrateSourceTypeConstraint() {
@@ -74,6 +75,56 @@ public class MemoryEmbeddingSchemaInitializer {
                     ADD CONSTRAINT chk_memory_embeddings_source_type
                     CHECK (source_type IN ('DIARY', 'MEMORY', 'GROWTH_OBSERVATION'));
             END $$;
+            """);
+    }
+
+    private void cleanupSupersededPendingEmbeddings() {
+        jdbcTemplate.execute("""
+            WITH stale_pending AS (
+                SELECT
+                    em.id,
+                    CASE
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM memory_embeddings newer
+                            WHERE newer.source_type = em.source_type
+                              AND newer.source_id = em.source_id
+                              AND newer.id > em.id
+                        ) THEN 'STARTUP_STALE_PENDING_SUPERSEDED'
+                        ELSE 'STARTUP_STALE_PENDING_TIMEOUT'
+                    END AS cleanup_reason,
+                    CASE
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM memory_embeddings newer
+                            WHERE newer.source_type = em.source_type
+                              AND newer.source_id = em.source_id
+                              AND newer.id > em.id
+                        ) THEN 'Superseded by newer embedding request'
+                        ELSE 'Embedding request timed out before completion'
+                    END AS cleanup_error
+                FROM memory_embeddings em
+                WHERE em.status = 'PENDING'
+                  AND (
+                    EXISTS (
+                        SELECT 1
+                        FROM memory_embeddings newer
+                        WHERE newer.source_type = em.source_type
+                          AND newer.source_id = em.source_id
+                          AND newer.id > em.id
+                    )
+                    OR em.updated_at < NOW() - INTERVAL '10 minutes'
+                  )
+            )
+            UPDATE memory_embeddings em
+            SET status = 'FAILED',
+                metadata = jsonb_build_object(
+                    'error', stale_pending.cleanup_error,
+                    'cleanupReason', stale_pending.cleanup_reason
+                ),
+                updated_at = NOW()
+            FROM stale_pending
+            WHERE em.id = stale_pending.id
             """);
     }
 }

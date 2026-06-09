@@ -56,10 +56,10 @@ public interface DiaryEntryRepository extends BaseMapper<DiaryEntry> {
           AND visibility = #{visibility}
           AND (metadata->>'status' IS NULL OR metadata->>'status' = 'ACTIVE')
           AND COALESCE(metadata->>'diaryDate', TO_CHAR(created_at, 'YYYY-MM-DD')) = #{diaryDate}
-        ORDER BY created_at ASC
-        LIMIT 1
+        ORDER BY created_at DESC
+        LIMIT 2
         """)
-    DiaryEntry findSameDayMergeCandidate(
+    List<DiaryEntry> findSameDayMergeCandidates(
             @Param("familyId") Long familyId,
             @Param("userId") Long userId,
             @Param("visibility") String visibility,

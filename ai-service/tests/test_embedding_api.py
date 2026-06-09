@@ -24,7 +24,7 @@ async def test_local_embedding_uses_requested_dimensions():
 def test_embedding_router_requires_backend_token_verification():
     dependencies = [item.dependency for item in embedding.router.dependencies]
 
-    assert embedding.verify_token in dependencies
+    assert embedding.verify_token_or_internal_service in dependencies
 
 
 def test_qwen3_vl_embedding_allows_1536_dimensions():

@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { heritageTaskApi, memoryApi } from '@/lib/api';
 import { useViewerRole } from '@/hooks/useViewerRole';
 import VoiceInputButton from '@/components/voice/VoiceInputButton';
-import type { FamilyMemoryCard, HeritageTask, MemoryEntry, MemoryEntryType, MemoryScope, MemoryVoteStats, MemoryVoteType } from '@/types';
+import type { FamilyMemoryCard, HeritageSaveJudge, HeritageTask, MemoryEntry, MemoryEntryType, MemoryScope, MemoryVoteStats, MemoryVoteType } from '@/types';
 import {
   AlertTriangle,
   BookHeart,
@@ -49,6 +49,17 @@ const scenarioSuggestions = [
 ];
 
 const memoryPageSizeOptions = [3, 6, 9];
+
+type EntryMode = 'INTERVIEW' | 'ATOM' | 'DIRECT';
+
+const entryModeOptions: { value: EntryMode; label: string; description: string }[] = [
+  { value: 'INTERVIEW', label: '访谈式录入', description: '问长辈三个问题' },
+  { value: 'ATOM', label: '三句话原子', description: '先写三个短句' },
+  { value: 'DIRECT', label: '直接写正式草稿', description: '直接编辑保存栏' },
+];
+
+const validMemoryTypes = new Set(typeOptions.map((option) => option.value));
+const validMemoryScopes = new Set(scopeOptions.map((option) => option.value));
 
 const interviewThemes: {
   id: string;
@@ -238,6 +249,8 @@ export default function HeritagePage() {
   const [memories, setMemories] = useState<MemoryEntry[]>([]);
   const [tasks, setTasks] = useState<HeritageTask[]>([]);
   const [content, setContent] = useState('');
+  const [entryMode, setEntryMode] = useState<EntryMode>('INTERVIEW');
+  const [sourceMode, setSourceMode] = useState<EntryMode>('DIRECT');
   const [memoryType, setMemoryType] = useState<MemoryEntryType>('ELDER_ADVICE');
   const [scope, setScope] = useState<MemoryScope>('FAMILY_VISIBLE');
   const [scenario, setScenario] = useState('全家通用');
@@ -247,6 +260,9 @@ export default function HeritagePage() {
   const [atomThinking, setAtomThinking] = useState('');
   const [atomRedo, setAtomRedo] = useState('');
   const [draftCard, setDraftCard] = useState<FamilyMemoryCard | null>(null);
+  const [organizedReason, setOrganizedReason] = useState('');
+  const [saveJudge, setSaveJudge] = useState<HeritageSaveJudge | null>(null);
+  const [organizingMode, setOrganizingMode] = useState<EntryMode | null>(null);
   const [loadingMemories, setLoadingMemories] = useState(false);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -282,13 +298,19 @@ export default function HeritagePage() {
     setMemoryPage(1);
   }, [selectedFamilyId, memoryPageSize]);
 
+  const resetFormalDerivedState = () => {
+    setDraftCard(null);
+    setSaveJudge(null);
+    setOrganizedReason('');
+  };
+
   const applyInterviewTheme = (themeId: string) => {
     const theme = interviewThemes.find((item) => item.id === themeId) || interviewThemes[0];
     setInterviewThemeId(theme.id);
     setInterviewAnswers(theme.questions.map(() => ''));
     setMemoryType(theme.memoryType);
     setScenario(theme.scenario);
-    setDraftCard(null);
+    resetFormalDerivedState();
   };
 
   const buildInterviewDraft = () => {
@@ -305,23 +327,7 @@ export default function HeritagePage() {
       `适用场景：${selectedInterviewTheme.scenario}`,
       '',
       answerLines.join('\n\n'),
-      '',
-      '请把以上访谈内容整理成一条可传承的家族经验，保留事实和原意，不夸大、不编造。',
     ].join('\n');
-  };
-
-  const useInterviewDraft = () => {
-    const draft = buildInterviewDraft();
-    if (!draft) {
-      setError('请先填写至少一个访谈回答');
-      return;
-    }
-    setContent(draft);
-    setMemoryType(selectedInterviewTheme.memoryType);
-    setScenario(selectedInterviewTheme.scenario);
-    setDraftCard(null);
-    setError('');
-    flashSuccess('访谈回答已整理为经验草稿，可继续 AI 整理');
   };
 
   const buildAtomDraft = () => {
@@ -330,32 +336,64 @@ export default function HeritagePage() {
     const redo = atomRedo.trim();
     if (!situation && !thinking && !redo) return '';
     return [
-      '三句话经验原子',
       `当时发生了什么：${situation || '未填写'}`,
       `我当时怎么想：${thinking || '未填写'}`,
       `如果重来我会怎么做：${redo || '未填写'}`,
-      '',
-      '请把以上三句话整理成一条短小、具体、可传承的家族经验，保留事实和原意，不夸大、不编造。',
     ].join('\n');
   };
 
-  const useAtomDraft = () => {
-    const draft = buildAtomDraft();
-    if (!draft) {
-      setError('请至少填写一句经验原子');
+  const organizeToFormalDraft = async (rawContent: string, mode: EntryMode) => {
+    const trimmed = rawContent.trim();
+    if (!trimmed) {
+      setError(mode === 'INTERVIEW' ? '请先填写至少一个访谈回答' : '请至少填写一句经验原子');
       return;
     }
-    setContent(draft);
-    setMemoryType('ELDER_ADVICE');
-    setScenario((current) => current.trim() || '全家通用');
-    setDraftCard(null);
+    setOrganizingMode(mode);
     setError('');
-    flashSuccess('三句话已整理为经验草稿，可继续 AI 整理');
+    try {
+      const result = await memoryApi.organizeDraft({
+        scene: 'HERITAGE',
+        content: trimmed,
+        currentType: mode === 'INTERVIEW' ? selectedInterviewTheme.memoryType : memoryType,
+        currentVisibility: scope,
+        target: mode === 'INTERVIEW' ? selectedInterviewTheme.scenario : scenario,
+        familyContext: selectedFamily?.description || selectedFamily?.name || '',
+      });
+      const draft = result.data;
+      setContent(draft.content);
+      if (validMemoryTypes.has(draft.memory_type)) {
+        setMemoryType(draft.memory_type as MemoryEntryType);
+      } else if (mode === 'INTERVIEW') {
+        setMemoryType(selectedInterviewTheme.memoryType);
+      }
+      if (validMemoryScopes.has(draft.memory_scope as MemoryScope)) {
+        setScope(draft.memory_scope as MemoryScope);
+      }
+      setScenario(draft.scenario || (mode === 'INTERVIEW' ? selectedInterviewTheme.scenario : scenario || '全家通用'));
+      setSourceMode(mode);
+      setDraftCard(null);
+      setSaveJudge(null);
+      setOrganizedReason(draft.reason || 'AI 已将输入整理为正式保存草稿。');
+      flashSuccess('已整理到正式保存区，可继续编辑后保存');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'AI 整理失败');
+    } finally {
+      setOrganizingMode(null);
+    }
+  };
+
+  const useInterviewDraft = () => {
+    void organizeToFormalDraft(buildInterviewDraft(), 'INTERVIEW');
+  };
+
+  const useAtomDraft = () => {
+    void organizeToFormalDraft(buildAtomDraft(), 'ATOM');
   };
 
   const appendVoiceTranscript = useCallback((text: string) => {
     setContent((current) => (current.trim() ? `${current.trim()}\n${text}` : text));
-    setDraftCard(null);
+    resetFormalDerivedState();
+    setSourceMode('DIRECT');
   }, []);
 
   const loadMemories = useCallback(async (familyId: number) => {
@@ -427,18 +465,20 @@ export default function HeritagePage() {
   };
 
   const handleGenerateCard = async () => {
-    if (!content.trim()) return;
+    const formalContent = content.trim();
+    if (!formalContent) return;
     setGenerating(true);
     setError('');
     try {
       const result = await memoryApi.createFamilyMemoryCard({
-        content,
+        content: formalContent,
         memoryType,
         familyContext: selectedFamily?.description || selectedFamily?.name || '',
         target: scenario,
       });
       setDraftCard(result.data);
-      flashSuccess('已整理为经验卡');
+      setSaveJudge(null);
+      flashSuccess('已基于正式保存内容整理为经验卡预览');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'AI 整理失败');
     } finally {
@@ -446,35 +486,74 @@ export default function HeritagePage() {
     }
   };
 
+  const sourceMetadataValue = (mode: EntryMode) => {
+    if (mode === 'INTERVIEW') return 'HERITAGE_INTERVIEW';
+    if (mode === 'ATOM') return 'HERITAGE_ATOM';
+    return 'HERITAGE_ENTRY';
+  };
+
   const handleSave = async () => {
-    if (!selectedFamilyId || !content.trim()) return;
+    const formalContent = content.trim();
+    if (!selectedFamilyId || !formalContent) return;
     setSaving(true);
     setError('');
     try {
-      const card = draftCard;
-      const isInterviewDraft = content.includes('访谈主题：');
-      const isAtomDraft = content.includes('三句话经验原子');
+      const judgeResult = await memoryApi.judgeHeritageSave({
+        content: formalContent,
+        memoryType,
+        scenario,
+        familyContext: selectedFamily?.description || selectedFamily?.name || '',
+        sourceMode,
+      });
+      const judge = judgeResult.data;
+      setSaveJudge(judge);
+      if (!judge.should_save) {
+        setError(judge.reason || '这条内容暂不适合作为家族经验沉淀保存，请补充具体经历和后辈可借鉴做法。');
+        return;
+      }
+
+      const card = draftCard || (await memoryApi.createFamilyMemoryCard({
+        content: formalContent,
+        memoryType,
+        familyContext: selectedFamily?.description || selectedFamily?.name || '',
+        target: scenario,
+      })).data;
       await memoryApi.createFamilyMemory({
         familyId: selectedFamilyId,
-        content,
+        content: formalContent,
         type: memoryType,
         scope,
-        summary: card?.summary || content.slice(0, 120),
+        summary: card?.summary || formalContent.slice(0, 120),
         importance: memoryType === 'HEALTH_REMINDER' || memoryType === 'GROWTH_RISK' ? 4 : 3,
         memoryCard: card || undefined,
         metadata: {
-          source: isInterviewDraft ? 'HERITAGE_INTERVIEW' : isAtomDraft ? 'HERITAGE_ATOM' : 'HERITAGE_ENTRY',
+          source: sourceMetadataValue(sourceMode),
+          sourceMode,
           curationStatus: 'PENDING_CONFIRMATION',
-          curationReason: card?.summary || content.slice(0, 120),
+          curationReason: card?.summary || formalContent.slice(0, 120),
           scenario,
           target: scenario,
-          interviewThemeId: isInterviewDraft ? selectedInterviewTheme.id : undefined,
-          interviewThemeLabel: isInterviewDraft ? selectedInterviewTheme.label : undefined,
-          atomVersion: isAtomDraft ? 'THREE_SENTENCE_V1' : undefined,
+          saveJudge: {
+            shouldSave: judge.should_save,
+            learningValueScore: judge.learning_value_score,
+            descendantValue: judge.descendant_value,
+            reason: judge.reason,
+            missingElements: judge.missing_elements,
+            sensitivity: judge.sensitivity,
+          },
+          learningValueScore: judge.learning_value_score,
+          descendantValue: judge.descendant_value,
+          saveJudgeReason: judge.reason,
+          interviewThemeId: sourceMode === 'INTERVIEW' ? selectedInterviewTheme.id : undefined,
+          interviewThemeLabel: sourceMode === 'INTERVIEW' ? selectedInterviewTheme.label : undefined,
+          atomVersion: sourceMode === 'ATOM' ? 'THREE_SENTENCE_V1' : undefined,
         },
       });
       setContent('');
       setDraftCard(null);
+      setSaveJudge(null);
+      setOrganizedReason('');
+      setSourceMode('DIRECT');
       flashSuccess('家族经验已保存');
       await loadMemories(selectedFamilyId);
     } catch (err) {
@@ -577,7 +656,7 @@ export default function HeritagePage() {
     try {
       await heritageTaskApi.complete(task.id, note);
       setCompletionNotes((current) => ({ ...current, [task.id]: '' }));
-      flashSuccess('任务已完成，并沉淀为人生记录');
+      flashSuccess('任务已完成，并沉淀为记录');
       if (selectedFamilyId) {
         await loadTasks(selectedFamilyId);
       }
@@ -637,106 +716,150 @@ export default function HeritagePage() {
             <h2 className="text-sm font-semibold text-gray-900">新增经验沉淀</h2>
           </div>
 
-          <div className="mb-4 rounded-lg border border-purple-100 bg-purple-50 p-3">
-            <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold text-purple-900">访谈式录入</p>
-                <p className="mt-1 text-xs leading-5 text-purple-700">
-                  不用写长文，先问长辈三个问题。回答越口语越好，AI 会把具体经历整理成可复用的家族经验卡。
-                </p>
-              </div>
-              <select
-                name="interviewThemeId"
-                value={interviewThemeId}
-                onChange={(event) => applyInterviewTheme(event.target.value)}
-                className="h-9 rounded-lg border border-purple-200 bg-white px-3 text-sm text-purple-900 outline-none focus:ring-2 focus:ring-purple-500"
+          <div className="mb-4 grid grid-cols-1 gap-2 rounded-lg bg-gray-50 p-1 sm:grid-cols-3">
+            {entryModeOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setEntryMode(option.value)}
+                className={`rounded-lg px-3 py-2 text-left transition-colors ${
+                  entryMode === option.value
+                    ? 'bg-white text-purple-700 shadow-sm'
+                    : 'text-gray-500 hover:bg-white/70 hover:text-gray-800'
+                }`}
               >
-                {interviewThemes.map((theme) => (
-                  <option key={theme.id} value={theme.id}>{theme.label}</option>
-                ))}
-              </select>
-            </div>
-            <p className="mb-3 text-xs leading-5 text-purple-700">{selectedInterviewTheme.description}</p>
-            <div className="space-y-3">
-              {selectedInterviewTheme.questions.map((question, index) => (
-                <label key={question} className="block text-xs font-medium text-purple-900">
-                  {index + 1}. {question}
-                  <textarea
-                    name={`interviewAnswer-${index}`}
-                    value={interviewAnswers[index] || ''}
-                    onChange={(event) => {
-                      const next = [...interviewAnswers];
-                      next[index] = event.target.value;
-                      setInterviewAnswers(next);
-                    }}
-                    rows={2}
-                    className="mt-1 w-full resize-none rounded-lg border border-purple-100 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-purple-500"
-                    placeholder="可以直接粘贴访谈口述，也可以先写三句话..."
-                  />
-                </label>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={useInterviewDraft}
-              className="mt-3 inline-flex h-9 items-center gap-2 rounded-lg bg-purple-600 px-3 text-xs font-medium text-white hover:bg-purple-700"
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              生成访谈草稿
-            </button>
+                <span className="block text-sm font-semibold">{option.label}</span>
+                <span className="mt-0.5 block text-[11px]">{option.description}</span>
+              </button>
+            ))}
           </div>
 
-          <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 p-3">
-            <div className="mb-3">
-              <p className="text-sm font-semibold text-blue-900">三句话经验原子</p>
-              <p className="mt-1 text-xs leading-5 text-blue-700">
-                不需要完整文章，只写三个短句：发生了什么、当时怎么想、重来会怎么做。适合把一时经历转成长期可用的经验原子。
-              </p>
+          {entryMode === 'INTERVIEW' && (
+            <div className="mb-4 rounded-lg border border-purple-100 bg-purple-50 p-3">
+              <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-purple-900">访谈式录入</p>
+                  <p className="mt-1 text-xs leading-5 text-purple-700">
+                    不用写长文，先问长辈三个问题。回答越口语越好，AI 会整理成下方可编辑的正式保存内容。
+                  </p>
+                </div>
+                <select
+                  name="interviewThemeId"
+                  value={interviewThemeId}
+                  onChange={(event) => applyInterviewTheme(event.target.value)}
+                  className="h-9 rounded-lg border border-purple-200 bg-white px-3 text-sm text-purple-900 outline-none focus:ring-2 focus:ring-purple-500"
+                >
+                  {interviewThemes.map((theme) => (
+                    <option key={theme.id} value={theme.id}>{theme.label}</option>
+                  ))}
+                </select>
+              </div>
+              <p className="mb-3 text-xs leading-5 text-purple-700">{selectedInterviewTheme.description}</p>
+              <div className="space-y-3">
+                {selectedInterviewTheme.questions.map((question, index) => (
+                  <label key={question} className="block text-xs font-medium text-purple-900">
+                    {index + 1}. {question}
+                    <textarea
+                      name={`interviewAnswer-${index}`}
+                      value={interviewAnswers[index] || ''}
+                      onChange={(event) => {
+                        const next = [...interviewAnswers];
+                        next[index] = event.target.value;
+                        setInterviewAnswers(next);
+                      }}
+                      rows={2}
+                      className="mt-1 w-full resize-none rounded-lg border border-purple-100 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-purple-500"
+                      placeholder="可以直接粘贴访谈口述，也可以先写三句话..."
+                    />
+                  </label>
+                ))}
+              </div>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs text-purple-700">
+                  已回答 {interviewAnswers.filter((answer) => answer.trim()).length} / {selectedInterviewTheme.questions.length}
+                </span>
+                <button
+                  type="button"
+                  onClick={useInterviewDraft}
+                  disabled={organizingMode === 'INTERVIEW'}
+                  className="inline-flex h-9 items-center gap-2 rounded-lg bg-purple-600 px-3 text-xs font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+                >
+                  {organizingMode === 'INTERVIEW' ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  整理到正式保存区
+                </button>
+              </div>
             </div>
-            <div className="space-y-3">
-              <label className="block text-xs font-medium text-blue-900">
-                1. 当时发生了什么？
-                <textarea
-                  name="atomSituation"
-                  value={atomSituation}
-                  onChange={(event) => setAtomSituation(event.target.value)}
-                  rows={2}
-                  className="mt-1 w-full resize-none rounded-lg border border-blue-100 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="例如：我年轻时因为忽视牙齿矫正，后来花了更大代价补救。"
-                />
-              </label>
-              <label className="block text-xs font-medium text-blue-900">
-                2. 我当时怎么想？
-                <textarea
-                  name="atomThinking"
-                  value={atomThinking}
-                  onChange={(event) => setAtomThinking(event.target.value)}
-                  rows={2}
-                  className="mt-1 w-full resize-none rounded-lg border border-blue-100 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="例如：我觉得不疼不痒，不值得马上处理。"
-                />
-              </label>
-              <label className="block text-xs font-medium text-blue-900">
-                3. 如果重来，我会怎么做？
-                <textarea
-                  name="atomRedo"
-                  value={atomRedo}
-                  onChange={(event) => setAtomRedo(event.target.value)}
-                  rows={2}
-                  className="mt-1 w-full resize-none rounded-lg border border-blue-100 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="例如：孩子换牙期就定期检查，发现问题尽早咨询医生。"
-                />
-              </label>
+          )}
+
+          {entryMode === 'ATOM' && (
+            <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 p-3">
+              <div className="mb-3">
+                <p className="text-sm font-semibold text-blue-900">三句话经验原子</p>
+                <p className="mt-1 text-xs leading-5 text-blue-700">
+                  不需要完整文章，只写三个短句：发生了什么、当时怎么想、重来会怎么做。AI 会整理成下方正式保存内容。
+                </p>
+              </div>
+              <div className="space-y-3">
+                <label className="block text-xs font-medium text-blue-900">
+                  1. 当时发生了什么？
+                  <textarea
+                    name="atomSituation"
+                    value={atomSituation}
+                    onChange={(event) => setAtomSituation(event.target.value)}
+                    rows={2}
+                    className="mt-1 w-full resize-none rounded-lg border border-blue-100 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="例如：我年轻时因为忽视牙齿矫正，后来花了更大代价补救。"
+                  />
+                </label>
+                <label className="block text-xs font-medium text-blue-900">
+                  2. 我当时怎么想？
+                  <textarea
+                    name="atomThinking"
+                    value={atomThinking}
+                    onChange={(event) => setAtomThinking(event.target.value)}
+                    rows={2}
+                    className="mt-1 w-full resize-none rounded-lg border border-blue-100 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="例如：我觉得不疼不痒，不值得马上处理。"
+                  />
+                </label>
+                <label className="block text-xs font-medium text-blue-900">
+                  3. 如果重来，我会怎么做？
+                  <textarea
+                    name="atomRedo"
+                    value={atomRedo}
+                    onChange={(event) => setAtomRedo(event.target.value)}
+                    rows={2}
+                    className="mt-1 w-full resize-none rounded-lg border border-blue-100 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="例如：孩子换牙期就定期检查，发现问题尽早咨询医生。"
+                  />
+                </label>
+              </div>
+              <button
+                type="button"
+                onClick={useAtomDraft}
+                disabled={organizingMode === 'ATOM'}
+                className="mt-3 inline-flex h-9 items-center gap-2 rounded-lg bg-blue-600 px-3 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {organizingMode === 'ATOM' ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                整理到正式保存区
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={useAtomDraft}
-              className="mt-3 inline-flex h-9 items-center gap-2 rounded-lg bg-blue-600 px-3 text-xs font-medium text-white hover:bg-blue-700"
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              生成三句话草稿
-            </button>
-          </div>
+          )}
+
+          {entryMode === 'DIRECT' && (
+            <div className="mb-4 rounded-lg border border-amber-100 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
+              你可以直接在下方“正式保存内容”中写最终版本。保存时系统会先判断是否具备后辈学习价值；没有价值时不会保存，并会提示需要补充什么。
+            </div>
+          )}
+
+          <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+            <div className="mb-3 flex items-center gap-2">
+              <Save className="h-4 w-4 text-blue-600" />
+              <div>
+                <p className="text-sm font-semibold text-gray-900">正式保存内容</p>
+                <p className="text-xs text-gray-500">这是唯一保存来源，访谈和三句话只负责生成这份正式草稿。</p>
+              </div>
+            </div>
 
           <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <label className="text-xs font-medium text-gray-500">
@@ -746,7 +869,7 @@ export default function HeritagePage() {
                 value={memoryType}
                 onChange={(event) => {
                   setMemoryType(event.target.value as MemoryEntryType);
-                  setDraftCard(null);
+                  setSaveJudge(null);
                 }}
                 className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
               >
@@ -809,13 +932,44 @@ export default function HeritagePage() {
               value={content}
               onChange={(event) => {
                 setContent(event.target.value);
-                setDraftCard(null);
+                resetFormalDerivedState();
+                setSourceMode('DIRECT');
               }}
               rows={9}
               placeholder="例如：爷爷说，孩子换牙期和初中前后要特别注意牙齿、坐姿和用眼距离，很多问题小时候不明显，长大后再调整会更费劲。"
               className="w-full resize-none rounded-lg border border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+
+          {organizedReason && (
+            <p className="mb-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-700">
+              {organizedReason}
+            </p>
+          )}
+
+          {saveJudge && !saveJudge.should_save && (
+            <div className="mb-3 rounded-lg border border-red-100 bg-red-50 p-3 text-sm text-red-700">
+              <p className="font-medium">暂不能保存为家族经验</p>
+              <p className="mt-1 text-xs leading-5">{saveJudge.reason}</p>
+              {saveJudge.missing_elements.length > 0 && (
+                <p className="mt-2 text-xs">缺少：{saveJudge.missing_elements.join('、')}</p>
+              )}
+              {saveJudge.suggested_revision && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setContent(saveJudge.suggested_revision);
+                    setSaveJudge(null);
+                    setDraftCard(null);
+                    setOrganizedReason('已采用 AI 建议修改，请补充真实细节后再保存。');
+                  }}
+                  className="mt-3 inline-flex h-8 items-center rounded-lg border border-red-200 bg-white px-3 text-xs font-medium text-red-700 hover:bg-red-100"
+                >
+                  采用建议修改
+                </button>
+              )}
+            </div>
+          )}
 
           <div className="flex flex-col gap-2 sm:flex-row">
             <button
@@ -874,6 +1028,7 @@ export default function HeritagePage() {
               </p>
             </div>
           )}
+          </div>
         </section>
 
         <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-5">

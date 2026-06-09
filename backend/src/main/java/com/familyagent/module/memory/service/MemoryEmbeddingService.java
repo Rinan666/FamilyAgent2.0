@@ -211,6 +211,7 @@ public class MemoryEmbeddingService {
     }
 
     private Long upsertPending(String sourceType, Long sourceId, Long familyId, Long userId, String contentHash) {
+        supersedeOlderPendingEmbeddings(sourceType, sourceId, contentHash);
         return jdbcTemplate.queryForObject("""
                 INSERT INTO memory_embeddings (
                     family_id, user_id, source_type, source_id, content_hash, status, metadata
@@ -222,17 +223,53 @@ public class MemoryEmbeddingService {
                 """, Long.class, familyId, userId, sourceType, sourceId, contentHash);
     }
 
+    private void supersedeOlderPendingEmbeddings(String sourceType, Long sourceId, String contentHash) {
+        try {
+            String metadata = objectMapper.writeValueAsString(Map.of(
+                    "error", "Superseded by newer embedding request",
+                    "cleanupReason", "STALE_PENDING_SUPERSEDED",
+                    "supersededByContentHash", contentHash == null ? "" : contentHash));
+            jdbcTemplate.update("""
+                    UPDATE memory_embeddings
+                    SET status = 'FAILED',
+                        metadata = ?::jsonb,
+                        updated_at = NOW()
+                    WHERE source_type = ?
+                      AND source_id = ?
+                      AND status = 'PENDING'
+                      AND content_hash <> ?
+                    """, metadata, sourceType, sourceId, contentHash);
+        } catch (Exception e) {
+            log.warn("Failed to supersede stale pending embeddings: sourceType={}, sourceId={}, error={}",
+                    sourceType, sourceId, e.getMessage());
+        }
+    }
+
     private void markFailed(Long id, String error) {
         if (id == null) {
             return;
         }
-        jdbcTemplate.update("""
-                UPDATE memory_embeddings
-                SET status = 'FAILED',
-                    metadata = jsonb_build_object('error', ?),
-                    updated_at = NOW()
-                WHERE id = ?
-                """, error == null ? "unknown" : error, id);
+        try {
+            String metadata = objectMapper.writeValueAsString(Map.of(
+                    "error", error == null ? "unknown" : error));
+            jdbcTemplate.update("""
+                    UPDATE memory_embeddings
+                    SET status = 'FAILED',
+                        metadata = ?::jsonb,
+                        updated_at = NOW()
+                    WHERE id = ?
+                    """, metadata, id);
+        } catch (Exception serializationError) {
+            log.warn("Failed to serialize embedding error metadata: id={}, error={}",
+                    id, serializationError.getMessage());
+            jdbcTemplate.update("""
+                    UPDATE memory_embeddings
+                    SET status = 'FAILED',
+                        metadata = '{"error":"unknown"}'::jsonb,
+                        updated_at = NOW()
+                    WHERE id = ?
+                    """, id);
+        }
     }
 
     private static String buildDiaryText(DiaryEntry entry) {

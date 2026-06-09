@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.config import settings
-from app.middleware.auth import verify_token
+from app.middleware.auth import verify_token_or_internal_service
 from app.utils.privacy_guard import redact_ai_bound_text
 from app.utils.sanitizer import sanitize_text
 from app.utils.safety_limits import enforce_ai_concurrency, enforce_embedding_rate_limit
@@ -20,7 +20,7 @@ from app.utils.safety_limits import enforce_ai_concurrency, enforce_embedding_ra
 logger = logging.getLogger("familyagent.ai.api.embedding")
 
 router = APIRouter(dependencies=[
-    Depends(verify_token),
+    Depends(verify_token_or_internal_service),
     Depends(enforce_embedding_rate_limit),
     Depends(enforce_ai_concurrency),
 ])

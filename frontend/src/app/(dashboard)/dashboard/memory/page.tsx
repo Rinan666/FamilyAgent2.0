@@ -38,9 +38,9 @@ const visibilityOptions = ['PRIVATE', 'FAMILY_VISIBLE', 'CARE_VISIBLE', 'LEGACY_
 
 const typeOptions: { value: LibraryItemType | 'ALL'; label: string }[] = [
   { value: 'ALL', label: '全部类型' },
-  { value: 'LIFE_RECORD', label: '人生记录' },
-  { value: 'FAMILY_EXPERIENCE', label: '家族经验' },
-  { value: 'GROWTH_OBSERVATION', label: '成长观察' },
+  { value: 'LIFE_RECORD', label: '记录' },
+  { value: 'FAMILY_EXPERIENCE', label: '经验' },
+  { value: 'GROWTH_OBSERVATION', label: '观察' },
   { value: 'AI_SUMMARY', label: 'AI 摘要' },
 ];
 
@@ -51,19 +51,19 @@ const typeMeta: Record<LibraryItemType, {
   badge: string;
 }> = {
   LIFE_RECORD: {
-    label: '人生记录',
+    label: '记录',
     icon: BookHeart,
     tone: 'text-rose-700 bg-rose-50',
     badge: 'bg-rose-50 text-rose-700',
   },
   FAMILY_EXPERIENCE: {
-    label: '家族经验',
+    label: '经验',
     icon: ScrollText,
     tone: 'text-amber-700 bg-amber-50',
     badge: 'bg-amber-50 text-amber-700',
   },
   GROWTH_OBSERVATION: {
-    label: '成长观察',
+    label: '观察',
     icon: HeartPulse,
     tone: 'text-emerald-700 bg-emerald-50',
     badge: 'bg-emerald-50 text-emerald-700',
@@ -97,11 +97,18 @@ function sourceLabel(item: MemoryLibraryItem) {
 }
 
 function sourceHref(item: MemoryLibraryItem, familyId?: number | null) {
-  const query = familyId ? `?familyId=${familyId}` : '';
-  if (item.sourceType === 'LIFE_RECORD') return `/dashboard/diary${query}`;
-  if (item.sourceType === 'FAMILY_EXPERIENCE') return `/dashboard/heritage${query}`;
-  if (item.sourceType === 'GROWTH_OBSERVATION') return `/dashboard/growth${query}`;
-  return `/dashboard/memory${query}`;
+  const params = new URLSearchParams();
+  if (familyId) params.set('familyId', String(familyId));
+  if (item.memberUserId) params.set('targetUserId', String(item.memberUserId));
+  if (item.sourceType === 'GROWTH_OBSERVATION') {
+    params.set('tab', 'growth');
+    const query = params.toString();
+    return `/dashboard/diary${query ? `?${query}` : ''}`;
+  }
+  const query = params.toString();
+  if (item.sourceType === 'LIFE_RECORD') return `/dashboard/diary${query ? `?${query}` : ''}`;
+  if (item.sourceType === 'FAMILY_EXPERIENCE') return `/dashboard/heritage${query ? `?${query}` : ''}`;
+  return `/dashboard/memory${query ? `?${query}` : ''}`;
 }
 
 function metadataText(item: MemoryLibraryItem, key: string) {
@@ -201,9 +208,9 @@ function emptyPage(pageSize: number): PageResult<MemoryLibraryItem> {
 }
 
 function recallSourceTypeLabel(sourceType?: string) {
-  if (sourceType === 'LIFE_RECORD') return '人生记录';
-  if (sourceType === 'FAMILY_EXPERIENCE') return '家族经验';
-  if (sourceType === 'GROWTH_OBSERVATION') return '成长观察';
+  if (sourceType === 'LIFE_RECORD') return '记录';
+  if (sourceType === 'FAMILY_EXPERIENCE') return '经验';
+  if (sourceType === 'GROWTH_OBSERVATION') return '观察';
   if (sourceType === 'AI_SUMMARY') return 'AI 摘要';
   return sourceType || '未知来源';
 }
@@ -500,7 +507,7 @@ export default function MemoryLibraryPage() {
       <div className="mx-auto max-w-3xl rounded-lg border border-gray-200 bg-white p-10 text-center">
         <BookHeart className="mx-auto mb-3 h-10 w-10 text-gray-300" />
         <h1 className="text-lg font-semibold text-gray-900">先创建一个家族空间</h1>
-        <p className="mt-2 text-sm text-gray-500">家族知识库会统一收纳每日记录、经验沉淀、成长观察和 AI 摘要。</p>
+        <p className="mt-2 text-sm text-gray-500">家族记忆库会统一收纳当下记录、沉淀经验、守护观察和 AI 摘要。</p>
         <Link
           href="/dashboard/family"
           className="mt-5 inline-flex h-10 items-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
@@ -516,9 +523,9 @@ export default function MemoryLibraryPage() {
       <section className="mb-4 rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">家族知识库</h1>
+            <h1 className="text-xl font-bold text-gray-900">家族记忆库</h1>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-gray-500">
-              统一检索 {activeFamily?.name || '当前家族'} 的人生记录、家族经验、成长观察和 AI 摘要。这里是总入口，具体编辑仍回到对应来源页面。
+              统一检索 {activeFamily?.name || '当前家族'} 的记录、经验、观察和 AI 摘要。这里是总入口，具体编辑仍回到对应来源页面。
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -673,7 +680,7 @@ export default function MemoryLibraryPage() {
           <div>
             <h2 className="text-sm font-semibold text-gray-900">RAG 召回调试</h2>
             <p className="mt-1 text-sm leading-6 text-gray-500">
-              输入一句家族 Agent 可能收到的问题，查看系统会按权限召回哪些日记、经验和成长观察。
+              输入一句家族 Agent 可能收到的问题，查看系统会按权限召回哪些记录、经验和守护观察。
             </p>
           </div>
           {recallResult && (

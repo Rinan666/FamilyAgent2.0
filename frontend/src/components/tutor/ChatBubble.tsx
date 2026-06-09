@@ -36,7 +36,7 @@ export default function ChatBubble({ message, isStreaming }: ChatBubbleProps) {
           isStreaming && 'typing-cursor',
         )}
       >
-        <div className="whitespace-pre-wrap break-words">
+        <div className="break-words">
           {message.content ? <MathRenderer content={message.content} /> : (isStreaming ? '' : '...')}
         </div>
       </div>

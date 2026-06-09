@@ -1,21 +1,17 @@
 package com.familyagent.module.session.service;
 
 import cn.dev33.satoken.stp.StpUtil;
-import com.familyagent.infra.ai.AIServiceClient;
 import com.familyagent.module.family.service.FamilyService;
-import com.familyagent.module.memory.service.MemoryService;
 import com.familyagent.module.session.entity.ChatSession;
 import com.familyagent.module.session.repository.ChatSessionRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -31,22 +27,16 @@ class ChatSessionServiceTest {
 
     @Mock private ChatSessionRepository sessionRepository;
     @Mock private FamilyService familyService;
-    @Mock private AIServiceClient aiServiceClient;
-    @Mock private MemoryService memoryService;
 
     @Test
-    void endSession_shouldTransitionActiveSessionAndExtractMemoriesOnce() {
+    void endSession_shouldTransitionActiveSessionWithoutLegacyMemoryExtraction() {
         ChatSession active = session(100L, 10L, "ACTIVE", null);
-        active.setMessages(List.of(Map.of("role", "user", "content", "need help")));
         ChatSession ended = session(100L, 10L, "ENDED", LocalDateTime.now());
-        ended.setMessages(active.getMessages());
 
-        when(sessionRepository.selectById(100L)).thenReturn(active, ended);
+        when(sessionRepository.findStatusById(100L)).thenReturn(active, ended);
         when(sessionRepository.endActiveSession(eq(100L), eq("done"), any(LocalDateTime.class))).thenReturn(1);
-        when(aiServiceClient.extractMemories(any(), eq("Bearer token"))).thenReturn(Map.of("memories", List.of()));
 
-        ChatSessionService service = new ChatSessionService(
-                sessionRepository, familyService, aiServiceClient, memoryService);
+        ChatSessionService service = new ChatSessionService(sessionRepository, familyService);
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
@@ -58,9 +48,7 @@ class ChatSessionServiceTest {
             assertNotNull(result.getEndedAt());
         }
 
-        ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(aiServiceClient).extractMemories(requestCaptor.capture(), eq("Bearer token"));
-        assertEquals(100L, requestCaptor.getValue().get("session_id"));
+        verify(sessionRepository, never()).selectById(100L);
     }
 
     @Test
@@ -68,11 +56,10 @@ class ChatSessionServiceTest {
         LocalDateTime endedAt = LocalDateTime.now().minusMinutes(5);
         ChatSession ended = session(100L, 10L, "ENDED", endedAt);
 
-        when(sessionRepository.selectById(100L)).thenReturn(ended, ended);
+        when(sessionRepository.findStatusById(100L)).thenReturn(ended, ended);
         when(sessionRepository.endActiveSession(eq(100L), eq(null), any(LocalDateTime.class))).thenReturn(0);
 
-        ChatSessionService service = new ChatSessionService(
-                sessionRepository, familyService, aiServiceClient, memoryService);
+        ChatSessionService service = new ChatSessionService(sessionRepository, familyService);
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
@@ -83,19 +70,18 @@ class ChatSessionServiceTest {
             assertEquals(endedAt, result.getEndedAt());
         }
 
-        verify(aiServiceClient, never()).extractMemories(any(), any());
         verify(sessionRepository, never()).fillMissingEndedAt(any(), any());
+        verify(sessionRepository, never()).selectById(100L);
     }
 
     @Test
     void endSession_shouldRepairEndedSessionWithoutEndedAt() {
         ChatSession endedWithoutTime = session(100L, 10L, "ENDED", null);
 
-        when(sessionRepository.selectById(100L)).thenReturn(endedWithoutTime, endedWithoutTime);
+        when(sessionRepository.findStatusById(100L)).thenReturn(endedWithoutTime, endedWithoutTime);
         when(sessionRepository.endActiveSession(eq(100L), eq(null), any(LocalDateTime.class))).thenReturn(0);
 
-        ChatSessionService service = new ChatSessionService(
-                sessionRepository, familyService, aiServiceClient, memoryService);
+        ChatSessionService service = new ChatSessionService(sessionRepository, familyService);
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
@@ -107,7 +93,29 @@ class ChatSessionServiceTest {
         }
 
         verify(sessionRepository).fillMissingEndedAt(eq(100L), any(LocalDateTime.class));
-        verify(aiServiceClient, never()).extractMemories(any(), any());
+        verify(sessionRepository, never()).selectById(100L);
+    }
+
+    @Test
+    void updateMessages_shouldUpdateOnlyMessages() {
+        ChatSession existing = session(100L, 10L, "ENDED", LocalDateTime.now());
+        List<Object> messages = List.of();
+
+        when(sessionRepository.selectById(100L)).thenReturn(existing);
+
+        ChatSessionService service = new ChatSessionService(sessionRepository, familyService);
+
+        try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
+            stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
+
+            ChatSession result = service.updateMessages(100L, messages);
+
+            assertEquals(messages, result.getMessages());
+            assertEquals("ENDED", result.getStatus());
+        }
+
+        verify(sessionRepository).updateSessionMessages(100L, messages);
+        verify(sessionRepository, never()).updateById(any(ChatSession.class));
     }
 
     private static ChatSession session(Long id, Long userId, String status, LocalDateTime endedAt) {

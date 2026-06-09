@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Bot, CheckCircle, Loader2, RefreshCw, Send, UserRound, Users, XCircle } from 'lucide-react';
+import MathRenderer from '@/components/tutor/MathRenderer';
 import { diaryApi, familyApi, growthGuardApi, memoryApi, mirrorApi, skillRunApi, tutorApi } from '@/lib/api';
 import { memberAge } from '@/lib/roles';
 import { useViewerRole } from '@/hooks/useViewerRole';
@@ -171,7 +172,7 @@ function buildSourceRefs(context?: MirrorContextResponse | null): MirrorSourceRe
   const libraryRefs = (context.libraryItems || []).map((item, index) => ({
     code: `L${index + 1}`,
     title: item.title || '记忆库片段',
-    sourceLabel: '家族知识库',
+    sourceLabel: '家族记忆库',
     temporalLabel: '已授权',
     toneClass: 'bg-indigo-50 text-indigo-700',
   }));
@@ -888,10 +889,10 @@ export default function MirrorPage() {
                         补一条长者经验
                       </Link>
                       <Link
-                        href={`/dashboard/growth?category=VISION${targetUserId ? `&targetUserId=${targetUserId}` : ''}${selectedFamilyId ? `&familyId=${selectedFamilyId}` : ''}`}
+                href={`/dashboard/diary?tab=growth&category=VISION${targetUserId ? `&targetUserId=${targetUserId}` : ''}${selectedFamilyId ? `&familyId=${selectedFamilyId}` : ''}`}
                         className="rounded-lg border border-green-100 bg-green-50 px-3 py-2 text-xs font-medium text-green-700 hover:bg-green-100"
                       >
-                        补一条成长观察
+                补一条守护观察
                       </Link>
                     </div>
                   </div>
@@ -983,13 +984,15 @@ export default function MirrorPage() {
             ) : (
               messages.map((message) => (
                 <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[94%] whitespace-pre-wrap break-words rounded-2xl px-3 py-2.5 text-sm leading-6 sm:max-w-[86%] sm:px-4 ${
+                  <div className={`max-w-[94%] break-words rounded-2xl px-3 py-2.5 text-sm leading-6 sm:max-w-[86%] sm:px-4 ${
                     message.role === 'user'
                       ? 'rounded-br-md bg-blue-600 text-white'
                       : 'rounded-bl-md bg-gray-100 text-gray-900'
                   } ${message.role === 'assistant' && !message.content ? 'animate-pulse' : ''}`}
                   >
-                    {message.content || (message.role === 'assistant' ? '思考中...' : '')}
+                    {message.role === 'assistant' && message.content
+                      ? <MathRenderer content={message.content} />
+                      : message.content || (message.role === 'assistant' ? '思考中...' : '')}
                     {message.role === 'assistant' && <WebSearchBadge metadata={message.metadata} />}
                     {message.role === 'assistant' && message.toolResult && (
                       <div className="mt-3 rounded-lg border border-green-100 bg-white/70 px-3 py-2 text-xs text-green-700">

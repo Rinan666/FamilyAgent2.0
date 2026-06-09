@@ -1,61 +1,136 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import katex from 'katex';
-import 'katex/dist/katex.min.css';
-
 interface MathRendererProps {
-  /** Text that may contain $...$ (inline) or $$...$$ (block) math */
   content: string;
   className?: string;
 }
 
-/**
- * MathRenderer — renders text with KaTeX for math expressions.
- *
- * Supported delimiters:
- * - $...$ for inline math
- * - $$...$$ for display (block) math
- */
+interface TextBlock {
+  type: 'text';
+  content: string;
+}
+
+interface CodeBlock {
+  type: 'code';
+  content: string;
+}
+
+type ContentBlock = TextBlock | CodeBlock;
+
+function splitBlocks(content: string): ContentBlock[] {
+  const lines = content.replace(/\r\n/g, '\n').split('\n');
+  const blocks: ContentBlock[] = [];
+  let textBuffer: string[] = [];
+  let codeBuffer: string[] = [];
+  let inCodeBlock = false;
+
+  const flushText = () => {
+    if (textBuffer.length === 0) return;
+    blocks.push({ type: 'text', content: textBuffer.join('\n').trim() });
+    textBuffer = [];
+  };
+
+  const flushCode = () => {
+    if (codeBuffer.length === 0) return;
+    blocks.push({ type: 'code', content: codeBuffer.join('\n') });
+    codeBuffer = [];
+  };
+
+  lines.forEach((line) => {
+    if (line.trim().startsWith('```')) {
+      if (inCodeBlock) {
+        flushCode();
+      } else {
+        flushText();
+      }
+      inCodeBlock = !inCodeBlock;
+      return;
+    }
+
+    if (inCodeBlock) {
+      codeBuffer.push(line);
+      return;
+    }
+
+    textBuffer.push(line);
+  });
+
+  if (inCodeBlock) {
+    flushCode();
+  } else {
+    flushText();
+  }
+
+  return blocks.filter((block) => block.content.trim().length > 0);
+}
+
+function renderInlineText(text: string) {
+  const parts = text.split(/(`[^`]+`)/g);
+
+  return parts.map((part, index) => {
+    if (part.startsWith('`') && part.endsWith('`') && part.length >= 2) {
+      return (
+        <code
+          key={`inline-${index}`}
+          className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[0.92em] text-gray-800"
+        >
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+
+    return <span key={`text-${index}`}>{part}</span>;
+  });
+}
+
+function renderTextBlock(content: string) {
+  return content.split(/\n{2,}/).map((paragraph, index) => {
+    const lines = paragraph.split('\n');
+
+    if (lines.every((line) => line.trim().startsWith('- ') || line.trim().startsWith('* '))) {
+      return (
+        <ul key={`list-${index}`} className="mb-2 list-disc space-y-1 pl-5 last:mb-0">
+          {lines.map((line, lineIndex) => (
+            <li key={`item-${lineIndex}`} className="leading-6">
+              {renderInlineText(line.replace(/^\s*[-*]\s*/, ''))}
+            </li>
+          ))}
+        </ul>
+      );
+    }
+
+    return (
+      <p key={`paragraph-${index}`} className="mb-2 whitespace-pre-wrap leading-6 last:mb-0">
+        {renderInlineText(paragraph)}
+      </p>
+    );
+  });
+}
+
 export default function MathRenderer({ content, className = '' }: MathRendererProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  if (!content) {
+    return null;
+  }
 
-  useEffect(() => {
-    if (!containerRef.current || !content) return;
+  const blocks = splitBlocks(content);
 
-    // Replace block math first ($$...$$), then inline ($...$)
-    let html = content
-      // Escape HTML entities in non-math text first
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+  return (
+    <div className={`break-words ${className}`.trim()}>
+      {blocks.map((block, index) => {
+        if (block.type === 'code') {
+          return (
+            <pre key={`code-${index}`} className="my-3 overflow-x-auto rounded-lg bg-gray-900/95 px-3 py-2 text-xs text-gray-100">
+              <code>{block.content}</code>
+            </pre>
+          );
+        }
 
-    // Block math: $$...$$
-    html = html.replace(/\$\$([\s\S]*?)\$\$/g, (_match, formula: string) => {
-      try {
-        return katex.renderToString(formula.trim(), {
-          displayMode: true,
-          throwOnError: false,
-        });
-      } catch {
-        return `<pre>${formula.trim()}</pre>`;
-      }
-    });
-
-    // Inline math: $...$ (but not $$)
-    html = html.replace(/(?<!\$)\$(?!\$)([\s\S]*?)(?<!\$)\$(?!\$)/g, (_match, formula: string) => {
-      try {
-        return katex.renderToString(formula.trim(), {
-          displayMode: false,
-          throwOnError: false,
-        });
-      } catch {
-        return `$${formula.trim()}$`;
-      }
-    });
-
-    containerRef.current.innerHTML = html;
-  }, [content]);
-
-  return <div ref={containerRef} className={`math-content ${className}`} />;
+        return (
+          <div key={`block-${index}`}>
+            {renderTextBlock(block.content)}
+          </div>
+        );
+      })}
+    </div>
+  );
 }

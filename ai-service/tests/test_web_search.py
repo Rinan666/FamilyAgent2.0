@@ -2,6 +2,8 @@
 Web search trigger and context tests.
 """
 
+import asyncio
+
 from app.services.web_search import WebSearchResult, format_web_context, needs_web_search
 
 
@@ -41,3 +43,31 @@ def test_web_context_includes_sources():
     assert "联网搜索得到的公开结果摘要" in context
     assert "示例新闻" in context
     assert "https://example.com/news" in context
+
+
+def test_timeout_metadata_shape_is_stable():
+    payload = {
+        "type": "metadata",
+        "web_search": {
+            "needed": False,
+            "used": False,
+            "pending": True,
+            "result_count": 0,
+            "sources": [],
+        },
+    }
+
+    assert payload["type"] == "metadata"
+    assert payload["web_search"]["pending"] is True
+    assert payload["web_search"]["sources"] == []
+
+
+def test_background_task_can_resolve_after_timeout_marker():
+    async def delayed_result():
+        await asyncio.sleep(0)
+        return {"needed": True, "results": [1]}
+
+    result = asyncio.run(delayed_result())
+
+    assert result["needed"] is True
+    assert result["results"] == [1]

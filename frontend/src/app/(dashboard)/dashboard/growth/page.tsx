@@ -29,6 +29,10 @@ import {
   Users,
 } from 'lucide-react';
 
+interface GrowthPageProps {
+  embedded?: boolean;
+}
+
 const categoryOptions: { value: GrowthGuardCategory; label: string }[] = [
   { value: 'POSTURE', label: '体态' },
   { value: 'DENTAL', label: '牙齿' },
@@ -211,7 +215,7 @@ function stalenessStats(record: GrowthGuardRecord) {
   };
 }
 
-export default function GrowthPage() {
+export default function GrowthPage({ embedded = false }: GrowthPageProps) {
   const searchParams = useSearchParams();
   const { families, activeFamilyId, setActiveFamilyId, isLoading: loadingFamilies } = useViewerRole();
   const [members, setMembers] = useState<Record<number, FamilyMember[]>>({});
@@ -388,7 +392,7 @@ export default function GrowthPage() {
       setConcernText('');
       setUncertaintyText('');
       setFollowUpAt(dateAfter(7));
-      flashSuccess('成长观察已保存');
+      flashSuccess('守护观察已保存');
       await loadFamilyData(selectedFamilyId);
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败');
@@ -521,7 +525,7 @@ export default function GrowthPage() {
         });
         setSavedReports((prev) => [saved, ...prev.filter((item) => item.id !== saved.id)].slice(0, 3));
       }
-      flashSuccess('已生成并保存成长观察照护摘要');
+      flashSuccess('已生成并保存守护观察照护摘要');
     } catch (err) {
       setError(err instanceof Error ? err.message : '生成照护摘要失败');
     } finally {
@@ -555,19 +559,61 @@ export default function GrowthPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">成长观察</h1>
-          <p className="mt-1 text-sm text-gray-500">记录可观察事实、来源视角和不确定性。它不是诊断，也不是对人的定性；系统会按复核周期降低旧观察的权重。</p>
+    <div className={embedded ? 'w-full' : 'mx-auto w-full max-w-6xl'}>
+      {!embedded && (
+        <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 p-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-blue-900">守护观察已并入“写记录”</p>
+              <p className="mt-1 text-xs leading-5 text-blue-700">
+                旧入口会继续保留一段时间。以后从“写记录”里切到“守护观察”，就能直接记录照护线索与后续跟进。
+              </p>
+            </div>
+            <Link
+              href={`/dashboard/diary?tab=growth${selectedFamilyId ? `&familyId=${selectedFamilyId}` : ''}${requestedTargetUserId ? `&targetUserId=${requestedTargetUserId}` : ''}${requestedCategory ? `&category=${requestedCategory}` : ''}`}
+              className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-white px-3 text-xs font-medium text-blue-700 hover:bg-blue-100"
+            >
+              去写记录
+            </Link>
+          </div>
         </div>
-      </div>
+      )}
+
+      {!embedded && (
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">守护观察</h1>
+            <p className="mt-1 text-sm text-gray-500">记录可观察事实、来源视角和不确定性。它不是诊断，而是面向照护跟进的家庭观察线索。</p>
+          </div>
+        </div>
+      )}
 
       {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">{error}</div>}
       {success && (
         <div className="mb-4 flex items-center gap-2 rounded-lg bg-green-50 px-4 py-2 text-sm text-green-700">
           <CheckCircle className="h-4 w-4" />
           {success}
+        </div>
+      )}
+
+      {targetMember && (
+        <div className="mb-4 rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-emerald-900">当前正在关注 {memberName(targetMember)}</p>
+              <p className="mt-1 text-xs leading-5 text-emerald-700">
+                这条观察会围绕当前成员展开。适合记录照护线索、后续复核时间，以及是否已经出现改善。
+              </p>
+            </div>
+            {!embedded && (
+              <Link
+                href={`/dashboard/diary?tab=growth${selectedFamilyId ? `&familyId=${selectedFamilyId}` : ''}${targetUserId ? `&targetUserId=${targetUserId}` : ''}`}
+                className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg bg-white px-3 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+              >
+                在写记录中查看
+              </Link>
+            )}
+          </div>
         </div>
       )}
 
@@ -821,7 +867,7 @@ export default function GrowthPage() {
             className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            保存成长观察
+            保存守护观察
           </button>
         </section>
 
@@ -829,7 +875,7 @@ export default function GrowthPage() {
           <div className="rounded-lg border border-gray-200 bg-white p-4 sm:p-5">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-sm font-semibold text-gray-900">成长观察照护摘要</h2>
+                <h2 className="text-sm font-semibold text-gray-900">守护观察照护摘要</h2>
                 <p className="mt-1 text-xs text-gray-500">面向照护者，基于观察线索和来源视角生成；默认照护可见，不构成诊断。</p>
               </div>
               <button
@@ -909,7 +955,7 @@ export default function GrowthPage() {
             ) : (
               <div className="rounded-lg border border-dashed border-gray-200 p-8 text-center">
                 <Sparkles className="mx-auto mb-2 h-8 w-8 text-gray-300" />
-                <p className="text-sm text-gray-500">保存 1 条以上成长观察后，可生成照护者可见的成长观察摘要。</p>
+                <p className="text-sm text-gray-500">保存 1 条以上守护观察后，可生成照护者可见的观察摘要。</p>
               </div>
             )}
 
@@ -946,7 +992,7 @@ export default function GrowthPage() {
               <div>
                 <h2 className="text-sm font-semibold text-gray-900">最近观察</h2>
                 <p className="mt-1 text-xs text-gray-500">
-                  待跟进 {actionableRecords.length} 条，改善后可标记沉淀为家庭经验。
+                  待跟进 {actionableRecords.length} 条，改善后可整理成家庭经验。
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -979,7 +1025,7 @@ export default function GrowthPage() {
             ) : records.length === 0 ? (
               <div className="rounded-lg border border-dashed border-gray-200 p-8 text-center">
                 <HeartPulse className="mx-auto mb-2 h-8 w-8 text-gray-300" />
-                <p className="text-sm text-gray-500">还没有成长观察记录。</p>
+                <p className="text-sm text-gray-500">还没有守护观察记录。</p>
               </div>
             ) : visibleRecords.length === 0 ? (
               <div className="rounded-lg border border-dashed border-gray-200 p-8 text-center">

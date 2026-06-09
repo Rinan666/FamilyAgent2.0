@@ -1,4 +1,5 @@
 """File content extraction helpers for the tutor upload MVP."""
+
 from __future__ import annotations
 
 import re
@@ -69,7 +70,7 @@ def extract_content(filename: str, content_type: str | None, data: bytes) -> Ext
             detected_answers=[],
             detected_steps=[],
             supported=False,
-            message="图片识别需要接入 OCR 或视觉模型。DeepSeek V4 Pro 适合基于识别后的文本讲题，但不能直接读取图片。",
+            message="图片识别需要接入 OCR 或视觉模型；当前版本不能直接读取图片。",
         )
 
     try:
@@ -122,7 +123,7 @@ def extract_content(filename: str, content_type: str | None, data: bytes) -> Ext
             detected_answers=[],
             detected_steps=[],
             supported=False,
-            message="没有提取到可读文本。扫描版 PDF 或图片题目需要 OCR/视觉模型支持。",
+            message="没有提取到可读文本。扫描版 PDF 或图片题目需要 OCR 或视觉模型支持。",
         )
 
     return ExtractedContent(
@@ -190,11 +191,11 @@ def _parse_learning_text(text: str) -> dict[str, Any]:
     steps: list[str] = []
 
     question_patterns = [
-        r"^(?:第?\s*\d+\s*[题、.)]|题目[:：]|问题[:：]|例题[:：])\s*(.+)",
+        r"^(?:第?\s*\d+\s*[题.)、]|题目[:：]|问题[:：]|例题[:：])\s*(.+)",
         r"^(.+[？?])$",
     ]
-    answer_pattern = re.compile(r"^(?:答案|正确答案|解答|结果|答)[:：]\s*(.+)")
-    step_pattern = re.compile(r"^(?:步骤|解题过程|过程|解析|思路|证明)[:：]\s*(.+)")
+    answer_pattern = re.compile(r"^(?:答案|正确答案|解答|结果|答)[:：]?\s*(.+)")
+    step_pattern = re.compile(r"^(?:步骤|解题过程|过程|解析|思路|证明)[:：]?\s*(.+)")
 
     for line in lines:
         answer_match = answer_pattern.match(line)
@@ -242,7 +243,7 @@ def _parse_learning_text(text: str) -> dict[str, Any]:
 
 
 def _split_possible_questions(text: str) -> list[str]:
-    chunks = re.split(r"(?:\n\s*){2,}|(?=第?\s*\d+\s*[题、.)])", text)
+    chunks = re.split(r"(?:\n\s*){2,}|(?=第?\s*\d+\s*[题.)、])", text)
     return [chunk.strip() for chunk in chunks if 8 <= len(chunk.strip()) <= 800][:10]
 
 
@@ -262,5 +263,8 @@ def _build_success_message(parsed: dict[str, Any]) -> str:
     answer_count = len(parsed["answers"])
     step_count = len(parsed["steps"])
     if question_count or answer_count or step_count:
-        return f"已提取文本，并识别到 {question_count} 个题目、{answer_count} 个答案、{step_count} 段解析。"
+        return (
+            f"已提取文本，并识别到 {question_count} 个题目、"
+            f"{answer_count} 个答案、{step_count} 段解析。"
+        )
     return "已提取文本，但未识别出明确题目结构，可让学习陪伴 AI 先整理后讲解。"

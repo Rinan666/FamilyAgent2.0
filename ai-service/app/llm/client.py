@@ -1,6 +1,5 @@
-"""
-Unified LiteLLM client with cost and safety limits.
-"""
+"""Unified LiteLLM client with cost and safety limits."""
+
 import json
 import logging
 import re
@@ -30,9 +29,6 @@ class LLMClient:
         self.default_model = settings.default_llm_model
         self.fallback_model = settings.fallback_llm_model
 
-    def _is_deepseek(self, model: str) -> bool:
-        return "deepseek" in model.lower()
-
     @retry(
         stop=stop_after_attempt(2),
         wait=wait_exponential(multiplier=1, min=2, max=15),
@@ -56,25 +52,13 @@ class LLMClient:
         validate_messages(messages)
         max_tokens = bounded_output_tokens(max_tokens)
 
-        kwargs = dict(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-
-        if response_format and self._is_deepseek(model):
-            json_schema = response_format.get("json_schema", {}).get("schema", {})
-            fields_desc = self._schema_to_fields(json_schema)
-            json_instruction = (
-                "\n\n请直接返回一个 JSON 对象，包含以下字段："
-                f"{fields_desc}\n只输出 JSON，不要加解释、markdown 代码块标记或模板文字。"
-            )
-            messages = [dict(m) for m in messages]
-            messages[-1]["content"] += json_instruction
-            validate_messages(messages)
-            kwargs["messages"] = messages
-        elif response_format:
+        kwargs = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        if response_format:
             kwargs["response_format"] = response_format
 
         try:
@@ -90,34 +74,17 @@ class LLMClient:
             return content
         except (SafetyLimitError, PromptLeakAttemptError, RoleHijackAttemptError, TimeoutError):
             raise
-        except Exception as e:
-            logger.warning("LLM call failed (model=%s): %s, trying fallback", model, e)
+        except Exception as exc:
+            logger.warning("LLM call failed (model=%s): %s, trying fallback", model, exc)
             if model != self.fallback_model and self.fallback_model != model:
                 return await self.chat(
                     messages=messages,
                     model=self.fallback_model,
                     temperature=temperature,
                     max_tokens=max_tokens,
-                    response_format=response_format if not self._is_deepseek(model) else None,
+                    response_format=response_format,
                 )
             raise
-
-    def _schema_to_fields(self, schema: dict, prefix: str = "") -> str:
-        """Extract a compact field description from JSON schema."""
-        fields = []
-        props = schema.get("properties", {})
-        for name, prop in props.items():
-            ptype = prop.get("type", "string")
-            if ptype == "array":
-                items = prop.get("items", {}).get("properties", {})
-                sub_fields = ", ".join(items.keys()) if items else "object"
-                fields.append(f"{name}(数组,每项包含:{sub_fields})")
-            elif ptype == "object":
-                sub = self._schema_to_fields(prop, name)
-                fields.append(f"{name}(对象:{sub})")
-            else:
-                fields.append(f"{name}({ptype})")
-        return "{ " + ", ".join(fields) + " }"
 
     def _extract_json(self, text: str) -> str:
         """Extract JSON from LLM output."""
@@ -166,8 +133,8 @@ class LLMClient:
                     yield delta.content
         except (SafetyLimitError, PromptLeakAttemptError, RoleHijackAttemptError, TimeoutError):
             raise
-        except Exception as e:
-            logger.error("LLM stream call failed (model=%s): %s", model, e)
+        except Exception as exc:
+            logger.error("LLM stream call failed (model=%s): %s", model, exc)
             if model != self.fallback_model and self.fallback_model != model:
                 async for chunk in self.chat_stream(
                     messages,
