@@ -5,21 +5,17 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { heritageTaskApi, memoryApi } from '@/lib/api';
 import { useViewerRole } from '@/hooks/useViewerRole';
+import LegacyWorkpageNotice from '@/components/family/LegacyWorkpageNotice';
 import VoiceInputButton from '@/components/voice/VoiceInputButton';
-import type { FamilyMemoryCard, HeritageSaveJudge, HeritageTask, MemoryEntry, MemoryEntryType, MemoryScope, MemoryVoteStats, MemoryVoteType } from '@/types';
+import type { FamilyMemoryCard, HeritageSaveJudge, HeritageTask, MemoryEntryType, MemoryScope } from '@/types';
 import {
-  AlertTriangle,
-  BookHeart,
   CheckCircle,
-  HeartPulse,
   RefreshCw,
   Save,
   ScrollText,
   Shield,
   Sparkles,
   Target,
-  ThumbsDown,
-  ThumbsUp,
   Users,
 } from 'lucide-react';
 
@@ -48,14 +44,12 @@ const scenarioSuggestions = [
   '睡眠作息',
 ];
 
-const memoryPageSizeOptions = [3, 6, 9];
-
 type EntryMode = 'INTERVIEW' | 'ATOM' | 'DIRECT';
 
 const entryModeOptions: { value: EntryMode; label: string; description: string }[] = [
-  { value: 'INTERVIEW', label: '访谈式录入', description: '问长辈三个问题' },
+  { value: 'INTERVIEW', label: '访谈式录入', description: '先问长辈三个问题' },
   { value: 'ATOM', label: '三句话原子', description: '先写三个短句' },
-  { value: 'DIRECT', label: '直接写正式草稿', description: '直接编辑保存栏' },
+  { value: 'DIRECT', label: '直接写正式稿', description: '直接编辑最终内容' },
 ];
 
 const validMemoryTypes = new Set(typeOptions.map((option) => option.value));
@@ -72,11 +66,11 @@ const interviewThemes: {
   {
     id: 'hard-choice',
     label: '艰难选择',
-    description: '适合记录升学、职业、迁居、家庭关键决定背后的判断。',
+    description: '适合记录升学、职业、迁居或家庭关键决定背后的判断。',
     memoryType: 'ELDER_ADVICE',
     scenario: '人生选择',
     questions: [
-      '当时发生了什么？你面临哪几个选择？',
+      '当时发生了什么？你面对哪几个选择？',
       '你当时最看重什么？为什么最后那样决定？',
       '如果后辈遇到类似情况，你希望他们多想一步什么？',
     ],
@@ -113,48 +107,14 @@ const interviewThemes: {
     scenario: '亲子沟通',
     questions: [
       '你印象最深的一次亲子沟通或误会是什么？',
-      '后来你明白了什么？当时如果换一种说法会怎样？',
+      '后来你明白了什么？如果换一种说法会怎样？',
       '你希望后辈在和家人沟通时记住什么？',
-    ],
-  },
-  {
-    id: 'money-work',
-    label: '钱与工作',
-    description: '适合记录职业选择、金钱观、风险和责任。',
-    memoryType: 'ELDER_ADVICE',
-    scenario: '钱与工作',
-    questions: [
-      '你在工作或用钱上吃过什么亏，或者见过什么关键教训？',
-      '这件事后来怎么影响你的判断？',
-      '后辈遇到类似机会或诱惑时，应该先问自己什么？',
-    ],
-  },
-  {
-    id: 'failure-regret',
-    label: '失败与后悔',
-    description: '适合把遗憾转化成可传承的提醒，而不是只留下情绪。',
-    memoryType: 'FAMILY_STORY',
-    scenario: '失败复盘',
-    questions: [
-      '那次失败或后悔大概是怎么发生的？',
-      '当时你忽略了什么，或者太相信了什么？',
-      '如果重来一次，你会怎么做？',
     ],
   },
 ];
 
 function memoryTypeLabel(type?: string) {
   return typeOptions.find((option) => option.value === type)?.label || '家族经验';
-}
-
-function scopeLabel(scope?: string) {
-  return scopeOptions.find((option) => option.value === scope)?.label || '家庭可见';
-}
-
-function getMemoryCard(memory: MemoryEntry): FamilyMemoryCard | null {
-  const card = memory.metadata?.memoryCard;
-  if (!card || typeof card !== 'object' || Array.isArray(card)) return null;
-  return card as unknown as FamilyMemoryCard;
 }
 
 function sensitivityStyle(value?: string) {
@@ -168,85 +128,22 @@ function sensitivityStyle(value?: string) {
   }
 }
 
-function memorySourceLabel(memory: MemoryEntry) {
-  if (memory.metadata?.source === 'DIARY_PROMOTION') {
-    return `来自家族日记 #${memory.metadata.sourceDiaryId || ''}`.trim();
-  }
-  if (memory.metadata?.source === 'HERITAGE_ENTRY') {
-    return '手动录入';
-  }
-  if (memory.metadata?.source === 'HERITAGE_INTERVIEW') {
-    return `访谈沉淀：${memory.metadata.interviewThemeLabel || ''}`.trim();
-  }
-  if (memory.metadata?.source === 'HERITAGE_ATOM') {
-    return '三句话经验原子';
-  }
-  return '';
-}
-
-function sourceVisibilityLabel(value?: unknown) {
-  switch (value) {
-    case 'PRIVATE':
-      return '原日记仅自己可见';
-    case 'CARE_VISIBLE':
-    case 'PARENT_VISIBLE':
-      return '原日记照护者可见';
-    case 'FAMILY_VISIBLE':
-    case 'FAMILY':
-      return '原日记全家可见';
-    default:
-      return '';
-  }
-}
-
-function nextWeekDate() {
-  const date = new Date();
-  date.setDate(date.getDate() + 7);
-  return date.toISOString().slice(0, 10);
-}
-
-function dateAfterDays(days: number) {
-  const safeDays = Number.isFinite(days) ? Math.max(1, Math.min(14, Math.round(days))) : 7;
-  const date = new Date();
-  date.setDate(date.getDate() + safeDays);
-  return date.toISOString().slice(0, 10);
-}
-
 function taskCompletionPrompt(task: HeritageTask) {
   const prompt = task.metadata?.completionPrompt;
   return typeof prompt === 'string' && prompt.trim()
     ? prompt
-    : '写一句完成记录，例如：今天和孩子一起检查了牙齿，约了下周复诊。';
+    : '写一句完成记录，例如：今天和孩子一起检查了牙齿，并约了下周复诊。';
 }
 
-function voteStats(memory: MemoryEntry): MemoryVoteStats {
-  const stats = memory.metadata?.voteStats;
-  if (!stats || typeof stats !== 'object' || Array.isArray(stats)) {
-    return {
-      memoryId: memory.id,
-      upVotes: 0,
-      downVotes: 0,
-      voteScore: 0,
-      consensusWeight: 1,
-      myVote: '',
-    };
-  }
-  const value = stats as Record<string, unknown>;
-  return {
-    memoryId: Number(value.memoryId) || memory.id,
-    upVotes: Number(value.upVotes) || 0,
-    downVotes: Number(value.downVotes) || 0,
-    voteScore: Number(value.voteScore) || 0,
-    consensusWeight: Number(value.consensusWeight) || 1,
-    myVote: typeof value.myVote === 'string' ? value.myVote : '',
-  };
+interface HeritagePageProps {
+  embedded?: boolean;
 }
 
-export default function HeritagePage() {
+export default function HeritagePage({ embedded = false }: HeritagePageProps) {
   const searchParams = useSearchParams();
-  const { families, activeFamilyId, setActiveFamilyId, isLoading: loadingFamilies } = useViewerRole();
+  const { families, activeFamilyId, setActiveFamilyId, viewerRole, isLoading: loadingFamilies } = useViewerRole();
+
   const [selectedFamilyId, setSelectedFamilyId] = useState<number | null>(null);
-  const [memories, setMemories] = useState<MemoryEntry[]>([]);
   const [tasks, setTasks] = useState<HeritageTask[]>([]);
   const [content, setContent] = useState('');
   const [entryMode, setEntryMode] = useState<EntryMode>('INTERVIEW');
@@ -263,19 +160,14 @@ export default function HeritagePage() {
   const [organizedReason, setOrganizedReason] = useState('');
   const [saveJudge, setSaveJudge] = useState<HeritageSaveJudge | null>(null);
   const [organizingMode, setOrganizingMode] = useState<EntryMode | null>(null);
-  const [loadingMemories, setLoadingMemories] = useState(false);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [creatingTaskKey, setCreatingTaskKey] = useState('');
-  const [generatingTaskKey, setGeneratingTaskKey] = useState('');
   const [completingTaskId, setCompletingTaskId] = useState<number | null>(null);
-  const [votingMemoryId, setVotingMemoryId] = useState<number | null>(null);
   const [completionNotes, setCompletionNotes] = useState<Record<number, string>>({});
-  const [memoryPage, setMemoryPage] = useState(1);
-  const [memoryPageSize, setMemoryPageSize] = useState(3);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
   const requestedFamilyId = useMemo(() => {
     const value = Number(searchParams.get('familyId'));
     return Number.isFinite(value) && value > 0 ? value : null;
@@ -285,23 +177,27 @@ export default function HeritagePage() {
     () => families.find((family) => family.id === selectedFamilyId) || null,
     [families, selectedFamilyId],
   );
+
   const selectedInterviewTheme = useMemo(
     () => interviewThemes.find((theme) => theme.id === interviewThemeId) || interviewThemes[0],
     [interviewThemeId],
   );
-  const totalMemoryPages = Math.max(1, Math.ceil(memories.length / memoryPageSize));
-  const safeMemoryPage = Math.min(memoryPage, totalMemoryPages);
-  const memoryPageStart = (safeMemoryPage - 1) * memoryPageSize;
-  const paginatedMemories = memories.slice(memoryPageStart, memoryPageStart + memoryPageSize);
-
-  useEffect(() => {
-    setMemoryPage(1);
-  }, [selectedFamilyId, memoryPageSize]);
 
   const resetFormalDerivedState = () => {
     setDraftCard(null);
     setSaveJudge(null);
     setOrganizedReason('');
+  };
+
+  const appendVoiceTranscript = useCallback((text: string) => {
+    setContent((current) => (current.trim() ? `${current.trim()}\n${text}` : text));
+    resetFormalDerivedState();
+    setSourceMode('DIRECT');
+  }, []);
+
+  const flashSuccess = (message: string) => {
+    setSuccess(message);
+    setTimeout(() => setSuccess(''), 3000);
   };
 
   const applyInterviewTheme = (themeId: string) => {
@@ -345,7 +241,7 @@ export default function HeritagePage() {
   const organizeToFormalDraft = async (rawContent: string, mode: EntryMode) => {
     const trimmed = rawContent.trim();
     if (!trimmed) {
-      setError(mode === 'INTERVIEW' ? '请先填写至少一个访谈回答' : '请至少填写一句经验原子');
+      setError(mode === 'INTERVIEW' ? '请先填写至少一个访谈回答。' : '请至少填写一句经验原子。');
       return;
     }
     setOrganizingMode(mode);
@@ -382,32 +278,6 @@ export default function HeritagePage() {
     }
   };
 
-  const useInterviewDraft = () => {
-    void organizeToFormalDraft(buildInterviewDraft(), 'INTERVIEW');
-  };
-
-  const useAtomDraft = () => {
-    void organizeToFormalDraft(buildAtomDraft(), 'ATOM');
-  };
-
-  const appendVoiceTranscript = useCallback((text: string) => {
-    setContent((current) => (current.trim() ? `${current.trim()}\n${text}` : text));
-    resetFormalDerivedState();
-    setSourceMode('DIRECT');
-  }, []);
-
-  const loadMemories = useCallback(async (familyId: number) => {
-    setLoadingMemories(true);
-    try {
-      const data = await memoryApi.listFamilyMemories(familyId, 30);
-      setMemories(Array.isArray(data) ? data : []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '家族经验加载失败');
-    } finally {
-      setLoadingMemories(false);
-    }
-  }, []);
-
   const loadTasks = useCallback(async (familyId: number) => {
     setLoadingTasks(true);
     try {
@@ -421,19 +291,16 @@ export default function HeritagePage() {
   }, []);
 
   useEffect(() => {
-    const queryFamilyId = requestedFamilyId && families.some((family) => family.id === requestedFamilyId)
+    const queryFamily = requestedFamilyId && families.some((family) => family.id === requestedFamilyId)
       ? requestedFamilyId
       : null;
-    const nextFamilyId = queryFamilyId || (activeFamilyId && families.some((family) => family.id === activeFamilyId)
-      ? activeFamilyId
-      : families[0]?.id ?? null);
-    setSelectedFamilyId((current) => {
-      if (current === nextFamilyId) return current;
-      setDraftCard(null);
-      return nextFamilyId;
-    });
-    if (queryFamilyId && activeFamilyId !== queryFamilyId) {
-      setActiveFamilyId(queryFamilyId);
+    const nextFamilyId = queryFamily
+      || (activeFamilyId && families.some((family) => family.id === activeFamilyId) ? activeFamilyId : null)
+      || families[0]?.id
+      || null;
+    setSelectedFamilyId(nextFamilyId);
+    if (queryFamily && activeFamilyId !== queryFamily) {
+      setActiveFamilyId(queryFamily);
     }
   }, [activeFamilyId, families, requestedFamilyId, setActiveFamilyId]);
 
@@ -454,15 +321,9 @@ export default function HeritagePage() {
 
   useEffect(() => {
     if (selectedFamilyId) {
-      void loadMemories(selectedFamilyId);
       void loadTasks(selectedFamilyId);
     }
-  }, [loadMemories, loadTasks, selectedFamilyId]);
-
-  const flashSuccess = (message: string) => {
-    setSuccess(message);
-    setTimeout(() => setSuccess(''), 3000);
-  };
+  }, [loadTasks, selectedFamilyId]);
 
   const handleGenerateCard = async () => {
     const formalContent = content.trim();
@@ -495,6 +356,7 @@ export default function HeritagePage() {
   const handleSave = async () => {
     const formalContent = content.trim();
     if (!selectedFamilyId || !formalContent) return;
+
     setSaving(true);
     setError('');
     try {
@@ -507,8 +369,9 @@ export default function HeritagePage() {
       });
       const judge = judgeResult.data;
       setSaveJudge(judge);
+
       if (!judge.should_save) {
-        setError(judge.reason || '这条内容暂不适合作为家族经验沉淀保存，请补充具体经历和后辈可借鉴做法。');
+        setError(judge.reason || '这条内容暂时不适合作为家族经验沉淀保存，请补充更具体的经历和后辈可借鉴做法。');
         return;
       }
 
@@ -518,6 +381,7 @@ export default function HeritagePage() {
         familyContext: selectedFamily?.description || selectedFamily?.name || '',
         target: scenario,
       })).data;
+
       await memoryApi.createFamilyMemory({
         familyId: selectedFamilyId,
         content: formalContent,
@@ -549,13 +413,13 @@ export default function HeritagePage() {
           atomVersion: sourceMode === 'ATOM' ? 'THREE_SENTENCE_V1' : undefined,
         },
       });
+
       setContent('');
       setDraftCard(null);
       setSaveJudge(null);
       setOrganizedReason('');
       setSourceMode('DIRECT');
-      flashSuccess('家族经验已保存');
-      await loadMemories(selectedFamilyId);
+      flashSuccess('家族经验已保存，可到家族记忆库继续查看和操作');
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败');
     } finally {
@@ -563,92 +427,10 @@ export default function HeritagePage() {
     }
   };
 
-  const handleVoteMemory = async (memory: MemoryEntry, voteType: MemoryVoteType) => {
-    setVotingMemoryId(memory.id);
-    setError('');
-    try {
-      const updated = await memoryApi.voteFamilyMemory(memory.id, voteType);
-      setMemories((current) => current.map((item) => (item.id === memory.id ? updated : item)));
-      flashSuccess(voteType === 'UP' ? '已赞同这条经验' : '已标记为需要谨慎参考');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '经验反馈失败');
-    } finally {
-      setVotingMemoryId(null);
-    }
-  };
-
-  const createTaskFromMemory = async (memory: MemoryEntry, action?: string) => {
-    if (!selectedFamilyId) return;
-    const card = getMemoryCard(memory);
-    const taskAction = action?.trim() || card?.action_suggestions?.[0] || memory.summary || memory.content.slice(0, 100);
-    const taskKey = `${memory.id}:${taskAction}`;
-    setCreatingTaskKey(taskKey);
-    setError('');
-    try {
-      await heritageTaskApi.create({
-        familyId: selectedFamilyId,
-        memoryId: memory.id,
-        title: `实践经验：${(card?.title || memory.summary || memoryTypeLabel(memory.type)).slice(0, 42)}`,
-        action: taskAction,
-        targetLabel: typeof memory.metadata?.scenario === 'string' ? memory.metadata.scenario : undefined,
-        dueDate: nextWeekDate(),
-        metadata: {
-          source: 'HERITAGE_MEMORY_ACTION',
-          sourceMemoryType: memory.type,
-        },
-      });
-      flashSuccess('已转成家庭任务');
-      await loadTasks(selectedFamilyId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '家庭任务创建失败');
-    } finally {
-      setCreatingTaskKey('');
-    }
-  };
-
-  const createAiTaskFromMemory = async (memory: MemoryEntry) => {
-    if (!selectedFamilyId) return;
-    const card = getMemoryCard(memory);
-    const scenarioValue = typeof memory.metadata?.scenario === 'string' ? memory.metadata.scenario : '';
-    setGeneratingTaskKey(String(memory.id));
-    setError('');
-    try {
-      const result = await memoryApi.heritageTaskDraft({
-        content: memory.content,
-        summary: card?.summary || memory.summary || '',
-        memoryType: memory.type,
-        scenario: scenarioValue,
-        familyContext: selectedFamily?.description || selectedFamily?.name || '',
-        existingActions: card?.action_suggestions || [],
-      });
-      const draft = result.data;
-      await heritageTaskApi.create({
-        familyId: selectedFamilyId,
-        memoryId: memory.id,
-        title: draft.title,
-        action: draft.action,
-        targetLabel: draft.target_label || scenarioValue || undefined,
-        dueDate: dateAfterDays(draft.due_days),
-        metadata: {
-          source: 'AI_HERITAGE_TASK_DRAFT',
-          sourceMemoryType: memory.type,
-          completionPrompt: draft.completion_prompt,
-          draftReason: draft.reason,
-        },
-      });
-      flashSuccess(`AI 已生成家庭任务：${draft.title}`);
-      await loadTasks(selectedFamilyId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'AI 生成家庭任务失败');
-    } finally {
-      setGeneratingTaskKey('');
-    }
-  };
-
   const completeTask = async (task: HeritageTask) => {
     const note = completionNotes[task.id]?.trim();
     if (!note) {
-      setError('请先写一句完成记录');
+      setError('请先写一句完成记录。');
       return;
     }
     setCompletingTaskId(task.id);
@@ -692,12 +474,89 @@ export default function HeritagePage() {
     );
   }
 
+  if (viewerRole === 'STUDENT') {
+    return (
+      <div className="mx-auto w-full max-w-4xl">
+        {!embedded && <LegacyWorkpageNotice tab="heritage" label="经验沉淀" />}
+        <div className="space-y-4">
+          <section className="rounded-lg border border-gray-200 bg-white p-5 sm:p-6">
+            <div className="mb-3 flex items-center gap-2">
+              <ScrollText className="h-5 w-5 text-blue-600" />
+              <h1 className="text-xl font-bold text-gray-900">经验沉淀</h1>
+            </div>
+            <p className="text-sm leading-6 text-gray-500">
+              当前账号在这里使用只读视图。你可以查看自己有权限看到的经验沉淀结果与家庭任务进展；新增、整理和保存操作由家长或管理员处理。
+            </p>
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+              <Link
+                href={`/dashboard/family?tab=heritage${selectedFamilyId ? `&familyId=${selectedFamilyId}` : ''}`}
+                className="inline-flex h-10 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                回到家族空间查看
+              </Link>
+              <Link
+                href={`/dashboard/memory${selectedFamilyId ? `?familyId=${selectedFamilyId}` : ''}`}
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              >
+                去全部记忆
+              </Link>
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-green-100 bg-green-50 p-4 sm:p-5">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Target className="h-4 w-4 text-green-700" />
+                <p className="text-sm font-semibold text-green-900">家庭任务结果</p>
+              </div>
+              <span className="text-xs text-green-700">{tasks.filter((task) => task.status === 'PENDING').length} 个待实践</span>
+            </div>
+
+            {loadingTasks ? (
+              <div className="flex h-16 items-center justify-center text-green-700">
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                加载任务...
+              </div>
+            ) : tasks.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-green-200 bg-white/70 px-3 py-4 text-center text-xs text-green-700">
+                暂时还没有你可查看的家庭任务。
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {tasks.slice(0, 6).map((task) => (
+                  <div key={task.id} className="rounded-lg border border-green-100 bg-white p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium text-gray-900">{task.title}</span>
+                      <span className={`rounded px-2 py-0.5 text-[11px] font-medium ${
+                        task.status === 'DONE' ? 'bg-gray-100 text-gray-500' : 'bg-green-100 text-green-700'
+                      }`}>
+                        {task.status === 'DONE' ? '已完成' : '待实践'}
+                      </span>
+                      {task.dueDate && <span className="text-xs text-gray-400">截止 {task.dueDate}</span>}
+                    </div>
+                    <p className="mt-1 text-xs leading-5 text-gray-600">{task.action}</p>
+                    {task.completionNote ? (
+                      <p className="mt-2 rounded bg-gray-50 px-2 py-1.5 text-xs leading-5 text-gray-500">
+                        完成记录：{task.completionNote}
+                      </p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto w-full max-w-6xl">
+      {!embedded && <LegacyWorkpageNotice tab="heritage" label="经验沉淀" />}
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">家族经验</h1>
-          <p className="mt-1 text-sm text-gray-500">把日记、观察或长辈口述整理成长期资产。经验沉淀衰退最慢，适合作为家风、判断方法和避坑提醒。</p>
+          <p className="mt-1 text-sm text-gray-500">把日记、观察或长辈口述整理成长期资产。</p>
         </div>
       </div>
 
@@ -740,7 +599,7 @@ export default function HeritagePage() {
                 <div>
                   <p className="text-sm font-semibold text-purple-900">访谈式录入</p>
                   <p className="mt-1 text-xs leading-5 text-purple-700">
-                    不用写长文，先问长辈三个问题。回答越口语越好，AI 会整理成下方可编辑的正式保存内容。
+                    不用先写长文，先问长辈几个问题，AI 会整理成正式稿。
                   </p>
                 </div>
                 <select
@@ -769,7 +628,7 @@ export default function HeritagePage() {
                       }}
                       rows={2}
                       className="mt-1 w-full resize-none rounded-lg border border-purple-100 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-purple-500"
-                      placeholder="可以直接粘贴访谈口述，也可以先写三句话..."
+                      placeholder="可以直接粘贴访谈口述。"
                     />
                   </label>
                 ))}
@@ -780,7 +639,7 @@ export default function HeritagePage() {
                 </span>
                 <button
                   type="button"
-                  onClick={useInterviewDraft}
+                  onClick={() => void organizeToFormalDraft(buildInterviewDraft(), 'INTERVIEW')}
                   disabled={organizingMode === 'INTERVIEW'}
                   className="inline-flex h-9 items-center gap-2 rounded-lg bg-purple-600 px-3 text-xs font-medium text-white hover:bg-purple-700 disabled:opacity-50"
                 >
@@ -793,12 +652,7 @@ export default function HeritagePage() {
 
           {entryMode === 'ATOM' && (
             <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 p-3">
-              <div className="mb-3">
-                <p className="text-sm font-semibold text-blue-900">三句话经验原子</p>
-                <p className="mt-1 text-xs leading-5 text-blue-700">
-                  不需要完整文章，只写三个短句：发生了什么、当时怎么想、重来会怎么做。AI 会整理成下方正式保存内容。
-                </p>
-              </div>
+              <p className="mb-3 text-sm font-semibold text-blue-900">三句话经验原子</p>
               <div className="space-y-3">
                 <label className="block text-xs font-medium text-blue-900">
                   1. 当时发生了什么？
@@ -808,7 +662,6 @@ export default function HeritagePage() {
                     onChange={(event) => setAtomSituation(event.target.value)}
                     rows={2}
                     className="mt-1 w-full resize-none rounded-lg border border-blue-100 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="例如：我年轻时因为忽视牙齿矫正，后来花了更大代价补救。"
                   />
                 </label>
                 <label className="block text-xs font-medium text-blue-900">
@@ -819,7 +672,6 @@ export default function HeritagePage() {
                     onChange={(event) => setAtomThinking(event.target.value)}
                     rows={2}
                     className="mt-1 w-full resize-none rounded-lg border border-blue-100 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="例如：我觉得不疼不痒，不值得马上处理。"
                   />
                 </label>
                 <label className="block text-xs font-medium text-blue-900">
@@ -830,13 +682,12 @@ export default function HeritagePage() {
                     onChange={(event) => setAtomRedo(event.target.value)}
                     rows={2}
                     className="mt-1 w-full resize-none rounded-lg border border-blue-100 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="例如：孩子换牙期就定期检查，发现问题尽早咨询医生。"
                   />
                 </label>
               </div>
               <button
                 type="button"
-                onClick={useAtomDraft}
+                onClick={() => void organizeToFormalDraft(buildAtomDraft(), 'ATOM')}
                 disabled={organizingMode === 'ATOM'}
                 className="mt-3 inline-flex h-9 items-center gap-2 rounded-lg bg-blue-600 px-3 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
               >
@@ -848,7 +699,7 @@ export default function HeritagePage() {
 
           {entryMode === 'DIRECT' && (
             <div className="mb-4 rounded-lg border border-amber-100 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
-              你可以直接在下方“正式保存内容”中写最终版本。保存时系统会先判断是否具备后辈学习价值；没有价值时不会保存，并会提示需要补充什么。
+              你可以直接在下方“正式保存内容”里写最终版本。保存时系统会先判断是否具备长期价值。
             </div>
           )}
 
@@ -857,197 +708,174 @@ export default function HeritagePage() {
               <Save className="h-4 w-4 text-blue-600" />
               <div>
                 <p className="text-sm font-semibold text-gray-900">正式保存内容</p>
-                <p className="text-xs text-gray-500">这是唯一保存来源，访谈和三句话只负责生成这份正式草稿。</p>
+                <p className="text-xs text-gray-500">这是唯一保存入口。</p>
               </div>
             </div>
 
-          <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <label className="text-xs font-medium text-gray-500">
-              类型
-              <select
-                name="memoryType"
-                value={memoryType}
-                onChange={(event) => {
-                  setMemoryType(event.target.value as MemoryEntryType);
-                  setSaveJudge(null);
-                }}
-                className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {typeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </label>
-            <label className="text-xs font-medium text-gray-500">
-              可见范围
-              <select
-                name="scope"
-                value={scope}
-                onChange={(event) => setScope(event.target.value as MemoryScope)}
-                className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {scopeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </label>
-            <label className="text-xs font-medium text-gray-500">
-              适用场景
-              <input
-                name="scenario"
-                value={scenario}
-                onChange={(event) => setScenario(event.target.value)}
-                placeholder="例如：换牙期、亲子沟通、视力保护"
-                className="mt-1 h-10 w-full rounded-lg border border-gray-200 px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </label>
-          </div>
+            <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <label className="text-xs font-medium text-gray-500">
+                类型
+                <select
+                  name="memoryType"
+                  value={memoryType}
+                  onChange={(event) => {
+                    setMemoryType(event.target.value as MemoryEntryType);
+                    setSaveJudge(null);
+                  }}
+                  className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {typeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs font-medium text-gray-500">
+                可见范围
+                <select
+                  name="scope"
+                  value={scope}
+                  onChange={(event) => setScope(event.target.value as MemoryScope)}
+                  className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {scopeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs font-medium text-gray-500">
+                适用场景
+                <input
+                  name="scenario"
+                  value={scenario}
+                  onChange={(event) => setScenario(event.target.value)}
+                  className="mt-1 h-10 w-full rounded-lg border border-gray-200 px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </label>
+            </div>
 
-          <div className="mb-3 flex flex-wrap gap-2">
-            {scenarioSuggestions.map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => setScenario(item)}
-                className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
-                  scenario === item
-                    ? 'border-purple-200 bg-purple-50 text-purple-700'
-                    : 'border-gray-200 bg-white text-gray-500 hover:border-purple-200 hover:bg-purple-50 hover:text-purple-700'
-                }`}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
+            <div className="mb-3 flex flex-wrap gap-2">
+              {scenarioSuggestions.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setScenario(item)}
+                  className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                    scenario === item
+                      ? 'border-purple-200 bg-purple-50 text-purple-700'
+                      : 'border-gray-200 bg-white text-gray-500 hover:border-purple-200 hover:bg-purple-50 hover:text-purple-700'
+                  }`}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
 
-          <div className="mb-3">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <span className="text-xs font-medium text-gray-500">经验内容</span>
-              <div className="flex flex-wrap justify-end gap-2">
+            <div className="mb-3">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <span className="text-xs font-medium text-gray-500">经验内容</span>
                 <VoiceInputButton onTranscript={appendVoiceTranscript} disabled={saving || generating} />
               </div>
+              <textarea
+                name="content"
+                value={content}
+                onChange={(event) => {
+                  setContent(event.target.value);
+                  resetFormalDerivedState();
+                  setSourceMode('DIRECT');
+                }}
+                rows={9}
+                className="w-full resize-none rounded-lg border border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
+              />
             </div>
-            <textarea
-              name="content"
-              value={content}
-              onChange={(event) => {
-                setContent(event.target.value);
-                resetFormalDerivedState();
-                setSourceMode('DIRECT');
-              }}
-              rows={9}
-              placeholder="例如：爷爷说，孩子换牙期和初中前后要特别注意牙齿、坐姿和用眼距离，很多问题小时候不明显，长大后再调整会更费劲。"
-              className="w-full resize-none rounded-lg border border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
 
-          {organizedReason && (
-            <p className="mb-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-700">
-              {organizedReason}
-            </p>
-          )}
-
-          {saveJudge && !saveJudge.should_save && (
-            <div className="mb-3 rounded-lg border border-red-100 bg-red-50 p-3 text-sm text-red-700">
-              <p className="font-medium">暂不能保存为家族经验</p>
-              <p className="mt-1 text-xs leading-5">{saveJudge.reason}</p>
-              {saveJudge.missing_elements.length > 0 && (
-                <p className="mt-2 text-xs">缺少：{saveJudge.missing_elements.join('、')}</p>
-              )}
-              {saveJudge.suggested_revision && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setContent(saveJudge.suggested_revision);
-                    setSaveJudge(null);
-                    setDraftCard(null);
-                    setOrganizedReason('已采用 AI 建议修改，请补充真实细节后再保存。');
-                  }}
-                  className="mt-3 inline-flex h-8 items-center rounded-lg border border-red-200 bg-white px-3 text-xs font-medium text-red-700 hover:bg-red-100"
-                >
-                  采用建议修改
-                </button>
-              )}
-            </div>
-          )}
-
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <button
-              type="button"
-              onClick={handleGenerateCard}
-              disabled={!content.trim() || generating}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-purple-200 bg-purple-50 px-4 text-sm font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50"
-            >
-              {generating ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              AI 整理
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={!selectedFamilyId || !content.trim() || saving}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              保存经验
-            </button>
-          </div>
-
-          {draftCard && (
-            <div className="mt-4 rounded-lg border border-purple-100 bg-purple-50 p-4">
-              <div className="mb-2 flex flex-wrap items-center gap-2">
-                <span className="text-sm font-semibold text-gray-900">{draftCard.title}</span>
-                <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-purple-700">
-                  {draftCard.theme}
-                </span>
-                <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${sensitivityStyle(draftCard.sensitivity)}`}>
-                  {draftCard.sensitivity}
-                </span>
-              </div>
-              <p className="text-sm leading-6 text-gray-700">{draftCard.summary}</p>
-              {draftCard.motto && (
-                <p className="mt-3 rounded-lg border border-purple-100 bg-white px-3 py-2 text-sm font-semibold text-purple-800">
-                  {draftCard.motto}
-                </p>
-              )}
-              {draftCard.action_suggestions.length > 0 && (
-                <div className="mt-3">
-                  <p className="mb-1 text-xs font-medium text-gray-500">建议行动</p>
-                  <ul className="space-y-1 text-sm text-gray-700">
-                    {draftCard.action_suggestions.map((item) => (
-                      <li key={item} className="flex gap-2">
-                        <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              <p className="mt-3 flex gap-2 text-xs text-gray-500">
-                <Shield className="h-3.5 w-3.5 shrink-0" />
-                {draftCard.safety_note}
+            {organizedReason && (
+              <p className="mb-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-700">
+                {organizedReason}
               </p>
+            )}
+
+            {saveJudge && !saveJudge.should_save && (
+              <div className="mb-3 rounded-lg border border-red-100 bg-red-50 p-3 text-sm text-red-700">
+                <p className="font-medium">暂不建议保存为家族经验</p>
+                <p className="mt-1 text-xs leading-5">{saveJudge.reason}</p>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={handleGenerateCard}
+                disabled={!content.trim() || generating}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-purple-200 bg-purple-50 px-4 text-sm font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50"
+              >
+                {generating ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                AI 整理
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={!selectedFamilyId || !content.trim() || saving}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                保存经验
+              </button>
             </div>
-          )}
+
+            {draftCard && (
+              <div className="mt-4 rounded-lg border border-purple-100 bg-purple-50 p-4">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-gray-900">{draftCard.title}</span>
+                  <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-purple-700">
+                    {draftCard.theme}
+                  </span>
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${sensitivityStyle(draftCard.sensitivity)}`}>
+                    {draftCard.sensitivity}
+                  </span>
+                </div>
+                <p className="text-sm leading-6 text-gray-700">{draftCard.summary}</p>
+                {draftCard.motto && (
+                  <p className="mt-3 rounded-lg border border-purple-100 bg-white px-3 py-2 text-sm font-semibold text-purple-800">
+                    {draftCard.motto}
+                  </p>
+                )}
+                <p className="mt-3 flex gap-2 text-xs text-gray-500">
+                  <Shield className="h-3.5 w-3.5 shrink-0" />
+                  {draftCard.safety_note}
+                </p>
+              </div>
+            )}
           </div>
         </section>
 
         <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-5">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <HeartPulse className="h-5 w-5 text-green-600" />
-              <h2 className="text-sm font-semibold text-gray-900">长期经验卡片</h2>
-            </div>
-            <button
-              type="button"
-              onClick={() => selectedFamilyId && loadMemories(selectedFamilyId)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-50"
-              aria-label="刷新家族经验"
-            >
-              <RefreshCw className={`h-4 w-4 ${loadingMemories ? 'animate-spin' : ''}`} />
-            </button>
+          <div className="mb-4 flex items-center gap-2">
+            <ScrollText className="h-5 w-5 text-blue-600" />
+            <h2 className="text-sm font-semibold text-gray-900">经验查看与管理</h2>
           </div>
 
-          <div className="mb-4 rounded-lg border border-green-100 bg-green-50 p-3">
+          <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
+            <p className="text-sm font-medium text-blue-900">经验记录和各类家族记录已统一收口到家族记忆库</p>
+            <p className="mt-2 text-sm leading-6 text-blue-800">
+              经验沉淀页只负责整理和保存。家族成员查看与操作记录、家族创建者管理成员记录和归档，都统一在家族记忆库里完成。
+            </p>
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+              <Link
+                href={`/dashboard/memory${selectedFamilyId ? `?familyId=${selectedFamilyId}` : ''}`}
+                className="inline-flex h-10 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                前往家族记忆库
+              </Link>
+              <Link
+                href={`/dashboard/memory${selectedFamilyId ? `?familyId=${selectedFamilyId}` : ''}`}
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-blue-200 bg-white px-4 text-sm font-medium text-blue-700 hover:bg-blue-100"
+              >
+                查看全部经验与记录
+              </Link>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-lg border border-green-100 bg-green-50 p-3">
             <div className="mb-3 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Target className="h-4 w-4 text-green-700" />
@@ -1055,6 +883,7 @@ export default function HeritagePage() {
               </div>
               <span className="text-xs text-green-700">{tasks.filter((task) => task.status === 'PENDING').length} 个待做</span>
             </div>
+
             {loadingTasks ? (
               <div className="flex h-16 items-center justify-center text-green-700">
                 <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
@@ -1062,11 +891,11 @@ export default function HeritagePage() {
               </div>
             ) : tasks.length === 0 ? (
               <p className="rounded-lg border border-dashed border-green-200 bg-white/70 px-3 py-4 text-center text-xs text-green-700">
-                还没有家庭任务。可以从下方经验卡的建议行动转成一次小实践。
+                还没有家庭任务。后续可以在家族记忆库里围绕经验继续管理和推进。
               </p>
             ) : (
               <div className="space-y-2">
-                {tasks.slice(0, 3).map((task) => (
+                {tasks.slice(0, 4).map((task) => (
                   <div key={task.id} className="rounded-lg border border-green-100 bg-white p-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm font-medium text-gray-900">{task.title}</span>
@@ -1108,216 +937,11 @@ export default function HeritagePage() {
             )}
           </div>
 
-          {loadingMemories ? (
-            <div className="flex h-48 items-center justify-center text-gray-400">
-              <RefreshCw className="mr-2 h-5 w-5 animate-spin" />
-              加载经验卡...
-            </div>
-          ) : memories.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-gray-200 p-8 text-center">
-              <ScrollText className="mx-auto mb-2 h-8 w-8 text-gray-300" />
-              <p className="text-sm text-gray-500">这个家族还没有经验卡。</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {paginatedMemories.map((memory) => {
-                const card = getMemoryCard(memory);
-                const sourceLabel = memorySourceLabel(memory);
-                const originalVisibility = sourceVisibilityLabel(memory.metadata?.sourceVisibility);
-                const sourceDiaryId = String(memory.metadata?.sourceDiaryId || '');
-                const stats = voteStats(memory);
-                return (
-                  <article key={memory.id} className="rounded-lg border border-gray-200 p-4">
-                    <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-semibold text-gray-900">
-                        {card?.title || memory.summary || memoryTypeLabel(memory.type)}
-                      </span>
-                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
-                        {memoryTypeLabel(memory.type)}
-                      </span>
-                      <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
-                        {scopeLabel(memory.scope)}
-                      </span>
-                      {card?.sensitivity && (
-                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${sensitivityStyle(card.sensitivity)}`}>
-                          {card.sensitivity}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm leading-6 text-gray-700">{card?.summary || memory.content}</p>
-                    {card?.motto && (
-                      <p className="mt-3 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
-                        {card.motto}
-                      </p>
-                    )}
-                    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-600">
-                      <span className="font-medium text-gray-700">家族反馈</span>
-                      <button
-                        type="button"
-                        onClick={() => { void handleVoteMemory(memory, 'UP'); }}
-                        disabled={votingMemoryId === memory.id || stats.myVote === 'UP'}
-                        className={`inline-flex h-7 items-center gap-1 rounded-lg border px-2 font-medium transition-colors disabled:opacity-60 ${
-                          stats.myVote === 'UP'
-                            ? 'border-green-200 bg-green-50 text-green-700'
-                            : 'border-gray-200 bg-white text-gray-500 hover:border-green-200 hover:text-green-700'
-                        }`}
-                        title="赞同后，这条经验在相关召回中的权重会提高"
-                      >
-                        {votingMemoryId === memory.id && stats.myVote !== 'UP'
-                          ? <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                          : <ThumbsUp className="h-3.5 w-3.5" />}
-                        {stats.upVotes}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { void handleVoteMemory(memory, 'DOWN'); }}
-                        disabled={votingMemoryId === memory.id || stats.myVote === 'DOWN'}
-                        className={`inline-flex h-7 items-center gap-1 rounded-lg border px-2 font-medium transition-colors disabled:opacity-60 ${
-                          stats.myVote === 'DOWN'
-                            ? 'border-red-200 bg-red-50 text-red-700'
-                            : 'border-gray-200 bg-white text-gray-500 hover:border-red-200 hover:text-red-700'
-                        }`}
-                        title="点踩后，这条经验仍保留，但 AI 会更谨慎参考"
-                      >
-                        {votingMemoryId === memory.id && stats.myVote !== 'DOWN'
-                          ? <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                          : <ThumbsDown className="h-3.5 w-3.5" />}
-                        {stats.downVotes}
-                      </button>
-                      <span className="text-gray-400">
-                        差值 {stats.voteScore > 0 ? `+${stats.voteScore}` : stats.voteScore} · 权重 {stats.consensusWeight.toFixed(2)}
-                      </span>
-                    </div>
-                    {card?.risk_points && card.risk_points.length > 0 && (
-                      <div className="mt-3 rounded-lg bg-yellow-50 p-3">
-                        <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-yellow-700">
-                          <AlertTriangle className="h-3.5 w-3.5" />
-                          需要留意
-                        </p>
-                        <ul className="space-y-1 text-sm text-yellow-800">
-                          {card.risk_points.map((item) => <li key={item}>{item}</li>)}
-                        </ul>
-                      </div>
-                    )}
-                    {card?.action_suggestions && card.action_suggestions.length > 0 && (
-                      <div className="mt-3">
-                        <p className="mb-1 text-xs font-medium text-gray-500">建议行动</p>
-                        <ul className="space-y-1 text-sm text-gray-700">
-                          {card.action_suggestions.map((item) => (
-                            <li key={item} className="flex flex-wrap items-start gap-2">
-                              <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
-                              <span className="min-w-0 flex-1">{item}</span>
-                              <button
-                                type="button"
-                                onClick={() => { void createTaskFromMemory(memory, item); }}
-                                disabled={creatingTaskKey === `${memory.id}:${item}`}
-                                className="inline-flex h-7 items-center gap-1 rounded-lg border border-green-100 bg-green-50 px-2 text-[11px] font-medium text-green-700 hover:bg-green-100 disabled:opacity-50"
-                              >
-                                {creatingTaskKey === `${memory.id}:${item}`
-                                  ? <RefreshCw className="h-3 w-3 animate-spin" />
-                                  : <Target className="h-3 w-3" />}
-                                转任务
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {(!card?.action_suggestions || card.action_suggestions.length === 0) && (
-                      <button
-                        type="button"
-                        onClick={() => { void createTaskFromMemory(memory); }}
-                        disabled={creatingTaskKey.startsWith(`${memory.id}:`)}
-                        className="mt-3 inline-flex h-8 items-center gap-2 rounded-lg border border-green-100 bg-green-50 px-3 text-xs font-medium text-green-700 hover:bg-green-100 disabled:opacity-50"
-                      >
-                        {creatingTaskKey.startsWith(`${memory.id}:`)
-                          ? <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                          : <Target className="h-3.5 w-3.5" />}
-                        转成家庭任务
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => { void createAiTaskFromMemory(memory); }}
-                      disabled={generatingTaskKey === String(memory.id)}
-                      className="mt-3 inline-flex h-8 items-center gap-2 rounded-lg border border-amber-100 bg-amber-50 px-3 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
-                    >
-                      {generatingTaskKey === String(memory.id)
-                        ? <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                        : <Sparkles className="h-3.5 w-3.5" />}
-                      AI 生成家庭任务
-                    </button>
-                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-400">
-                      <span>{new Date(memory.createdAt).toLocaleDateString()}</span>
-                      {sourceLabel && (
-                        <span className="inline-flex items-center gap-1 rounded bg-rose-50 px-2 py-0.5 text-rose-600">
-                          <BookHeart className="h-3.5 w-3.5" />
-                          {sourceLabel}
-                        </span>
-                      )}
-                      {originalVisibility && (
-                        <span className="rounded bg-gray-50 px-2 py-0.5">{originalVisibility}</span>
-                      )}
-                      {typeof memory.metadata?.scenario === 'string' && memory.metadata.scenario && (
-                        <span>场景：{memory.metadata.scenario}</span>
-                      )}
-                      {card?.suitable_for?.length ? <span>适合：{card.suitable_for.join('、')}</span> : null}
-                      {sourceDiaryId && (
-                        <Link
-                          href="/dashboard/diary"
-                          className="ml-auto text-blue-600 hover:underline"
-                        >
-                          查看日记
-                        </Link>
-                      )}
-                    </div>
-                  </article>
-                );
-              })}
-              {memories.length > memoryPageSizeOptions[0] && (
-                <div className="flex flex-col gap-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <span>每页</span>
-                    <select
-                      name="memoryPageSize"
-                      value={memoryPageSize}
-                      onChange={(event) => {
-                        setMemoryPageSize(Number(event.target.value));
-                        setMemoryPage(1);
-                      }}
-                      className="h-8 rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      {memoryPageSizeOptions.map((option) => (
-                        <option key={option} value={option}>{option} 条</option>
-                      ))}
-                    </select>
-                    <span>
-                      第 {safeMemoryPage} / {totalMemoryPages} 页
-                      {memories.length > 0 ? `，当前显示第 ${memoryPageStart + 1}-${Math.min(memoryPageStart + memoryPageSize, memories.length)} 条` : ''}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setMemoryPage((page) => Math.max(1, page - 1))}
-                      disabled={safeMemoryPage <= 1}
-                      className="h-8 rounded-lg border border-gray-200 bg-white px-3 text-xs text-gray-600 hover:border-blue-200 hover:text-blue-700 disabled:opacity-50"
-                    >
-                      上一页
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMemoryPage((page) => Math.min(totalMemoryPages, page + 1))}
-                      disabled={safeMemoryPage >= totalMemoryPages}
-                      className="h-8 rounded-lg border border-gray-200 bg-white px-3 text-xs text-gray-600 hover:border-blue-200 hover:text-blue-700 disabled:opacity-50"
-                    >
-                      下一页
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          <div className="mt-4 rounded-lg border border-dashed border-gray-200 p-4 text-sm leading-6 text-gray-500">
+            {selectedFamily
+              ? `当前沉淀目标：${selectedFamily.name}。保存后的经验会进入该家族的记忆库。`
+              : '保存后的经验会进入当前家族的记忆库。'}
+          </div>
         </section>
       </div>
     </div>

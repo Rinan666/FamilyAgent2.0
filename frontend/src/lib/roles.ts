@@ -27,6 +27,7 @@ export function deriveViewerRole(
     ? memberships.find((member) => member.familyId === activeFamilyId)
     : memberships[0];
   const role = (activeMembership?.role || '').toUpperCase();
+
   if (role === 'OWNER') return 'PARENT';
   return isMinor(activeMembership) ? 'STUDENT' : 'PARENT';
 }
@@ -41,6 +42,7 @@ export function canMaintainSystem(role: ViewerRole) {
 
 export function memberAge(member?: FamilyMember | null) {
   if (!member) return 20;
+
   const metadata = member.metadata || {};
   const birthDate = [
     member.birthDate,
@@ -66,6 +68,7 @@ export function memberAge(member?: FamilyMember | null) {
   if (Number.isFinite(year) && year > 1870 && year <= new Date().getFullYear()) {
     return new Date().getFullYear() - year;
   }
+
   return 20;
 }
 

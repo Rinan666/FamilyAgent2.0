@@ -701,7 +701,7 @@ export default function TutorPage() {
     }
   }, [activeFamilyId, executeSavePlan, setMessages, viewerRole]);
 
-  const { messages, isStreaming, sendFreeMessage } = useChat({
+  const { messages, isStreaming, sendFreeMessage, stopStreaming } = useChat({
     getMastery: (kpId) => masteryMap[kpId] || 'medium',
     getKnowledgePoint: (kpId) => kpNames[kpId] || '',
     viewerRole,
@@ -776,7 +776,7 @@ export default function TutorPage() {
       .catch((err: unknown) => { console.log('KP names not loaded:', err); });
   }, [userId]);
 
-  const handleSend = async () => {
+  const handleSend = useCallback(async () => {
     if (!input.trim() || isStreaming) return;
     const msg = input.trim();
     setInput('');
@@ -787,12 +787,20 @@ export default function TutorPage() {
       return;
     }
     sendFreeMessage(msg);
-  };
+  }, [input, isStreaming, planSaveFromFreeChat, sendFreeMessage]);
+
+  const handleSubmit = useCallback(() => {
+    if (isStreaming) {
+      stopStreaming();
+      return;
+    }
+    void handleSend();
+  }, [handleSend, isStreaming, stopStreaming]);
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
-      handleSend();
+      handleSubmit();
     }
   };
 
@@ -1129,7 +1137,7 @@ export default function TutorPage() {
               </div>
             )}
             <form
-              onSubmit={(event) => { event.preventDefault(); handleSend(); }}
+              onSubmit={(event) => { event.preventDefault(); handleSubmit(); }}
               className="flex items-end gap-1.5 sm:gap-2"
             >
               <input
@@ -1161,11 +1169,12 @@ export default function TutorPage() {
               />
               <button
                 type="submit"
-                disabled={!input.trim() || isStreaming || isExtractingFile}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:opacity-50 sm:h-10 sm:w-auto sm:gap-1 sm:px-4"
-                aria-label="发送"
+                disabled={isStreaming ? false : (!input.trim() || isExtractingFile)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:opacity-50 sm:h-10 sm:w-auto sm:gap-1.5 sm:px-4"
+                aria-label={isStreaming ? '停止生成' : '发送'}
               >
-                {isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                {isStreaming ? <XCircle className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+                <span className="hidden sm:inline">{isStreaming ? '停止生成' : '发送'}</span>
               </button>
             </form>
             {extractMessage && (

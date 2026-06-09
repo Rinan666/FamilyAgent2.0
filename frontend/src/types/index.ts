@@ -12,6 +12,8 @@ export interface User {
   phone?: string;
   role: string;
   status: string;
+  birthDate?: string;
+  birthYear?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -27,6 +29,8 @@ export interface LoginResponse {
   avatarUrl?: string;
   role?: string;
   status?: string;
+  birthDate?: string;
+  birthYear?: string;
   metadata?: Record<string, unknown>;
   token: string;
   tokenName: string;
@@ -60,6 +64,8 @@ export interface Family {
   createdBy: number;
   createdAt: string;
 }
+
+export type FamilyTab = 'overview' | 'stream' | 'heritage' | 'library' | 'members';
 
 export interface FamilyMember {
   id: number;

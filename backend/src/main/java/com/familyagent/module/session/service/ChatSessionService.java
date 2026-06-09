@@ -76,9 +76,10 @@ public class ChatSessionService {
     public ChatSession endSession(Long sessionId, String summary, String authorization) {
         ChatSession session = getSessionForEnd(sessionId);
         CurrentUserGuard.requireSelf(session.getUserId());
+        String normalizedSummary = blankToNull(summary);
 
         LocalDateTime endedAt = LocalDateTime.now();
-        int updated = sessionRepository.endActiveSession(sessionId, blankToNull(summary), endedAt);
+        int updated = sessionRepository.endActiveSession(sessionId, normalizedSummary, endedAt);
         ChatSession endedSession = getSessionForEnd(sessionId);
 
         if (updated == 0) {
@@ -91,8 +92,8 @@ public class ChatSessionService {
         }
 
         endedSession.setStatus(STATUS_ENDED);
-        if (blankToNull(summary) != null) {
-            endedSession.setSummary(summary);
+        if (normalizedSummary != null) {
+            endedSession.setSummary(normalizedSummary);
         }
         endedSession.setEndedAt(endedAt);
         return endedSession;

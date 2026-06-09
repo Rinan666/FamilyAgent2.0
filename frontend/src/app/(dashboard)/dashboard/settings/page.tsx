@@ -7,6 +7,7 @@ import { CalendarDays, CheckCircle, Database, KeyRound, LogOut, RefreshCw, Shiel
 import { userApi } from '@/lib/api';
 import { isPlatformAdmin } from '@/lib/roles';
 import { useAuthStore } from '@/stores/authStore';
+import type { User as AppUser } from '@/types';
 
 function platformRoleLabel(role?: string) {
   return (role || '').toUpperCase() === 'ADMIN' ? '平台管理员' : '普通用户';
@@ -14,20 +15,39 @@ function platformRoleLabel(role?: string) {
 
 function parseMetadata(metadata?: Record<string, unknown> | string | null) {
   if (!metadata) return {};
-  if (typeof metadata === 'string') {
-    try {
-      return JSON.parse(metadata) as Record<string, unknown>;
-    } catch {
-      return {};
+  let current: unknown = metadata;
+
+  for (let depth = 0; depth < 5; depth += 1) {
+    if (!current) return {};
+    if (typeof current === 'string') {
+      try {
+        current = JSON.parse(current);
+        continue;
+      } catch {
+        return {};
+      }
     }
+    if (typeof current === 'object' && !Array.isArray(current)) {
+      return current as Record<string, unknown>;
+    }
+    return {};
   }
-  return metadata;
+
+  return {};
 }
 
 function birthDateFromMetadata(metadata?: Record<string, unknown> | string | null) {
   const parsed = parseMetadata(metadata);
   const value = parsed.birthDate || parsed.birthday || parsed.dateOfBirth;
   return typeof value === 'string' ? value.slice(0, 10) : '';
+}
+
+function birthDateFromUser(user?: Pick<AppUser, 'birthDate' | 'metadata'> | null) {
+  if (!user) return '';
+  if (typeof user.birthDate === 'string' && user.birthDate.trim()) {
+    return user.birthDate.slice(0, 10);
+  }
+  return birthDateFromMetadata(user.metadata);
 }
 
 function ageLabel(birthDate: string) {
@@ -46,7 +66,7 @@ export default function SettingsPage() {
   const setUser = useAuthStore((s) => s.setUser);
   const logout = useAuthStore((s) => s.logout);
   const router = useRouter();
-  const [birthDate, setBirthDate] = useState(() => birthDateFromMetadata(user?.metadata));
+  const [birthDate, setBirthDate] = useState(() => birthDateFromUser(user));
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [profileSuccess, setProfileSuccess] = useState('');
@@ -58,8 +78,8 @@ export default function SettingsPage() {
   const [passwordSuccess, setPasswordSuccess] = useState('');
 
   useEffect(() => {
-    setBirthDate(birthDateFromMetadata(user?.metadata));
-  }, [user?.metadata]);
+    setBirthDate(birthDateFromUser(user));
+  }, [user]);
 
   useEffect(() => {
     let active = true;
@@ -67,7 +87,7 @@ export default function SettingsPage() {
       .then((latest) => {
         if (!active) return;
         setUser(latest);
-        setBirthDate(birthDateFromMetadata(latest.metadata));
+        setBirthDate(birthDateFromUser(latest));
       })
       .catch(() => {
         // Keep the cached user if the refresh fails.
@@ -90,7 +110,7 @@ export default function SettingsPage() {
     try {
       const updated = await userApi.updateProfile({ birthDate: birthDate || undefined });
       setUser(updated);
-      setBirthDate(birthDateFromMetadata(updated.metadata));
+      setBirthDate(birthDateFromUser(updated));
       setProfileSuccess('生日已保存，家族成员页会展示生日和年龄。');
     } catch (err) {
       setProfileError(err instanceof Error ? err.message : '保存个人资料失败');

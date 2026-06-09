@@ -26,6 +26,10 @@ import type {
 import type { ViewerRole } from '@/lib/roles';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
+export type AIStreamHandle = {
+  abort: () => void;
+  completed: Promise<void>;
+};
 // ============================================
 class ApiError extends Error {
   constructor(public code: number, message: string) {
@@ -117,25 +121,35 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
 }
 
 function parseJsonField<T>(value: unknown, fallback: T): T {
-  if (value == null) return fallback;
-  if (typeof value === 'string') {
-    try {
-      return JSON.parse(value) as T;
-    } catch {
-      return fallback;
-    }
-  }
-  if (typeof value === 'object') {
-    const wrapped = value as { value?: unknown };
-    if (typeof wrapped.value === 'string') {
+  let current: unknown = value;
+
+  for (let depth = 0; depth < 5; depth += 1) {
+    if (current == null) return fallback;
+
+    if (typeof current === 'string') {
       try {
-        return JSON.parse(wrapped.value) as T;
+        current = JSON.parse(current);
+        continue;
       } catch {
         return fallback;
       }
     }
-    return value as T;
+
+    if (typeof current === 'object') {
+      const wrapped = current as { value?: unknown };
+      if (
+        Object.keys(current as Record<string, unknown>).length === 1
+        && typeof wrapped.value === 'string'
+      ) {
+        current = wrapped.value;
+        continue;
+      }
+      return current as T;
+    }
+
+    return current as T;
   }
+
   return fallback;
 }
 
@@ -275,16 +289,40 @@ function normalizeSession(raw: ChatSession): ChatSession {
 }
 
 function normalizeUser(raw: User): User {
+  const metadata = parseJsonField<Record<string, unknown>>(raw.metadata, {});
+  const birthDate = raw.birthDate
+    || (typeof metadata.birthDate === 'string' ? metadata.birthDate.slice(0, 10) : '')
+    || (typeof metadata.birthday === 'string' ? metadata.birthday.slice(0, 10) : '')
+    || (typeof metadata.dateOfBirth === 'string' ? metadata.dateOfBirth.slice(0, 10) : '');
+  const birthYear = raw.birthYear
+    || (typeof metadata.birthYear === 'string' ? metadata.birthYear : '')
+    || (typeof metadata.yearOfBirth === 'string' ? metadata.yearOfBirth : '')
+    || (birthDate ? birthDate.slice(0, 4) : '');
+
   return {
     ...raw,
-    metadata: parseJsonField<Record<string, unknown>>(raw.metadata, {}),
+    birthDate: birthDate || undefined,
+    birthYear: birthYear || undefined,
+    metadata,
   };
 }
 
 function normalizeLoginResponse(raw: LoginResponse): LoginResponse {
+  const metadata = parseJsonField<Record<string, unknown>>(raw.metadata, {});
+  const birthDate = raw.birthDate
+    || (typeof metadata.birthDate === 'string' ? metadata.birthDate.slice(0, 10) : '')
+    || (typeof metadata.birthday === 'string' ? metadata.birthday.slice(0, 10) : '')
+    || (typeof metadata.dateOfBirth === 'string' ? metadata.dateOfBirth.slice(0, 10) : '');
+  const birthYear = raw.birthYear
+    || (typeof metadata.birthYear === 'string' ? metadata.birthYear : '')
+    || (typeof metadata.yearOfBirth === 'string' ? metadata.yearOfBirth : '')
+    || (birthDate ? birthDate.slice(0, 4) : '');
+
   return {
     ...raw,
-    metadata: parseJsonField<Record<string, unknown>>(raw.metadata, {}),
+    birthDate: birthDate || undefined,
+    birthYear: birthYear || undefined,
+    metadata,
   };
 }
 
@@ -456,13 +494,17 @@ async function aiFileRequest<T>(path: string, file: File): Promise<T> {
   return data as T;
 }
 
-async function sseRequest(
-  path: string, body: unknown,
+function sseStreamRequest(
+  path: string,
+  body: unknown,
   onChunk: (chunk: string) => void,
   onDone: () => void,
   onError: (error: string) => void,
   onMetadata?: (metadata: Record<string, unknown>) => void,
-): Promise<void> {
+  onAbort?: () => void,
+): AIStreamHandle {
+  const controller = new AbortController();
+
   const handleSseLine = (rawLine: string): boolean => {
     const line = rawLine.replace(/\r$/, '');
     if (!line || line.startsWith(':')) return false;
@@ -472,64 +514,86 @@ async function sseRequest(
     if (!data) return false;
 
     try {
-      const p = JSON.parse(data);
-      if (p.done) { onDone(); return true; }
-      if (p.error) { onError(aiErrorMessage(500, p.error)); return true; }
-      if (p.metadata) onMetadata?.(p.metadata);
-      if (p.content) onChunk(p.content);
+      const payload = JSON.parse(data);
+      if (payload.done) {
+        onDone();
+        return true;
+      }
+      if (payload.error) {
+        onError(aiErrorMessage(500, payload.error));
+        return true;
+      }
+      if (payload.metadata) onMetadata?.(payload.metadata);
+      if (payload.content) onChunk(payload.content);
     } catch {
       // skip malformed SSE payloads
     }
     return false;
   };
 
-  try {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    const res = await fetch(`/ai-proxy${path}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json;charset=UTF-8',
-        ...(token ? { Authorization: token } : {}),
-      },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const detail = await readErrorDetail(res);
-      onError(aiErrorMessage(res.status, detail, res.headers.get('Retry-After')));
-      return;
-    }
+  const completed = (async () => {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const res = await fetch(`/ai-proxy${path}`, {
+        method: 'POST',
+        headers: {
+          Accept: 'text/event-stream',
+          'Content-Type': 'application/json;charset=UTF-8',
+          ...(token ? { Authorization: token } : {}),
+        },
+        body: JSON.stringify(body),
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const detail = await readErrorDetail(res);
+        onError(aiErrorMessage(res.status, detail, res.headers.get('Retry-After')));
+        return;
+      }
 
-    const reader = res.body?.getReader();
-    if (!reader) { onError('AI 服务没有返回可读取的响应，请稍后再试。'); return; }
+      const reader = res.body?.getReader();
+      if (!reader) {
+        onError('AI service returned no readable response body.');
+        return;
+      }
 
-    const decoder = new TextDecoder();
-    let buffer = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-      for (const line of lines) {
-        if (handleSseLine(line)) {
-          return;
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (handleSseLine(line)) return;
         }
       }
-    }
 
-    const tail = buffer + decoder.decode();
-    if (tail) {
-      const lines = tail.split('\n');
-      for (const line of lines) {
-        if (handleSseLine(line)) {
-          return;
+      const tail = buffer + decoder.decode();
+      if (tail) {
+        const lines = tail.split('\n');
+        for (const line of lines) {
+          if (handleSseLine(line)) return;
         }
       }
+
+      onDone();
+    } catch (error) {
+      if (controller.signal.aborted) {
+        onAbort?.();
+        return;
+      }
+      onError(error instanceof Error ? error.message : 'AI request failed, please retry later.');
     }
-    onDone();
-  } catch (e) {
-    onError(e instanceof Error ? e.message : 'AI 请求失败，请稍后再试。');
-  }
+  })();
+
+  return {
+    abort: () => controller.abort(),
+    completed,
+  };
 }
 
 // ============================================
@@ -538,7 +602,7 @@ async function sseRequest(
 export const userApi = {
   register: (data: RegisterRequest) => request<User>('/users/register', { method: 'POST', body: JSON.stringify(data) }).then(normalizeUser),
   login: (data: LoginRequest) => request<LoginResponse>('/users/login', { method: 'POST', body: JSON.stringify(data) }).then(normalizeLoginResponse),
-  getMe: () => request<User>('/users/me').then(normalizeUser),
+  getMe: () => request<User>('/users/me', { cache: 'no-store' }).then(normalizeUser),
   updateProfile: (data: UpdateProfileRequest) =>
     request<User>('/users/me/profile', { method: 'POST', body: JSON.stringify(data) }).then(normalizeUser),
   changePassword: (data: ChangePasswordRequest) =>
@@ -976,7 +1040,8 @@ export const tutorApi = {
             clientTimestamp?: string; clientTimezone?: string; },
     onChunk: (chunk: string) => void, onDone: () => void, onError: (error: string) => void,
     onMetadata?: (metadata: Record<string, unknown>) => void,
-  ) => sseRequest('/agent/chat/stream', {
+    onAbort?: () => void,
+  ) => sseStreamRequest('/agent/chat/stream', {
     question_content: body.questionContent,
     answer: body.answer,
     steps: body.steps,
@@ -992,7 +1057,7 @@ export const tutorApi = {
     target_role: body.targetRole || 'STUDENT',
     client_timestamp: body.clientTimestamp || new Date().toISOString(),
     client_timezone: body.clientTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
-  }, onChunk, onDone, onError, onMetadata),
+  }, onChunk, onDone, onError, onMetadata, onAbort),
 
   mistakeReview: (body: {
     questionContent: string; answer: string; studentAnswer: string; steps?: string;

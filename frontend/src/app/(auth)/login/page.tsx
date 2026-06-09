@@ -44,6 +44,8 @@ export default function LoginPage() {
           avatarUrl: result.avatarUrl,
           role: result.role || 'USER',
           status: result.status || 'ACTIVE',
+          birthDate: result.birthDate,
+          birthYear: result.birthYear,
           metadata: result.metadata,
         },
         result.token,

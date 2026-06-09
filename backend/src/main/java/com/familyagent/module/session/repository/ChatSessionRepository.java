@@ -33,7 +33,7 @@ public interface ChatSessionRepository extends BaseMapper<ChatSession> {
     @Update("""
             UPDATE chat_sessions
             SET status = 'ENDED',
-                summary = CASE WHEN #{summary} IS NULL THEN summary ELSE #{summary} END,
+                summary = COALESCE(#{summary, jdbcType=VARCHAR}, summary),
                 ended_at = #{endedAt}
             WHERE id = #{sessionId}
               AND status = 'ACTIVE'

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Bot, CheckCircle, Loader2, RefreshCw, Send, UserRound, Users, XCircle } from 'lucide-react';
 import MathRenderer from '@/components/tutor/MathRenderer';
-import { diaryApi, familyApi, growthGuardApi, memoryApi, mirrorApi, skillRunApi, tutorApi } from '@/lib/api';
+import { diaryApi, familyApi, growthGuardApi, memoryApi, mirrorApi, skillRunApi, tutorApi, type AIStreamHandle } from '@/lib/api';
 import { memberAge } from '@/lib/roles';
 import { useViewerRole } from '@/hooks/useViewerRole';
 import WebSearchBadge from '@/components/tutor/WebSearchBadge';
@@ -241,6 +241,8 @@ export default function MirrorPage() {
   const [executingToolMessageId, setExecutingToolMessageId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const endRef = useRef<HTMLDivElement>(null);
+  const activeStreamRef = useRef<AIStreamHandle | null>(null);
+  const streamRunIdRef = useRef(0);
   const requestedFamilyId = useMemo(() => {
     const value = Number(searchParams.get('familyId'));
     return Number.isFinite(value) && value > 0 ? value : null;
@@ -613,9 +615,17 @@ export default function MirrorPage() {
     setInput((current) => (current.trim() ? `${current.trim()} ${text}` : text));
   }, []);
 
+  const stopStreaming = useCallback(() => {
+    streamRunIdRef.current += 1;
+    activeStreamRef.current?.abort();
+    activeStreamRef.current = null;
+    setIsStreaming(false);
+  }, []);
+
   const sendMessage = async () => {
     const content = input.trim();
     if (!content || isStreaming || !targetMember || !mirrorContext || !selectedFamilyId || !targetUserId) return;
+    const runId = ++streamRunIdRef.current;
     setInput('');
     setError('');
 
@@ -642,11 +652,13 @@ export default function MirrorPage() {
     let contextForAnswer = mirrorContext;
     try {
       const savedByTool = await runSaveTool(content, assistantMessage.id);
+      if (streamRunIdRef.current !== runId) return;
       if (savedByTool) {
         setIsStreaming(false);
         return;
       }
     } catch (err) {
+      if (streamRunIdRef.current !== runId) return;
       setMessages((prev) => prev.map((message) => (
         message.id === assistantMessage.id
           ? {
@@ -663,18 +675,21 @@ export default function MirrorPage() {
 
     try {
       const recalledContext = await mirrorApi.getContext(selectedFamilyId, targetUserId, content);
+      if (streamRunIdRef.current !== runId) return;
       contextForAnswer = recalledContext;
       setMirrorContext(recalledContext);
       setDiaries(Array.isArray(recalledContext.diaries) ? recalledContext.diaries : []);
       setMemories(Array.isArray(recalledContext.memories) ? recalledContext.memories : []);
     } catch (err) {
+      if (streamRunIdRef.current !== runId) return;
       setError(err instanceof Error ? `相关记忆召回失败，已使用当前上下文：${err.message}` : '相关记忆召回失败，已使用当前上下文');
     }
+    if (streamRunIdRef.current !== runId) return;
     setMessages((prev) => prev.map((message) => (
       message.id === assistantMessage.id ? { ...message, ...buildAnswerSourceMetadata(contextForAnswer) } : message
     )));
 
-    tutorApi.explainStream(
+    const handle = tutorApi.explainStream(
       {
         questionContent: '',
         answer: '',
@@ -691,18 +706,26 @@ export default function MirrorPage() {
         targetRole: agentRoleFromMember(targetMember),
       },
       (chunk) => {
+        if (streamRunIdRef.current !== runId) return;
         setMessages((prev) => prev.map((message) => (
           message.id === assistantMessage.id ? { ...message, content: `${message.content}${chunk}` } : message
         )));
       },
-      () => setIsStreaming(false),
+      () => {
+        if (streamRunIdRef.current !== runId) return;
+        activeStreamRef.current = null;
+        setIsStreaming(false);
+      },
       (streamError) => {
+        if (streamRunIdRef.current !== runId) return;
         setMessages((prev) => prev.map((message) => (
           message.id === assistantMessage.id ? { ...message, content: `${message.content}\n\n[错误] ${streamError}` } : message
         )));
+        activeStreamRef.current = null;
         setIsStreaming(false);
       },
       (metadata) => {
+        if (streamRunIdRef.current !== runId) return;
         const normalized = normalizeMirrorAssistantMetadata(metadata);
         setMessages((prev) => prev.map((message) => (
           message.id === assistantMessage.id
@@ -710,7 +733,17 @@ export default function MirrorPage() {
             : message
         )));
       },
+      () => {
+        if (streamRunIdRef.current !== runId) return;
+        activeStreamRef.current = null;
+        setIsStreaming(false);
+      },
     );
+    if (streamRunIdRef.current !== runId) {
+      handle.abort();
+      return;
+    }
+    activeStreamRef.current = handle;
   };
 
   if (loadingFamilies) {
@@ -1096,6 +1129,10 @@ export default function MirrorPage() {
           <form
             onSubmit={(event) => {
               event.preventDefault();
+              if (isStreaming) {
+                stopStreaming();
+                return;
+              }
               sendMessage();
             }}
             className="flex shrink-0 items-end gap-1.5 border-t border-gray-200 bg-white p-1.5 pb-[max(env(safe-area-inset-bottom),0.375rem)] sm:gap-2 sm:p-3 sm:pb-3"
@@ -1125,11 +1162,12 @@ export default function MirrorPage() {
             />
             <button
               type="submit"
-              disabled={!input.trim() || isStreaming || loadingContext || !targetMember || !mirrorContext}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 sm:h-10 sm:w-10"
-              aria-label="发送"
+              disabled={isStreaming ? false : (!input.trim() || loadingContext || !targetMember || !mirrorContext)}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 sm:h-10 sm:w-auto sm:gap-1.5 sm:px-4"
+              aria-label={isStreaming ? '停止生成' : '发送'}
             >
-              {isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              {isStreaming ? <XCircle className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+              <span className="hidden sm:inline">{isStreaming ? '停止生成' : '发送'}</span>
             </button>
           </form>
         </section>

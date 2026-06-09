@@ -50,14 +50,6 @@ const nextConfig = {
     const aiServiceUrl = process.env.AI_SERVICE_URL || process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:8090';
     return [
       {
-        source: '/ai-proxy/agent/chat/stream',
-        destination: `${backendUrl}/api/agent/chat/stream`,
-      },
-      {
-        source: '/ai-proxy/tutor/explain',
-        destination: `${backendUrl}/api/tutor/explain`,
-      },
-      {
         source: '/ai-proxy/:path*',
         destination: `${aiServiceUrl}/ai/:path*`,
       },

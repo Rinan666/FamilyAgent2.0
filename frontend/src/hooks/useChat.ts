@@ -6,9 +6,9 @@
  */
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { useChatStore } from '@/stores/chatStore';
-import { growthGuardApi, heritageTaskApi, memoryApi, memoryLibraryApi, tutorApi } from '@/lib/api';
+import { growthGuardApi, heritageTaskApi, memoryApi, memoryLibraryApi, tutorApi, type AIStreamHandle } from '@/lib/api';
 import type { ChatMessage, DiaryEntry, GrowthGuardRecord, HeritageTask, MemoryEntry, MemoryLibraryItem, Question } from '@/types';
 import type { ViewerRole } from '@/lib/roles';
 
@@ -60,7 +60,7 @@ export function useChat(options: UseChatOptions = {}) {
   } = useChatStore();
 
   const {
-    getMastery = () => '中',
+    getMastery = () => 'medium',
     getKnowledgePoint = () => '',
     viewerRole = 'STUDENT',
     targetRole = 'STUDENT',
@@ -72,6 +72,9 @@ export function useChat(options: UseChatOptions = {}) {
     viewerIdentityContext,
     getSessionSavedMemories,
   } = options;
+
+  const activeStreamRef = useRef<AIStreamHandle | null>(null);
+  const streamRunIdRef = useRef(0);
 
   const persistSafely = useCallback(
     (question: Question) => {
@@ -93,11 +96,26 @@ export function useChat(options: UseChatOptions = {}) {
     [persistChatMessages],
   );
 
+  const clearActiveStream = useCallback((runId: number) => {
+    if (streamRunIdRef.current === runId) {
+      activeStreamRef.current = null;
+    }
+  }, []);
+
+  const isRunActive = useCallback((runId: number) => streamRunIdRef.current === runId, []);
+
+  const stopStreaming = useCallback(() => {
+    streamRunIdRef.current += 1;
+    activeStreamRef.current?.abort();
+    activeStreamRef.current = null;
+    setStreaming(false);
+  }, [setStreaming]);
+
   const makeBody = useCallback(
     (question: Question, studentMessage: string) => {
       const history = messages
-        .filter((m) => m.role !== 'system')
-        .map((m) => ({ role: m.role, content: m.content }));
+        .filter((message) => message.role !== 'system')
+        .map((message) => ({ role: message.role, content: message.content }));
 
       return {
         questionContent: question.content.stem,
@@ -113,7 +131,7 @@ export function useChat(options: UseChatOptions = {}) {
         targetRole,
       };
     },
-    [messages, getMastery, getKnowledgePoint, viewerRole, targetRole],
+    [messages, getKnowledgePoint, getMastery, targetRole, viewerRole],
   );
 
   const recallMemoryContext = useCallback(
@@ -125,9 +143,11 @@ export function useChat(options: UseChatOptions = {}) {
       try {
         const allowFamilyContext = shouldRecallFamilyContext(params.query);
         const activationScene = allowFamilyContext ? detectFamilyActivationScene(params.query) : null;
-        onActivationSceneChange?.(activationScene
-          ? { label: activationScene.label, instruction: activationScene.instruction }
-          : null);
+        onActivationSceneChange?.(
+          activationScene
+            ? { label: activationScene.label, instruction: activationScene.instruction }
+            : null,
+        );
         const libraryKeyword = activationScene
           ? `${params.query} ${activationScene.label} ${activationScene.searchKeywords.join(' ')}`
           : params.query;
@@ -148,18 +168,26 @@ export function useChat(options: UseChatOptions = {}) {
               }), null, FAMILY_CONTEXT_TIMEOUT_MS).catch(() => null)
             : Promise.resolve(null),
           activeFamilyId && allowFamilyContext
-            ? withTimeout(growthGuardApi.listFamilyRecords(activeFamilyId, 8), [] as GrowthGuardRecord[], FAMILY_CONTEXT_TIMEOUT_MS)
-                .catch(() => [] as GrowthGuardRecord[])
+            ? withTimeout(
+                growthGuardApi.listFamilyRecords(activeFamilyId, 8),
+                [] as GrowthGuardRecord[],
+                FAMILY_CONTEXT_TIMEOUT_MS,
+              ).catch(() => [] as GrowthGuardRecord[])
             : Promise.resolve([] as GrowthGuardRecord[]),
           activeFamilyId && allowFamilyContext
-            ? withTimeout(heritageTaskApi.listFamilyTasks(activeFamilyId, 8), [] as HeritageTask[], FAMILY_CONTEXT_TIMEOUT_MS)
-                .catch(() => [] as HeritageTask[])
+            ? withTimeout(
+                heritageTaskApi.listFamilyTasks(activeFamilyId, 8),
+                [] as HeritageTask[],
+                FAMILY_CONTEXT_TIMEOUT_MS,
+              ).catch(() => [] as HeritageTask[])
             : Promise.resolve([] as HeritageTask[]),
         ]);
+
         const libraryItems = libraryResult?.items || [];
         if (!allowFamilyContext) {
           return { context: '' } satisfies MemoryContextResult;
         }
+
         const context = formatMemoryContext({
           libraryItems,
           familyMemories: familyRecall?.memories || [],
@@ -173,6 +201,7 @@ export function useChat(options: UseChatOptions = {}) {
           viewerIdentityContext,
           activationScene,
         });
+
         return {
           context,
           metadata: familyRecall
@@ -196,171 +225,246 @@ export function useChat(options: UseChatOptions = {}) {
     [activeFamilyId, getSessionSavedMemories, onActivationSceneChange, viewerIdentityContext, viewerRole],
   );
 
-  /**
-   * 发送讲题请求
-   */
   const askQuestion = useCallback(
     async (question: Question, studentMessage: string) => {
       if (isStreaming) return;
+      const runId = ++streamRunIdRef.current;
 
       setCurrentQuestion(question);
       addMessage('user', studentMessage);
       addMessage('assistant', '');
       setStreaming(true);
-      const timeContext = currentTimeContext();
 
+      const timeContext = currentTimeContext();
       const memoryContext = await recallMemoryContext({
         query: studentMessage,
         subject: question.subject,
         knowledgePointId: question.kpId || undefined,
       });
+
+      if (!isRunActive(runId)) return;
+
       if (memoryContext.metadata) {
         mergeLastAssistantMetadata(memoryContext.metadata);
       }
 
-      tutorApi.explainStream(
+      const handle = tutorApi.explainStream(
         { ...makeBody(question, studentMessage), memoryContext: memoryContext.context, ...timeContext },
-        (chunk) => appendToLastMessage(chunk),
+        (chunk) => {
+          if (!isRunActive(runId)) return;
+          appendToLastMessage(chunk);
+        },
         () => {
+          if (!isRunActive(runId)) return;
+          clearActiveStream(runId);
           setStreaming(false);
           persistSafely(question);
         },
         (error) => {
-          appendToLastMessage(`\n\n[错误] ${error}`);
+          if (!isRunActive(runId)) return;
+          clearActiveStream(runId);
+          appendToLastMessage(`\n\n[Error] ${error}`);
           setStreaming(false);
           persistSafely(question);
         },
-        (metadata) => mergeLastAssistantMetadata(normalizeAssistantMetadata(metadata)),
+        (metadata) => {
+          if (!isRunActive(runId)) return;
+          mergeLastAssistantMetadata(normalizeAssistantMetadata(metadata));
+        },
+        () => {
+          if (!isRunActive(runId)) return;
+          clearActiveStream(runId);
+          setStreaming(false);
+        },
       );
+
+      if (!isRunActive(runId)) {
+        handle.abort();
+        return;
+      }
+
+      activeStreamRef.current = handle;
     },
     [
-      isStreaming,
-      makeBody,
       addMessage,
       appendToLastMessage,
+      clearActiveStream,
+      isRunActive,
+      isStreaming,
+      makeBody,
       mergeLastAssistantMetadata,
-      setStreaming,
-      setCurrentQuestion,
       persistSafely,
       recallMemoryContext,
+      setCurrentQuestion,
+      setStreaming,
     ],
   );
 
-  /**
-   * 发送文本消息（在已有会话中）
-   */
   const sendMessage = useCallback(
     async (message: string) => {
       if (isStreaming || !currentQuestion) return;
+      const runId = ++streamRunIdRef.current;
 
       addMessage('user', message);
       addMessage('assistant', '');
       setStreaming(true);
-      const timeContext = currentTimeContext();
 
+      const timeContext = currentTimeContext();
       const memoryContext = await recallMemoryContext({
         query: message,
         subject: currentQuestion.subject,
         knowledgePointId: currentQuestion.kpId || undefined,
       });
+
+      if (!isRunActive(runId)) return;
+
       if (memoryContext.metadata) {
         mergeLastAssistantMetadata(memoryContext.metadata);
       }
 
-      tutorApi.explainStream(
+      const handle = tutorApi.explainStream(
         { ...makeBody(currentQuestion, message), memoryContext: memoryContext.context, ...timeContext },
-        (chunk) => appendToLastMessage(chunk),
+        (chunk) => {
+          if (!isRunActive(runId)) return;
+          appendToLastMessage(chunk);
+        },
         () => {
+          if (!isRunActive(runId)) return;
+          clearActiveStream(runId);
           setStreaming(false);
           persistSafely(currentQuestion);
         },
         (error) => {
-          appendToLastMessage(`\n\n[错误] ${error}`);
+          if (!isRunActive(runId)) return;
+          clearActiveStream(runId);
+          appendToLastMessage(`\n\n[Error] ${error}`);
           setStreaming(false);
           persistSafely(currentQuestion);
         },
-        (metadata) => mergeLastAssistantMetadata(normalizeAssistantMetadata(metadata)),
+        (metadata) => {
+          if (!isRunActive(runId)) return;
+          mergeLastAssistantMetadata(normalizeAssistantMetadata(metadata));
+        },
+        () => {
+          if (!isRunActive(runId)) return;
+          clearActiveStream(runId);
+          setStreaming(false);
+        },
       );
+
+      if (!isRunActive(runId)) {
+        handle.abort();
+        return;
+      }
+
+      activeStreamRef.current = handle;
     },
     [
-      isStreaming,
-      currentQuestion,
-      makeBody,
       addMessage,
       appendToLastMessage,
+      clearActiveStream,
+      currentQuestion,
+      isRunActive,
+      isStreaming,
+      makeBody,
       mergeLastAssistantMetadata,
-      setStreaming,
       persistSafely,
       recallMemoryContext,
+      setStreaming,
     ],
   );
 
-  /**
-   * 发送自由对话消息（不绑定某一道题）
-   */
   const sendFreeMessage = useCallback(
     async (message: string) => {
       if (isStreaming) return;
+      const runId = ++streamRunIdRef.current;
 
       const history = useChatStore.getState().messages
-        .filter((m) => m.role !== 'system')
-        .map((m) => ({ role: m.role, content: m.content }));
+        .filter((item) => item.role !== 'system')
+        .map((item) => ({ role: item.role, content: item.content }));
 
       addMessage('user', message);
       addMessage('assistant', '');
       setStreaming(true);
-      const timeContext = currentTimeContext();
 
+      const timeContext = currentTimeContext();
       const memoryContext = await recallMemoryContext({
         query: message,
         subject: 'family',
       });
+
+      if (!isRunActive(runId)) return;
+
       if (memoryContext.metadata) {
         mergeLastAssistantMetadata(memoryContext.metadata);
       }
 
-      tutorApi.explainStream(
+      const handle = tutorApi.explainStream(
         {
           questionContent: '',
           answer: '',
           steps: '',
           studentMessage: message,
           history,
-          subject: '家族Agent',
+          subject: 'FamilyAgent',
           grade: '',
-          knowledgePoint: '家族记忆',
-          masteryLevel: '中',
+          knowledgePoint: 'family_memory',
+          masteryLevel: 'medium',
           mode: 'chat',
           memoryContext: memoryContext.context,
           viewerRole,
           targetRole,
           ...timeContext,
         },
-        (chunk) => appendToLastMessage(chunk),
+        (chunk) => {
+          if (!isRunActive(runId)) return;
+          appendToLastMessage(chunk);
+        },
         () => {
+          if (!isRunActive(runId)) return;
+          clearActiveStream(runId);
           setStreaming(false);
           onFreeChatDone?.(message);
           persistChatSafely();
         },
         (error) => {
-          appendToLastMessage(`\n\n[错误] ${error}`);
+          if (!isRunActive(runId)) return;
+          clearActiveStream(runId);
+          appendToLastMessage(`\n\n[Error] ${error}`);
           setStreaming(false);
           persistChatSafely();
         },
-        (metadata) => mergeLastAssistantMetadata(normalizeAssistantMetadata(metadata)),
+        (metadata) => {
+          if (!isRunActive(runId)) return;
+          mergeLastAssistantMetadata(normalizeAssistantMetadata(metadata));
+        },
+        () => {
+          if (!isRunActive(runId)) return;
+          clearActiveStream(runId);
+          setStreaming(false);
+        },
       );
+
+      if (!isRunActive(runId)) {
+        handle.abort();
+        return;
+      }
+
+      activeStreamRef.current = handle;
     },
     [
-      isStreaming,
       addMessage,
       appendToLastMessage,
+      clearActiveStream,
+      isRunActive,
+      isStreaming,
       mergeLastAssistantMetadata,
-      setStreaming,
-      viewerRole,
-      targetRole,
       onFreeChatDone,
       persistChatSafely,
       recallMemoryContext,
+      setStreaming,
+      targetRole,
+      viewerRole,
     ],
   );
 
@@ -371,6 +475,7 @@ export function useChat(options: UseChatOptions = {}) {
     askQuestion,
     sendMessage,
     sendFreeMessage,
+    stopStreaming,
     reset,
   };
 }

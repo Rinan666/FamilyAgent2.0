@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
   AlertTriangle,
   Archive,
@@ -19,6 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { familyApi, memoryApi, memoryLibraryApi } from '@/lib/api';
+import LegacyWorkpageNotice from '@/components/family/LegacyWorkpageNotice';
 import { useViewerRole } from '@/hooks/useViewerRole';
 import type {
   AuthorizedMemoryRecallResult,
@@ -244,8 +246,21 @@ function maintenanceActionMeta(action?: string) {
   };
 }
 
-export default function MemoryLibraryPage() {
-  const { families, activeFamilyId, activeFamily, isLoading: loadingFamilies } = useViewerRole();
+interface MemoryLibraryPageProps {
+  embedded?: boolean;
+}
+
+export default function MemoryLibraryPage({ embedded = false }: MemoryLibraryPageProps) {
+  const searchParams = useSearchParams();
+  const {
+    families,
+    activeFamilyId,
+    activeFamily,
+    activeMembership,
+    viewerRole,
+    setActiveFamilyId,
+    isLoading: loadingFamilies,
+  } = useViewerRole();
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [pageData, setPageData] = useState<PageResult<MemoryLibraryItem>>(() => emptyPage(pageSizeOptions[0]));
   const [counts, setCounts] = useState<Record<LibraryItemType, number>>({
@@ -275,6 +290,11 @@ export default function MemoryLibraryPage() {
   const [deletingItemId, setDeletingItemId] = useState('');
   const [viewMode, setViewMode] = useState<LibraryViewMode>('ACTIVE');
 
+  const requestedFamilyId = useMemo(() => {
+    const value = Number(searchParams.get('familyId'));
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }, [searchParams]);
+
   const memberOptions = useMemo(
     () => members.map((member) => ({ id: member.userId, name: memberDisplayName(member) })),
     [members],
@@ -294,6 +314,23 @@ export default function MemoryLibraryPage() {
   const pageStart = pageData.total === 0 ? 0 : (pageData.page - 1) * pageData.pageSize + 1;
   const pageEnd = Math.min(pageData.page * pageData.pageSize, pageData.total);
   const totalPages = Math.max(1, pageData.totalPages || 1);
+  const canManageLibrary = activeMembership?.role === 'OWNER' || viewerRole === 'ADMIN';
+  const canUseRecallDebug = viewerRole !== 'STUDENT';
+
+  useEffect(() => {
+    const queryFamily = requestedFamilyId && families.some((family) => family.id === requestedFamilyId)
+      ? requestedFamilyId
+      : null;
+    if (queryFamily && activeFamilyId !== queryFamily) {
+      setActiveFamilyId(queryFamily);
+    }
+  }, [activeFamilyId, families, requestedFamilyId, setActiveFamilyId]);
+
+  useEffect(() => {
+    if (!canManageLibrary && viewMode !== 'ACTIVE') {
+      setViewMode('ACTIVE');
+    }
+  }, [canManageLibrary, viewMode]);
 
   const loadCounts = useCallback(async (
     familyId: number,
@@ -447,6 +484,14 @@ export default function MemoryLibraryPage() {
     }
   };
 
+  const handleArchiveItem = async (item: MemoryLibraryItem) => {
+    if (!canManageLibrary) {
+      setError('只有家族创建者可以归档家族记录');
+      return;
+    }
+    await handleArchiveSuggestionItem(item);
+  };
+
   const handleDeleteArchivedItem = async (item: MemoryLibraryItem) => {
     if (!activeFamilyId || !item.id) return;
     const confirmed = window.confirm('确认永久删除这条已归档记忆吗？删除后无法恢复，也不会再进入家族 Agent 召回。');
@@ -507,7 +552,7 @@ export default function MemoryLibraryPage() {
       <div className="mx-auto max-w-3xl rounded-lg border border-gray-200 bg-white p-10 text-center">
         <BookHeart className="mx-auto mb-3 h-10 w-10 text-gray-300" />
         <h1 className="text-lg font-semibold text-gray-900">先创建一个家族空间</h1>
-        <p className="mt-2 text-sm text-gray-500">家族记忆库会统一收纳当下记录、沉淀经验、守护观察和 AI 摘要。</p>
+        <p className="mt-2 text-sm text-gray-500">全部记忆会统一收纳当下记录、沉淀经验、守护观察和 AI 摘要。</p>
         <Link
           href="/dashboard/family"
           className="mt-5 inline-flex h-10 items-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
@@ -520,40 +565,47 @@ export default function MemoryLibraryPage() {
 
   return (
     <div className="mx-auto w-full max-w-7xl">
+      {!embedded && <LegacyWorkpageNotice tab="library" label="全部记忆" />}
       <section className="mb-4 rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">家族记忆库</h1>
+            <h1 className="text-xl font-bold text-gray-900">{embedded ? '全部记忆' : '记忆整理'}</h1>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-gray-500">
-              统一检索 {activeFamily?.name || '当前家族'} 的记录、经验、观察和 AI 摘要。这里是总入口，具体编辑仍回到对应来源页面。
+              统一检索 {activeFamily?.name || '当前家族'} 的记录、经验、观察和 AI 摘要。这里是浏览与整理入口，具体编辑仍回到对应来源页面。
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
-              {([
-                { value: 'ACTIVE', label: '当前记忆', icon: BookHeart },
-                { value: 'ARCHIVED', label: '归档箱', icon: Archive },
-              ] as const).map((option) => {
-                const Icon = option.icon;
-                const active = viewMode === option.value;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => {
-                      setViewMode(option.value);
-                      setSelectedItemId('');
-                    }}
-                    className={`inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium ${
-                      active ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
+            {canManageLibrary ? (
+              <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+                {([
+                  { value: 'ACTIVE', label: '当前记忆', icon: BookHeart },
+                  { value: 'ARCHIVED', label: '归档箱', icon: Archive },
+                ] as const).map((option) => {
+                  const Icon = option.icon;
+                  const active = viewMode === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => {
+                        setViewMode(option.value);
+                        setSelectedItemId('');
+                      }}
+                      className={`inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium ${
+                        active ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="inline-flex h-9 items-center rounded-lg bg-gray-50 px-3 text-xs font-medium text-gray-600">
+                当前记忆
+              </div>
+            )}
             <button
               type="button"
               onClick={() => loadData()}
@@ -594,7 +646,7 @@ export default function MemoryLibraryPage() {
         </div>
       )}
 
-      {viewMode === 'ACTIVE' && (
+      {viewMode === 'ACTIVE' && canManageLibrary && (
       <section className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
         <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -674,7 +726,7 @@ export default function MemoryLibraryPage() {
       </section>
       )}
 
-      {viewMode === 'ACTIVE' && (
+      {viewMode === 'ACTIVE' && canUseRecallDebug && (
       <section className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -900,33 +952,50 @@ export default function MemoryLibraryPage() {
                       </button>
                       {viewMode === 'ARCHIVED' ? (
                         <>
-                          <button
-                            type="button"
-                            onClick={() => { void handleRestoreItem(item); }}
-                            disabled={restoringItemId === item.id || deletingItemId === item.id}
-                            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-60"
-                          >
-                            {restoringItemId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-                            恢复
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { void handleDeleteArchivedItem(item); }}
-                            disabled={deletingItemId === item.id || restoringItemId === item.id}
-                            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
-                          >
-                            {deletingItemId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                            删除
-                          </button>
+                          {canManageLibrary && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => { void handleRestoreItem(item); }}
+                                disabled={restoringItemId === item.id || deletingItemId === item.id}
+                                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+                              >
+                                {restoringItemId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                                恢复
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { void handleDeleteArchivedItem(item); }}
+                                disabled={deletingItemId === item.id || restoringItemId === item.id}
+                                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
+                              >
+                                {deletingItemId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                                删除
+                              </button>
+                            </>
+                          )}
                         </>
                       ) : (
-                        <Link
-                          href={sourceHref(item, activeFamilyId)}
-                          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 hover:bg-gray-50"
-                        >
-                          <CheckCircle className="h-3.5 w-3.5" />
-                          查看来源
-                        </Link>
+                        <>
+                          {canManageLibrary && (
+                            <button
+                              type="button"
+                              onClick={() => { void handleArchiveItem(item); }}
+                              disabled={archivingItemId === item.id}
+                              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-amber-200 bg-white px-3 text-xs font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-60"
+                            >
+                              {archivingItemId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
+                              归档
+                            </button>
+                          )}
+                          <Link
+                            href={sourceHref(item, activeFamilyId)}
+                            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                          >
+                            <CheckCircle className="h-3.5 w-3.5" />
+                            查看来源
+                          </Link>
+                        </>
                       )}
                     </div>
                   </div>
@@ -1018,7 +1087,26 @@ export default function MemoryLibraryPage() {
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              {viewMode === 'ARCHIVED' && (
+              {viewMode === 'ACTIVE' && canManageLibrary && (
+                <div className="mb-4 rounded-lg border border-amber-100 bg-amber-50 p-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm leading-6 text-amber-800">
+                      家族创建者可以直接在记忆库归档这条记录，让主记忆流保持清晰，同时保留后续恢复空间。
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => { void handleArchiveItem(selectedItem); }}
+                      disabled={archivingItemId === selectedItem.id}
+                      className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-white px-3 text-xs font-medium text-amber-700 ring-1 ring-amber-100 hover:bg-amber-100 disabled:opacity-60"
+                    >
+                      {archivingItemId === selectedItem.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
+                      归档这条记录
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {viewMode === 'ARCHIVED' && canManageLibrary && (
                 <div className="mb-4 rounded-lg border border-amber-100 bg-amber-50 p-3">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-sm leading-6 text-amber-800">
@@ -1179,7 +1267,7 @@ export default function MemoryLibraryPage() {
                   className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium text-gray-600 hover:bg-gray-50"
                 >
                   <CheckCircle className="h-4 w-4" />
-                  前往来源页面管理
+                  前往来源页面补充
                 </Link>
               </div>
             </div>
