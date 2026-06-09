@@ -416,6 +416,10 @@ CREATE TABLE IF NOT EXISTS tenant_storage_routes (
 
 CREATE INDEX IF NOT EXISTS idx_tenant_storage_tier ON tenant_storage_routes(storage_tier);
 
+-- Historical tutor seed data below has been retired for the FamilyAgent MVP.
+-- Stop initialization here so deprecated seed SQL does not block deployment.
+\quit
+
 -- ============================================
 -- 閹绘帒鍙嗘妯款吇閺佺増宓侀敍姘灥娑擃厽鏆熺€涳妇鐓＄拠鍡欏仯缁€杞扮伐
 -- ============================================
