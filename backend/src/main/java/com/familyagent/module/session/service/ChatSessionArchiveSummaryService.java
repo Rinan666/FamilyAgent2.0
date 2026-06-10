@@ -34,7 +34,7 @@ public class ChatSessionArchiveSummaryService {
             ));
             Object data = response == null ? null : response.get("data");
             if (data instanceof Map<?, ?> map) {
-                return new LinkedHashMap<>((Map<String, Object>) map);
+                return ChatSessionSupportUtils.castMap(map);
             }
         } catch (Exception error) {
             log.warn("Session archive AI summary failed: sessionId={}, error={}", session.getId(), error.getMessage());

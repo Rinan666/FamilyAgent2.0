@@ -1,0 +1,102 @@
+package com.familyagent.module.admin.service;
+
+import com.familyagent.common.exception.BusinessException;
+import com.familyagent.common.response.ErrorCode;
+import com.familyagent.common.security.CurrentUserGuard;
+import com.familyagent.module.family.service.FamilyLifecycleService;
+import com.familyagent.module.user.entity.User;
+import com.familyagent.module.user.repository.UserRepository;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
+
+final class AdminUserMaintenanceSupport {
+
+    private final PlatformAdminAccessSupport adminAccessSupport;
+    private final JdbcTemplate jdbcTemplate;
+    private final UserRepository userRepository;
+    private final FamilyLifecycleService familyLifecycleService;
+
+    AdminUserMaintenanceSupport(PlatformAdminAccessSupport adminAccessSupport,
+                                JdbcTemplate jdbcTemplate,
+                                UserRepository userRepository,
+                                FamilyLifecycleService familyLifecycleService) {
+        this.adminAccessSupport = adminAccessSupport;
+        this.jdbcTemplate = jdbcTemplate;
+        this.userRepository = userRepository;
+        this.familyLifecycleService = familyLifecycleService;
+    }
+
+    @Transactional
+    void deleteUser(Long userId) {
+        adminAccessSupport.requirePlatformAdmin();
+        if (userId == null || userId <= 0) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "userId is required");
+        }
+
+        Long operatorUserId = CurrentUserGuard.currentUserId();
+        if (userId.equals(operatorUserId)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Platform admin cannot delete the current account");
+        }
+
+        User target = userRepository.findBasicById(userId);
+        if (target == null) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+        if ("ADMIN".equalsIgnoreCase(target.getRole())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Platform admin accounts cannot be deleted");
+        }
+
+        familyLifecycleService.prepareFamiliesForUserDeletion(userId);
+
+        updateNullIfTableExists("families", "created_by", userId);
+        updateNullIfTableExists("invite_codes", "created_by", userId);
+        updateNullIfTableExists("family_relationships", "created_by", userId);
+        updateNullIfTableExists("family_relationships", "updated_by", userId);
+        updateNullIfTableExists("care_authorizations", "created_by", userId);
+        updateNullIfTableExists("care_authorizations", "updated_by", userId);
+        updateNullIfTableExists("growth_guard_records", "target_user_id", userId);
+        updateNullIfTableExists("growth_guard_reports", "target_user_id", userId);
+        updateNullIfTableExists("heritage_tasks", "completed_by", userId);
+
+        deleteIfTableExists("family_relationships", "from_user_id", userId);
+        deleteIfTableExists("family_relationships", "to_user_id", userId);
+        deleteIfTableExists("care_authorizations", "subject_user_id", userId);
+        deleteIfTableExists("care_authorizations", "caregiver_user_id", userId);
+        deleteIfTableExists("growth_guard_staleness_votes", "user_id", userId);
+        deleteIfTableExists("memory_entry_votes", "user_id", userId);
+        deleteIfTableExists("heritage_tasks", "created_by", userId);
+        deleteIfTableExists("growth_guard_reports", "created_by", userId);
+        deleteIfTableExists("growth_guard_records", "created_by", userId);
+        deleteIfTableExists("memory_embeddings", "user_id", userId);
+        deleteIfTableExists("skill_runs", "triggered_by", userId);
+        deleteIfTableExists("chat_sessions", "user_id", userId);
+        deleteIfTableExists("diary_entries", "user_id", userId);
+        deleteIfTableExists("memory_entries", "user_id", userId);
+        deleteIfTableExists("mirror_agent_data", "user_id", userId);
+        deleteIfTableExists("family_members", "user_id", userId);
+
+        int deleted = jdbcTemplate.update("DELETE FROM users WHERE id = ?", userId);
+        if (deleted == 0) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+    }
+
+    private void deleteIfTableExists(String tableName, String columnName, Long userId) {
+        if (!tableExists(tableName)) {
+            return;
+        }
+        jdbcTemplate.update("DELETE FROM " + tableName + " WHERE " + columnName + " = ?", userId);
+    }
+
+    private void updateNullIfTableExists(String tableName, String columnName, Long userId) {
+        if (!tableExists(tableName)) {
+            return;
+        }
+        jdbcTemplate.update("UPDATE " + tableName + " SET " + columnName + " = NULL WHERE " + columnName + " = ?", userId);
+    }
+
+    private boolean tableExists(String tableName) {
+        Boolean exists = jdbcTemplate.queryForObject("SELECT to_regclass(?) IS NOT NULL", Boolean.class, "public." + tableName);
+        return Boolean.TRUE.equals(exists);
+    }
+}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { familyApi } from '@/lib/api';
+import { familyApi } from '@/lib/api/family';
 import { deriveViewerRole, type ViewerRole } from '@/lib/roles';
 import { useFamilyContextStore } from '@/stores/familyContextStore';
 import { useAuthStore } from '@/stores/authStore';

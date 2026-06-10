@@ -1,9 +1,12 @@
 """Application configuration loaded from environment variables."""
 
 import os
+from pathlib import Path
 from typing import Optional
 
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource
+
+ROOT_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
 
 class Settings(BaseSettings):
@@ -84,7 +87,7 @@ class Settings(BaseSettings):
     log_level: str = "DEBUG"
 
     model_config = {
-        "env_file": ".env",
+        "env_file": str(ROOT_ENV_FILE),
         "env_file_encoding": "utf-8",
         "extra": "ignore",
     }
@@ -98,8 +101,8 @@ class Settings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ):
-        # Local development prefers ai-service/.env, while production-like
-        # environments should honor process-level env vars injected by systemd.
+        # Local development prefers the repository-root .env, while
+        # production-like environments should honor process-level env vars.
         current_env = os.environ.get("APP_ENV", "").strip().lower()
         if current_env and current_env != "development":
             return init_settings, env_settings, dotenv_settings, file_secret_settings

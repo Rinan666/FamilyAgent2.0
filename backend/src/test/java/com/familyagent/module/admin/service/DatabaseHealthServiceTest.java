@@ -19,6 +19,7 @@ import com.familyagent.module.user.entity.User;
 import com.familyagent.module.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
@@ -36,6 +37,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -338,6 +340,33 @@ class DatabaseHealthServiceTest {
             assertEquals(1L, page.getTotal());
             assertEquals(1, page.getItems().size());
             assertEquals("Smith Family", page.getItems().get(0).getFamilyName());
+        }
+    }
+
+    @Test
+    void searchFamilies_buildsJoinBeforeWhereClause() {
+        try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
+            stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(1L);
+            when(userRepository.findBasicById(1L)).thenReturn(adminUser());
+            when(jdbcTemplate.queryForObject(eq("SELECT to_regclass(?) IS NOT NULL"), eq(Boolean.class), anyString()))
+                    .thenReturn(true);
+            when(jdbcTemplate.queryForObject(contains("SELECT COUNT(*) FROM families f"), eq(Long.class), any(Object[].class)))
+                    .thenReturn(1L);
+            when(jdbcTemplate.query(contains("LEFT JOIN LATERAL"), any(RowMapper.class), any(Object[].class)))
+                    .thenReturn(List.of());
+
+            databaseHealthService.searchFamilies("smith", 1, 10);
+
+            ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+            verify(jdbcTemplate, atLeastOnce()).query(sqlCaptor.capture(), any(RowMapper.class), any(Object[].class));
+
+            String familySql = sqlCaptor.getAllValues().stream()
+                    .filter(sql -> sql.contains("LEFT JOIN LATERAL") && sql.contains("WHERE 1 = 1"))
+                    .findFirst()
+                    .orElseThrow();
+
+            assertEquals(true, familySql.indexOf("FROM families f") < familySql.indexOf("LEFT JOIN LATERAL"));
+            assertEquals(true, familySql.indexOf("LEFT JOIN LATERAL") < familySql.indexOf("WHERE 1 = 1"));
         }
     }
 

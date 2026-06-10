@@ -1,0 +1,153 @@
+package com.familyagent.module.session.service;
+
+import com.familyagent.module.session.entity.ChatSession;
+import com.familyagent.module.session.entity.ChatSessionArchive;
+import com.familyagent.module.session.entity.ChatSessionMessage;
+import com.familyagent.module.session.repository.ChatSessionArchiveRepository;
+import com.familyagent.module.session.repository.ChatSessionMessageRepository;
+import com.familyagent.module.session.repository.ChatSessionRepository;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+final class ChatSessionArchiveSupport {
+
+    private final ChatSessionRepository sessionRepository;
+    private final ChatSessionMessageRepository messageRepository;
+    private final ChatSessionArchiveRepository archiveRepository;
+    private final ChatSessionArchiveStorageService archiveStorageService;
+    private final ChatSessionArchiveSummaryService archiveSummaryService;
+    private final int archiveTriggerMessageCount;
+    private final int archiveChunkSize;
+    private final int archiveRetainRecentCount;
+    private final int storageVersion;
+
+    ChatSessionArchiveSupport(ChatSessionRepository sessionRepository,
+                              ChatSessionMessageRepository messageRepository,
+                              ChatSessionArchiveRepository archiveRepository,
+                              ChatSessionArchiveStorageService archiveStorageService,
+                              ChatSessionArchiveSummaryService archiveSummaryService,
+                              int archiveTriggerMessageCount,
+                              int archiveChunkSize,
+                              int archiveRetainRecentCount,
+                              int storageVersion) {
+        this.sessionRepository = sessionRepository;
+        this.messageRepository = messageRepository;
+        this.archiveRepository = archiveRepository;
+        this.archiveStorageService = archiveStorageService;
+        this.archiveSummaryService = archiveSummaryService;
+        this.archiveTriggerMessageCount = archiveTriggerMessageCount;
+        this.archiveChunkSize = archiveChunkSize;
+        this.archiveRetainRecentCount = archiveRetainRecentCount;
+        this.storageVersion = storageVersion;
+    }
+
+    void maybeArchiveSession(Long sessionId) {
+        ChatSession session = sessionRepository.selectById(sessionId);
+        if (session == null) {
+            return;
+        }
+        while (ChatSessionSupportUtils.safeInt(session.getMessageCount()) > archiveTriggerMessageCount) {
+            Integer maxSeq = messageRepository.findMaxSeqBySessionId(sessionId);
+            if (maxSeq == null || maxSeq <= archiveRetainRecentCount) {
+                return;
+            }
+            int archivedBeforeSeq = ChatSessionSupportUtils.safeInt(session.getArchivedBeforeSeq());
+            int highestArchivableSeq = maxSeq - archiveRetainRecentCount;
+            int startSeq = archivedBeforeSeq + 1;
+            if (highestArchivableSeq < startSeq) {
+                return;
+            }
+            int endSeq = Math.min(startSeq + archiveChunkSize - 1, highestArchivableSeq);
+            List<ChatSessionMessage> chunk = messageRepository.findBySessionIdAndSeqRange(sessionId, startSeq, endSeq);
+            if (chunk.isEmpty()) {
+                return;
+            }
+
+            Map<String, Object> summaryData = archiveSummaryService.summarize(session, chunk);
+            String objectKey = archiveStorageService.writeTranscript(sessionId, startSeq, endSeq, chunk);
+
+            ChatSessionArchive archive = new ChatSessionArchive();
+            archive.setSessionId(sessionId);
+            archive.setStartSeq(startSeq);
+            archive.setEndSeq(endSeq);
+            archive.setSummary(ChatSessionSupportUtils.stringValue(
+                    summaryData.get("summary"),
+                    ChatSessionSupportUtils.buildRollingSummary(chunk)));
+            archive.setObjectKey(objectKey);
+            archive.setMessageCount(chunk.size());
+            archive.setTokenCount(chunk.stream().map(ChatSessionMessage::getTokenCount).filter(Objects::nonNull).mapToInt(Integer::intValue).sum());
+            archive.setCreatedAt(LocalDateTime.now());
+            archive.setMetadata(new LinkedHashMap<>(summaryData));
+            archiveRepository.insert(archive);
+
+            messageRepository.deleteSeqRange(sessionId, startSeq, endSeq);
+
+            session = sessionRepository.selectById(sessionId);
+            session.setArchivedBeforeSeq(endSeq);
+            session.setArchiveStatus("READY");
+            if (ChatSessionSupportUtils.blankToNull(session.getTitle()) == null) {
+                session.setTitle(ChatSessionSupportUtils.blankToNull(
+                        ChatSessionSupportUtils.stringValue(summaryData.get("titleSuggestion"), "")));
+            }
+            if (ChatSessionSupportUtils.blankToNull(session.getSummary()) == null) {
+                session.setSummary(archive.getSummary());
+            }
+            Map<String, Object> archiveMetadata = ChatSessionSupportUtils.toMutableMap(session.getArchiveMetadata());
+            archiveMetadata.put("lastArchiveId", archive.getId());
+            archiveMetadata.put("lastArchiveAt", archive.getCreatedAt().toString());
+            archiveMetadata.put("lastArchiveRange", startSeq + "-" + endSeq);
+            archiveMetadata.put("storageVersion", storageVersion);
+            session.setArchiveMetadata(archiveMetadata);
+            session.setMetadata(ChatSessionSupportUtils.withStorageVersion(
+                    ChatSessionSupportUtils.toMutableMap(session.getMetadata()),
+                    storageVersion));
+            sessionRepository.updateById(session);
+        }
+    }
+
+    List<ChatSessionMessage> loadArchivedMessagesDescending(Long sessionId, long beforeSeq, int remaining) {
+        if (remaining <= 0 || beforeSeq <= 1) {
+            return List.of();
+        }
+
+        List<ChatSessionMessage> collected = new ArrayList<>();
+        List<ChatSessionArchive> archives = archiveRepository.findRangesBeforeSeqDesc(
+                sessionId,
+                beforeSeq,
+                Math.max(remaining, 4));
+        for (ChatSessionArchive archive : archives) {
+            List<ChatSessionMessage> transcript = archiveStorageService.readTranscript(archive.getObjectKey());
+            if (transcript.isEmpty()) {
+                continue;
+            }
+            List<ChatSessionMessage> eligible = transcript.stream()
+                    .filter(message -> message.getSeq() != null && message.getSeq() < beforeSeq)
+                    .sorted((left, right) -> Integer.compare(right.getSeq(), left.getSeq()))
+                    .toList();
+            for (ChatSessionMessage message : eligible) {
+                collected.add(message);
+                if (collected.size() >= remaining) {
+                    return collected;
+                }
+            }
+        }
+        return collected;
+    }
+
+    List<ChatSessionMessage> readArchiveTranscript(String objectKey) {
+        return archiveStorageService.readTranscript(objectKey);
+    }
+
+    long resolveHistoryUpperExclusive(ChatSession session, Long beforeSeq) {
+        if (beforeSeq != null && beforeSeq > 0) {
+            return beforeSeq;
+        }
+        int totalMessages = ChatSessionSupportUtils.safeInt(session.getMessageCount());
+        return totalMessages <= 0 ? 1L : (long) totalMessages + 1L;
+    }
+}

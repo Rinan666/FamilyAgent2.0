@@ -1,5 +1,5 @@
 import type { ChatMessage, ChatSessionMessagePage } from '@/types';
-import { sessionMessageItemToChatMessage } from '@/lib/api';
+import { sessionMessageItemToChatMessage } from '@/lib/api/shared';
 
 export type FetchSessionMessagesPage = (
   sessionId: number,

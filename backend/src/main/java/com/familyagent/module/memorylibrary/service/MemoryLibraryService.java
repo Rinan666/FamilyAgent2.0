@@ -160,17 +160,17 @@ public class MemoryLibraryService {
             String plainSummary,
             String styleNote) {
         if (familyId == null) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "familyId 涓嶈兘涓虹┖");
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "familyId 不能为空");
         }
         familyService.checkMembership(familyId);
         ParsedItemId parsed = parseItemId(itemId);
         if (!"memory".equals(parsed.prefix())) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "褰撳墠浠呮敮鎸佸瀹舵棌缁忛獙杩涜鍙ゆ枃鎻愮偧");
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "当前仅支持对家族经验进行古文提炼");
         }
 
         String normalizedClassicalText = blankToNull(classicalText);
         if (normalizedClassicalText == null || normalizedClassicalText.length() < 8) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "鍙ゆ枃绋胯繃鐭紝鏃犳硶鍥炲啓");
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "古文稿过短，无法回写");
         }
         String normalizedPlainSummary = blankToNull(plainSummary);
         if (normalizedPlainSummary == null) {

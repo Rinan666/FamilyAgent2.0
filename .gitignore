@@ -50,10 +50,6 @@ Desktop.ini
 
 # --- Environment ---
 .env
-.env.infra.local
-.env.local
-.env.*.local
-*.env
 
 # --- Runtime ---
 .service-pids.txt

@@ -157,7 +157,7 @@ public class FamilyService {
             throw new BusinessException(ErrorCode.INSUFFICIENT_PERMISSION, "不能修改自己的家庭角色");
         }
         if ("OWNER".equalsIgnoreCase(targetMember.getRole())) {
-            throw new BusinessException(ErrorCode.INSUFFICIENT_PERMISSION, "鍒涘缓鑰呰鑹蹭笉鑳藉湪姝ゅ淇敼");
+            throw new BusinessException(ErrorCode.INSUFFICIENT_PERMISSION, "创建者角色不能在此处修改");
         }
         targetMember.setRole(nextRole);
         memberRepository.updateById(targetMember);
@@ -211,7 +211,7 @@ public class FamilyService {
             return "MEMBER";
         }
         if (!MUTABLE_FAMILY_ROLES.contains(normalized)) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "瀹跺涵瑙掕壊鍙兘鏄?MEMBER锛屽垱寤鸿€呰鑹蹭笉鍙湪姝ゅ淇敼");
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "家庭角色只能是 MEMBER，创建者角色不能在此处修改");
         }
         return normalized;
     }

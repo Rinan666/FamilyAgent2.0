@@ -1,7 +1,0 @@
-tunnel: TUNNEL_ID_OR_NAME
-credentials-file: /etc/familyagent/cloudflared/TUNNEL_CREDENTIALS.json
-
-ingress:
-  - hostname: app.familyagent.cn
-    service: http://127.0.0.1:3000
-  - service: http_status:404

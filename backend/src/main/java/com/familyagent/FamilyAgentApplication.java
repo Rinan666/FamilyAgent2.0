@@ -1,5 +1,6 @@
 package com.familyagent;
 
+import com.familyagent.config.LocalEnvDefaults;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableAsync;
@@ -15,6 +16,8 @@ import org.springframework.scheduling.annotation.EnableAsync;
 public class FamilyAgentApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(FamilyAgentApplication.class, args);
+        SpringApplication application = new SpringApplication(FamilyAgentApplication.class);
+        application.setDefaultProperties(LocalEnvDefaults.load());
+        application.run(args);
     }
 }
