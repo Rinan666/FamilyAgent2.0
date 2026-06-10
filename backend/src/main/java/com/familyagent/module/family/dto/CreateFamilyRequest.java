@@ -5,7 +5,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
- * 创建家族请求
+ * Create-family request.
  */
 @Data
 public class CreateFamilyRequest {

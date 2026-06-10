@@ -1,7 +1,7 @@
 """
-Token 验证 — 调用 Java 后端验证 Sa-Token
+Token verification helpers backed by the Java service.
 
-作为 FastAPI Dependency 注入到需要鉴权的路由中。
+These dependencies protect FastAPI routes with the backend Sa-Token session.
 """
 import logging
 import secrets
@@ -24,14 +24,14 @@ async def verify_token(
     authorization: Optional[str] = Header(None),
 ) -> dict:
     """
-    验证请求中的 Authorization token。
-    调用 Java 后端 /api/users/me 确认 token 有效。
+    Validate the Authorization token from the current request.
+    Uses the Java backend /api/users/me endpoint as the source of truth.
 
     Returns:
-        dict: 已验证的用户信息
+        dict: The authenticated user payload.
 
     Raises:
-        HTTPException: 401 如果 token 无效或缺失
+        HTTPException: Raised when the token is missing or invalid.
     """
     if not authorization:
         raise HTTPException(status_code=401, detail="未提供认证令牌")
@@ -40,7 +40,7 @@ async def verify_token(
     if user is None:
         raise HTTPException(status_code=401, detail="认证令牌无效或已过期")
 
-    # 注入到 request state 供下游使用
+    # Expose the verified user to downstream handlers.
     request.state.user = user
     request.state.user_id = user.get("id")
 
@@ -67,7 +67,7 @@ async def verify_token_or_internal_service(
 
 
 async def _call_backend_verify(token: str) -> Optional[dict]:
-    """调用 Java 后端 /api/users/me 验证 token"""
+    """Call the Java backend /api/users/me endpoint to verify the token."""
     backend_url = settings.backend_url.rstrip("/")
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
@@ -80,10 +80,10 @@ async def _call_backend_verify(token: str) -> Optional[dict]:
                 if data.get("code") == 200:
                     return data["data"]
             if resp.status_code == 401:
-                # Token 确实无效
-                logger.warning("Token 验证失败: status=401")
+                # The backend confirmed the token is invalid.
+                logger.warning("Token verification failed: status=401")
                 return None
-            # 其它错误（500等）→ 按环境配置 fail-open / fail-closed
+            # Other backend failures follow the configured fail-open / fail-closed mode.
             return _handle_backend_unavailable(f"status={resp.status_code}", -1, "backend_error", "后端异常-开发放行")
     except httpx.TimeoutException:
         return _handle_backend_unavailable("timeout", -2, "timeout", "后端超时-开发放行")
@@ -94,8 +94,8 @@ async def _call_backend_verify(token: str) -> Optional[dict]:
 def _handle_backend_unavailable(reason: str, user_id: int, username: str, nickname: str) -> dict:
     """Handle backend verification outages with explicit fail-open/fail-closed behavior."""
     if settings.auth_fail_open_enabled:
-        logger.warning("Token 验证后端不可用: %s, AUTH_FAIL_OPEN=true, 开发放行", reason)
+        logger.warning("Token verification backend unavailable: %s, AUTH_FAIL_OPEN=true, allowing development fallback", reason)
         return {"id": user_id, "username": username, "nickname": nickname}
 
-    logger.warning("Token 验证后端不可用: %s, AUTH_FAIL_OPEN=false, 拒绝请求", reason)
+    logger.warning("Token verification backend unavailable: %s, AUTH_FAIL_OPEN=false, rejecting request", reason)
     raise _backend_unavailable_error()

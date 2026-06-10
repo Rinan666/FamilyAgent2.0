@@ -2,14 +2,14 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 /**
- * 合并 Tailwind CSS 类名
+ * Merge Tailwind CSS class names.
  */
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
 /**
- * 格式化日期
+ * Format a date string.
  */
 export function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -23,7 +23,7 @@ export function formatDate(dateStr: string): string {
 }
 
 /**
- * 格式化时间间隔
+ * Format a relative time string.
  */
 export function timeAgo(dateStr: string): string {
   const now = Date.now();
@@ -42,7 +42,7 @@ export function timeAgo(dateStr: string): string {
 }
 
 /**
- * 掌握概率 → 颜色
+ * Map mastery probability to a color class.
  */
 export function masteryColor(probability: number): string {
   if (probability < 0.3) return 'text-red-500';
@@ -52,7 +52,7 @@ export function masteryColor(probability: number): string {
 }
 
 /**
- * 掌握概率 → 等级文字
+ * Map mastery probability to a user-facing level label.
  */
 export function masteryLevel(probability: number): string {
   if (probability < 0.3) return '需要加强';
@@ -62,7 +62,7 @@ export function masteryLevel(probability: number): string {
 }
 
 /**
- * 难度 → 文字
+ * Map difficulty to a display label.
  */
 export function difficultyLabel(difficulty: number): string {
   const labels: Record<number, string> = {
@@ -76,7 +76,7 @@ export function difficultyLabel(difficulty: number): string {
 }
 
 /**
- * 学科编码 → 中文名称
+ * Map subject codes to display names.
  */
 export function subjectLabel(subject?: string): string {
   const labels: Record<string, string> = {
@@ -90,7 +90,7 @@ export function subjectLabel(subject?: string): string {
 }
 
 /**
- * 生成唯一ID
+ * Generate a lightweight unique ID.
  */
 export function generateId(): string {
   return Math.random().toString(36).substring(2) + Date.now().toString(36);

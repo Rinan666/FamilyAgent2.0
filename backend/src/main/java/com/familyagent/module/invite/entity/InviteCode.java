@@ -10,7 +10,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 内测邀请码。
+ * Beta invite code entity.
  */
 @Data
 @TableName("invite_codes")

@@ -52,14 +52,14 @@ public class FamilyService {
         family.setInviteCode(generateInviteCode());
         familyRepository.insert(family);
 
-        // 鍒涘缓鑰呬负鏃忛暱
+        // Add the creator as the initial owner.
         FamilyMember member = new FamilyMember();
         member.setFamilyId(family.getId());
         member.setUserId(currentUser.getId());
         member.setRole("OWNER");
         memberRepository.insert(member);
 
-        log.info("瀹舵棌鍒涘缓鎴愬姛: name={}, id={}, owner={}", family.getName(), family.getId(), currentUser.getId());
+        log.info("Family created: name={}, id={}, owner={}", family.getName(), family.getId(), currentUser.getId());
         return family;
     }
 
@@ -72,13 +72,13 @@ public class FamilyService {
             throw new BusinessException(ErrorCode.INVALID_INVITE_CODE);
         }
 
-        // 妫€鏌ユ槸鍚﹀凡鏄垚鍛?
+        // Reject duplicate memberships.
         FamilyMember existing = memberRepository.findByFamilyAndUser(family.getId(), currentUser.getId());
         if (existing != null) {
             throw new BusinessException(ErrorCode.ALREADY_MEMBER);
         }
 
-        // 妫€鏌ヤ汉鏁颁笂闄?
+        // Enforce the family size limit.
         int count = memberRepository.countByFamilyId(family.getId());
         if (count >= family.getMaxMembers()) {
             throw new BusinessException(ErrorCode.FAMILY_FULL);
@@ -90,7 +90,7 @@ public class FamilyService {
         member.setRole("MEMBER");
         memberRepository.insert(member);
 
-        log.info("鐢ㄦ埛鍔犲叆瀹舵棌: userId={}, familyId={}, role=MEMBER", currentUser.getId(), family.getId());
+        log.info("User joined family: userId={}, familyId={}, role=MEMBER", currentUser.getId(), family.getId());
         return member;
     }
 
@@ -99,7 +99,7 @@ public class FamilyService {
         if (family == null) {
             throw new BusinessException(ErrorCode.FAMILY_NOT_FOUND);
         }
-        // 楠岃瘉鏄惁涓烘垚鍛?
+        // Ensure the current user belongs to the family.
         checkMembership(familyId);
         return family;
     }
@@ -161,7 +161,7 @@ public class FamilyService {
         }
         targetMember.setRole(nextRole);
         memberRepository.updateById(targetMember);
-        log.info("瀹跺涵鎴愬憳瑙掕壊鏇存柊: familyId={}, operator={}, target={}, role={}",
+        log.info("Family member role updated: familyId={}, operator={}, target={}, role={}",
                 familyId, currentUser.getId(), userId, nextRole);
         FamilyMemberVO updated = memberRepository.findMemberViewByFamilyAndUser(familyId, userId);
         attachRelationshipLabels(familyId, currentUser.getId(), List.of(updated));

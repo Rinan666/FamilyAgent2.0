@@ -11,7 +11,7 @@ import org.apache.ibatis.annotations.Update;
 import java.util.List;
 
 /**
- * 家族成员数据访问
+ * Family member data access.
  */
 @Mapper
 public interface FamilyMemberRepository extends BaseMapper<FamilyMember> {

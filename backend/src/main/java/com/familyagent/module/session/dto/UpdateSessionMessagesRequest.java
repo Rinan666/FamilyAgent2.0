@@ -7,7 +7,7 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 鏇存柊浼氳瘽娑堟伅璇锋眰
+ * Update-session-messages request.
  */
 @Data
 public class UpdateSessionMessagesRequest {

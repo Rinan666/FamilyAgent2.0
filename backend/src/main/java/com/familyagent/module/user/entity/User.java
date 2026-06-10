@@ -8,7 +8,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 用户实体
+ * User entity.
  */
 @Data
 @TableName(value = "users", autoResultMap = true)

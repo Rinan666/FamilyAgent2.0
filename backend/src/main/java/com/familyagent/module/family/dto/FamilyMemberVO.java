@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 /**
- * 家族成员视图
+ * Family member view.
  */
 @Data
 @Builder

@@ -8,7 +8,7 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 /**
- * 邀请码数据访问。
+ * Invite code data access.
  */
 @Mapper
 public interface InviteCodeRepository extends BaseMapper<InviteCode> {

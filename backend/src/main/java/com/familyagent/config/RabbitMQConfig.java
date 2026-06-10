@@ -6,7 +6,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * RabbitMQ 配置
+ * RabbitMQ configuration.
  */
 @Configuration
 public class RabbitMQConfig {

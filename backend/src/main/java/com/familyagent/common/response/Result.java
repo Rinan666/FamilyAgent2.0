@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 
 /**
- * 统一API响应格式
+ * Standard API response envelope.
  */
 @Data
 @NoArgsConstructor

@@ -8,7 +8,7 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 /**
- * 用户数据访问
+ * User data access.
  */
 @Mapper
 public interface UserRepository extends BaseMapper<User> {

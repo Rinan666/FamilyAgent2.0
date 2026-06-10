@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * MyBatis-Plus 配置
+ * MyBatis-Plus configuration.
  */
 @Configuration
 @MapperScan("com.familyagent.module.**.repository")

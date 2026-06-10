@@ -5,7 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableAsync;
 
 /**
- * 家族教育Agent - 主应用入口
+ * Main application entry point for FamilyAgent.
  *
  * @author FamilyAgent Team
  * @since 0.1.0

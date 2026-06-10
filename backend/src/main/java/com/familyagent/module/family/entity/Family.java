@@ -6,7 +6,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 家族实体
+ * Family entity.
  */
 @Data
 @TableName(value = "families", autoResultMap = true)

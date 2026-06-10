@@ -15,7 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * 用户控制器
+ * User controller.
  */
 @Tag(name = "用户管理")
 @RestController

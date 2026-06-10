@@ -7,7 +7,7 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * Sa-Token 安全配置
+ * Sa-Token security configuration.
  */
 @Configuration
 public class SecurityConfig implements WebMvcConfigurer {

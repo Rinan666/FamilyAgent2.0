@@ -4,7 +4,7 @@ import com.familyagent.common.response.ErrorCode;
 import lombok.Getter;
 
 /**
- * 业务异常
+ * Business exception.
  */
 @Getter
 public class BusinessException extends RuntimeException {

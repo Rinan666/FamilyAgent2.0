@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * 家族控制器
+ * Family controller.
  */
 @Tag(name = "家族管理")
 @RestController

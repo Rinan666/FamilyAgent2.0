@@ -18,8 +18,8 @@ const nextConfig = {
       },
     ],
   },
-  // 代理 /api 请求到 Java 后端 (可通过 BACKEND_URL 环境变量覆盖)
-  // 注：普通 AI 服务走前端直连；FamilyAgent 聊天流统一走 Java 透明流式代理，避免中间层缓冲。
+  // Proxy /api requests to the Java backend (override with BACKEND_URL).
+  // Standard AI calls stay frontend-direct; FamilyAgent chat streaming uses the Java proxy to avoid buffering.
   async headers() {
     const securityHeaders = [
       {

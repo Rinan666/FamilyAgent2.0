@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 分页响应
+ * Paginated response payload.
  */
 @Data
 @AllArgsConstructor

@@ -1,5 +1,5 @@
 /**
- * 认证状态管理
+ * Authentication state store.
  */
 import { create } from 'zustand';
 import type { User } from '@/types';

@@ -43,7 +43,7 @@ class FamilyMemoryCardRequest(BaseModel):
     content: str = Field(..., min_length=8)
     memory_type: str = "ELDER_ADVICE"
     family_context: str = ""
-    # Backward compatible field name; product wording is "适用场景".
+    # Keep the legacy field name for backward compatibility; the product UI still uses a Chinese scenario label.
     target: str = ""
 
 

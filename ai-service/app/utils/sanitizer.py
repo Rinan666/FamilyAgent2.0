@@ -1,5 +1,5 @@
 """
-输入安全处理
+Input sanitization helpers.
 """
 import re
 from typing import Optional
@@ -7,17 +7,17 @@ from typing import Optional
 
 def sanitize_text(text: str, max_length: int = 10000) -> str:
     """
-    清理用户输入文本
-    - 限制长度
-    - 移除危险字符
+    Sanitize free-form user input.
+    - Limit maximum length
+    - Remove dangerous markers
     """
     if not text:
         return ""
 
-    # 截断
+    # Truncate oversized payloads early.
     text = text[:max_length]
 
-    # 移除潜在的注入标记
+    # Remove obvious prompt-injection markers.
     text = re.sub(r"<script.*?</script>", "", text, flags=re.DOTALL | re.IGNORECASE)
     text = re.sub(r"```system.*?```", "", text, flags=re.DOTALL)
 
@@ -26,13 +26,13 @@ def sanitize_text(text: str, max_length: int = 10000) -> str:
 
 def sanitize_math_expression(expr: str) -> Optional[str]:
     """
-    验证并清理数学表达式
-    只允许安全的sympy操作
+    Validate and sanitize a math expression.
+    Only allow safe sympy-style operations.
     """
     if not expr or len(expr) > 500:
         return None
 
-    # 禁止危险操作
+    # Block unsafe code execution markers.
     dangerous = ["import", "__", "exec", "eval", "open", "os.", "sys.", "subprocess"]
     for d in dangerous:
         if d in expr.lower():

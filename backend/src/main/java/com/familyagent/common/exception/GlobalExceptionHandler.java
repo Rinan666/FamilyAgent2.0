@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.util.stream.Collectors;
 
 /**
- * 全局异常处理器
+ * Global exception handler.
  */
 @Slf4j
 @RestControllerAdvice
@@ -23,7 +23,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     @ResponseStatus(HttpStatus.OK)
     public Result<?> handleBusinessException(BusinessException e) {
-        log.warn("业务异常: code={}, message={}", e.getCode(), e.getMessage());
+        log.warn("Business exception: code={}, message={}", e.getCode(), e.getMessage());
         return Result.error(e.getCode(), e.getMessage());
     }
 
@@ -33,21 +33,21 @@ public class GlobalExceptionHandler {
         String message = e.getBindingResult().getFieldErrors().stream()
                 .map(FieldError::getDefaultMessage)
                 .collect(Collectors.joining("; "));
-        log.warn("参数校验失败: {}", message);
+        log.warn("Request validation failed: {}", message);
         return Result.error(ErrorCode.PARAM_VALID_FAILED, message);
     }
 
     @ExceptionHandler(NotLoginException.class)
     @ResponseStatus(HttpStatus.OK)
     public Result<?> handleNotLoginException(NotLoginException e) {
-        log.warn("登录状态异常: {}", e.getMessage());
+        log.warn("Authentication state exception: {}", e.getMessage());
         return Result.error(ErrorCode.UNAUTHORIZED);
     }
 
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public Result<?> handleUnknownException(Exception e) {
-        log.error("未知异常", e);
+        log.error("Unhandled exception", e);
         return Result.error(ErrorCode.INTERNAL_ERROR);
     }
 }

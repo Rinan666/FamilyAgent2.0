@@ -10,7 +10,7 @@ import org.apache.ibatis.annotations.Update;
 import java.util.List;
 
 /**
- * 家族数据访问
+ * Family data access.
  */
 @Mapper
 public interface FamilyRepository extends BaseMapper<Family> {

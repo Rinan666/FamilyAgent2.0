@@ -1,12 +1,12 @@
 """
-日志配置
+Logging configuration helpers.
 """
 import logging
 import sys
 
 
 def setup_logging(level: str = "DEBUG") -> logging.Logger:
-    """配置应用日志"""
+    """Configure application logging."""
     logger = logging.getLogger("familyagent.ai")
     logger.setLevel(getattr(logging, level.upper(), logging.DEBUG))
 
