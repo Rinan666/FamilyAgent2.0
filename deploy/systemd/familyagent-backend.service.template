@@ -1,0 +1,18 @@
+[Unit]
+Description=FamilyAgent backend service
+After=network-online.target familyagent-infra.service familyagent-ai.service
+Requires=familyagent-infra.service
+
+[Service]
+Type=simple
+User=__DEPLOY_USER__
+Group=__DEPLOY_GROUP__
+WorkingDirectory=__APP_ROOT__/backend
+EnvironmentFile=__ETC_DIR__/backend.env
+ExecStart=/usr/bin/env bash -lc 'chmod +x "./mvnw" && exec "./mvnw" spring-boot:run -Dspring-boot.run.profiles=prod'
+Restart=always
+RestartSec=5
+TimeoutStartSec=0
+
+[Install]
+WantedBy=familyagent.target

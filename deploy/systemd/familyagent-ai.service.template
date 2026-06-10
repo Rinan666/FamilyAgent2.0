@@ -1,0 +1,18 @@
+[Unit]
+Description=FamilyAgent AI service
+After=network-online.target familyagent-infra.service
+Requires=familyagent-infra.service
+
+[Service]
+Type=simple
+User=__DEPLOY_USER__
+Group=__DEPLOY_GROUP__
+WorkingDirectory=__APP_ROOT__/ai-service
+EnvironmentFile=__ETC_DIR__/ai-service.env
+ExecStart=/usr/bin/env bash -lc 'exec "__APP_ROOT__/ai-service/.venv/bin/python" -m uvicorn app.main:app --host 0.0.0.0 --port "${AI_SERVICE_PORT:-8090}"'
+Restart=always
+RestartSec=5
+TimeoutStartSec=0
+
+[Install]
+WantedBy=familyagent.target
