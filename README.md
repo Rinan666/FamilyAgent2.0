@@ -190,6 +190,21 @@ GitHub Actions production deploy requires these repository secrets:
 - `DEPLOY_USER`
 - `DEPLOY_SSH_KEY`
 
+Common production operations:
+
+```bash
+sudo systemctl status familyagent-backend.service --no-pager -l
+sudo systemctl status familyagent-frontend.service --no-pager -l
+sudo systemctl status familyagent-tunnel.service --no-pager -l
+sudo journalctl -u familyagent-backend.service -n 100 --no-pager
+sudo journalctl -u familyagent-frontend.service -n 100 --no-pager
+sudo journalctl -u familyagent-tunnel.service -n 100 --no-pager
+sudo systemctl restart familyagent-ai.service
+sudo systemctl restart familyagent-backend.service
+sudo systemctl restart familyagent-frontend.service
+sudo systemctl restart familyagent-tunnel.service
+```
+
 私有项目，保留所有权利。
 ## 2026-06-10 Database Migration Update
 

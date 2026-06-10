@@ -20,3 +20,13 @@ def test_cors_allow_origins_parses_comma_separated_values():
 def test_auth_fail_open_defaults_to_development_only():
     assert Settings(app_env="development", auth_fail_open=None).auth_fail_open_enabled is True
     assert Settings(app_env="production", auth_fail_open=None).auth_fail_open_enabled is False
+
+
+def test_production_env_vars_override_local_dotenv(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("APP_DEBUG", "false")
+
+    settings = Settings()
+
+    assert settings.app_env == "production"
+    assert settings.app_debug is False

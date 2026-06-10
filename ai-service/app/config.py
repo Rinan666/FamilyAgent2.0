@@ -98,7 +98,11 @@ class Settings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ):
-        # Keep ai-service/.env authoritative so stale shell values do not override AI config.
+        # Local development prefers ai-service/.env, while production-like
+        # environments should honor process-level env vars injected by systemd.
+        current_env = os.environ.get("APP_ENV", "").strip().lower()
+        if current_env and current_env != "development":
+            return init_settings, env_settings, dotenv_settings, file_secret_settings
         return init_settings, dotenv_settings, env_settings, file_secret_settings
 
     def __init__(self, **kwargs):
