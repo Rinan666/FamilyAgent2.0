@@ -50,6 +50,7 @@ Desktop.ini
 
 # --- Environment ---
 .env
+.env.docker
 
 # --- Runtime ---
 .service-pids.txt

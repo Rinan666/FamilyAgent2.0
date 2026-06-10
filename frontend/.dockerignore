@@ -1,0 +1,6 @@
+node_modules
+.next
+npm-debug.log
+coverage
+vitest.config.ts
+tsconfig.tsbuildinfo
