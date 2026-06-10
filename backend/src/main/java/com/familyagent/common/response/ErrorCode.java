@@ -19,6 +19,8 @@ public enum ErrorCode {
     INTERNAL_ERROR(500, "服务器内部错误"),
     PARAM_VALID_FAILED(5001, "参数校验失败"),
     RATE_LIMIT_EXCEEDED(5002, "请求过于频繁"),
+    DATABASE_ACCESS_ERROR(5003, "数据库访问异常"),
+    DATA_PERSIST_FAILED(5004, "数据保存失败"),
 
     // User codes: 1000-1999
     USER_NOT_FOUND(1001, "用户不存在"),
