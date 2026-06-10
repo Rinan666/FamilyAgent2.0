@@ -116,14 +116,6 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
 
-      - name: Add deploy host to known_hosts
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -p "$DEPLOY_PORT" "$DEPLOY_HOST" >> ~/.ssh/known_hosts
-
       - name: Run production deploy
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
@@ -131,7 +123,8 @@ jobs:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+          mkdir -p ~/.ssh
+          ssh -o StrictHostKeyChecking=accept-new -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
             "set -e; \
             mkdir -p /opt; \
             if [ ! -d /opt/familyagent/.git ]; then \
