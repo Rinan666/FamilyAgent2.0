@@ -244,13 +244,20 @@ verify_service_on_port "$BACKEND_PORT" "Backend" || true
 print_step 4 "Starting Frontend (port $FRONTEND_PORT)..."
 kill_port_if_needed "$FRONTEND_PORT" "Frontend"
 echo "        Building frontend (this may take a while)..."
-(
+if [[ -d "$ROOT_DIR/frontend/.next" ]]; then
+  rm -rf "$ROOT_DIR/frontend/.next"
+fi
+if ! (
   cd "$ROOT_DIR/frontend"
   npm run build >"$LOG_DIR/frontend-build.log" 2>&1
-) || {
-  echo "        [WARNING] Frontend build failed. Check $LOG_DIR/frontend-build.log"
-  echo "        Attempting to start anyway..."
-}
+); then
+  echo "[ERROR] Frontend build failed. Check $LOG_DIR/frontend-build.log"
+  exit 1
+fi
+if [[ ! -f "$ROOT_DIR/frontend/.next/BUILD_ID" ]]; then
+  echo "[ERROR] Frontend build did not produce .next/BUILD_ID. Check $LOG_DIR/frontend-build.log"
+  exit 1
+fi
 start_background_service \
   "frontend" \
   "$ROOT_DIR/frontend" \

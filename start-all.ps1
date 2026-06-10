@@ -9,6 +9,7 @@ $InfraEnvExampleFile = Join-Path $Root ".env.infra.example"
 $TunnelEnvFile = Join-Path $Root ".env.tunnel.local"
 $TunnelExampleFile = Join-Path $Root ".env.tunnel.example"
 $TunnelScript = Join-Path $Root "tunnel.ps1"
+$LogDir = Join-Path $Root "logs"
 
 # Add Docker to PATH (may not be in cmd.exe PATH by default)
 $env:Path += ";C:\Program Files\Docker\Docker\resources\bin"
@@ -18,6 +19,8 @@ Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "    FamilyAgent One-Click Start" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
+
+New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 $PidFile = Join-Path $Root ".service-pids.txt"
 "" | Set-Content $PidFile -Force
@@ -155,7 +158,34 @@ Write-Host "       Backend window opened" -ForegroundColor Green
 
 Write-Host ""
 Write-Host "[4/5] Starting Frontend (port 3000)..." -ForegroundColor Yellow
-Start-ServiceOnPort 3000 "Frontend" "$Root\frontend" "echo Frontend http://localhost:3000 && npm run build && npm run start"
+Write-Host "       Building frontend (this may take a while)..." -ForegroundColor DarkYellow
+$FrontendBuildLog = Join-Path $LogDir "frontend-build.log"
+$FrontendNextDir = Join-Path $Root "frontend\.next"
+$FrontendBuildId = Join-Path $FrontendNextDir "BUILD_ID"
+
+if (Test-Path $FrontendNextDir) {
+    Remove-Item $FrontendNextDir -Recurse -Force
+}
+
+Push-Location "$Root\frontend"
+try {
+    npm run build *>&1 | Tee-Object -FilePath $FrontendBuildLog
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "       [ERROR] Frontend build failed. Check $FrontendBuildLog" -ForegroundColor Red
+        Pause
+        exit 1
+    }
+} finally {
+    Pop-Location
+}
+
+if (-not (Test-Path $FrontendBuildId)) {
+    Write-Host "       [ERROR] Frontend build did not produce .next\BUILD_ID. Check $FrontendBuildLog" -ForegroundColor Red
+    Pause
+    exit 1
+}
+
+Start-ServiceOnPort 3000 "Frontend" "$Root\frontend" "echo Frontend http://localhost:3000 && npm run start"
 Write-Host "       Frontend window opened" -ForegroundColor Green
 
 Write-Host ""
