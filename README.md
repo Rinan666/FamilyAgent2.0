@@ -13,7 +13,7 @@ tunnel.bat status
 tunnel.bat logs
 ```
 
-Linux / 云服务器:
+Linux / 手动环境（仅独立管理 tunnel）:
 
 ```bash
 ./tunnel.sh up
@@ -25,7 +25,7 @@ Linux / 云服务器:
 配置方式：
 - 复制 `/.env.tunnel.example` 为 `/.env.tunnel.local`
 - 使用统一配置键：`TUNNEL_ENABLED`、`TUNNEL_PROVIDER`、`TUNNEL_MODE`、`TUNNEL_CONFIG_PATH`、`TUNNEL_PUBLIC_HOST`、`TUNNEL_TARGET_URL`
-- 若希望 `start-all` 自动带起隧道，设置 `START_TUNNEL=true`
+- 生产服务器优先使用 `familyagent-tunnel.service` 交给 `systemd` 托管，而不是手动执行 `tunnel.sh`
 - 浏览器统一走前端入口访问 `/api/*` 与 `/ai-proxy/*`，不再保留浏览器直连 AI 公网域名配置
 
 面向有传承意识家庭的家族记忆与软资产 AI 系统。
@@ -157,7 +157,10 @@ FamilyAgent now supports a split deployment model:
 
 - Production traffic goes only to the cloud server via `app.familyagent.cn`
 - Local development stays on your own machine via `http://localhost:3000`
+- Linux / 云服务器托管统一使用 `systemd`，不再保留额外的服务器一键启动脚本
 - Production secrets live outside the repo under `/etc/familyagent/`
+- Frontend production build now happens during `scripts/deploy-prod.sh`, not during `systemctl restart familyagent-frontend.service`
+- Cloudflare Tunnel is intentionally decoupled from frontend liveness so it can stay registered while the frontend restarts
 
 Server-side assets added for this flow:
 
@@ -190,20 +193,41 @@ GitHub Actions production deploy requires these repository secrets:
 - `DEPLOY_USER`
 - `DEPLOY_SSH_KEY`
 
+Production deploy stages now run in this order:
+
+1. Refresh systemd units
+2. Install frontend and AI dependencies
+3. Validate Cloudflare Tunnel ingress config
+4. Build frontend and verify `.next/BUILD_ID`
+5. Restart AI and wait for `/ai/health`
+6. Restart backend and wait for `/actuator/health`
+7. Restart frontend and wait for `/`
+8. Restart Cloudflare Tunnel after frontend is healthy
+
+If any stage fails, deploy stops immediately and prints `systemctl status` plus recent `journalctl` output for the failing service.
+
 Common production operations:
 
 ```bash
+sudo systemctl status familyagent-ai.service --no-pager -l
 sudo systemctl status familyagent-backend.service --no-pager -l
 sudo systemctl status familyagent-frontend.service --no-pager -l
 sudo systemctl status familyagent-tunnel.service --no-pager -l
+sudo journalctl -u familyagent-ai.service -n 100 --no-pager
 sudo journalctl -u familyagent-backend.service -n 100 --no-pager
 sudo journalctl -u familyagent-frontend.service -n 100 --no-pager
-sudo journalctl -u familyagent-tunnel.service -n 100 --no-pager
+sudo journalctl -u familyagent-tunnel.service -n 80 --no-pager
 sudo systemctl restart familyagent-ai.service
 sudo systemctl restart familyagent-backend.service
 sudo systemctl restart familyagent-frontend.service
 sudo systemctl restart familyagent-tunnel.service
 ```
+
+Troubleshooting notes:
+
+- If AI fails with `address already in use`, stop the stale manual process on port `8090` before restarting `familyagent-ai.service`.
+- If frontend `build` succeeds but `start` exits, check `systemctl status familyagent-frontend.service --no-pager -l` and `journalctl -u familyagent-frontend.service -n 100 --no-pager` for the exact `next start` error.
+- Cloudflare Tunnel may briefly proxy upstream failures while frontend is restarting, but it should no longer be stopped by systemd just because frontend restarts.
 
 私有项目，保留所有权利。
 ## 2026-06-10 Database Migration Update

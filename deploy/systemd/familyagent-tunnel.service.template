@@ -1,7 +1,6 @@
 [Unit]
 Description=FamilyAgent Cloudflare named tunnel
 After=network-online.target familyagent-frontend.service
-Requires=familyagent-frontend.service
 
 [Service]
 Type=simple
