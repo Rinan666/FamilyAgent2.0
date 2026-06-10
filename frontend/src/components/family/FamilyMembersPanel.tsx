@@ -33,7 +33,7 @@ interface FamilyMembersPanelProps {
 }
 
 function memberAccountName(member: FamilyMember) {
-  return member.nickname?.trim() || member.username?.trim() || `用户 ${member.userId}`;
+  return member.nickname?.trim() || member.username?.trim() || `User ${member.userId}`;
 }
 
 function memberDisplayName(member: FamilyMember) {
@@ -72,8 +72,8 @@ function memberAge(member: FamilyMember) {
 function memberProfileLine(member: FamilyMember) {
   const birthDate = memberBirthDate(member);
   const age = memberAge(member);
-  const birthText = birthDate ? `生日：${birthDate}` : '生日：未设置';
-  const ageText = age == null ? '年龄：未设置' : `年龄：${age} 岁`;
+  const birthText = birthDate ? `Birthday: ${birthDate}` : 'Birthday: not set';
+  const ageText = age == null ? 'Age: not set' : `Age: ${age}`;
   return `${birthText} · ${ageText}`;
 }
 
@@ -136,7 +136,7 @@ export default function FamilyMembersPanel({
       const data = await familyApi.getMyFamilies();
       setFamilies(Array.isArray(data) ? data : []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '加载家族列表失败');
+      setError(err instanceof Error ? err.message : 'Failed to load family list');
     } finally {
       setLoadingFamilies(false);
     }
@@ -193,11 +193,11 @@ export default function FamilyMembersPanel({
       setShowCreate(false);
       setNewFamilyName('');
       setNewFamilyDesc('');
-      showMsg('家族创建成功');
+      showMsg('Family created');
       await loadFamilies();
       notifyViewerRoleChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : '创建家族失败');
+      setError(err instanceof Error ? err.message : 'Failed to create family');
     }
   };
 
@@ -212,11 +212,11 @@ export default function FamilyMembersPanel({
       setExpandedFamilyId(joined.familyId);
       setShowJoin(false);
       setInviteCode('');
-      showMsg('加入家族成功');
+      showMsg('Joined family');
       await loadFamilies();
       notifyViewerRoleChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : '加入家族失败');
+      setError(err instanceof Error ? err.message : 'Failed to join family');
     }
   };
 
@@ -224,7 +224,7 @@ export default function FamilyMembersPanel({
     try {
       await loadFamilyDetails(familyId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '刷新成员失败');
+      setError(err instanceof Error ? err.message : 'Failed to refresh members');
     }
   };
 
@@ -242,7 +242,7 @@ export default function FamilyMembersPanel({
       try {
         await loadFamilyDetails(familyId);
       } catch (err) {
-        setError(err instanceof Error ? err.message : '加载成员失败');
+        setError(err instanceof Error ? err.message : 'Failed to load members');
       }
     }
   };
@@ -260,7 +260,7 @@ export default function FamilyMembersPanel({
   const handleUpdateRelationship = async (familyId: number, member: FamilyMember) => {
     const label = relationshipDraft.trim();
     if (!label) {
-      setError('称呼不能为空');
+      setError('Relationship label cannot be empty');
       return;
     }
 
@@ -278,9 +278,9 @@ export default function FamilyMembersPanel({
         )),
       }));
       cancelEditRelationship();
-      showMsg('称呼已更新');
+      showMsg('Relationship updated');
     } catch (err) {
-      setError(err instanceof Error ? err.message : '更新称呼失败');
+      setError(err instanceof Error ? err.message : 'Failed to update relationship');
     } finally {
       setUpdatingRelationshipKey(null);
     }
@@ -298,10 +298,10 @@ export default function FamilyMembersPanel({
         ...current,
         [familyId]: (current[familyId] || []).map((item) => (item.userId === member.userId ? updated : item)),
       }));
-      showMsg('成员角色已更新');
+      showMsg('Member role updated');
       notifyViewerRoleChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : '更新角色失败');
+      setError(err instanceof Error ? err.message : 'Failed to update role');
       await refreshFamilyMembers(familyId);
     } finally {
       setUpdatingRoleKey(null);
@@ -357,9 +357,9 @@ export default function FamilyMembersPanel({
         return { ...current, [familyId]: [...filtered, ...updates] };
       });
 
-      showMsg(active ? '已撤销照护授权' : '已授权查看我的照护记录');
+      showMsg(active ? 'Care authorization revoked' : 'Care authorization granted');
     } catch (err) {
-      setError(err instanceof Error ? err.message : '更新照护授权失败');
+      setError(err instanceof Error ? err.message : 'Failed to update care authorization');
     } finally {
       setUpdatingCareKey(null);
     }
@@ -371,7 +371,7 @@ export default function FamilyMembersPanel({
       setCopiedCode(code);
       window.setTimeout(() => setCopiedCode(null), 2000);
     } catch {
-      setError('复制邀请码失败');
+      setError('Failed to copy invite code');
     }
   };
 
@@ -399,7 +399,7 @@ export default function FamilyMembersPanel({
     return (
       <div className="flex h-40 items-center justify-center text-gray-400">
         <RefreshCw className="mr-2 h-5 w-5 animate-spin" />
-        正在加载家族...
+        Loading families...
       </div>
     );
   }
@@ -408,11 +408,11 @@ export default function FamilyMembersPanel({
     <div className="mx-auto max-w-4xl">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">成员与权限</h2>
+          <h2 className="text-xl font-semibold text-gray-900">Members and permissions</h2>
           <p className="mt-1 text-sm text-gray-500">
             {canManageSpace
-              ? '在这里管理家族成员、称呼关系和照护授权。'
-              : '在这里查看当前家族成员，并进入成员记忆视角。'}
+              ? 'Manage family members, relationship labels, and care access here.'
+              : 'Review current family members here and open the member memory view.'}
           </p>
         </div>
 
@@ -428,7 +428,7 @@ export default function FamilyMembersPanel({
               className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
               <UserPlus className="h-4 w-4" />
-              加入家族
+              Join family
             </button>
             <button
               type="button"
@@ -440,7 +440,7 @@ export default function FamilyMembersPanel({
               className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
             >
               <Plus className="h-4 w-4" />
-              创建家族
+              Create family
             </button>
           </div>
         )}
@@ -451,13 +451,13 @@ export default function FamilyMembersPanel({
 
       {canManageSpace && showCreate && (
         <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
-          <h3 className="mb-3 text-base font-semibold text-gray-900">创建新家族</h3>
+          <h3 className="mb-3 text-base font-semibold text-gray-900">Create a new family</h3>
           <input
             name="newFamilyName"
             type="text"
             value={newFamilyName}
             onChange={(event) => setNewFamilyName(event.target.value)}
-            placeholder="例如：王家成长小组"
+            placeholder="Example: Wang Family Growth Circle"
             className="mb-3 w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
           />
           <textarea
@@ -465,7 +465,7 @@ export default function FamilyMembersPanel({
             rows={2}
             value={newFamilyDesc}
             onChange={(event) => setNewFamilyDesc(event.target.value)}
-            placeholder="家族说明，可选"
+            placeholder="Optional family description"
             className="mb-3 w-full resize-none rounded-lg border border-gray-200 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
           />
           <div className="flex justify-end gap-2">
@@ -474,7 +474,7 @@ export default function FamilyMembersPanel({
               onClick={() => setShowCreate(false)}
               className="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
             >
-              取消
+              Cancel
             </button>
             <button
               type="button"
@@ -482,7 +482,7 @@ export default function FamilyMembersPanel({
               disabled={!newFamilyName.trim()}
               className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
             >
-              创建
+              Create
             </button>
           </div>
         </div>
@@ -490,7 +490,7 @@ export default function FamilyMembersPanel({
 
       {canManageSpace && showJoin && (
         <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
-          <h3 className="mb-3 text-base font-semibold text-gray-900">通过邀请码加入</h3>
+          <h3 className="mb-3 text-base font-semibold text-gray-900">Join with an invite code</h3>
           <div className="flex flex-col gap-2 sm:flex-row">
             <input
               name="inviteCode"
@@ -498,7 +498,7 @@ export default function FamilyMembersPanel({
               value={inviteCode}
               maxLength={8}
               onChange={(event) => setInviteCode(event.target.value.toUpperCase())}
-              placeholder="请输入 8 位邀请码"
+              placeholder="Enter the 8-character invite code"
               className="min-w-0 flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm uppercase tracking-widest outline-none focus:ring-2 focus:ring-blue-500"
             />
             <button
@@ -507,7 +507,7 @@ export default function FamilyMembersPanel({
               disabled={inviteCode.trim().length < 8}
               className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
             >
-              加入
+              Join
             </button>
           </div>
           <button
@@ -515,7 +515,7 @@ export default function FamilyMembersPanel({
             onClick={() => setShowJoin(false)}
             className="mt-2 text-sm text-gray-500 hover:text-gray-700"
           >
-            取消
+            Cancel
           </button>
         </div>
       )}
@@ -523,11 +523,11 @@ export default function FamilyMembersPanel({
       {visibleFamilies.length === 0 ? (
         <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
           <Users className="mx-auto mb-3 h-12 w-12 text-gray-200" />
-          <h3 className="mb-1 text-lg font-medium text-gray-700">还没有家族</h3>
+          <h3 className="mb-1 text-lg font-medium text-gray-700">No family yet</h3>
           <p className="mb-5 text-sm text-gray-400">
             {canManageSpace
-              ? '先创建一个家族，再邀请家人一起沉淀记忆与经验。'
-              : '你还没有加入家族空间，请联系家族创建者邀请你加入。'}
+              ? 'Create a family first, then invite people to preserve memory and experience together.'
+              : 'You have not joined a family space yet. Ask the family owner to invite you.'}
           </p>
           {canManageSpace && (
             <button
@@ -535,7 +535,7 @@ export default function FamilyMembersPanel({
               onClick={() => setShowCreate(true)}
               className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
             >
-              创建第一个家族
+              Create your first family
             </button>
           )}
         </div>
@@ -567,7 +567,7 @@ export default function FamilyMembersPanel({
                       </div>
                     </div>
                     <div className="text-xs text-gray-400 sm:text-right">
-                      最多 {family.maxMembers} 名成员
+                      Up to {family.maxMembers} members
                     </div>
                   </div>
 
@@ -581,7 +581,7 @@ export default function FamilyMembersPanel({
                         {copiedCode === family.inviteCode ? (
                           <>
                             <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-                            已复制
+                            Copied
                           </>
                         ) : (
                           <>
@@ -598,17 +598,17 @@ export default function FamilyMembersPanel({
                       className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50 hover:text-gray-700"
                     >
                       {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                      {isExpanded ? '收起成员' : '查看成员'}
+                      {isExpanded ? 'Collapse members' : 'View members'}
                     </button>
 
                     {currentFamilyId === family.id && (
                       <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
-                        当前家族
+                        Current family
                       </span>
                     )}
 
                     <span className="w-full text-xs text-gray-400 sm:ml-auto sm:w-auto">
-                      创建于 {new Date(family.createdAt).toLocaleDateString()}
+                      Created on {new Date(family.createdAt).toLocaleDateString('en-US')}
                     </span>
                   </div>
                 </div>
@@ -618,10 +618,10 @@ export default function FamilyMembersPanel({
                     {isLoadingFamilyDetails ? (
                       <div className="flex items-center text-sm text-gray-400">
                         <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        正在加载成员...
+                        Loading members...
                       </div>
                     ) : memberList.length === 0 ? (
-                      <p className="text-sm text-gray-400">当前家族还没有可展示的成员信息。</p>
+                      <p className="text-sm text-gray-400">No member information is available for this family yet.</p>
                     ) : (
                       <div className="space-y-2">
                         {memberList.map((member) => {
@@ -658,7 +658,7 @@ export default function FamilyMembersPanel({
                                       maxLength={60}
                                       autoFocus
                                       onChange={(event) => setRelationshipDraft(event.target.value)}
-                                      placeholder="例如：妈妈、二叔、小楠"
+                                      placeholder="Example: Mom, Uncle, Xiaonan"
                                       className="h-9 min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                     <button
@@ -666,13 +666,13 @@ export default function FamilyMembersPanel({
                                       disabled={updatingRelationshipKey === updateKey || !relationshipDraft.trim()}
                                       className="rounded-md px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-50"
                                     >
-                                      保存
+                                      Save
                                     </button>
                                     <button
                                       type="button"
                                       onClick={cancelEditRelationship}
                                       className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                                      aria-label="取消编辑称呼"
+                                      aria-label="Cancel relationship editing"
                                     >
                                       <X className="h-4 w-4" />
                                     </button>
@@ -691,7 +691,7 @@ export default function FamilyMembersPanel({
                                           type="button"
                                           onClick={() => startEditRelationship(family.id, member)}
                                           className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-blue-600"
-                                          aria-label="编辑称呼"
+                                          aria-label="Edit relationship"
                                         >
                                           <Pencil className="h-3.5 w-3.5" />
                                         </button>
@@ -711,7 +711,7 @@ export default function FamilyMembersPanel({
                                   className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-purple-600 px-3 text-xs font-semibold text-white hover:bg-purple-700"
                                 >
                                   <BookHeart className="h-3.5 w-3.5" />
-                                  成员记忆
+                                  Member memory
                                 </Link>
 
                                 <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${badge.className}`}>
@@ -731,7 +731,7 @@ export default function FamilyMembersPanel({
                                     }`}
                                   >
                                     <Eye className="h-3 w-3" />
-                                    {careAuthorized ? '已授权照护' : '授权照护'}
+                                    {careAuthorized ? 'Care enabled' : 'Enable care'}
                                   </button>
                                 )}
 
@@ -742,7 +742,7 @@ export default function FamilyMembersPanel({
                                     onClick={() => { void handleUpdateRole(family.id, member, 'MEMBER'); }}
                                     className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 hover:border-blue-200 hover:text-blue-700 disabled:opacity-50"
                                   >
-                                    归并为成员
+                                    Normalize to member
                                   </button>
                                 )}
                               </div>
@@ -761,7 +761,7 @@ export default function FamilyMembersPanel({
 
       {focusedFamilyId && currentVisibleFamily && currentVisibleMembers.length > 0 && (
         <p className="mt-4 text-xs text-gray-400">
-          当前页已聚焦到「{currentVisibleFamily.name}」，不再额外提供二次切换家族入口。
+          This page is currently focused on &quot;{currentVisibleFamily.name}&quot;, so there is no secondary family switcher here.
         </p>
       )}
     </div>

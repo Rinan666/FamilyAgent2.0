@@ -16,20 +16,20 @@ type NavItem = {
 };
 
 const navItems: readonly NavItem[] = [
-  { href: '/dashboard/agent', label: '家族Agent', icon: Sparkles, roles: ['MEMBER', 'ADMIN'] },
-  { href: '/dashboard/mirror', label: '镜像 Agent', icon: Bot, roles: ['MEMBER', 'ADMIN'] },
-  { href: '/dashboard/diary', label: '写记录', icon: BookHeart, roles: ['MEMBER', 'ADMIN'] },
-  { href: '/dashboard/family', label: '家族空间', icon: Users, roles: ['MEMBER', 'ADMIN'] },
-  { href: '/dashboard/admin/database', label: '数据库健康', icon: Database, roles: ['ADMIN'], platformAdminOnly: true },
-  { href: '/dashboard/settings', label: '设置', icon: Settings, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/dashboard/agent', label: 'Family Agent', icon: Sparkles, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/dashboard/mirror', label: 'Mirror Agent', icon: Bot, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/dashboard/diary', label: 'Write', icon: BookHeart, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/dashboard/family', label: 'Family Space', icon: Users, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/dashboard/admin/database', label: 'Database Health', icon: Database, roles: ['ADMIN'], platformAdminOnly: true },
+  { href: '/dashboard/settings', label: 'Settings', icon: Settings, roles: ['MEMBER', 'ADMIN'] },
 ] as const;
 
 const mobilePrimaryNav: readonly NavItem[] = [
   { href: '/dashboard/agent', label: 'Agent', icon: Sparkles, roles: ['MEMBER', 'ADMIN'] },
-  { href: '/dashboard/mirror', label: '镜像', icon: Bot, roles: ['MEMBER', 'ADMIN'] },
-  { href: '/dashboard/diary', label: '记录', icon: BookHeart, roles: ['MEMBER', 'ADMIN'] },
-  { href: '/dashboard/family', label: '空间', icon: Users, roles: ['MEMBER', 'ADMIN'] },
-  { href: '/dashboard/settings', label: '设置', icon: Settings, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/dashboard/mirror', label: 'Mirror', icon: Bot, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/dashboard/diary', label: 'Diary', icon: BookHeart, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/dashboard/family', label: 'Family', icon: Users, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/dashboard/settings', label: 'Settings', icon: Settings, roles: ['MEMBER', 'ADMIN'] },
 ] as const;
 
 interface SidebarProps {
@@ -131,7 +131,7 @@ export default function Sidebar({ viewerRole = 'MEMBER', isPlatformAdmin = false
       </nav>
 
       <div className="border-t border-gray-200 p-4">
-        <p className="text-xs text-gray-400">v0.1.0 内测版</p>
+        <p className="text-xs text-gray-400">v0.1.0 beta</p>
       </div>
     </aside>
   );
@@ -152,7 +152,7 @@ export function MobileNav({
         type="button"
         onClick={() => setOpen(true)}
         className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 lg:hidden"
-        aria-label="打开导航"
+        aria-label="Open navigation"
       >
         <Menu className="h-5 w-5" />
       </button>
@@ -162,7 +162,7 @@ export function MobileNav({
           <button
             type="button"
             className="absolute inset-0 bg-gray-900/35"
-            aria-label="关闭导航"
+            aria-label="Close navigation"
             onClick={() => setOpen(false)}
           />
           <div className="absolute inset-y-0 left-0 flex w-[min(20rem,86vw)] flex-col bg-white shadow-xl">
@@ -175,7 +175,7 @@ export function MobileNav({
                 type="button"
                 onClick={() => setOpen(false)}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-50"
-                aria-label="关闭导航"
+                aria-label="Close navigation"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -190,7 +190,7 @@ export function MobileNav({
             </nav>
 
             <div className="border-t border-gray-200 p-4">
-              <p className="text-xs text-gray-400">v0.1.0 内测版</p>
+              <p className="text-xs text-gray-400">v0.1.0 beta</p>
             </div>
           </div>
         </div>

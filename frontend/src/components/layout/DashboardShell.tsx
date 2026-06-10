@@ -9,7 +9,7 @@ import { isPlatformAdmin } from '@/lib/roles';
 function LoadingShell() {
   return (
     <div className="min-h-screen flex items-center justify-center">
-      <div className="text-gray-500">加载中...</div>
+      <div className="text-gray-500">Loading...</div>
     </div>
   );
 }

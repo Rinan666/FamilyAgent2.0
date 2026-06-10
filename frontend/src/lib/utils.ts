@@ -13,7 +13,7 @@ export function cn(...inputs: ClassValue[]) {
  */
 export function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
-  return date.toLocaleDateString('zh-CN', {
+  return date.toLocaleDateString('en-US', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -34,10 +34,10 @@ export function timeAgo(dateStr: string): string {
   const hours = Math.floor(diff / 3600000);
   const days = Math.floor(diff / 86400000);
 
-  if (minutes < 1) return '刚刚';
-  if (minutes < 60) return `${minutes}分钟前`;
-  if (hours < 24) return `${hours}小时前`;
-  if (days < 30) return `${days}天前`;
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`;
   return formatDate(dateStr);
 }
 
@@ -55,10 +55,10 @@ export function masteryColor(probability: number): string {
  * Map mastery probability to a user-facing level label.
  */
 export function masteryLevel(probability: number): string {
-  if (probability < 0.3) return '需要加强';
-  if (probability < 0.6) return '基本掌握';
-  if (probability < 0.85) return '熟练掌握';
-  return '精通';
+  if (probability < 0.3) return 'Needs work';
+  if (probability < 0.6) return 'Basic';
+  if (probability < 0.85) return 'Proficient';
+  return 'Mastered';
 }
 
 /**
@@ -66,13 +66,13 @@ export function masteryLevel(probability: number): string {
  */
 export function difficultyLabel(difficulty: number): string {
   const labels: Record<number, string> = {
-    1: '基础',
-    2: '简单',
-    3: '中等',
-    4: '较难',
-    5: '困难',
+    1: 'Basic',
+    2: 'Easy',
+    3: 'Medium',
+    4: 'Hard',
+    5: 'Very hard',
   };
-  return labels[difficulty] || '未知';
+  return labels[difficulty] || 'Unknown';
 }
 
 /**
@@ -80,13 +80,13 @@ export function difficultyLabel(difficulty: number): string {
  */
 export function subjectLabel(subject?: string): string {
   const labels: Record<string, string> = {
-    math: '数学',
-    chinese: '语文',
-    english: '英语',
-    science: '科学',
-    family_wisdom: '家族传承',
+    math: 'Math',
+    chinese: 'Chinese',
+    english: 'English',
+    science: 'Science',
+    family_wisdom: 'Family wisdom',
   };
-  return subject ? labels[subject] || subject : '未标注学科';
+  return subject ? labels[subject] || subject : 'Unlabeled subject';
 }
 
 /**

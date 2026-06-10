@@ -121,10 +121,10 @@ export function growthCategoryFromPlan(plan: Pick<AgentSaveToolPlan, 'category'>
 }
 
 export function toolLabel(tool: AgentSaveTool) {
-  if (tool === 'DIARY') return '每日记录';
-  if (tool === 'FAMILY_MEMORY') return '经验沉淀';
-  if (tool === 'GROWTH_GUARD') return '成长观察';
-  return '未保存';
+  if (tool === 'DIARY') return 'Diary';
+  if (tool === 'FAMILY_MEMORY') return 'Family memory';
+  if (tool === 'GROWTH_GUARD') return 'Growth observation';
+  return 'Not saved';
 }
 
 export function savedRecordType(tool: AgentSaveTool): SavedRecordType {
@@ -214,18 +214,18 @@ export function todayString() {
 
 function defaultSaveTitle(tool: AgentSaveTool) {
   return {
-    DIARY: '对话保存的每日记录',
-    FAMILY_MEMORY: '对话沉淀的经验',
-    GROWTH_GUARD: '对话记录的成长观察',
-    NONE: '无需保存',
+    DIARY: 'Saved diary from chat',
+    FAMILY_MEMORY: 'Saved family memory from chat',
+    GROWTH_GUARD: 'Saved growth observation from chat',
+    NONE: 'No save needed',
   }[tool];
 }
 
 function defaultSaveConfirmation(tool: AgentSaveTool) {
   return {
-    DIARY: '已保存为每日记录。',
-    FAMILY_MEMORY: '已保存为经验沉淀。',
-    GROWTH_GUARD: '已保存为成长观察。',
-    NONE: '这条消息不需要保存。',
+    DIARY: 'Saved as a diary entry.',
+    FAMILY_MEMORY: 'Saved as a family memory.',
+    GROWTH_GUARD: 'Saved as a growth observation.',
+    NONE: 'This message does not need to be saved.',
   }[tool];
 }

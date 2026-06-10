@@ -12,10 +12,10 @@ export default function RagMemoryBadge({ metadata }: RagMemoryBadgeProps) {
 
   const growthRecordCount = rag.growthRecordCount || 0;
   const hasHits = rag.diaryCount > 0 || rag.memoryCount > 0 || growthRecordCount > 0 || rag.sources.length > 0;
-  const modeLabel = rag.retrievalMode === 'VECTOR_WITH_TEXT_FALLBACK' ? '向量+文本' : '文本兜底';
+  const modeLabel = rag.retrievalMode === 'VECTOR_WITH_TEXT_FALLBACK' ? 'Vector + text' : 'Text fallback';
   const label = hasHits
-    ? `已参考家族记忆 · 每日记录 ${rag.diaryCount} · 经验沉淀 ${rag.memoryCount} · 成长观察 ${growthRecordCount}`
-    : '未命中明确家族记忆';
+    ? `Family memory referenced · Diary ${rag.diaryCount} · Experience ${rag.memoryCount} · Growth ${growthRecordCount}`
+    : 'No matching family memory';
   const toneClass = hasHits
     ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
     : 'border-gray-100 bg-white/70 text-gray-500';
@@ -57,7 +57,7 @@ function SourceItem({ source }: { source: RagRecallSource }) {
           {sourceTypeLabel(source.sourceType)}
         </span>
         <span className="min-w-0 flex-1 truncate font-medium text-gray-700">
-          {source.title || '未命名片段'}
+          {source.title || 'Untitled snippet'}
         </span>
       </div>
       {source.snippet && (
@@ -77,25 +77,25 @@ function SourceItem({ source }: { source: RagRecallSource }) {
 }
 
 function sourceTypeLabel(type: string) {
-  if (type === 'LIFE_RECORD') return '每日记录';
-  if (type === 'FAMILY_EXPERIENCE') return '经验沉淀';
-  if (type === 'GROWTH_OBSERVATION') return '成长观察';
-  return '记忆片段';
+  if (type === 'LIFE_RECORD') return 'Diary';
+  if (type === 'FAMILY_EXPERIENCE') return 'Experience';
+  if (type === 'GROWTH_OBSERVATION') return 'Growth';
+  return 'Memory snippet';
 }
 
 function temporalLabel(value: string) {
-  if (value === 'RECENT') return '近期';
-  if (value === 'RECENT_SIGNAL') return '近期信号';
-  if (value === 'STABLE') return '稳定经验';
-  if (value === 'FADING') return '淡化记忆';
+  if (value === 'RECENT') return 'Recent';
+  if (value === 'RECENT_SIGNAL') return 'Recent signal';
+  if (value === 'STABLE') return 'Stable';
+  if (value === 'FADING') return 'Fading';
   return value;
 }
 
 function topicLabel(value: string) {
-  if (value === 'HEALTH') return '健康';
-  if (value === 'EMOTION') return '情绪';
-  if (value === 'FAMILY_STORY') return '家族故事';
-  if (value === 'CHOICE') return '选择';
-  if (value === 'COMMUNICATION') return '沟通';
+  if (value === 'HEALTH') return 'Health';
+  if (value === 'EMOTION') return 'Emotion';
+  if (value === 'FAMILY_STORY') return 'Family story';
+  if (value === 'CHOICE') return 'Choice';
+  if (value === 'COMMUNICATION') return 'Communication';
   return value;
 }

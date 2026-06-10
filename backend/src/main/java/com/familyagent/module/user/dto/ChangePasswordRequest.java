@@ -7,10 +7,10 @@ import lombok.Data;
 @Data
 public class ChangePasswordRequest {
 
-    @NotBlank(message = "当前密码不能为空")
+    @NotBlank(message = "Current password cannot be empty")
     private String currentPassword;
 
-    @NotBlank(message = "新密码不能为空")
-    @Size(min = 6, max = 100, message = "新密码长度6-100个字符")
+    @NotBlank(message = "New password cannot be empty")
+    @Size(min = 6, max = 100, message = "New password must be 6 to 100 characters long")
     private String newPassword;
 }

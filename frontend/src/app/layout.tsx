@@ -3,12 +3,12 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: {
-    default: 'FamilyAgent | 家族记忆与传承',
+    default: 'FamilyAgent | Family Memory and Legacy',
     template: '%s | FamilyAgent',
   },
-  description: '面向有传承意识家庭的家族记忆、家风经验、镜像陪伴与成长守护 AI 系统。',
+  description: 'An AI system for family memory, shared wisdom, mirror companionship, and growth support.',
   applicationName: 'FamilyAgent',
-  keywords: ['FamilyAgent', '家族记忆', '家风传承', '家庭陪伴 AI', '成长守护', '镜像 Agent'],
+  keywords: ['FamilyAgent', 'family memory', 'family legacy', 'family companion AI', 'growth support', 'mirror agent'],
   icons: {
     icon: '/icon.svg',
     shortcut: '/icon.svg',
@@ -26,7 +26,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="zh-CN">
+    <html lang="en">
       <body>{children}</body>
     </html>
   );
