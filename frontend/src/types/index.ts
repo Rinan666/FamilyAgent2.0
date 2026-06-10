@@ -48,6 +48,7 @@ export interface UpdateProfileRequest {
 export interface RegisterRequest {
   username: string;
   password: string;
+  inviteCode: string;
   nickname?: string;
   email?: string;
 }

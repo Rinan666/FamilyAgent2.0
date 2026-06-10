@@ -15,6 +15,10 @@ public class RegisterRequest {
     @Size(min = 6, max = 100, message = "Password length must be between 6 and 100")
     private String password;
 
+    @NotBlank(message = "Invite code is required")
+    @Size(max = 50, message = "Invite code length must be less than 50")
+    private String inviteCode;
+
     private String nickname;
 
     private String email;

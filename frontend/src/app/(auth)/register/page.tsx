@@ -7,15 +7,16 @@ import { NotebookPen, ShieldCheck, Sparkles, Users } from 'lucide-react';
 import { userApi } from '@/lib/api';
 
 const highlights = [
-  { icon: NotebookPen, text: '从家族日记开始沉淀真实、可传承的生活记录' },
-  { icon: Users, text: '把家人连接进同一个家族空间，而不是分散在聊天记录里' },
-  { icon: ShieldCheck, text: '权限先于 AI，家庭记忆和照护边界默认受保护' },
+  { icon: NotebookPen, text: '从家族日记开始沉淀真实、可传承的生活记录。' },
+  { icon: Users, text: '把家人连接进同一个家族空间，而不是散落在聊天记录里。' },
+  { icon: ShieldCheck, text: '权限先于 AI，家庭记忆和照护边界默认受到保护。' },
 ];
 
 export default function RegisterPage() {
   const router = useRouter();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [nickname, setNickname] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -29,6 +30,7 @@ export default function RegisterPage() {
       await userApi.register({
         username: username.trim(),
         password,
+        inviteCode: inviteCode.trim().toUpperCase(),
         nickname: nickname.trim() || undefined,
       });
       router.push('/login?registered=true');
@@ -46,7 +48,7 @@ export default function RegisterPage() {
           <div>
             <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white/80 px-3 py-1 text-xs font-medium text-emerald-800">
               <Sparkles className="h-3.5 w-3.5" />
-              现在可直接注册
+              需要邀请码才能注册
             </div>
             <h1 className="text-3xl font-bold leading-tight">创建 FamilyAgent 账号</h1>
             <p className="mt-4 max-w-md text-sm leading-6 text-gray-600">
@@ -73,7 +75,7 @@ export default function RegisterPage() {
         <section className="p-6 sm:p-8">
           <div className="mb-7">
             <h2 className="text-2xl font-bold text-gray-900">创建账号</h2>
-            <p className="mt-1 text-sm text-gray-500">注册后就可以创建或加入家族空间，不再需要邀请码。</p>
+            <p className="mt-1 text-sm text-gray-500">请输入有效邀请码，注册后即可创建或加入家族空间。</p>
           </div>
 
           <form action="javascript:void(0)" onSubmit={handleSubmit} className="space-y-4">
@@ -97,6 +99,23 @@ export default function RegisterPage() {
                 placeholder="3-50 个字符"
                 required
                 minLength={3}
+                maxLength={50}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="register-invite-code" className="mb-1 block text-sm font-medium text-gray-700">
+                邀请码
+              </label>
+              <input
+                id="register-invite-code"
+                name="inviteCode"
+                type="text"
+                value={inviteCode}
+                onChange={(event) => setInviteCode(event.target.value.toUpperCase())}
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 uppercase outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                placeholder="请输入邀请码"
+                required
                 maxLength={50}
               />
             </div>
@@ -134,8 +153,7 @@ export default function RegisterPage() {
             </div>
 
             <button
-              type="button"
-              onClick={() => void handleSubmit()}
+              type="submit"
               disabled={loading}
               className="w-full rounded-xl bg-emerald-700 py-2.5 font-medium text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
             >
@@ -144,8 +162,7 @@ export default function RegisterPage() {
           </form>
 
           <p className="mt-6 text-center text-sm text-gray-500">
-            已有账号？
-            {' '}
+            已有账号？{' '}
             <Link href="/login" className="font-medium text-emerald-700 hover:underline">
               立即登录
             </Link>

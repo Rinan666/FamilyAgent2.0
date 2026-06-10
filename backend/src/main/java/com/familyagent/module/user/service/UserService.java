@@ -4,6 +4,8 @@ import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.crypto.SecureUtil;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
+import com.familyagent.module.invite.entity.InviteCode;
+import com.familyagent.module.invite.repository.InviteCodeRepository;
 import com.familyagent.module.user.dto.ChangePasswordRequest;
 import com.familyagent.module.user.dto.LoginRequest;
 import com.familyagent.module.user.dto.LoginResponse;
@@ -31,6 +33,7 @@ import java.util.Map;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final InviteCodeRepository inviteCodeRepository;
     private static final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -47,6 +50,9 @@ public class UserService {
             throw new BusinessException(ErrorCode.USERNAME_EXISTS);
         }
 
+        InviteCode inviteCode = validateInviteCode(request.getInviteCode());
+        consumeInviteCode(inviteCode.getCode());
+
         User user = new User();
         user.setUsername(request.getUsername());
         user.setPasswordHash(encoder.encode(request.getPassword()));
@@ -54,7 +60,10 @@ public class UserService {
         user.setEmail(request.getEmail());
         user.setRole("USER");
         user.setStatus("ACTIVE");
-        user.setMetadata(Map.of());
+        user.setMetadata(Map.of(
+                "inviteCode", inviteCode.getCode(),
+                "inviteSource", inviteCode.getSource() == null ? "unknown" : inviteCode.getSource()
+        ));
 
         userRepository.insert(user);
         log.info("User registered: username={}, id={}", user.getUsername(), user.getId());
@@ -224,5 +233,41 @@ public class UserService {
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Failed to save profile");
         }
+    }
+
+    private InviteCode validateInviteCode(String rawInviteCode) {
+        if (rawInviteCode == null || rawInviteCode.trim().isEmpty()) {
+            throw new BusinessException(ErrorCode.INVITE_CODE_REQUIRED);
+        }
+
+        String normalizedCode = rawInviteCode.trim().toUpperCase();
+        InviteCode inviteCode = inviteCodeRepository.findByCode(normalizedCode);
+        if (inviteCode == null || !"ACTIVE".equals(inviteCode.getStatus())) {
+            throw new BusinessException(ErrorCode.INVITE_CODE_INVALID);
+        }
+        if (inviteCode.getExpiresAt() != null && !inviteCode.getExpiresAt().isAfter(LocalDateTime.now())) {
+            throw new BusinessException(ErrorCode.INVITE_CODE_INVALID);
+        }
+        if (inviteCode.getMaxUses() != null && inviteCode.getUsedCount() != null
+                && inviteCode.getUsedCount() >= inviteCode.getMaxUses()) {
+            throw new BusinessException(ErrorCode.INVITE_CODE_EXHAUSTED);
+        }
+        return inviteCode;
+    }
+
+    private void consumeInviteCode(String normalizedCode) {
+        int updated = inviteCodeRepository.incrementUsedCountByCode(normalizedCode);
+        if (updated > 0) {
+            return;
+        }
+
+        InviteCode latest = inviteCodeRepository.findByCode(normalizedCode);
+        if (latest == null || !"ACTIVE".equals(latest.getStatus())) {
+            throw new BusinessException(ErrorCode.INVITE_CODE_INVALID);
+        }
+        if (latest.getExpiresAt() != null && !latest.getExpiresAt().isAfter(LocalDateTime.now())) {
+            throw new BusinessException(ErrorCode.INVITE_CODE_INVALID);
+        }
+        throw new BusinessException(ErrorCode.INVITE_CODE_EXHAUSTED);
     }
 }

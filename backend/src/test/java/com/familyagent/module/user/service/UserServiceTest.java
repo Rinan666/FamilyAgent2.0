@@ -2,6 +2,9 @@ package com.familyagent.module.user.service;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.familyagent.common.exception.BusinessException;
+import com.familyagent.common.response.ErrorCode;
+import com.familyagent.module.invite.entity.InviteCode;
+import com.familyagent.module.invite.repository.InviteCodeRepository;
 import com.familyagent.module.user.dto.LoginRequest;
 import com.familyagent.module.user.dto.LoginResponse;
 import com.familyagent.module.user.dto.RegisterRequest;
@@ -36,6 +39,7 @@ import static org.mockito.Mockito.when;
 class UserServiceTest {
 
     @Mock private UserRepository userRepository;
+    @Mock private InviteCodeRepository inviteCodeRepository;
     @InjectMocks private UserService userService;
 
     private static final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
@@ -45,8 +49,11 @@ class UserServiceTest {
         RegisterRequest req = new RegisterRequest();
         req.setUsername("testuser");
         req.setPassword("mypassword123");
+        req.setInviteCode("ASDFGZXCVB");
 
         when(userRepository.countByUsername("testuser")).thenReturn(0);
+        mockInviteCode("ASDFGZXCVB", 20, 0);
+        when(inviteCodeRepository.incrementUsedCountByCode("ASDFGZXCVB")).thenReturn(1);
 
         userService.register(req);
 
@@ -64,6 +71,7 @@ class UserServiceTest {
         RegisterRequest req = new RegisterRequest();
         req.setUsername("existing");
         req.setPassword("pass123");
+        req.setInviteCode("ASDFGZXCVB");
 
         when(userRepository.countByUsername("existing")).thenReturn(1);
 
@@ -76,8 +84,11 @@ class UserServiceTest {
         RegisterRequest req = new RegisterRequest();
         req.setUsername("alice");
         req.setPassword("pass123");
+        req.setInviteCode("ASDFGZXCVB");
 
         when(userRepository.countByUsername("alice")).thenReturn(0);
+        mockInviteCode("ASDFGZXCVB", 20, 0);
+        when(inviteCodeRepository.incrementUsedCountByCode("ASDFGZXCVB")).thenReturn(1);
 
         userService.register(req);
 
@@ -87,12 +98,15 @@ class UserServiceTest {
     }
 
     @Test
-    void register_shouldSetRoleStatusAndEmptyMetadata() {
+    void register_shouldSetRoleStatusAndInviteMetadata() {
         RegisterRequest req = new RegisterRequest();
         req.setUsername("newbie");
         req.setPassword("pass123");
+        req.setInviteCode("ASDFGZXCVB");
 
         when(userRepository.countByUsername("newbie")).thenReturn(0);
+        mockInviteCode("ASDFGZXCVB", 20, 0);
+        when(inviteCodeRepository.incrementUsedCountByCode("ASDFGZXCVB")).thenReturn(1);
 
         userService.register(req);
 
@@ -100,7 +114,37 @@ class UserServiceTest {
         verify(userRepository).insert(captor.capture());
         assertEquals("USER", captor.getValue().getRole());
         assertEquals("ACTIVE", captor.getValue().getStatus());
-        assertEquals(Map.of(), captor.getValue().getMetadata());
+        assertEquals(Map.of("inviteCode", "ASDFGZXCVB", "inviteSource", "seed-test"), captor.getValue().getMetadata());
+    }
+
+    @Test
+    void register_shouldRejectMissingInviteCode() {
+        RegisterRequest req = new RegisterRequest();
+        req.setUsername("newbie");
+        req.setPassword("pass123");
+
+        when(userRepository.countByUsername("newbie")).thenReturn(0);
+
+        BusinessException error = assertThrows(BusinessException.class, () -> userService.register(req));
+
+        assertEquals(ErrorCode.INVITE_CODE_REQUIRED.getCode(), error.getCode());
+        verify(userRepository, never()).insert(any());
+    }
+
+    @Test
+    void register_shouldRejectExhaustedInviteCode() {
+        RegisterRequest req = new RegisterRequest();
+        req.setUsername("newbie");
+        req.setPassword("pass123");
+        req.setInviteCode("ASDFGZXCVB");
+
+        when(userRepository.countByUsername("newbie")).thenReturn(0);
+        mockInviteCode("ASDFGZXCVB", 20, 20);
+
+        BusinessException error = assertThrows(BusinessException.class, () -> userService.register(req));
+
+        assertEquals(ErrorCode.INVITE_CODE_EXHAUSTED.getCode(), error.getCode());
+        verify(userRepository, never()).insert(any());
     }
 
     @Test
@@ -220,5 +264,16 @@ class UserServiceTest {
             verify(userRepository).updateMetadata(eq(35L), contains("\"inviteCode\":\"FAMILY006\""));
             verify(userRepository).updateMetadata(eq(35L), contains("\"birthDate\":\"2006-01-02\""));
         }
+    }
+
+    private void mockInviteCode(String code, Integer maxUses, Integer usedCount) {
+        InviteCode inviteCode = new InviteCode();
+        inviteCode.setId(7L);
+        inviteCode.setCode(code);
+        inviteCode.setSource("seed-test");
+        inviteCode.setStatus("ACTIVE");
+        inviteCode.setMaxUses(maxUses);
+        inviteCode.setUsedCount(usedCount);
+        when(inviteCodeRepository.findByCode(code)).thenReturn(inviteCode);
     }
 }
