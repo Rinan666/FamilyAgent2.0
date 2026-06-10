@@ -1,0 +1,13 @@
+#go
+cd /opt/familyagent
+bash stop-all.sh
+bash start-all.sh
+
+#end
+bash stop-all.sh
+
+
+#pull
+ssh -T git@github.com
+git pull origin main
+Hi Rinan666! You've successfully authenticated, but GitHub does not provide shell access.

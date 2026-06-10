@@ -17,6 +17,7 @@ AI_SERVICE_PORT_DEFAULT=8090
 
 mkdir -p "$LOG_DIR"
 : > "$PID_FILE"
+: > "$RUNTIME_PID_FILE"
 
 print_header() {
   echo
@@ -82,7 +83,7 @@ pid_on_port() {
     return
   fi
   if command -v ss >/dev/null 2>&1; then
-    ss -ltnp "sport = :$port" 2>/dev/null | awk -F 'pid=' 'NR>1 && NF>1 {split($2,a,","); print a[1]; exit}' || true
+    ss -ltnp "sport = :$port" 2>/dev/null | awk 'NR>1 {split($NF,a,"pid="); if(length(a)>1){split(a[2],b,","); print b[1]; exit}}' || true
     return
   fi
   echo ""
@@ -95,7 +96,12 @@ kill_port_if_needed() {
   pid="$(pid_on_port "$port")"
   if [[ -n "${pid:-}" ]]; then
     kill "$pid" 2>/dev/null || sudo kill "$pid" 2>/dev/null || true
-    sleep 1
+    sleep 2
+    # Verify the process is actually stopped
+    if kill -0 "$pid" 2>/dev/null; then
+      kill -9 "$pid" 2>/dev/null || sudo kill -9 "$pid" 2>/dev/null || true
+      sleep 1
+    fi
     echo "        [OK] Stopped old $service_name process on port $port (PID $pid)"
   fi
 }
@@ -148,10 +154,38 @@ start_background_service() {
   ) >"$out_log" 2>"$err_log" &
 
   local pid=$!
+  # Save to both PID files with consistent format
   echo "$pid" >>"$PID_FILE"
   record_named_pid "$name" "$pid"
   echo "        $name started (PID $pid)"
   echo "        Logs: $out_log"
+  
+  # Wait a moment and verify the process is still running
+  sleep 2
+  if ! kill -0 "$pid" 2>/dev/null; then
+    echo "        [WARNING] $name (PID $pid) exited unexpectedly. Check logs: $err_log"
+    return 1
+  fi
+  return 0
+}
+
+verify_service_on_port() {
+  local port="$1"
+  local service_name="$2"
+  local max_wait=30
+  local waited=0
+  
+  while [[ $waited -lt $max_wait ]]; do
+    if pid_on_port "$port" >/dev/null 2>&1; then
+      echo "        [OK] $service_name is listening on port $port"
+      return 0
+    fi
+    sleep 2
+    waited=$((waited + 2))
+  done
+  
+  echo "        [WARNING] $service_name may not be ready on port $port after ${max_wait}s"
+  return 1
 }
 
 print_header
@@ -193,6 +227,7 @@ fi
 
 echo "        All checks passed"
 
+# Load environment variables early to get port configurations
 load_env_file "$INFRA_ENV_FILE"
 load_env_file "$AI_ENV_FILE"
 load_env_file "$TUNNEL_ENV_FILE"
@@ -219,6 +254,7 @@ start_background_service \
   "$ROOT_DIR/ai-service" \
   "ai-service" \
   env AI_SERVICE_PORT="$AI_SERVICE_PORT" "$ROOT_DIR/ai-service/.venv/bin/python" -m uvicorn app.main:app --host 0.0.0.0 --port "$AI_SERVICE_PORT"
+verify_service_on_port "$AI_SERVICE_PORT" "AI Service" || true
 
 print_step 3 "Starting Backend (port $BACKEND_PORT)..."
 kill_port_if_needed "$BACKEND_PORT" "Backend"
@@ -227,18 +263,24 @@ start_background_service \
   "$ROOT_DIR/backend" \
   "backend" \
   env SERVER_PORT="$BACKEND_PORT" "$ROOT_DIR/backend/mvnw" spring-boot:run -Dspring-boot.run.profiles=dev
+verify_service_on_port "$BACKEND_PORT" "Backend" || true
 
 print_step 4 "Starting Frontend (port $FRONTEND_PORT)..."
 kill_port_if_needed "$FRONTEND_PORT" "Frontend"
+echo "        Building frontend (this may take a while)..."
 (
   cd "$ROOT_DIR/frontend"
-  npm run build >/dev/null
-)
+  npm run build >"$LOG_DIR/frontend-build.log" 2>&1
+) || {
+  echo "        [WARNING] Frontend build failed. Check $LOG_DIR/frontend-build.log"
+  echo "        Attempting to start anyway..."
+}
 start_background_service \
   "frontend" \
   "$ROOT_DIR/frontend" \
   "frontend" \
   npm run start -- --hostname 0.0.0.0 --port "$FRONTEND_PORT"
+verify_service_on_port "$FRONTEND_PORT" "Frontend" || true
 
 print_step 5 "Starting Cloudflare Tunnel..."
 if [[ "${START_TUNNEL_VALUE,,}" == "true" ]]; then
@@ -264,5 +306,6 @@ echo "   MinIO:     http://localhost:9001"
 echo "   RabbitMQ:  http://localhost:15672"
 echo
 echo "   PID file:  $PID_FILE"
+echo "   Runtime PID file: $RUNTIME_PID_FILE"
 echo "   Logs dir:  $LOG_DIR"
 echo "============================================"
