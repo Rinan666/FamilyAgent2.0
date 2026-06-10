@@ -13,6 +13,9 @@ import com.familyagent.module.admin.dto.FailedSkillRunSummary;
 import com.familyagent.module.admin.dto.FamilyDatabaseSummary;
 import com.familyagent.module.admin.dto.MemoryRecallDiagnosticRequest;
 import com.familyagent.module.admin.dto.MemoryRecallDiagnosticResponse;
+import com.familyagent.module.admin.dto.SessionArchiveRangeSummary;
+import com.familyagent.module.admin.dto.SessionStorageHealthSummary;
+import com.familyagent.module.admin.dto.SuspiciousFamilySummary;
 import com.familyagent.module.family.dto.FamilyMemberVO;
 import com.familyagent.module.family.repository.FamilyRepository;
 import com.familyagent.module.family.repository.FamilyMemberRepository;
@@ -52,12 +55,9 @@ public class DatabaseHealthService {
             new TableDefinition("mirror_agent_data", "Mirror profiles", false),
             new TableDefinition("heritage_tasks", "Heritage tasks", false),
             new TableDefinition("chat_sessions", "Chat sessions", false),
-            new TableDefinition("skill_runs", "Skill run audit", false),
-            new TableDefinition("questions", "Legacy questions", true),
-            new TableDefinition("knowledge_points", "Legacy knowledge points", true),
-            new TableDefinition("test_records", "Legacy tests", true),
-            new TableDefinition("wrong_question_records", "Legacy wrong questions", true),
-            new TableDefinition("ability_profiles", "Legacy ability profiles", true)
+            new TableDefinition("chat_session_messages", "Chat session messages", false),
+            new TableDefinition("chat_session_archives", "Chat session archives", false),
+            new TableDefinition("skill_runs", "Skill run audit", false)
     );
 
     private final JdbcTemplate jdbcTemplate;
@@ -91,9 +91,6 @@ public class DatabaseHealthService {
 
         updateNullIfTableExists("families", "created_by", userId);
         updateNullIfTableExists("invite_codes", "created_by", userId);
-        updateNullIfTableExists("questions", "created_by", userId);
-        updateNullIfTableExists("questions", "reviewed_by", userId);
-        updateNullIfTableExists("family_knowledge", "author_id", userId);
         updateNullIfTableExists("family_relationships", "created_by", userId);
         updateNullIfTableExists("family_relationships", "updated_by", userId);
         updateNullIfTableExists("care_authorizations", "created_by", userId);
@@ -113,9 +110,6 @@ public class DatabaseHealthService {
         deleteIfTableExists("growth_guard_records", "created_by", userId);
         deleteIfTableExists("memory_embeddings", "user_id", userId);
         deleteIfTableExists("skill_runs", "triggered_by", userId);
-        deleteIfTableExists("wrong_question_records", "user_id", userId);
-        deleteIfTableExists("test_records", "user_id", userId);
-        deleteIfTableExists("ability_profiles", "user_id", userId);
         deleteIfTableExists("chat_sessions", "user_id", userId);
         deleteIfTableExists("diary_entries", "user_id", userId);
         deleteIfTableExists("memory_entries", "user_id", userId);
@@ -175,6 +169,9 @@ public class DatabaseHealthService {
                 .tableCounts(tableCounts)
                 .embeddingStatuses(queryEmbeddingStatuses())
                 .families(queryFamilySummaries())
+                .suspiciousFamilies(querySuspiciousFamilies())
+                .sessionStorageHealth(querySessionStorageHealth())
+                .sessionArchiveRanges(querySessionArchiveRanges())
                 .recentFailedEmbeddings(queryRecentFailedEmbeddings())
                 .recentFailedSkillRuns(queryRecentFailedSkillRuns())
                 .build();
@@ -558,6 +555,98 @@ public class DatabaseHealthService {
                 .failedSkillRunCount(rs.getLong("failed_skill_run_count"))
                 .readyEmbeddingCount(rs.getLong("ready_embedding_count"))
                 .failedEmbeddingCount(rs.getLong("failed_embedding_count"))
+                .build());
+    }
+
+    private List<SuspiciousFamilySummary> querySuspiciousFamilies() {
+        if (!tableExists("families") || !tableExists("family_members")) {
+            return List.of();
+        }
+        return jdbcTemplate.query("""
+                SELECT
+                    f.id AS family_id,
+                    f.name AS family_name,
+                    COUNT(fm.id) AS member_count,
+                    COUNT(*) FILTER (WHERE UPPER(COALESCE(fm.role, '')) = 'OWNER') AS owner_count
+                FROM families f
+                LEFT JOIN family_members fm ON fm.family_id = f.id
+                GROUP BY f.id, f.name
+                HAVING COUNT(fm.id) = 0
+                    OR COUNT(*) FILTER (WHERE UPPER(COALESCE(fm.role, '')) = 'OWNER') = 0
+                    OR COUNT(*) FILTER (WHERE UPPER(COALESCE(fm.role, '')) = 'OWNER') > 1
+                ORDER BY f.id ASC
+                """, (rs, rowNum) -> SuspiciousFamilySummary.builder()
+                .familyId(rs.getLong("family_id"))
+                .familyName(rs.getString("family_name"))
+                .memberCount(rs.getLong("member_count"))
+                .ownerCount(rs.getLong("owner_count"))
+                .build());
+    }
+
+    private List<SessionStorageHealthSummary> querySessionStorageHealth() {
+        if (!tableExists("chat_sessions")) {
+            return List.of();
+        }
+        return jdbcTemplate.query("""
+                SELECT
+                    s.id AS session_id,
+                    s.family_id,
+                    s.message_count,
+                    s.archived_before_seq,
+                    s.archive_status,
+                    COALESCE(live.live_count, 0) AS live_message_rows,
+                    COALESCE(arch.archived_count, 0) AS archived_message_rows,
+                    COALESCE(live.live_count, 0) + COALESCE(arch.archived_count, 0) AS total_materialized_rows
+                FROM chat_sessions s
+                LEFT JOIN (
+                    SELECT session_id, COUNT(*) AS live_count
+                    FROM chat_session_messages
+                    GROUP BY session_id
+                ) live ON live.session_id = s.id
+                LEFT JOIN (
+                    SELECT session_id, SUM(message_count) AS archived_count
+                    FROM chat_session_archives
+                    GROUP BY session_id
+                ) arch ON arch.session_id = s.id
+                WHERE s.message_count > 0
+                ORDER BY s.last_message_at DESC NULLS LAST, s.id DESC
+                LIMIT 100
+                """, (rs, rowNum) -> SessionStorageHealthSummary.builder()
+                .sessionId(rs.getLong("session_id"))
+                .familyId((Long) rs.getObject("family_id"))
+                .messageCount(rs.getInt("message_count"))
+                .archivedBeforeSeq(rs.getInt("archived_before_seq"))
+                .archiveStatus(rs.getString("archive_status"))
+                .liveMessageRows(rs.getLong("live_message_rows"))
+                .archivedMessageRows(rs.getLong("archived_message_rows"))
+                .totalMaterializedRows(rs.getLong("total_materialized_rows"))
+                .build());
+    }
+
+    private List<SessionArchiveRangeSummary> querySessionArchiveRanges() {
+        if (!tableExists("chat_session_archives")) {
+            return List.of();
+        }
+        return jdbcTemplate.query("""
+                SELECT
+                    session_id,
+                    id AS archive_id,
+                    start_seq,
+                    end_seq,
+                    message_count,
+                    created_at
+                FROM chat_session_archives
+                ORDER BY session_id ASC, start_seq ASC, id ASC
+                LIMIT 200
+                """, (rs, rowNum) -> SessionArchiveRangeSummary.builder()
+                .sessionId(rs.getLong("session_id"))
+                .archiveId(rs.getLong("archive_id"))
+                .startSeq(rs.getInt("start_seq"))
+                .endSeq(rs.getInt("end_seq"))
+                .messageCount(rs.getInt("message_count"))
+                .createdAt(rs.getTimestamp("created_at") == null
+                        ? null
+                        : rs.getTimestamp("created_at").toLocalDateTime())
                 .build());
     }
 

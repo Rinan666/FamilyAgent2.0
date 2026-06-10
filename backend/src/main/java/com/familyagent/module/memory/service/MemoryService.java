@@ -241,7 +241,7 @@ public class MemoryService {
         return visibleEntry;
     }
 
-    public List<MemoryEntry> recall(String subject, Long knowledgePointId, int limit) {
+    public List<MemoryEntry> recall(String subject, int limit) {
         return List.of();
     }
 

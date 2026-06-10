@@ -137,15 +137,7 @@ if ($dockerOk) {
     if ($LASTEXITCODE -eq 0) {
         Write-Host "       Containers started, waiting 5s..." -ForegroundColor Green
         Start-Sleep 5
-        Write-Host "       Initializing database..." -ForegroundColor Yellow
-        docker exec fa-postgres psql -U fa_user -d familyagent -f /docker-entrypoint-initdb.d/01-init.sql 2>&1 | Out-Null
-        docker cp "$Root\scripts\migrate-multitenant-storage.sql" fa-postgres:/tmp/migrate-multitenant-storage.sql 2>&1 | Out-Null
-        docker exec fa-postgres psql -U fa_user -d familyagent -f /tmp/migrate-multitenant-storage.sql 2>&1 | Out-Null
-        docker cp "$Root\scripts\migrate-invite-codes.sql" fa-postgres:/tmp/migrate-invite-codes.sql 2>&1 | Out-Null
-        docker exec fa-postgres psql -U fa_user -d familyagent -f /tmp/migrate-invite-codes.sql 2>&1 | Out-Null
-        docker cp "$Root\scripts\migrate-wrong-question-records.sql" fa-postgres:/tmp/migrate-wrong-question-records.sql 2>&1 | Out-Null
-        docker exec fa-postgres psql -U fa_user -d familyagent -f /tmp/migrate-wrong-question-records.sql 2>&1 | Out-Null
-        Write-Host "       Database ready" -ForegroundColor Green
+        Write-Host "       Database ready (schema will be managed by backend Flyway)" -ForegroundColor Green
     } else {
         Write-Host "       [WARN] docker compose failed" -ForegroundColor DarkYellow
     }

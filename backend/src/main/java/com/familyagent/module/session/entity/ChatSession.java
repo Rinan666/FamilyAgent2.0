@@ -18,9 +18,7 @@ public class ChatSession {
 
     private Long userId;
     private Long familyId;
-    private Long questionId;
     private String subject;
-    private Long knowledgePointId;
 
     @Deprecated
     @TableField(typeHandler = JacksonTypeHandler.class)

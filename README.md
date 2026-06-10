@@ -148,4 +148,54 @@ cd frontend && npm run build
 
 ## License
 
+
+绉佹湁椤圭洰锛屼繚鐣欐墍鏈夋潈鍒┿€?
+
+## Production Deployment
+
+FamilyAgent now supports a split deployment model:
+
+- Production traffic goes only to the cloud server via `app.familyagent.cn`
+- Local development stays on your own machine via `http://localhost:3000`
+- Production secrets live outside the repo under `/etc/familyagent/`
+
+Server-side assets added for this flow:
+
+- `deploy/systemd/`: systemd unit templates for infra, backend, AI, frontend, and Cloudflare Tunnel
+- `deploy/env/*.example`: example production env files that map to `/etc/familyagent/*.env`
+- `deploy/cloudflared/config.yml.example`: example named-tunnel config
+- `scripts/install-systemd-services.sh`: installs rendered systemd units onto the server
+- `scripts/deploy-prod.sh`: idempotent server-side deploy script used by automation
+- `.github/workflows/deploy-prod.yml`: push-to-`main` production deploy workflow
+
+Recommended server bootstrap flow:
+
+```bash
+cd /opt/familyagent
+bash scripts/install-systemd-services.sh
+sudo cp deploy/env/infra.env.example /etc/familyagent/infra.env
+sudo cp deploy/env/backend.env.example /etc/familyagent/backend.env
+sudo cp deploy/env/ai-service.env.example /etc/familyagent/ai-service.env
+sudo cp deploy/env/frontend.env.example /etc/familyagent/frontend.env
+sudo cp deploy/cloudflared/config.yml.example /etc/familyagent/cloudflared/config.yml
+sudo systemctl start familyagent.target
+```
+
+Before first production start, replace all placeholder secrets and rotate any previously exposed keys.
+
+GitHub Actions production deploy requires these repository secrets:
+
+- `DEPLOY_HOST`
+- `DEPLOY_PORT`
+- `DEPLOY_USER`
+- `DEPLOY_SSH_KEY`
+
 私有项目，保留所有权利。
+## 2026-06-10 Database Migration Update
+
+- Backend schema source is now `Flyway` only.
+- Migrations live in `backend/src/main/resources/db/migration`.
+- Local startup no longer runs root-level `scripts/init-db.sql` or manual `migrate-*.sql`.
+- For a fresh database, start PostgreSQL first and then start backend; Flyway will create the Phase 2 schema automatically.
+- For an existing local or preprod database, backend uses `baseline-on-migrate` and then applies pruning migrations.
+- Legacy tutor tables and compatibility columns are no longer part of the main runtime schema.

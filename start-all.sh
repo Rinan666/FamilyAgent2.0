@@ -118,28 +118,6 @@ wait_for_postgres() {
   return 1
 }
 
-run_postgres_sql() {
-  local sql_file="$1"
-  local sql_name
-  sql_name="$(basename "$sql_file")"
-  docker cp "$sql_file" "fa-postgres:/tmp/$sql_name" >/dev/null
-  docker exec fa-postgres psql -U "${DB_USER:-fa_user}" -d "${DB_NAME:-familyagent}" -f "/tmp/$sql_name" >/dev/null
-}
-
-run_migration_scripts() {
-  local migration_file
-
-  echo "        Running init-db.sql"
-  run_postgres_sql "$ROOT_DIR/scripts/init-db.sql"
-
-  shopt -s nullglob
-  for migration_file in "$ROOT_DIR"/scripts/migrate-*.sql; do
-    echo "        Running $(basename "$migration_file")"
-    run_postgres_sql "$migration_file"
-  done
-  shopt -u nullglob
-}
-
 start_background_service() {
   local name="$1"
   local work_dir="$2"
@@ -243,9 +221,7 @@ if ! wait_for_postgres; then
   exit 1
 fi
 
-echo "        Initializing database..."
-run_migration_scripts
-echo "        Database ready"
+echo "        Database ready (schema will be managed by backend Flyway)"
 
 print_step 2 "Starting AI Service (port $AI_SERVICE_PORT)..."
 kill_port_if_needed "$AI_SERVICE_PORT" "AI Service"

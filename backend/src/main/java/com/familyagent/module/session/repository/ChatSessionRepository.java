@@ -11,13 +11,13 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 浼氳瘽鏁版嵁璁块棶
+ * Chat session data access.
  */
 @Mapper
 public interface ChatSessionRepository extends BaseMapper<ChatSession> {
 
     @Select("""
-            SELECT id, user_id, family_id, question_id, subject, knowledge_point_id,
+            SELECT id, user_id, family_id, subject,
                    title, summary, status, visibility, source, metadata,
                    started_at, ended_at, last_message_at, message_count, token_count,
                    archived_before_seq, archive_status, archive_metadata
@@ -29,7 +29,7 @@ public interface ChatSessionRepository extends BaseMapper<ChatSession> {
     List<ChatSession> findByUserId(@Param("userId") Long userId, @Param("limit") int limit);
 
     @Select("""
-            SELECT id, user_id, family_id, question_id, subject, knowledge_point_id,
+            SELECT id, user_id, family_id, subject,
                    title, summary, status, visibility, source, metadata,
                    started_at, ended_at, last_message_at, message_count, token_count,
                    archived_before_seq, archive_status, archive_metadata
@@ -41,7 +41,7 @@ public interface ChatSessionRepository extends BaseMapper<ChatSession> {
     List<ChatSession> findActiveByUserId(@Param("userId") Long userId);
 
     @Select("""
-            SELECT id, user_id, family_id, question_id, subject, knowledge_point_id,
+            SELECT id, user_id, family_id, subject,
                    title, summary, status, visibility, permission_scope, source, metadata,
                    started_at, ended_at, last_message_at, message_count, token_count,
                    archived_before_seq, archive_status, archive_metadata

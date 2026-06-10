@@ -1,5 +1,5 @@
 # ============================================
-# FamilyAgent Backend - 开发环境配置
+# FamilyAgent Backend - development configuration
 # ============================================
 
 spring:
@@ -53,7 +53,3 @@ minio:
   access-key: ${MINIO_ACCESS_KEY:minioadmin}
   secret-key: ${MINIO_SECRET_KEY:minioadmin}
   bucket-name: familyagent
-
-familyagent:
-  session-schema:
-    auto-init: true

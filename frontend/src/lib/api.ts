@@ -1,12 +1,12 @@
 /**
- * API 客户端
+ * API client helpers.
  *
- * - Java 业务 API 通过 Next.js 代理 (/api/* → backend)
- * - Python AI API 通过 Next.js 代理 (/ai-proxy/* → AI service)
+ * - Java business APIs are proxied through Next.js (/api/* -> backend)
+ * - Python AI APIs are proxied through Next.js (/ai-proxy/* -> AI service)
  *
- * 环境变量：
- *   NEXT_PUBLIC_API_URL — 后端地址 (默认 /api)
- *   AI_SERVICE_URL — AI 服务地址 (默认 http://localhost:8090)
+ * Environment variables:
+ *   NEXT_PUBLIC_API_URL - backend base URL (default /api)
+ *   AI_SERVICE_URL - AI service base URL (default http://localhost:8090)
  */
 import type {
   ApiResult,
@@ -365,7 +365,7 @@ async function aiRequest<T>(path: string, body: unknown): Promise<T> {
   return data as T;
 }
 
-// 文件上传请求（同源代理到 Python AI 服务）
+// File upload requests proxied to the Python AI service.
 async function aiFileRequest<T>(path: string, file: File): Promise<T> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
   const formData = new FormData();
@@ -492,7 +492,7 @@ function sseStreamRequest(
 }
 
 // ============================================
-// 用户
+// Users
 // ============================================
 export const userApi = {
   register: (data: RegisterRequest) => request<User>('/users/register', { method: 'POST', body: JSON.stringify(data) }).then(normalizeUser),
@@ -506,7 +506,7 @@ export const userApi = {
 };
 
 // ============================================
-// 家族
+// Families
 // ============================================
 export const familyApi = {
   create: (data: { name: string; description?: string }) =>
@@ -575,18 +575,18 @@ export const diaryApi = {
 };
 
 // ============================================
-// 题库
+// Question bank
 // ============================================
 
 // ============================================
-// 评估
+// Assessments
 // ============================================
 // ============================================
-// 会话
+// Sessions
 // ============================================
 export const sessionApi = {
   createSession: (data: {
-    familyId?: number; questionId?: number; subject?: string; knowledgePointId?: number;
+    familyId?: number; subject?: string;
     title?: string; summary?: string; messages?: ChatMessage[]; visibility?: string; source?: string; metadata?: Record<string, unknown>;
   }) => request<ChatSessionDetail>('/sessions', {
     method: 'POST',
@@ -750,7 +750,7 @@ export const memoryApi = {
       family_context: body.familyContext || '',
       existing_actions: body.existingActions || [],
     }),
-  recall: (body: { query?: string; subject?: string; knowledgePointId?: number; limit?: number }) =>
+  recall: (body: { query?: string; subject?: string; limit?: number }) =>
     request<MemoryEntry[]>('/memories/recall', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -954,7 +954,7 @@ export const mirrorApi = {
 };
 
 // ============================================
-// 家族Agent（直连 Python AI 服务）
+// Family agent calls sent to the Python AI service.
 // ============================================
 export const agentApi = {
   streamChat: (

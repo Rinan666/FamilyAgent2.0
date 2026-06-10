@@ -36,7 +36,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * 浼氳瘽鏈嶅姟
+ * Chat session service.
  */
 @Slf4j
 @Service
@@ -440,9 +440,7 @@ public class ChatSessionService {
                 .id(session.getId())
                 .userId(session.getUserId())
                 .familyId(session.getFamilyId())
-                .questionId(session.getQuestionId())
                 .subject(session.getSubject())
-                .knowledgePointId(session.getKnowledgePointId())
                 .title(session.getTitle())
                 .summary(session.getSummary())
                 .status(session.getStatus())
@@ -475,9 +473,7 @@ public class ChatSessionService {
                 .id(session.getId())
                 .userId(session.getUserId())
                 .familyId(session.getFamilyId())
-                .questionId(session.getQuestionId())
                 .subject(session.getSubject())
-                .knowledgePointId(session.getKnowledgePointId())
                 .title(session.getTitle())
                 .summary(session.getSummary())
                 .status(session.getStatus())

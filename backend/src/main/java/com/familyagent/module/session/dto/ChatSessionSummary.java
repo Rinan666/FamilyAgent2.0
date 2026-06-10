@@ -13,9 +13,7 @@ public class ChatSessionSummary {
     private Long id;
     private Long userId;
     private Long familyId;
-    private Long questionId;
     private String subject;
-    private Long knowledgePointId;
     private String title;
     private String summary;
     private String status;

@@ -37,9 +37,7 @@ public class ChatSessionController {
     public Result<ChatSessionDetail> createSession(@Valid @RequestBody CreateChatSessionRequest request) {
         ChatSession session = new ChatSession();
         session.setFamilyId(request.getFamilyId());
-        session.setQuestionId(request.getQuestionId());
         session.setSubject(request.getSubject());
-        session.setKnowledgePointId(request.getKnowledgePointId());
         session.setTitle(request.getTitle());
         session.setSummary(request.getSummary());
         session.setVisibility(request.getVisibility());

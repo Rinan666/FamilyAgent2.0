@@ -1,6 +1,6 @@
 # ============================================
-# FamilyAgent Backend - 生产环境配置
-# 实际值通过环境变量注入
+# FamilyAgent Backend - production configuration
+# Actual values are injected through environment variables
 # ============================================
 
 spring:

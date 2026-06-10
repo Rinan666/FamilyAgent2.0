@@ -1,8 +1,8 @@
 ﻿// ============================================
-// FamilyAgent - 鍓嶇绫诲瀷瀹氫箟
+// FamilyAgent - frontend type definitions
 // ============================================
 
-// --- 鐢ㄦ埛 ---
+// --- Users ---
 export interface User {
   id: number;
   username: string;
@@ -53,7 +53,7 @@ export interface RegisterRequest {
   email?: string;
 }
 
-// --- 瀹舵棌 ---
+// --- Families ---
 export interface Family {
   id: number;
   name: string;
@@ -110,7 +110,7 @@ export interface CareAuthorization {
   updatedAt: string;
 }
 
-// --- 瀹舵棌鏃ヨ / 浜虹敓璁板綍 ---
+// --- Family diary / life records ---
 export type DiaryEntryType =
   | 'DAILY'
   | 'IMPORTANT_EVENT'
@@ -181,9 +181,7 @@ export interface ChatSessionSummary {
   id: number;
   userId: number;
   familyId?: number;
-  questionId?: number;
   subject?: string;
-  knowledgePointId?: number;
   title?: string;
   summary?: string;
   status: 'ACTIVE' | 'ENDED';
@@ -243,7 +241,6 @@ export interface MemoryEntry {
   userId: number;
   familyId?: number;
   subject?: string;
-  knowledgePointId?: number;
   type: MemoryEntryType;
   scope: MemoryScope | string;
   content: string;
@@ -623,7 +620,7 @@ export interface MirrorContextResponse {
 }
 
 
-// --- 绠＄悊鍛樻暟鎹簱鍋ュ悍 ---
+// --- Admin database health ---
 export interface DatabaseTableCount {
   tableName: string;
   label: string;
@@ -675,6 +672,33 @@ export interface FailedSkillRunSummary {
   updatedAt?: string;
 }
 
+export interface SuspiciousFamilySummary {
+  familyId: number;
+  familyName?: string;
+  memberCount: number;
+  ownerCount: number;
+}
+
+export interface SessionStorageHealthSummary {
+  sessionId: number;
+  familyId?: number;
+  messageCount: number;
+  archivedBeforeSeq: number;
+  archiveStatus?: string;
+  liveMessageRows: number;
+  archivedMessageRows: number;
+  totalMaterializedRows: number;
+}
+
+export interface SessionArchiveRangeSummary {
+  sessionId: number;
+  archiveId: number;
+  startSeq: number;
+  endSeq: number;
+  messageCount: number;
+  createdAt?: string;
+}
+
 export interface AdminUserSummary {
   id: number;
   username: string;
@@ -698,6 +722,9 @@ export interface DatabaseHealthResponse {
   tableCounts: DatabaseTableCount[];
   embeddingStatuses: EmbeddingStatusSummary[];
   families: FamilyDatabaseSummary[];
+  suspiciousFamilies?: SuspiciousFamilySummary[];
+  sessionStorageHealth?: SessionStorageHealthSummary[];
+  sessionArchiveRanges?: SessionArchiveRangeSummary[];
   recentFailedEmbeddings: FailedEmbeddingSummary[];
   recentFailedSkillRuns: FailedSkillRunSummary[];
 }
@@ -722,7 +749,7 @@ export interface MemoryRecallDiagnosticResponse {
   sources: RagRecallSource[];
 }
 
-// --- API鍝嶅簲 ---
+// --- API responses ---
 export interface ApiResult<T> {
   code: number;
   message: string;

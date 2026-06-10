@@ -213,14 +213,7 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
         WHERE user_id = #{userId}
           AND status = 'ACTIVE'
           AND (CAST(#{subject} AS VARCHAR) IS NULL OR subject IS NULL OR subject = CAST(#{subject} AS VARCHAR))
-          AND (CAST(#{knowledgePointId} AS BIGINT) IS NULL OR knowledge_point_id IS NULL OR knowledge_point_id = CAST(#{knowledgePointId} AS BIGINT))
         ORDER BY
-          CASE
-            WHEN CAST(#{knowledgePointId} AS BIGINT) IS NOT NULL
-              AND knowledge_point_id = CAST(#{knowledgePointId} AS BIGINT)
-            THEN 0
-            ELSE 1
-          END,
           importance DESC,
           updated_at DESC
         LIMIT #{limit}
@@ -228,7 +221,6 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
     List<MemoryEntry> recall(
             @Param("userId") Long userId,
             @Param("subject") String subject,
-            @Param("knowledgePointId") Long knowledgePointId,
             @Param("limit") int limit);
 
     @Select("""

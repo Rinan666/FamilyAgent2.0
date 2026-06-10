@@ -10,7 +10,6 @@ import java.util.Map;
 public class CreateMemoryEntryRequest {
     private Long familyId;
     private String subject;
-    private Long knowledgePointId;
     private String type;
     private String scope;
 

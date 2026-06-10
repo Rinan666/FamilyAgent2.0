@@ -17,7 +17,6 @@ public class MemoryEntry {
     private Long userId;
     private Long familyId;
     private String subject;
-    private Long knowledgePointId;
     private String type;
     private String scope;
     private String content;

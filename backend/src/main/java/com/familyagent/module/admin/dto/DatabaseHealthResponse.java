@@ -24,6 +24,9 @@ public class DatabaseHealthResponse {
     private List<DatabaseTableCount> tableCounts;
     private List<EmbeddingStatusSummary> embeddingStatuses;
     private List<FamilyDatabaseSummary> families;
+    private List<SuspiciousFamilySummary> suspiciousFamilies;
+    private List<SessionStorageHealthSummary> sessionStorageHealth;
+    private List<SessionArchiveRangeSummary> sessionArchiveRanges;
     private List<FailedEmbeddingSummary> recentFailedEmbeddings;
     private List<FailedSkillRunSummary> recentFailedSkillRuns;
 }

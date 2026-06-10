@@ -36,7 +36,6 @@ public class FamilyLifecycleService {
             new TableColumn("diary_entries", "family_id"),
             new TableColumn("memory_entries", "family_id"),
             new TableColumn("chat_sessions", "family_id"),
-            new TableColumn("family_knowledge", "family_id"),
             new TableColumn("mirror_agent_data", "primary_family_id")
     );
 
