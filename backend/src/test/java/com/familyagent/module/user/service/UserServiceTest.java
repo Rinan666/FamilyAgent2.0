@@ -18,6 +18,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import java.util.Map;
@@ -25,11 +27,13 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -76,6 +80,64 @@ class UserServiceTest {
         when(userRepository.countByUsername("existing")).thenReturn(1);
 
         assertThrows(BusinessException.class, () -> userService.register(req));
+        verify(userRepository, never()).insert(any());
+    }
+
+    @Test
+    void register_shouldTranslateInsertUsernameConflict() {
+        RegisterRequest req = new RegisterRequest();
+        req.setUsername("existing");
+        req.setPassword("pass123");
+        req.setInviteCode("ASDFGZXCVB");
+
+        when(userRepository.countByUsername("existing")).thenReturn(0);
+        mockInviteCode("ASDFGZXCVB", 20, 0);
+        when(inviteCodeRepository.incrementUsedCountByCode("ASDFGZXCVB")).thenReturn(1);
+        doThrow(new DataIntegrityViolationException("duplicate key value violates unique constraint users_username_key"))
+                .when(userRepository).insert(any(User.class));
+
+        BusinessException error = assertThrows(BusinessException.class, () -> userService.register(req));
+
+        assertEquals(ErrorCode.USERNAME_EXISTS.getCode(), error.getCode());
+    }
+
+    @Test
+    void register_shouldRethrowInsertDatabaseAccessFailure() {
+        RegisterRequest req = new RegisterRequest();
+        req.setUsername("existing");
+        req.setPassword("pass123");
+        req.setInviteCode("ASDFGZXCVB");
+
+        when(userRepository.countByUsername("existing")).thenReturn(0);
+        mockInviteCode("ASDFGZXCVB", 20, 0);
+        when(inviteCodeRepository.incrementUsedCountByCode("ASDFGZXCVB")).thenReturn(1);
+
+        DataAccessResourceFailureException failure = new DataAccessResourceFailureException("db offline");
+        doThrow(failure).when(userRepository).insert(any(User.class));
+
+        DataAccessResourceFailureException thrown = assertThrows(DataAccessResourceFailureException.class,
+                () -> userService.register(req));
+
+        assertSame(failure, thrown);
+    }
+
+    @Test
+    void register_shouldRethrowInviteCodeDatabaseAccessFailure() {
+        RegisterRequest req = new RegisterRequest();
+        req.setUsername("newbie");
+        req.setPassword("pass123");
+        req.setInviteCode("ASDFGZXCVB");
+
+        when(userRepository.countByUsername("newbie")).thenReturn(0);
+        mockInviteCode("ASDFGZXCVB", 20, 0);
+
+        DataAccessResourceFailureException failure = new DataAccessResourceFailureException("db offline");
+        when(inviteCodeRepository.incrementUsedCountByCode("ASDFGZXCVB")).thenThrow(failure);
+
+        DataAccessResourceFailureException thrown = assertThrows(DataAccessResourceFailureException.class,
+                () -> userService.register(req));
+
+        assertSame(failure, thrown);
         verify(userRepository, never()).insert(any());
     }
 

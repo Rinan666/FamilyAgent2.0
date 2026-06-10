@@ -17,6 +17,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +27,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 
 @Slf4j
@@ -65,7 +68,22 @@ public class UserService {
                 "inviteSource", inviteCode.getSource() == null ? "unknown" : inviteCode.getSource()
         ));
 
-        userRepository.insert(user);
+        try {
+            userRepository.insert(user);
+        } catch (DataIntegrityViolationException e) {
+            if (isUsernameConflict(e)) {
+                log.warn("Registration username conflict: username={}", request.getUsername(), e);
+                throw new BusinessException(ErrorCode.USERNAME_EXISTS);
+            }
+            log.error("Registration persistence failed: username={}, inviteCode={}",
+                    request.getUsername(), inviteCode.getCode(), e);
+            throw new BusinessException(ErrorCode.DATA_PERSIST_FAILED);
+        } catch (DataAccessException e) {
+            log.error("Registration database access failed: username={}, inviteCode={}",
+                    request.getUsername(), inviteCode.getCode(), e);
+            throw e;
+        }
+
         log.info("User registered: username={}, id={}", user.getUsername(), user.getId());
         return user;
     }
@@ -269,5 +287,21 @@ public class UserService {
             throw new BusinessException(ErrorCode.INVITE_CODE_INVALID);
         }
         throw new BusinessException(ErrorCode.INVITE_CODE_EXHAUSTED);
+    }
+
+    private boolean isUsernameConflict(Throwable error) {
+        Throwable current = error;
+        while (current != null) {
+            String message = current.getMessage();
+            if (message != null) {
+                String normalized = message.toLowerCase(Locale.ROOT);
+                if (normalized.contains("users_username_key")
+                        || (normalized.contains("users") && normalized.contains("username"))) {
+                    return true;
+                }
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 }
