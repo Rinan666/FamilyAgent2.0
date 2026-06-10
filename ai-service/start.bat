@@ -19,7 +19,7 @@ if not exist "%VENV_PYTHON%" (
   exit /b 1
 )
 
-if "%AI_SERVICE_PORT%"=="" set AI_SERVICE_PORT=8090
+if "%AI_SERVICE_PORT%"=="" set AI_SERVICE_PORT=8000
 "%VENV_PYTHON%" -m ruff --version >nul 2>nul
 if errorlevel 1 (
   echo [ERROR] Ruff is not installed in the project virtual environment.

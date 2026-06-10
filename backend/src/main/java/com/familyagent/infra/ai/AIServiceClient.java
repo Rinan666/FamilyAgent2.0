@@ -40,7 +40,7 @@ public class AIServiceClient {
     private final String internalToken;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public AIServiceClient(@Value("${ai-service.base-url:http://localhost:8090}") String baseUrl,
+    public AIServiceClient(@Value("${ai-service.base-url:http://localhost:8000}") String baseUrl,
                            @Value("${ai-service.timeout:60}") int timeout,
                            @Value("${ai-service.internal-token:}") String internalToken) {
         this.baseUrl = baseUrl;

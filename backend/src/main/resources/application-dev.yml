@@ -44,7 +44,7 @@ logging:
     org.springframework.web: INFO
 
 ai-service:
-  base-url: ${AI_SERVICE_URL:http://localhost:8090}
+  base-url: ${AI_SERVICE_URL:http://localhost:8000}
   timeout: ${AI_SERVICE_TIMEOUT:60}
   internal-token: ${AI_INTERNAL_SERVICE_TOKEN:familyagent-dev-internal-token}
 

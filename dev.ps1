@@ -315,8 +315,8 @@ function Invoke-StartAll {
     }
 
     Load-ProjectEnv $ProjectEnvFile
-    $AiServicePort = [int](Get-ConfigValue "AI_SERVICE_PORT" "8090")
-    $BackendPort = [int](Get-ConfigValue "SERVER_PORT" "8180")
+    $AiServicePort = [int](Get-ConfigValue "AI_SERVICE_PORT" "8000")
+    $BackendPort = [int](Get-ConfigValue "SERVER_PORT" "8080")
     $DbPort = [int](Get-ConfigValue "DB_PORT" "5432")
     $StartTunnel = Test-Truthy (Get-ConfigValue "START_TUNNEL" "false") $false
     $TunnelPublicHost = Get-ConfigValue "TUNNEL_PUBLIC_HOST" ""
@@ -404,8 +404,8 @@ function Invoke-StartAll {
 
 function Invoke-StopAll {
     Load-ProjectEnv $ProjectEnvFile
-    $AiServicePort = [int](Get-ConfigValue "AI_SERVICE_PORT" "8090")
-    $BackendPort = [int](Get-ConfigValue "SERVER_PORT" "8180")
+    $AiServicePort = [int](Get-ConfigValue "AI_SERVICE_PORT" "8000")
+    $BackendPort = [int](Get-ConfigValue "SERVER_PORT" "8080")
     $Services = @(
         @{ Name = "ai"; Title = "*AI-Service*"; Port = $AiServicePort; Label = "AI-Service" },
         @{ Name = "backend"; Title = "*Backend*"; Port = $BackendPort; Label = "Backend" },
