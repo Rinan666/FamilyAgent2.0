@@ -8,6 +8,8 @@ PID_FILE="$ROOT_DIR/.service-pids.txt"
 RUNTIME_PID_FILE="$ROOT_DIR/.codex-runtime-pids.txt"
 INFRA_ENV_FILE="$ROOT_DIR/.env.infra.local"
 INFRA_ENV_EXAMPLE_FILE="$ROOT_DIR/.env.infra.example"
+TUNNEL_ENV_FILE="$ROOT_DIR/.env.tunnel.local"
+TUNNEL_EXAMPLE_FILE="$ROOT_DIR/.env.tunnel.example"
 AI_ENV_FILE="$ROOT_DIR/ai-service/.env"
 FRONTEND_PORT=3000
 BACKEND_PORT=8180
@@ -152,22 +154,6 @@ start_background_service() {
   echo "        Logs: $out_log"
 }
 
-start_cloudflare_tunnel() {
-  local config_path="${HOME}/.cloudflared/config.yml"
-  if ! command -v cloudflared >/dev/null 2>&1 || [[ ! -f "$config_path" ]]; then
-    echo "        [SKIP] Cloudflare Tunnel not configured"
-    return
-  fi
-
-  pkill -f "cloudflared.*tunnel" 2>/dev/null || true
-  local out_log="$LOG_DIR/cloudflared-named.out.log"
-  local err_log="$LOG_DIR/cloudflared-named.err.log"
-  cloudflared tunnel --config "$config_path" run >"$out_log" 2>"$err_log" &
-  local pid=$!
-  record_named_pid "cloudflared-named" "$pid"
-  echo "        Cloudflare Tunnel started (PID $pid)"
-}
-
 print_header
 
 print_step 0 "Checking prerequisites..."
@@ -209,7 +195,10 @@ echo "        All checks passed"
 
 load_env_file "$INFRA_ENV_FILE"
 load_env_file "$AI_ENV_FILE"
+load_env_file "$TUNNEL_ENV_FILE"
 AI_SERVICE_PORT="${AI_SERVICE_PORT:-$AI_SERVICE_PORT_DEFAULT}"
+START_TUNNEL_VALUE="${START_TUNNEL:-false}"
+TUNNEL_PUBLIC_HOST_VALUE="${TUNNEL_PUBLIC_HOST:-}"
 
 print_step 1 "Starting infrastructure..."
 docker compose --env-file "$INFRA_ENV_FILE" -f "$ROOT_DIR/docker-compose.yml" up -d
@@ -252,13 +241,23 @@ start_background_service \
   npm run start -- --hostname 0.0.0.0 --port "$FRONTEND_PORT"
 
 print_step 5 "Starting Cloudflare Tunnel..."
-start_cloudflare_tunnel
+if [[ "${START_TUNNEL_VALUE,,}" == "true" ]]; then
+  bash "$ROOT_DIR/tunnel.sh" up
+else
+  echo "        [SKIP] Tunnel disabled (set START_TUNNEL=true in .env.tunnel.local to auto-start)"
+  if [[ ! -f "$TUNNEL_ENV_FILE" && -f "$TUNNEL_EXAMPLE_FILE" ]]; then
+    echo "        Copy $TUNNEL_EXAMPLE_FILE to .env.tunnel.local to configure Tunnel defaults."
+  fi
+fi
 
 echo
 echo "============================================"
 echo "   All services launching!"
 echo
 echo "   Frontend:  http://localhost:$FRONTEND_PORT"
+if [[ -n "$TUNNEL_PUBLIC_HOST_VALUE" ]]; then
+  echo "   Public:    https://$TUNNEL_PUBLIC_HOST_VALUE"
+fi
 echo "   Backend:   http://localhost:$BACKEND_PORT"
 echo "   AI API:    http://localhost:$AI_SERVICE_PORT/docs"
 echo "   MinIO:     http://localhost:9001"

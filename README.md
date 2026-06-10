@@ -1,5 +1,33 @@
 # FamilyAgent
 
+## Tunnel
+
+统一隧道能力现已独立于 `start-all` / `stop-all`，默认只支持 Cloudflare named tunnel，并统一单入口回源到 Frontend `:3000`。
+
+Windows:
+
+```text
+tunnel.bat up
+tunnel.bat down
+tunnel.bat status
+tunnel.bat logs
+```
+
+Linux / 云服务器:
+
+```bash
+./tunnel.sh up
+./tunnel.sh down
+./tunnel.sh status
+./tunnel.sh logs
+```
+
+配置方式：
+- 复制 `/.env.tunnel.example` 为 `/.env.tunnel.local`
+- 使用统一配置键：`TUNNEL_ENABLED`、`TUNNEL_PROVIDER`、`TUNNEL_MODE`、`TUNNEL_CONFIG_PATH`、`TUNNEL_PUBLIC_HOST`、`TUNNEL_TARGET_URL`
+- 若希望 `start-all` 自动带起隧道，设置 `START_TUNNEL=true`
+- 浏览器统一走前端入口访问 `/api/*` 与 `/ai-proxy/*`，不再保留浏览器直连 AI 公网域名配置
+
 面向有传承意识家庭的家族记忆与软资产 AI 系统。
 
 FamilyAgent 不把题库、拍照答疑或作业批改作为主竞争点，而是帮助家庭记录、整理、授权共享并活化家族日记、长辈经验、家风价值观、成员理解和下一代成长观察。

@@ -112,13 +112,14 @@ AI_SERVICE_PORT="${AI_SERVICE_PORT:-$AI_SERVICE_PORT_DEFAULT}"
 
 echo "Stopping app services..."
 stop_pids_from_file "$PID_FILE" "service"
+if [[ -f "$ROOT_DIR/tunnel.sh" ]]; then
+  bash "$ROOT_DIR/tunnel.sh" down >/dev/null || true
+fi
 stop_pids_from_file "$RUNTIME_PID_FILE" "runtime"
 
 stop_service_on_port "$FRONTEND_PORT" "frontend"
 stop_service_on_port "$BACKEND_PORT" "backend"
 stop_service_on_port "$AI_SERVICE_PORT" "ai-service"
-
-pkill -f "cloudflared.*tunnel" 2>/dev/null || true
 
 rm -f "$PID_FILE" "$RUNTIME_PID_FILE"
 
