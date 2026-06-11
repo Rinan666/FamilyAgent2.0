@@ -280,7 +280,7 @@ public class GrowthGuardService {
 
     private void ensureCanViewRecord(GrowthGuardRecord record, Long viewerUserId) {
         if (viewerUserId.equals(record.getCreatedBy()) || viewerUserId.equals(record.getTargetUserId())
-                || "FAMILY_VISIBLE".equalsIgnoreCase(record.getVisibility())) {
+                || MemoryScope.FAMILY_VISIBLE.name().equalsIgnoreCase(record.getVisibility())) {
             return;
         }
         if (record.getTargetUserId() != null && careAuthorizationService.canViewCareScope(

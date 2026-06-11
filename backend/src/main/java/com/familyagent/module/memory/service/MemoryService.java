@@ -142,7 +142,7 @@ public class MemoryService {
         metadata.put("mergedReason", "主题相近或解决同一类问题，自动合并为更凝练的家族智慧。");
         metadata.put("mergedSourceCount", intValue(metadata.get("mergedSourceCount")) + 1);
         metadata.put("lastMergedSource", Map.of(
-                "source", String.valueOf(incomingMetadata.getOrDefault("source", "HERITAGE_ENTRY")),
+                "source", String.valueOf(incomingMetadata.getOrDefault("source", HeritageSource.HERITAGE_ENTRY.name())),
                 "scenario", String.valueOf(incomingMetadata.getOrDefault("scenario", "")),
                 "preview", request.getContent().trim().substring(0, Math.min(80, request.getContent().trim().length()))));
 

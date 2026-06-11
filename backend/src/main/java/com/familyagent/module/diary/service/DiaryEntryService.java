@@ -426,7 +426,7 @@ public class DiaryEntryService {
     private static boolean isArchived(DiaryEntry entry) {
         Object metadata = entry.getMetadata();
         if (metadata instanceof Map<?, ?> map) {
-            return "ARCHIVED".equalsIgnoreCase(String.valueOf(map.get("status")));
+            return EntityStatus.ARCHIVED.name().equalsIgnoreCase(String.valueOf(map.get("status")));
         }
         return false;
     }

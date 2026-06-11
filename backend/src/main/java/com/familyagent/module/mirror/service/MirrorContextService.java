@@ -1,5 +1,6 @@
 package com.familyagent.module.mirror.service;
 
+import com.familyagent.common.constant.MemoryType;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
@@ -593,7 +594,7 @@ public class MirrorContextService {
             return true;
         }
         String type = memory.getType() == null ? "" : memory.getType();
-        return "ELDER_ADVICE".equals(type) || "VALUE".equals(type) || "FAMILY_STORY".equals(type);
+        return MemoryType.ELDER_ADVICE.name().equals(type) || MemoryType.VALUE.name().equals(type) || MemoryType.FAMILY_STORY.name().equals(type);
     }
 
     private static TemporalKind temporalKind(MemoryEntry memory) {

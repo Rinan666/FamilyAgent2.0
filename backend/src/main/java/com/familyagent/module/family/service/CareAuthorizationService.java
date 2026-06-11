@@ -1,5 +1,6 @@
 package com.familyagent.module.family.service;
 
+import com.familyagent.common.constant.CareAuthorizationStatus;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
@@ -73,7 +74,7 @@ public class CareAuthorizationService {
             authorization.setCreatedBy(viewerUserId);
             authorization.setCreatedAt(now);
         }
-        authorization.setStatus(active ? "ACTIVE" : "REVOKED");
+        authorization.setStatus(active ? CareAuthorizationStatus.ACTIVE.name() : CareAuthorizationStatus.REVOKED.name());
         authorization.setExpiresAt(request == null ? null : request.getExpiresAt());
         authorization.setUpdatedBy(viewerUserId);
         authorization.setUpdatedAt(now);

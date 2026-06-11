@@ -261,7 +261,7 @@ public class UserService {
 
         String normalizedCode = rawInviteCode.trim().toUpperCase();
         InviteCode inviteCode = inviteCodeRepository.findByCode(normalizedCode);
-        if (inviteCode == null || !"ACTIVE".equals(inviteCode.getStatus())) {
+        if (inviteCode == null || !EntityStatus.ACTIVE.name().equals(inviteCode.getStatus())) {
             throw new BusinessException(ErrorCode.INVITE_CODE_INVALID);
         }
         if (inviteCode.getExpiresAt() != null && !inviteCode.getExpiresAt().isAfter(LocalDateTime.now())) {
@@ -281,7 +281,7 @@ public class UserService {
         }
 
         InviteCode latest = inviteCodeRepository.findByCode(normalizedCode);
-        if (latest == null || !"ACTIVE".equals(latest.getStatus())) {
+        if (latest == null || !EntityStatus.ACTIVE.name().equals(latest.getStatus())) {
             throw new BusinessException(ErrorCode.INVITE_CODE_INVALID);
         }
         if (latest.getExpiresAt() != null && !latest.getExpiresAt().isAfter(LocalDateTime.now())) {

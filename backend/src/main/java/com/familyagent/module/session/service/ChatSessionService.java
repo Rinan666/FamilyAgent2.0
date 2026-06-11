@@ -1,5 +1,7 @@
 package com.familyagent.module.session.service;
 
+import com.familyagent.common.constant.EntityStatus;
+import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
@@ -37,7 +39,7 @@ import java.util.Objects;
 @RequiredArgsConstructor
 public class ChatSessionService {
 
-    private static final String STATUS_ACTIVE = "ACTIVE";
+    private static final String STATUS_ACTIVE = EntityStatus.ACTIVE.name();
     private static final String STATUS_ENDED = "ENDED";
     private static final int DEFAULT_SESSION_LIMIT = 20;
     private static final int MAX_SESSION_LIMIT = 100;
@@ -62,7 +64,7 @@ public class ChatSessionService {
             session.setStatus(STATUS_ACTIVE);
         }
         if (session.getVisibility() == null || session.getVisibility().isBlank()) {
-            session.setVisibility("PRIVATE");
+            session.setVisibility(MemoryScope.DEFAULT_SESSION.name());
         }
         if (session.getSource() == null || session.getSource().isBlank()) {
             session.setSource("FAMILY_AGENT");

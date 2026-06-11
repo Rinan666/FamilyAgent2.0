@@ -2,6 +2,9 @@ package com.familyagent.module.memorylibrary.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.familyagent.common.constant.EntityStatus;
+import com.familyagent.common.constant.FollowUpStatus;
+import com.familyagent.common.constant.MemoryType;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.response.PageResult;
@@ -260,7 +263,7 @@ public class MemoryLibraryService {
         secondaryMetadata.put("mergedIntoItemId", "memory-" + primary.getId());
         secondaryMetadata.put("mergedIntoSummary", previewText(primary.getSummary(), 120));
         secondary.setMetadata(secondaryMetadata);
-        secondary.setStatus("ARCHIVED");
+        secondary.setStatus(EntityStatus.ARCHIVED.name());
         memoryEntryRepository.updateById(secondary);
     }
 
@@ -640,10 +643,10 @@ public class MemoryLibraryService {
 
     private MemoryEntry requireActiveFamilyMemory(Long familyId, Long memoryId) {
         MemoryEntry entry = memoryEntryRepository.selectById(memoryId);
-        if (entry == null || !familyId.equals(entry.getFamilyId()) || !"ACTIVE".equals(entry.getStatus())) {
+        if (entry == null || !familyId.equals(entry.getFamilyId()) || !EntityStatus.ACTIVE.name().equals(entry.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
-        if (!Set.of("FAMILY_STORY", "ELDER_ADVICE", "HEALTH_REMINDER", "GROWTH_RISK", "VALUE", "PLAN").contains(entry.getType())) {
+        if (!MemoryType.names().contains(entry.getType())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "当前仅支持合并经验沉淀类记忆");
         }
         return entry;
@@ -736,7 +739,7 @@ public class MemoryLibraryService {
                 reasons.add(staleVotes + " 人认为这条观察可能过时");
             }
             String followUpStatus = asText(metadata.get("followUpStatus"));
-            if ("IMPROVED".equalsIgnoreCase(followUpStatus) || "ARCHIVED".equalsIgnoreCase(followUpStatus)) {
+            if (FollowUpStatus.IMPROVED.name().equalsIgnoreCase(followUpStatus) || FollowUpStatus.ARCHIVED.name().equalsIgnoreCase(followUpStatus)) {
                 score += 18;
                 reasons.add("跟进状态已结束");
             }
@@ -802,7 +805,7 @@ public class MemoryLibraryService {
         }
         ensureCreatorOrFamilyOwner(familyId, entry.getUserId(), "只能归档自己的日记，或由家族创建者归档");
         Map<String, Object> metadata = mutableMap(entry.getMetadata());
-        metadata.put("status", "ARCHIVED");
+        metadata.put("status", EntityStatus.ARCHIVED.name());
         metadata.put("archivedBy", CurrentUserGuard.currentUserId());
         metadata.put("archivedAt", LocalDateTime.now().toString());
         metadata.put("archiveSource", "MEMORY_LIBRARY_MAINTENANCE");
@@ -817,7 +820,7 @@ public class MemoryLibraryService {
         }
         ensureCreatorOrFamilyOwner(familyId, entry.getUserId(), "只能恢复自己的日记，或由家族创建者恢复");
         Map<String, Object> metadata = mutableMap(entry.getMetadata());
-        metadata.put("status", "ACTIVE");
+        metadata.put("status", EntityStatus.ACTIVE.name());
         metadata.put("restoredBy", CurrentUserGuard.currentUserId());
         metadata.put("restoredAt", LocalDateTime.now().toString());
         metadata.put("restoreSource", "MEMORY_LIBRARY_ARCHIVE_BOX");
@@ -837,7 +840,7 @@ public class MemoryLibraryService {
 
     private void archiveMemory(Long familyId, Long memoryId) {
         MemoryEntry entry = memoryEntryRepository.selectById(memoryId);
-        if (entry == null || !familyId.equals(entry.getFamilyId()) || !"ACTIVE".equals(entry.getStatus())) {
+        if (entry == null || !familyId.equals(entry.getFamilyId()) || !EntityStatus.ACTIVE.name().equals(entry.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         ensureCreatorOrFamilyOwner(familyId, entry.getUserId(), "只能归档自己的经验，或由家族创建者归档");
@@ -846,13 +849,13 @@ public class MemoryLibraryService {
         metadata.put("archivedAt", LocalDateTime.now().toString());
         metadata.put("archiveSource", "MEMORY_LIBRARY_MAINTENANCE");
         entry.setMetadata(metadata);
-        entry.setStatus("ARCHIVED");
+        entry.setStatus(EntityStatus.ARCHIVED.name());
         memoryEntryRepository.updateById(entry);
     }
 
     private void restoreMemory(Long familyId, Long memoryId) {
         MemoryEntry entry = memoryEntryRepository.selectById(memoryId);
-        if (entry == null || !familyId.equals(entry.getFamilyId()) || !"ARCHIVED".equals(entry.getStatus())) {
+        if (entry == null || !familyId.equals(entry.getFamilyId()) || !EntityStatus.ARCHIVED.name().equals(entry.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         ensureCreatorOrFamilyOwner(familyId, entry.getUserId(), "只能恢复自己的经验，或由家族创建者恢复");
@@ -861,13 +864,13 @@ public class MemoryLibraryService {
         metadata.put("restoredAt", LocalDateTime.now().toString());
         metadata.put("restoreSource", "MEMORY_LIBRARY_ARCHIVE_BOX");
         entry.setMetadata(metadata);
-        entry.setStatus("ACTIVE");
+        entry.setStatus(EntityStatus.ACTIVE.name());
         memoryEntryRepository.updateById(entry);
     }
 
     private void deleteArchivedMemory(Long familyId, Long memoryId) {
         MemoryEntry entry = memoryEntryRepository.selectById(memoryId);
-        if (entry == null || !familyId.equals(entry.getFamilyId()) || !"ARCHIVED".equals(entry.getStatus())) {
+        if (entry == null || !familyId.equals(entry.getFamilyId()) || !EntityStatus.ARCHIVED.name().equals(entry.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         ensureCreatorOrFamilyOwner(familyId, entry.getUserId(), "只能删除自己归档的经验，或由家族创建者删除");
@@ -877,7 +880,7 @@ public class MemoryLibraryService {
 
     private void archiveGrowthRecord(Long familyId, Long recordId) {
         GrowthGuardRecord record = growthRecordRepository.selectById(recordId);
-        if (record == null || !familyId.equals(record.getFamilyId()) || !"ACTIVE".equals(record.getStatus())) {
+        if (record == null || !familyId.equals(record.getFamilyId()) || !EntityStatus.ACTIVE.name().equals(record.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         growthGuardService.archiveRecord(recordId);
@@ -885,17 +888,17 @@ public class MemoryLibraryService {
 
     private void restoreGrowthRecord(Long familyId, Long recordId) {
         GrowthGuardRecord record = growthRecordRepository.selectById(recordId);
-        if (record == null || !familyId.equals(record.getFamilyId()) || !"ARCHIVED".equals(record.getStatus())) {
+        if (record == null || !familyId.equals(record.getFamilyId()) || !EntityStatus.ARCHIVED.name().equals(record.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         ensureCreatorOrFamilyOwner(familyId, record.getCreatedBy(), "只能恢复自己创建的观察，或由家族创建者恢复");
-        record.setStatus("ACTIVE");
+        record.setStatus(EntityStatus.ACTIVE.name());
         growthRecordRepository.updateById(record);
     }
 
     private void deleteArchivedGrowthRecord(Long familyId, Long recordId) {
         GrowthGuardRecord record = growthRecordRepository.selectById(recordId);
-        if (record == null || !familyId.equals(record.getFamilyId()) || !"ARCHIVED".equals(record.getStatus())) {
+        if (record == null || !familyId.equals(record.getFamilyId()) || !EntityStatus.ARCHIVED.name().equals(record.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         ensureCreatorOrFamilyOwner(familyId, record.getCreatedBy(), "只能删除自己归档的观察，或由家族创建者删除");
@@ -905,7 +908,7 @@ public class MemoryLibraryService {
 
     private void archiveGrowthReport(Long familyId, Long reportId) {
         GrowthGuardReport report = growthReportRepository.selectById(reportId);
-        if (report == null || !"ACTIVE".equals(report.getStatus()) || !familyId.equals(report.getFamilyId())) {
+        if (report == null || !EntityStatus.ACTIVE.name().equals(report.getStatus()) || !familyId.equals(report.getFamilyId())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         Long viewerUserId = CurrentUserGuard.currentUserId();
@@ -920,23 +923,23 @@ public class MemoryLibraryService {
         if (!selfCreated && !familyOwner) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "只能归档自己创建的摘要，或由家族创建者归档");
         }
-        report.setStatus("ARCHIVED");
+        report.setStatus(EntityStatus.ARCHIVED.name());
         growthReportRepository.updateById(report);
     }
 
     private void restoreGrowthReport(Long familyId, Long reportId) {
         GrowthGuardReport report = growthReportRepository.selectById(reportId);
-        if (report == null || !"ARCHIVED".equals(report.getStatus()) || !familyId.equals(report.getFamilyId())) {
+        if (report == null || !EntityStatus.ARCHIVED.name().equals(report.getStatus()) || !familyId.equals(report.getFamilyId())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         ensureCreatorOrFamilyOwner(familyId, report.getCreatedBy(), "只能恢复自己创建的摘要，或由家族创建者恢复");
-        report.setStatus("ACTIVE");
+        report.setStatus(EntityStatus.ACTIVE.name());
         growthReportRepository.updateById(report);
     }
 
     private void deleteArchivedGrowthReport(Long familyId, Long reportId) {
         GrowthGuardReport report = growthReportRepository.selectById(reportId);
-        if (report == null || !"ARCHIVED".equals(report.getStatus()) || !familyId.equals(report.getFamilyId())) {
+        if (report == null || !EntityStatus.ARCHIVED.name().equals(report.getStatus()) || !familyId.equals(report.getFamilyId())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         ensureCreatorOrFamilyOwner(familyId, report.getCreatedBy(), "只能删除自己归档的摘要，或由家族创建者删除");
@@ -966,7 +969,7 @@ public class MemoryLibraryService {
 
     private static boolean isArchivedMetadata(Object metadata) {
         if (metadata instanceof Map<?, ?> map) {
-            return "ARCHIVED".equalsIgnoreCase(String.valueOf(map.get("status")));
+            return EntityStatus.ARCHIVED.name().equalsIgnoreCase(String.valueOf(map.get("status")));
         }
         return false;
     }
