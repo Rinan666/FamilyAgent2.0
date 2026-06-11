@@ -10,6 +10,7 @@ import io.minio.GetObjectArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -20,24 +21,14 @@ import java.util.List;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class ChatSessionArchiveStorageService {
 
     private final MinioClient minioClient;
     private final ObjectMapper objectMapper;
-    private final String bucketName;
 
-    public ChatSessionArchiveStorageService(@Value("${minio.endpoint}") String endpoint,
-                                            @Value("${minio.access-key}") String accessKey,
-                                            @Value("${minio.secret-key}") String secretKey,
-                                            @Value("${minio.bucket-name}") String bucketName,
-                                            ObjectMapper objectMapper) {
-        this.minioClient = MinioClient.builder()
-                .endpoint(normalizeEndpoint(endpoint))
-                .credentials(accessKey, secretKey)
-                .build();
-        this.objectMapper = objectMapper;
-        this.bucketName = bucketName;
-    }
+    @Value("${minio.bucket-name}")
+    private String bucketName;
 
     public String writeTranscript(Long sessionId, int startSeq, int endSeq, List<ChatSessionMessage> messages) {
         ensureBucket();
@@ -81,19 +72,5 @@ public class ChatSessionArchiveStorageService {
         } catch (Exception error) {
             throw new BusinessException(ErrorCode.OSS_UPLOAD_FAILED, "Failed to prepare MinIO bucket: " + error.getMessage());
         }
-    }
-
-    private String normalizeEndpoint(String endpoint) {
-        if (endpoint == null || endpoint.isBlank()) {
-            throw new IllegalArgumentException("MinIO endpoint must not be blank");
-        }
-        String normalized = endpoint.trim();
-        if (!normalized.contains("://")) {
-            normalized = "http://" + normalized;
-        }
-        while (normalized.endsWith("/")) {
-            normalized = normalized.substring(0, normalized.length() - 1);
-        }
-        return normalized;
     }
 }

@@ -16,14 +16,18 @@ import com.familyagent.module.admin.dto.SuspiciousFamilySummary;
 import com.familyagent.module.family.dto.FamilyMemberVO;
 import com.familyagent.module.family.repository.FamilyMemberRepository;
 import com.familyagent.module.family.repository.FamilyRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-final class DatabaseHealthQuerySupport {
+@Component
+@RequiredArgsConstructor
+class DatabaseHealthQuerySupport {
 
     private static final int DEFAULT_PAGE_SIZE = 10;
     private static final int MAX_PAGE_SIZE = 50;
@@ -51,16 +55,6 @@ final class DatabaseHealthQuerySupport {
     private final JdbcTemplate jdbcTemplate;
     private final FamilyRepository familyRepository;
     private final FamilyMemberRepository familyMemberRepository;
-
-    DatabaseHealthQuerySupport(PlatformAdminAccessSupport adminAccessSupport,
-                               JdbcTemplate jdbcTemplate,
-                               FamilyRepository familyRepository,
-                               FamilyMemberRepository familyMemberRepository) {
-        this.adminAccessSupport = adminAccessSupport;
-        this.jdbcTemplate = jdbcTemplate;
-        this.familyRepository = familyRepository;
-        this.familyMemberRepository = familyMemberRepository;
-    }
 
     List<FamilyMemberVO> listFamilyMembers(Long familyId) {
         adminAccessSupport.requirePlatformAdmin();

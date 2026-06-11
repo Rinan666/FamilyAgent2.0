@@ -24,7 +24,6 @@ import java.util.HexFormat;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 @Service
@@ -40,6 +39,7 @@ public class MemoryEmbeddingService {
     private final MemoryEntryRepository memoryRepository;
     private final GrowthGuardRecordRepository growthRecordRepository;
     private final FamilyService familyService;
+    private final EmbeddingAsyncProcessor asyncProcessor;
 
     public RebuildEmbeddingResponse rebuildFamilyEmbeddings(Long familyId, int limit) {
         familyService.checkMembership(familyId);
@@ -159,12 +159,12 @@ public class MemoryEmbeddingService {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    CompletableFuture.runAsync(task);
+                    asyncProcessor.execute(task);
                 }
             });
             return;
         }
-        CompletableFuture.runAsync(task);
+        asyncProcessor.execute(task);
     }
 
     private void index(String sourceType, Long sourceId, Long familyId, Long userId, String text) {

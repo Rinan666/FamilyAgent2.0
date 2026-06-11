@@ -34,6 +34,10 @@ class MemoryEmbeddingServiceTest {
     @Mock private GrowthGuardRecordRepository growthRecordRepository;
     @Mock private FamilyService familyService;
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    // Use a real EmbeddingAsyncProcessor — in test context @Async is a no-op so tasks run synchronously.
+    private final EmbeddingAsyncProcessor asyncProcessor = new EmbeddingAsyncProcessor();
+
     @Test
     void upsertPending_shouldSupersedeOlderPendingEmbeddingsForSameSource() throws Exception {
         when(jdbcTemplate.queryForObject(any(String.class), eq(Long.class), anyLong(), anyLong(), any(), anyLong(), any()))
@@ -42,11 +46,12 @@ class MemoryEmbeddingServiceTest {
         MemoryEmbeddingService service = new MemoryEmbeddingService(
                 aiServiceClient,
                 jdbcTemplate,
-                new ObjectMapper(),
+                objectMapper,
                 diaryRepository,
                 memoryRepository,
                 growthRecordRepository,
-                familyService);
+                familyService,
+                asyncProcessor);
 
         Method upsertPending = MemoryEmbeddingService.class.getDeclaredMethod(
                 "upsertPending", String.class, Long.class, Long.class, Long.class, String.class);
@@ -82,11 +87,12 @@ class MemoryEmbeddingServiceTest {
         MemoryEmbeddingService service = new MemoryEmbeddingService(
                 aiServiceClient,
                 jdbcTemplate,
-                new ObjectMapper(),
+                objectMapper,
                 diaryRepository,
                 memoryRepository,
                 growthRecordRepository,
-                familyService);
+                familyService,
+                asyncProcessor);
 
         Method index = MemoryEmbeddingService.class.getDeclaredMethod(
                 "index", String.class, Long.class, Long.class, Long.class, String.class);

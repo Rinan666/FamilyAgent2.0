@@ -12,6 +12,7 @@ import com.familyagent.module.session.entity.ChatSessionMessage;
 import com.familyagent.module.session.repository.ChatSessionArchiveRepository;
 import com.familyagent.module.session.repository.ChatSessionMessageRepository;
 import com.familyagent.module.session.repository.ChatSessionRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -47,6 +48,20 @@ class ChatSessionServiceTest {
     @Mock private ChatSessionArchiveStorageService archiveStorageService;
     @Mock private ChatSessionArchiveSummaryService archiveSummaryService;
 
+    private ChatSessionService service;
+
+    @BeforeEach
+    void setUp() {
+        ObjectMapper objectMapper = new ObjectMapper();
+        ChatSessionMessagePersistenceSupport messagePersistenceSupport =
+                new ChatSessionMessagePersistenceSupport(sessionRepository, messageRepository, objectMapper);
+        ChatSessionArchiveSupport archiveSupport =
+                new ChatSessionArchiveSupport(sessionRepository, messageRepository, archiveRepository,
+                        archiveStorageService, archiveSummaryService);
+        service = new ChatSessionService(sessionRepository, messageRepository, archiveRepository,
+                familyService, messagePersistenceSupport, archiveSupport);
+    }
+
     @Test
     void endSession_shouldBeIdempotentAndRepairMissingEndedAt() {
         ChatSession ended = sessionHeader(100L, 10L, "ENDED");
@@ -56,8 +71,6 @@ class ChatSessionServiceTest {
         when(sessionRepository.endActiveSession(eq(100L), eq(null), any(LocalDateTime.class))).thenReturn(0);
         when(sessionRepository.selectById(100L)).thenReturn(ended);
         when(archiveRepository.findBySessionId(100L)).thenReturn(List.of());
-
-        ChatSessionService service = service();
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
@@ -91,8 +104,6 @@ class ChatSessionServiceTest {
         when(messageRepository.findBySessionId(100L)).thenReturn(List.of(first, second));
         when(archiveRepository.findBySessionId(100L)).thenReturn(List.of());
 
-        ChatSessionService service = service();
-
         ChatSessionMessagePayload existing = payload("m1", "user", "hello");
         ChatSessionMessagePayload appended = payload("m2", "assistant", "world");
 
@@ -124,8 +135,6 @@ class ChatSessionServiceTest {
         when(sessionRepository.findHeaderById(100L)).thenReturn(session);
         when(messageRepository.findPageBeforeSeq(100L, 7L, 3)).thenReturn(liveMessages);
 
-        ChatSessionService service = service();
-
         ChatSessionMessagePage page = withUser(10L, () -> service.getSessionMessages(100L, null, 3));
 
         assertEquals(List.of(4L, 5L, 6L), page.getItems().stream().map(item -> item.getSeq()).toList());
@@ -148,8 +157,6 @@ class ChatSessionServiceTest {
                 message(2, "assistant", "a2"),
                 message(3, "user", "a3"),
                 message(4, "assistant", "a4")));
-
-        ChatSessionService service = service();
 
         ChatSessionMessagePage page = withUser(10L, () -> service.getSessionMessages(100L, 5L, 4));
 
@@ -177,8 +184,6 @@ class ChatSessionServiceTest {
                 message(4, "assistant", "m4"),
                 message(5, "user", "m5")));
 
-        ChatSessionService service = service();
-
         ChatSessionMessagePage page = withUser(10L, () -> service.getSessionMessages(100L, null, 5));
 
         assertEquals(List.of(4L, 5L, 6L, 7L, 8L), page.getItems().stream().map(item -> item.getSeq()).toList());
@@ -202,25 +207,11 @@ class ChatSessionServiceTest {
                 message(3, "user", "m3"),
                 message(4, "assistant", "m4")));
 
-        ChatSessionService service = service();
-
         ChatSessionMessagePage page = withUser(10L, () -> service.getSessionMessages(100L, 6L, 3));
 
         assertEquals(List.of(3L, 4L, 5L), page.getItems().stream().map(item -> item.getSeq()).toList());
         assertTrue(page.isHasMore());
         assertEquals(3L, page.getNextBeforeSeq());
-    }
-
-    private ChatSessionService service() {
-        return new ChatSessionService(
-                sessionRepository,
-                messageRepository,
-                archiveRepository,
-                familyService,
-                new ObjectMapper(),
-                archiveStorageService,
-                archiveSummaryService
-        );
     }
 
     private static <T> T withUser(Long userId, java.util.concurrent.Callable<T> action) {

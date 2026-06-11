@@ -1,19 +1,29 @@
 package com.familyagent.module.session.service;
 
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.ApplicationRunner;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
+/**
+ * Runs legacy session backfill asynchronously after the application context is ready.
+ * <p>
+ * Using {@link ApplicationRunner} + {@code @Async} avoids blocking bean initialization
+ * ({@code @PostConstruct}) or application startup — the container is healthy while
+ * the potentially long-running backfill executes in the background.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class ChatSessionBackfillInitializer {
+public class ChatSessionBackfillInitializer implements ApplicationRunner {
 
     private final ChatSessionService chatSessionService;
 
-    @PostConstruct
-    public void initialize() {
+    @Override
+    @Async
+    public void run(ApplicationArguments args) {
         try {
             chatSessionService.backfillLegacySessions();
         } catch (Exception error) {

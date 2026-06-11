@@ -1,0 +1,174 @@
+name: familyagent-stack
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-familyagent}
+      POSTGRES_USER: ${DB_USER:-fa_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-fa_dev_pass}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-fa_user} -d ${DB_NAME:-familyagent}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fa-network
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    command: sh -c 'if [ -n "$$REDIS_PASSWORD" ]; then exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"; else exec redis-server --appendonly yes; fi'
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "if [ -n \"$$REDIS_PASSWORD\" ]; then redis-cli -a \"$$REDIS_PASSWORD\" ping; else redis-cli ping; fi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fa-network
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-fa_user}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-fa_dev_pass}
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fa-network
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - fa-network
+
+  ai-service:
+    build:
+      context: ./ai-service
+    restart: unless-stopped
+    env_file:
+      - ${STACK_ENV_FILE:-.env.docker}
+    environment:
+      APP_ENV: ${APP_ENV:-prod}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      AI_SERVICE_PORT: 8000
+      BACKEND_URL: http://backend:8080
+      DB_HOST: postgres
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+    ports:
+      - "${AI_SERVICE_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - fa-network
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    env_file:
+      - ${STACK_ENV_FILE:-.env.docker}
+    environment:
+      APP_ENV: ${APP_ENV:-prod}
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: 8080
+      DB_HOST: postgres
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      AI_SERVICE_URL: http://ai-service:8000
+      MINIO_ENDPOINT: http://minio:9000
+      JAVA_OPTS: ${JAVA_OPTS:--Xms256m -Xmx768m}
+    command: sh -c 'java $$JAVA_OPTS -jar /app/app.jar --spring.profiles.active=prod'
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      ai-service:
+        condition: service_started
+    networks:
+      - fa-network
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        BACKEND_URL: ${DOCKER_FRONTEND_BACKEND_URL:-http://backend:8080}
+        AI_SERVICE_URL: ${DOCKER_FRONTEND_AI_SERVICE_URL:-http://ai-service:8000}
+    restart: unless-stopped
+    env_file:
+      - ${STACK_ENV_FILE:-.env.docker}
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      BACKEND_URL: ${DOCKER_FRONTEND_BACKEND_URL:-http://backend:8080}
+      AI_SERVICE_URL: ${DOCKER_FRONTEND_AI_SERVICE_URL:-http://ai-service:8000}
+      NEXT_PUBLIC_API_URL: /api
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_started
+      ai-service:
+        condition: service_started
+    networks:
+      - fa-network
+
+volumes:
+  pg_data:
+  redis_data:
+  rabbitmq_data:
+  minio_data:
+
+networks:
+  fa-network:
+    driver: bridge

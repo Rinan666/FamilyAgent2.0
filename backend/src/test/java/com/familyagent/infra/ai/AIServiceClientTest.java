@@ -1,9 +1,12 @@
 package com.familyagent.infra.ai;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -19,12 +22,24 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class AIServiceClientTest {
 
     private HttpServer server;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @AfterEach
     void tearDown() {
         if (server != null) {
             server.stop(0);
         }
+    }
+
+    private AIServiceClient createClient(String internalToken) {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(10_000);
+        requestFactory.setReadTimeout(5_000);
+        return new AIServiceClient(
+                new RestTemplateBuilder().requestFactory(() -> requestFactory).build(),
+                baseUrl(),
+                internalToken,
+                objectMapper);
     }
 
     @Test
@@ -36,7 +51,7 @@ class AIServiceClientTest {
                     "{\"success\":true,\"embedding\":[0.1,0.2],\"model\":\"local/test\",\"privacy_categories\":[]}");
         });
 
-        AIServiceClient client = new AIServiceClient(baseUrl(), 5, "secret-token");
+        AIServiceClient client = createClient("secret-token");
 
         Map<String, Object> response = client.embedText(Map.of("text", "family memory", "dimensions", 1536));
 
@@ -53,7 +68,7 @@ class AIServiceClientTest {
                     "{\"success\":true,\"embedding\":[0.1,0.2],\"model\":\"local/test\",\"privacy_categories\":[]}");
         });
 
-        AIServiceClient client = new AIServiceClient(baseUrl(), 5, " ");
+        AIServiceClient client = createClient(" ");
 
         Map<String, Object> response = client.embedText(Map.of("text", "family memory", "dimensions", 1536));
 
@@ -71,7 +86,7 @@ class AIServiceClientTest {
             respond(exchange, "text/event-stream", 200, ": connected\n\ndata: {\"content\":\"hello\"}\n\ndata: {\"done\":true}\n\n");
         });
 
-        AIServiceClient client = new AIServiceClient(baseUrl(), 5, "secret-token");
+        AIServiceClient client = createClient("secret-token");
         ByteArrayOutputStream downstream = new ByteArrayOutputStream();
 
         client.proxyChatStream(Map.of("member_message", "tell me one thing"), downstream, "Bearer demo-token");
@@ -91,7 +106,7 @@ class AIServiceClientTest {
                     "{\"success\":true,\"data\":{\"summary\":\"archive summary\",\"titleSuggestion\":\"family title\",\"confidence\":\"HIGH\"}}");
         });
 
-        AIServiceClient client = new AIServiceClient(baseUrl(), 5, "secret-token");
+        AIServiceClient client = createClient("secret-token");
 
         Map<String, Object> response = client.summarizeSessionArchive(Map.of("session_id", 1, "messages", List.of()));
 

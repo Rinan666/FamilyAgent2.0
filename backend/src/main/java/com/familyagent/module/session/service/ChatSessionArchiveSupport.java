@@ -6,6 +6,8 @@ import com.familyagent.module.session.entity.ChatSessionMessage;
 import com.familyagent.module.session.repository.ChatSessionArchiveRepository;
 import com.familyagent.module.session.repository.ChatSessionMessageRepository;
 import com.familyagent.module.session.repository.ChatSessionRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -14,55 +16,38 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-final class ChatSessionArchiveSupport {
+@Component
+@RequiredArgsConstructor
+class ChatSessionArchiveSupport {
+
+    private static final int ARCHIVE_TRIGGER_MESSAGE_COUNT = 100;
+    private static final int ARCHIVE_CHUNK_SIZE = 50;
+    private static final int ARCHIVE_RETAIN_RECENT_COUNT = 30;
+    private static final int STORAGE_VERSION = 2;
 
     private final ChatSessionRepository sessionRepository;
     private final ChatSessionMessageRepository messageRepository;
     private final ChatSessionArchiveRepository archiveRepository;
     private final ChatSessionArchiveStorageService archiveStorageService;
     private final ChatSessionArchiveSummaryService archiveSummaryService;
-    private final int archiveTriggerMessageCount;
-    private final int archiveChunkSize;
-    private final int archiveRetainRecentCount;
-    private final int storageVersion;
-
-    ChatSessionArchiveSupport(ChatSessionRepository sessionRepository,
-                              ChatSessionMessageRepository messageRepository,
-                              ChatSessionArchiveRepository archiveRepository,
-                              ChatSessionArchiveStorageService archiveStorageService,
-                              ChatSessionArchiveSummaryService archiveSummaryService,
-                              int archiveTriggerMessageCount,
-                              int archiveChunkSize,
-                              int archiveRetainRecentCount,
-                              int storageVersion) {
-        this.sessionRepository = sessionRepository;
-        this.messageRepository = messageRepository;
-        this.archiveRepository = archiveRepository;
-        this.archiveStorageService = archiveStorageService;
-        this.archiveSummaryService = archiveSummaryService;
-        this.archiveTriggerMessageCount = archiveTriggerMessageCount;
-        this.archiveChunkSize = archiveChunkSize;
-        this.archiveRetainRecentCount = archiveRetainRecentCount;
-        this.storageVersion = storageVersion;
-    }
 
     void maybeArchiveSession(Long sessionId) {
         ChatSession session = sessionRepository.selectById(sessionId);
         if (session == null) {
             return;
         }
-        while (ChatSessionSupportUtils.safeInt(session.getMessageCount()) > archiveTriggerMessageCount) {
+        while (ChatSessionSupportUtils.safeInt(session.getMessageCount()) > ARCHIVE_TRIGGER_MESSAGE_COUNT) {
             Integer maxSeq = messageRepository.findMaxSeqBySessionId(sessionId);
-            if (maxSeq == null || maxSeq <= archiveRetainRecentCount) {
+            if (maxSeq == null || maxSeq <= ARCHIVE_RETAIN_RECENT_COUNT) {
                 return;
             }
             int archivedBeforeSeq = ChatSessionSupportUtils.safeInt(session.getArchivedBeforeSeq());
-            int highestArchivableSeq = maxSeq - archiveRetainRecentCount;
+            int highestArchivableSeq = maxSeq - ARCHIVE_RETAIN_RECENT_COUNT;
             int startSeq = archivedBeforeSeq + 1;
             if (highestArchivableSeq < startSeq) {
                 return;
             }
-            int endSeq = Math.min(startSeq + archiveChunkSize - 1, highestArchivableSeq);
+            int endSeq = Math.min(startSeq + ARCHIVE_CHUNK_SIZE - 1, highestArchivableSeq);
             List<ChatSessionMessage> chunk = messageRepository.findBySessionIdAndSeqRange(sessionId, startSeq, endSeq);
             if (chunk.isEmpty()) {
                 return;
@@ -101,11 +86,11 @@ final class ChatSessionArchiveSupport {
             archiveMetadata.put("lastArchiveId", archive.getId());
             archiveMetadata.put("lastArchiveAt", archive.getCreatedAt().toString());
             archiveMetadata.put("lastArchiveRange", startSeq + "-" + endSeq);
-            archiveMetadata.put("storageVersion", storageVersion);
+            archiveMetadata.put("storageVersion", STORAGE_VERSION);
             session.setArchiveMetadata(archiveMetadata);
             session.setMetadata(ChatSessionSupportUtils.withStorageVersion(
                     ChatSessionSupportUtils.toMutableMap(session.getMetadata()),
-                    storageVersion));
+                    STORAGE_VERSION));
             sessionRepository.updateById(session);
         }
     }
