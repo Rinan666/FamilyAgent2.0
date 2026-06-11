@@ -2,8 +2,10 @@
 FamilyAgent AI service entrypoint.
 """
 from contextlib import asynccontextmanager
+from importlib import import_module
+from typing import Optional
 
-from fastapi import FastAPI, Request
+from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -18,7 +20,45 @@ from app.utils.safety_limits import (
 )
 from app.utils.input_guard import InputGuardError
 from app.utils.security_events import record_security_event
-from dip.router import router as dip_router
+
+
+def _build_unavailable_dip_router(detail: str) -> APIRouter:
+    router = APIRouter()
+
+    @router.post("/faces/cluster")
+    async def cluster_faces_unavailable() -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content={"success": False, "detail": detail},
+        )
+
+    @router.post("/faces/cluster-by-urls")
+    async def cluster_faces_by_urls_unavailable() -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content={"success": False, "detail": detail},
+        )
+
+    return router
+
+
+def _load_dip_router() -> tuple[APIRouter, Optional[str]]:
+    try:
+        return import_module("dip.router").router, None
+    except ModuleNotFoundError as exc:
+        missing_module = exc.name or "unknown"
+        if missing_module.startswith("dip"):
+            raise
+
+        detail = (
+            "DIP image processing is unavailable because optional dependency "
+            f"'{missing_module}' is not installed. Install ai-service "
+            "requirements to enable these endpoints."
+        )
+        return _build_unavailable_dip_router(detail), detail
+
+
+dip_router, dip_unavailable_reason = _load_dip_router()
 
 
 @asynccontextmanager
@@ -27,6 +67,8 @@ async def lifespan(app: FastAPI):
     logger = setup_logging(settings.log_level)
     app.state.logger = logger
     logger.info(f"AI Service starting (env={settings.app_env})")
+    if dip_unavailable_reason:
+        logger.warning(dip_unavailable_reason)
     yield
     logger.info("AI Service shutting down")
 

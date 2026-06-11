@@ -138,14 +138,19 @@ class Settings(BaseSettings):
         """Only development defaults to fail-open; all other environments fail-closed."""
         if self.auth_fail_open is not None:
             return self.auth_fail_open
-        return self.app_env.lower() == "development"
+        return self.is_development_env
+
+    @property
+    def is_development_env(self) -> bool:
+        """Treat common local aliases as development to avoid accidental fail-closed mode."""
+        return self.app_env.strip().lower() in {"dev", "development", "local"}
 
     @property
     def internal_service_token(self) -> Optional[str]:
         """Token used by the Java backend for service-to-service AI calls."""
         if self.ai_internal_service_token:
             return self.ai_internal_service_token
-        if self.app_env.lower() == "development":
+        if self.is_development_env:
             return "familyagent-dev-internal-token"
         return None
 
@@ -154,7 +159,7 @@ class Settings(BaseSettings):
         """Allowed browser origins for the AI service."""
         raw = self.cors_allow_origins
         if not raw:
-            if self.app_env.lower() == "development":
+            if self.is_development_env:
                 return ["http://localhost:3000", "http://127.0.0.1:3000"]
             return []
         return [origin.strip() for origin in raw.split(",") if origin.strip()]

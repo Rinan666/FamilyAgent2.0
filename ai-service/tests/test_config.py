@@ -8,6 +8,15 @@ def test_development_cors_defaults_do_not_allow_wildcard():
     assert settings.cors_origins == ["http://localhost:3000", "http://127.0.0.1:3000"]
 
 
+def test_dev_alias_uses_development_defaults():
+    settings = Settings(app_env="dev", auth_fail_open=None, cors_allow_origins=None)
+
+    assert settings.is_development_env is True
+    assert settings.auth_fail_open_enabled is True
+    assert settings.internal_service_token == "familyagent-dev-internal-token"
+    assert settings.cors_origins == ["http://localhost:3000", "http://127.0.0.1:3000"]
+
+
 def test_cors_allow_origins_parses_comma_separated_values():
     settings = Settings(
         app_env="production",
