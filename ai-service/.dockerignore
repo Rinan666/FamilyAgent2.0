@@ -5,3 +5,10 @@ __pycache__
 .ruff_cache
 tests
 *.log
+dip/data
+dip/output
+dip/experiment.py
+dip/setup_data.py
+dip/visualize.py
+dip/__pycache__
+dip/**/__pycache__

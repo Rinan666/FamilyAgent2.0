@@ -18,6 +18,7 @@ from app.utils.safety_limits import (
 )
 from app.utils.input_guard import InputGuardError
 from app.utils.security_events import record_security_event
+from dip.router import router as dip_router
 
 
 @asynccontextmanager
@@ -137,6 +138,7 @@ app.include_router(memory.internal_router, prefix="/ai/memory", tags=["Memory"])
 app.include_router(growth.router, prefix="/ai/growth", tags=["Growth"])
 app.include_router(embedding.router, prefix="/ai/embedding", tags=["Embedding"])
 app.include_router(health.router, prefix="/ai", tags=["Health"])
+app.include_router(dip_router, prefix="/ai/dip", tags=["DIP"])
 
 
 if __name__ == "__main__":

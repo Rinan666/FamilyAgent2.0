@@ -38,6 +38,12 @@ python-multipart==0.0.20
 pypdf==4.2.0
 ruff==0.12.0
 
+# Image Processing (DIP)
+opencv-python-headless==4.13.0.92
+scikit-learn==1.9.0
+matplotlib==3.10.9
+scikit-image==0.26.0
+
 # Test
 pytest==8.2.0
 pytest-asyncio==0.23.7
