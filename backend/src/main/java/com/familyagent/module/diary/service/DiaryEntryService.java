@@ -1,6 +1,8 @@
 package com.familyagent.module.diary.service;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.familyagent.common.constant.EntityStatus;
+import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.response.PageResult;
@@ -40,8 +42,7 @@ public class DiaryEntryService {
     private static final int MERGED_ENTRY_MAX_CHARS = 600;
     private static final String MANUAL_DIARY_SOURCE = "DIARY_MANUAL";
     private static final String MERGE_POLICY = "MANUAL_SELF_SINGLE_CANDIDATE";
-    private static final Set<String> VISIBILITIES = Set.of(
-            "PRIVATE", "FAMILY_VISIBLE", "CARE_VISIBLE", "PARENT_VISIBLE", "LEGACY_VISIBLE");
+    private static final Set<String> VISIBILITIES = MemoryScope.diaryNames();
     private static final Set<String> ENTRY_TYPES = Set.of(
             "DAILY", "IMPORTANT_EVENT", "LESSON", "EMOTION", "MESSAGE_TO_FAMILY", "SELF_REFLECTION");
 
@@ -172,7 +173,7 @@ public class DiaryEntryService {
         }
         CurrentUserGuard.requireSelf(entry.getUserId());
         Map<String, Object> metadata = toMutableMap(entry.getMetadata());
-        metadata.put("status", "ARCHIVED");
+        metadata.put("status", EntityStatus.ARCHIVED.name());
         entry.setMetadata(metadata);
         diaryRepository.updateById(entry);
     }
@@ -188,7 +189,7 @@ public class DiaryEntryService {
 
     private static Map<String, Object> buildMetadata(CreateDiaryEntryRequest request, String diaryDate) {
         Map<String, Object> metadata = request.getMetadata() == null ? new HashMap<>() : new HashMap<>(request.getMetadata());
-        metadata.putIfAbsent("status", "ACTIVE");
+        metadata.putIfAbsent("status", EntityStatus.ACTIVE.name());
         metadata.put("sourceModule", "DIARY");
         metadata.put("diaryDate", diaryDate);
         metadata.putIfAbsent("mergePolicy", MERGE_POLICY);
@@ -245,13 +246,13 @@ public class DiaryEntryService {
         if (nextMetadata != null) {
             metadata.putAll(nextMetadata);
         }
-        metadata.putIfAbsent("status", "ACTIVE");
+        metadata.putIfAbsent("status", EntityStatus.ACTIVE.name());
         metadata.put("sourceModule", "DIARY");
         return metadata;
     }
 
     private static String normalizeVisibility(String visibility) {
-        String normalized = visibility == null ? "PRIVATE" : visibility.trim().toUpperCase(Locale.ROOT);
+        String normalized = visibility == null ? MemoryScope.DEFAULT_DIARY.name() : visibility.trim().toUpperCase(Locale.ROOT);
         if (!VISIBILITIES.contains(normalized)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "日记可见范围不支持");
         }

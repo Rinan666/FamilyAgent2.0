@@ -1,5 +1,7 @@
 package com.familyagent.module.heritagetask.service;
 
+import com.familyagent.common.constant.EntityStatus;
+import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
@@ -40,7 +42,7 @@ public class HeritageTaskService {
         MemoryEntry memory = null;
         if (request.getMemoryId() != null) {
             memory = memoryRepository.selectById(request.getMemoryId());
-            if (memory == null || !request.getFamilyId().equals(memory.getFamilyId()) || !"ACTIVE".equals(memory.getStatus())) {
+            if (memory == null || !request.getFamilyId().equals(memory.getFamilyId()) || !EntityStatus.ACTIVE.name().equals(memory.getStatus())) {
                 throw new BusinessException(ErrorCode.NOT_FOUND, "关联经验不存在");
             }
         }
@@ -53,7 +55,7 @@ public class HeritageTaskService {
         task.setAction(request.getAction().trim());
         task.setTargetLabel(blankToNull(request.getTargetLabel()));
         task.setDueDate(request.getDueDate());
-        task.setStatus("PENDING");
+        task.setStatus(EntityStatus.PENDING.name());
         task.setMetadata(buildMetadata(request, memory));
         taskRepository.insert(task);
         return task;
@@ -68,7 +70,7 @@ public class HeritageTaskService {
     public HeritageTask complete(Long id, CompleteHeritageTaskRequest request) {
         Long userId = CurrentUserGuard.currentUserId();
         HeritageTask task = taskRepository.selectById(id);
-        if (task == null || "ARCHIVED".equals(task.getStatus())) {
+        if (task == null || EntityStatus.ARCHIVED.name().equals(task.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         familyService.checkMembership(task.getFamilyId());
@@ -86,7 +88,7 @@ public class HeritageTaskService {
             diaryRequest.setTitle("完成家庭任务：" + task.getTitle());
             diaryRequest.setContent(buildCompletionDiary(task));
             diaryRequest.setEntryType("IMPORTANT_EVENT");
-            diaryRequest.setVisibility("FAMILY_VISIBLE");
+            diaryRequest.setVisibility(MemoryScope.FAMILY_VISIBLE.name());
             diaryRequest.setTags(List.of("家庭任务", "经验传承"));
             diaryRequest.setMetadata(buildCompletionMetadata(task));
             diaryEntryService.create(diaryRequest);

@@ -1,5 +1,7 @@
 package com.familyagent.module.memory.service;
 
+import com.familyagent.common.constant.MemoryType;
+
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -62,7 +64,7 @@ public final class MemoryIndexMetadataBuilder {
         Map<String, Object> next = mutable(metadata);
         String text = join(content, summary, asText(next.get("scenario")));
         Map<String, Object> index = baseIndex("FAMILY_MEMORY", text);
-        index.put("memoryType", safeUpper(memoryType, "ELDER_ADVICE"));
+        index.put("memoryType", safeUpper(memoryType, MemoryType.DEFAULT.name()));
         index.put("importance", clamp(importance, 1, 5));
         attachRetention(index);
         index.put("temporalLayer", inferTemporalLayer(null, "FAMILY_MEMORY", index));

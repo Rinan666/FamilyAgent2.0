@@ -1,6 +1,9 @@
 package com.familyagent.module.growth.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.familyagent.common.constant.EntityStatus;
+import com.familyagent.common.constant.FollowUpStatus;
+import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.response.PageResult;
@@ -41,8 +44,8 @@ public class GrowthGuardService {
     private static final int MAX_PAGE_SIZE = 20;
     private static final Set<String> CATEGORIES = Set.of(
             "POSTURE", "DENTAL", "VISION", "SLEEP", "EXERCISE", "SCREEN_TIME", "EMOTION", "COMMUNICATION", "OTHER");
-    private static final Set<String> VISIBILITIES = Set.of("PRIVATE", "PARENT_VISIBLE", "CARE_VISIBLE", "FAMILY_VISIBLE");
-    private static final Set<String> FOLLOW_UP_STATUSES = Set.of("PENDING", "WATCHING", "IMPROVED", "ARCHIVED");
+    private static final Set<String> VISIBILITIES = MemoryScope.familyNames();
+    private static final Set<String> FOLLOW_UP_STATUSES = FollowUpStatus.names();
 
     private final GrowthGuardRecordRepository recordRepository;
     private final GrowthGuardReportRepository reportRepository;
@@ -74,9 +77,9 @@ public class GrowthGuardService {
         record.setObservedAt(request.getObservedAt() == null ? LocalDate.now() : request.getObservedAt());
         record.setFollowUpAt(request.getFollowUpAt());
         record.setVisibility(normalizeVisibility(request.getVisibility()));
-        record.setStatus("ACTIVE");
+        record.setStatus(EntityStatus.ACTIVE.name());
         Map<String, Object> metadata = request.getMetadata() == null ? new HashMap<>() : new HashMap<>(request.getMetadata());
-        metadata.putIfAbsent("followUpStatus", "PENDING");
+        metadata.putIfAbsent("followUpStatus", FollowUpStatus.PENDING.name());
         record.setMetadata(MemoryIndexMetadataBuilder.enrichGrowth(
                 metadata,
                 record.getContent(),
@@ -140,7 +143,7 @@ public class GrowthGuardService {
         report.setTitle(request.getTitle().trim());
         report.setSummary(blankToNull(request.getSummary()));
         report.setVisibility(normalizeVisibility(request.getVisibility()));
-        report.setStatus("ACTIVE");
+        report.setStatus(EntityStatus.ACTIVE.name());
         report.setReport(new HashMap<>(request.getReport()));
         report.setMetadata(request.getMetadata() == null ? Map.of() : new HashMap<>(request.getMetadata()));
         reportRepository.insert(report);
@@ -155,7 +158,7 @@ public class GrowthGuardService {
     @Transactional
     public GrowthGuardRecord updateFollowUpStatus(Long id, String followUpStatus) {
         GrowthGuardRecord record = recordRepository.selectById(id);
-        if (record == null || !"ACTIVE".equals(record.getStatus())) {
+        if (record == null || !EntityStatus.ACTIVE.name().equals(record.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         ensureCanModifyRecord(record);
@@ -170,7 +173,7 @@ public class GrowthGuardService {
     public GrowthGuardRecord markRecordStale(Long id) {
         Long viewerUserId = CurrentUserGuard.currentUserId();
         GrowthGuardRecord record = recordRepository.selectById(id);
-        if (record == null || !"ACTIVE".equals(record.getStatus())) {
+        if (record == null || !EntityStatus.ACTIVE.name().equals(record.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         familyService.checkMembership(record.getFamilyId());
@@ -195,7 +198,7 @@ public class GrowthGuardService {
     @Transactional
     public void archiveRecord(Long id) {
         GrowthGuardRecord record = recordRepository.selectById(id);
-        if (record == null || !"ACTIVE".equals(record.getStatus())) {
+        if (record == null || !EntityStatus.ACTIVE.name().equals(record.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         Long viewerUserId = CurrentUserGuard.currentUserId();
@@ -210,7 +213,7 @@ public class GrowthGuardService {
         if (!selfCreated && !familyOwner) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "只能删除自己创建的记录，或由家族创建者删除");
         }
-        record.setStatus("ARCHIVED");
+        record.setStatus(EntityStatus.ARCHIVED.name());
         recordRepository.updateById(record);
     }
 
@@ -246,7 +249,7 @@ public class GrowthGuardService {
     }
 
     private static String normalizeVisibility(String visibility) {
-        String normalized = visibility == null ? "CARE_VISIBLE" : visibility.trim().toUpperCase(Locale.ROOT);
+        String normalized = visibility == null ? MemoryScope.DEFAULT_GROWTH.name() : visibility.trim().toUpperCase(Locale.ROOT);
         if (!VISIBILITIES.contains(normalized)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "可见范围不支持");
         }

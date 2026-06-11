@@ -2,6 +2,7 @@ package com.familyagent.module.user.service;
 
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.crypto.SecureUtil;
+import com.familyagent.common.constant.EntityStatus;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.invite.entity.InviteCode;
@@ -62,7 +63,7 @@ public class UserService {
         user.setNickname(request.getNickname() != null ? request.getNickname() : request.getUsername());
         user.setEmail(request.getEmail());
         user.setRole("USER");
-        user.setStatus("ACTIVE");
+        user.setStatus(EntityStatus.ACTIVE.name());
         user.setMetadata(Map.of(
                 "inviteCode", inviteCode.getCode(),
                 "inviteSource", inviteCode.getSource() == null ? "unknown" : inviteCode.getSource()
@@ -94,7 +95,7 @@ public class UserService {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
 
-        if (!"ACTIVE".equals(user.getStatus())) {
+        if (!EntityStatus.ACTIVE.name().equals(user.getStatus())) {
             throw new BusinessException(ErrorCode.ACCOUNT_DISABLED);
         }
 
