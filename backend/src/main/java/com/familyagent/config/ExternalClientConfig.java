@@ -1,6 +1,7 @@
 package com.familyagent.config;
 
 import io.minio.MinioClient;
+import okhttp3.OkHttpClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
@@ -8,24 +9,29 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
-/**
- * Spring-managed external client bean configuration.
- * <p>
- * Replaces manual {@code new MinioClient(...)} and {@code new RestTemplate(...)}
- * so that Spring manages the full lifecycle (creation, configuration, shutdown).
- */
+import java.util.concurrent.TimeUnit;
+
 @Configuration
 public class ExternalClientConfig {
 
     private static final int MAX_CONNECT_TIMEOUT_MILLIS = 10_000;
+    private static final int MINIO_CONNECT_TIMEOUT_SECONDS = 10;
+    private static final int MINIO_WRITE_TIMEOUT_SECONDS = 60;
+    private static final int MINIO_READ_TIMEOUT_SECONDS = 60;
 
     @Bean
     public MinioClient minioClient(@Value("${minio.endpoint}") String endpoint,
                                    @Value("${minio.access-key}") String accessKey,
                                    @Value("${minio.secret-key}") String secretKey) {
+        OkHttpClient httpClient = new OkHttpClient.Builder()
+                .connectTimeout(MINIO_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .writeTimeout(MINIO_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .readTimeout(MINIO_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .build();
         return MinioClient.builder()
                 .endpoint(normalizeEndpoint(endpoint))
                 .credentials(accessKey, secretKey)
+                .httpClient(httpClient)
                 .build();
     }
 

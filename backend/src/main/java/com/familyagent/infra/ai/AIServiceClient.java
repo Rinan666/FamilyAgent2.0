@@ -3,6 +3,8 @@ package com.familyagent.infra.ai;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -55,6 +57,7 @@ public class AIServiceClient {
     /**
      * Proxy FamilyAgent chat SSE streams from the AI service.
      */
+    @CircuitBreaker(name = "aiService", fallbackMethod = "fallbackProxyChatStream")
     public void proxyChatStream(Map<String, Object> request, OutputStream downstream, String authorization) {
         HttpURLConnection conn = null;
         try {
@@ -128,7 +131,8 @@ public class AIServiceClient {
     /**
      * Extract memory candidates from a finished Agent session.
      */
-    @SuppressWarnings("unchecked")
+    @CircuitBreaker(name = "aiService", fallbackMethod = "fallbackExtractMemories")
+    @Retry(name = "aiService")
     public Map<String, Object> extractMemories(Map<String, Object> request, String authorization) {
         try {
             HttpHeaders headers = new HttpHeaders();
@@ -147,7 +151,8 @@ public class AIServiceClient {
         }
     }
 
-    @SuppressWarnings("unchecked")
+    @CircuitBreaker(name = "aiService", fallbackMethod = "fallbackCompressDiary")
+    @Retry(name = "aiService")
     public Map<String, Object> compressDiary(Map<String, Object> request, String authorization) {
         try {
             HttpHeaders headers = new HttpHeaders();
@@ -169,7 +174,8 @@ public class AIServiceClient {
     /**
      * Generate an embedding vector for backend-owned memory indexing.
      */
-    @SuppressWarnings("unchecked")
+    @CircuitBreaker(name = "aiService", fallbackMethod = "fallbackEmbedText")
+    @Retry(name = "aiService")
     public Map<String, Object> embedText(Map<String, Object> request) {
         try {
             HttpHeaders headers = new HttpHeaders();
@@ -191,7 +197,8 @@ public class AIServiceClient {
     /**
      * Summarize a session archive chunk via the AI service using the internal service token.
      */
-    @SuppressWarnings("unchecked")
+    @CircuitBreaker(name = "aiService", fallbackMethod = "fallbackSummarizeSessionArchive")
+    @Retry(name = "aiService")
     public Map<String, Object> summarizeSessionArchive(Map<String, Object> request) {
         try {
             HttpHeaders headers = new HttpHeaders();
@@ -220,6 +227,39 @@ public class AIServiceClient {
         } catch (Exception e) {
             log.error("AI service health check failed", e);
             return Map.of("status", "DOWN", "error", e.getMessage());
+        }
+    }
+
+    // --- Fallback methods ---
+
+    private Map<String, Object> fallbackEmbedText(Map<String, Object> request, Exception ex) {
+        log.warn("AI embedding fallback triggered: {}", ex.getMessage());
+        return Map.of("success", false, "error", "AI service unavailable");
+    }
+
+    private Map<String, Object> fallbackExtractMemories(Map<String, Object> request, String authorization, Exception ex) {
+        log.warn("AI memory extraction fallback triggered: {}", ex.getMessage());
+        return Map.of("success", false, "error", "AI service unavailable");
+    }
+
+    private Map<String, Object> fallbackCompressDiary(Map<String, Object> request, String authorization, Exception ex) {
+        log.warn("AI diary compression fallback triggered: {}", ex.getMessage());
+        return Map.of("success", false, "error", "AI service unavailable");
+    }
+
+    private Map<String, Object> fallbackSummarizeSessionArchive(Map<String, Object> request, Exception ex) {
+        log.warn("AI session archive summary fallback triggered: {}", ex.getMessage());
+        return Map.of("success", false, "error", "AI service unavailable");
+    }
+
+    private void fallbackProxyChatStream(Map<String, Object> request, OutputStream downstream, String authorization, Exception ex) {
+        log.warn("AI chat stream fallback triggered: {}", ex.getMessage());
+        try {
+            String msg = "data: {\"error\":\"AI service unavailable, please retry later.\"}\n\n";
+            downstream.write(msg.getBytes(StandardCharsets.UTF_8));
+            downstream.flush();
+        } catch (IOException ignored) {
+            // downstream already closed
         }
     }
 }

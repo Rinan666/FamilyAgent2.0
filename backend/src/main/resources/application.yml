@@ -67,3 +67,22 @@ springdoc:
     path: /docs
   api-docs:
     path: /v3/api-docs
+
+# Resilience4j — AI service circuit breaker & retry
+resilience4j:
+  circuitbreaker:
+    instances:
+      aiService:
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 5
+        slidingWindowSize: 10
+        registerHealthIndicator: true
+  retry:
+    instances:
+      aiService:
+        maxAttempts: 3
+        waitDuration: 2s
+        retryExceptions:
+          - java.io.IOException
+          - org.springframework.web.client.ResourceAccessException

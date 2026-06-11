@@ -8,6 +8,8 @@ import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.invite.entity.InviteCode;
 import com.familyagent.module.invite.repository.InviteCodeRepository;
 import com.familyagent.module.user.dto.ChangePasswordRequest;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import com.familyagent.module.user.dto.LoginRequest;
 import com.familyagent.module.user.dto.LoginResponse;
 import com.familyagent.module.user.dto.RegisterRequest;
@@ -129,6 +131,7 @@ public class UserService {
                 .build();
     }
 
+    @Cacheable(value = "user", key = "#id")
     public User getById(Long id) {
         User user = userRepository.findBasicById(id);
         if (user == null) {
@@ -144,6 +147,7 @@ public class UserService {
     }
 
     @Transactional
+    @CacheEvict(value = "user", key = "#result.id")
     public User updateProfile(UpdateProfileRequest request) {
         long userId = StpUtil.getLoginIdAsLong();
         User current = userRepository.findBasicById(userId);
@@ -170,6 +174,7 @@ public class UserService {
     }
 
     @Transactional
+    @CacheEvict(value = "user", key = "T(cn.dev33.satoken.stp.StpUtil).getLoginIdAsLong()")
     public void changePassword(ChangePasswordRequest request) {
         long userId = StpUtil.getLoginIdAsLong();
         User current = userRepository.findByIdWithPassword(userId);
