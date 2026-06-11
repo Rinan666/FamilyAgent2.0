@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BookHeart, Bot, Database, Menu, Settings, Sparkles, Users, X } from 'lucide-react';
+import { BookHeart, Bot, Database, Images, Menu, Settings, Sparkles, Users, X } from 'lucide-react';
 import type { ViewerRole } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 
@@ -19,6 +19,7 @@ const navItems: readonly NavItem[] = [
   { href: '/dashboard/agent', label: 'Family Agent', icon: Sparkles, roles: ['MEMBER', 'ADMIN'] },
   { href: '/dashboard/mirror', label: 'Mirror Agent', icon: Bot, roles: ['MEMBER', 'ADMIN'] },
   { href: '/dashboard/diary', label: 'Write', icon: BookHeart, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/album', label: 'Album', icon: Images, roles: ['MEMBER', 'ADMIN'] },
   { href: '/dashboard/family', label: 'Family Space', icon: Users, roles: ['MEMBER', 'ADMIN'] },
   { href: '/dashboard/admin/database', label: 'Database Health', icon: Database, roles: ['ADMIN'], platformAdminOnly: true },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings, roles: ['MEMBER', 'ADMIN'] },
@@ -28,7 +29,7 @@ const mobilePrimaryNav: readonly NavItem[] = [
   { href: '/dashboard/agent', label: 'Agent', icon: Sparkles, roles: ['MEMBER', 'ADMIN'] },
   { href: '/dashboard/mirror', label: 'Mirror', icon: Bot, roles: ['MEMBER', 'ADMIN'] },
   { href: '/dashboard/diary', label: 'Diary', icon: BookHeart, roles: ['MEMBER', 'ADMIN'] },
-  { href: '/dashboard/family', label: 'Family', icon: Users, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/album', label: 'Album', icon: Images, roles: ['MEMBER', 'ADMIN'] },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings, roles: ['MEMBER', 'ADMIN'] },
 ] as const;
 

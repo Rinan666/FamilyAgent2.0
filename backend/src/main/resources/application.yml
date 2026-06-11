@@ -21,7 +21,7 @@ spring:
   servlet:
     multipart:
       max-file-size: ${UPLOAD_MAX_SIZE_MB:10}MB
-      max-request-size: 20MB
+      max-request-size: ${UPLOAD_MAX_REQUEST_SIZE_MB:40}MB
   flyway:
     enabled: true
     locations: classpath:db/migration
