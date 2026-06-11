@@ -12,11 +12,11 @@ import { enqueuePersistMessages } from '@/lib/sessionPersistence';
 import type { ChatMessage, GrowthGuardRecord, HeritageTask } from '@/types';
 import type { ViewerRole } from '@/lib/roles';
 import {
+  buildFamilyRecallQuery,
   currentTimeContext,
   detectFamilyActivationScene,
   formatMemoryContext,
   normalizeAssistantMetadata,
-  shouldRecallFamilyContext,
   withTimeout,
   type FamilyActivationScene,
   type SessionSavedMemory,
@@ -129,10 +129,13 @@ export function useChat(options: UseChatOptions = {}) {
     setStreaming(false);
   }, [setStreaming]);
 
-  const recallMemoryContext = useCallback(async (query: string) => {
+  const recallMemoryContext = useCallback(async (
+    query: string,
+    history: Pick<ChatMessage, 'role' | 'content'>[] = [],
+  ) => {
     try {
-      const allowFamilyContext = shouldRecallFamilyContext(query);
-      const activationScene = allowFamilyContext ? detectFamilyActivationScene(query) : null;
+      const recallQuery = buildFamilyRecallQuery(query, history);
+      const activationScene = detectFamilyActivationScene(recallQuery);
       onActivationSceneChange?.(
         activationScene
           ? { label: activationScene.label, instruction: activationScene.instruction }
@@ -140,33 +143,33 @@ export function useChat(options: UseChatOptions = {}) {
       );
 
       const libraryKeyword = activationScene
-        ? `${query} ${activationScene.label} ${activationScene.searchKeywords.join(' ')}`
-        : query;
+        ? `${recallQuery} ${activationScene.label} ${activationScene.searchKeywords.join(' ')}`
+        : recallQuery;
 
       const [familyRecall, libraryResult, growthRecords, heritageTasks] = await Promise.all([
-        activeFamilyId && allowFamilyContext
+        activeFamilyId
           ? withTimeout(memoryApi.recallFamily(activeFamilyId, {
-              query: libraryKeyword,
+              query: libraryKeyword || query,
               scene: 'FAMILY_AGENT',
               diaryLimit: 8,
               memoryLimit: 8,
             }), null, FAMILY_CONTEXT_TIMEOUT_MS).catch(() => null)
           : Promise.resolve(null),
-        activeFamilyId && allowFamilyContext
+        activeFamilyId
           ? withTimeout(memoryLibraryApi.search({
               familyId: activeFamilyId,
               keyword: libraryKeyword,
               pageSize: 12,
             }), null, FAMILY_CONTEXT_TIMEOUT_MS).catch(() => null)
           : Promise.resolve(null),
-        activeFamilyId && allowFamilyContext
+        activeFamilyId
           ? withTimeout(
               growthGuardApi.listFamilyRecords(activeFamilyId, 8),
               [] as GrowthGuardRecord[],
               FAMILY_CONTEXT_TIMEOUT_MS,
             ).catch(() => [] as GrowthGuardRecord[])
           : Promise.resolve([] as GrowthGuardRecord[]),
-        activeFamilyId && allowFamilyContext
+        activeFamilyId
           ? withTimeout(
               heritageTaskApi.listFamilyTasks(activeFamilyId, 8),
               [] as HeritageTask[],
@@ -174,10 +177,6 @@ export function useChat(options: UseChatOptions = {}) {
             ).catch(() => [] as HeritageTask[])
           : Promise.resolve([] as HeritageTask[]),
       ]);
-
-      if (!allowFamilyContext) {
-        return { context: '' } satisfies MemoryContextResult;
-      }
 
       const context = formatMemoryContext({
         libraryItems: libraryResult?.items || [],
@@ -191,18 +190,29 @@ export function useChat(options: UseChatOptions = {}) {
         viewerIdentityContext,
         activationScene,
       });
+      const diaryCount = familyRecall?.diaryCount ?? familyRecall?.diaries?.length ?? 0;
+      const memoryCount = familyRecall?.memoryCount ?? familyRecall?.memories?.length ?? 0;
+      const growthRecordCount = familyRecall?.growthRecordCount ?? familyRecall?.growthRecords?.length ?? growthRecords.length;
+      const libraryCount = libraryResult?.items?.length ?? 0;
+      const heritageTaskCount = heritageTasks.length;
+      const sessionSavedCount = (getSessionSavedMemories?.() || []).filter((item) => item.content.trim()).length;
+      const totalReferenceCount = diaryCount + memoryCount + growthRecordCount + libraryCount + heritageTaskCount + sessionSavedCount;
 
       return {
         context,
-        metadata: familyRecall
+        metadata: (familyRecall || totalReferenceCount > 0)
           ? {
               rag: {
-                retrievalMode: familyRecall.retrievalMode,
-                embeddingReadyCount: familyRecall.embeddingReadyCount || 0,
-                diaryCount: familyRecall.diaryCount ?? familyRecall.diaries?.length ?? 0,
-                memoryCount: familyRecall.memoryCount ?? familyRecall.memories?.length ?? 0,
-                growthRecordCount: familyRecall.growthRecordCount ?? familyRecall.growthRecords?.length ?? 0,
-                sources: familyRecall.sources || [],
+                retrievalMode: familyRecall?.retrievalMode,
+                embeddingReadyCount: familyRecall?.embeddingReadyCount || 0,
+                diaryCount,
+                memoryCount,
+                growthRecordCount,
+                libraryCount,
+                heritageTaskCount,
+                sessionSavedCount,
+                totalReferenceCount,
+                sources: familyRecall?.sources || [],
               },
             }
           : undefined,
@@ -236,7 +246,7 @@ export function useChat(options: UseChatOptions = {}) {
     }
 
     const timeContext = currentTimeContext();
-    const memoryContext = await recallMemoryContext(message);
+    const memoryContext = await recallMemoryContext(message, history);
 
     if (!isRunActive(runId) || stoppedRunsRef.current.has(runId)) {
       removeMessageById(assistantMessage.id);

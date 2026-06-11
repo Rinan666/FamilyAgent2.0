@@ -172,6 +172,10 @@ export interface ChatMessage {
       diaryCount: number;
       memoryCount: number;
       growthRecordCount?: number;
+      libraryCount?: number;
+      heritageTaskCount?: number;
+      sessionSavedCount?: number;
+      totalReferenceCount?: number;
       sources: RagRecallSource[];
     };
   } & Record<string, unknown>;

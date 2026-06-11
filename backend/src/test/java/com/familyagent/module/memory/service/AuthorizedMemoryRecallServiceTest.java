@@ -77,6 +77,38 @@ class AuthorizedMemoryRecallServiceTest {
     }
 
     @Test
+    void recallForFamily_familyAgentSceneDoesNotShortCircuitPlainFollowUpQuestion() {
+        Long familyId = 10L;
+        Long viewerUserId = 101L;
+        DiaryEntry visibleDiary = diary(1L, familyId, 201L, "孩子最近刷牙需要提醒", "CARE_VISIBLE");
+        MemoryEntry visibleMemory = memory(2L, familyId, 202L, "爷爷的护牙经验", "牙齿健康要及早留意", "FAMILY_VISIBLE");
+        GrowthGuardRecord visibleGrowth = growth(3L, familyId, 201L, "DENTAL", "最近刷牙敷衍，继续观察", "CARE_VISIBLE");
+
+        when(diaryRepository.findVisibleByFamily(eq(familyId), eq(viewerUserId), anyInt()))
+                .thenReturn(List.of(visibleDiary));
+        when(memoryRepository.findActiveFamilyMemories(eq(familyId), eq(viewerUserId), anyInt()))
+                .thenReturn(List.of(visibleMemory));
+        when(growthRecordRepository.findVisibleByFamily(eq(familyId), eq(viewerUserId), anyInt()))
+                .thenReturn(List.of(visibleGrowth));
+        when(embeddingRepository.countReadyByFamilyId(familyId)).thenReturn(0L);
+
+        AuthorizedMemoryRecallResult result = recallService.recallForFamily(
+                familyId,
+                viewerUserId,
+                "那我该怎么跟他说？",
+                "FAMILY_AGENT",
+                3,
+                3);
+
+        verify(familyService).checkMembership(familyId);
+        verify(diaryRepository).findVisibleByFamily(eq(familyId), eq(viewerUserId), anyInt());
+        verify(memoryRepository).findActiveFamilyMemories(eq(familyId), eq(viewerUserId), anyInt());
+        verify(growthRecordRepository).findVisibleByFamily(eq(familyId), eq(viewerUserId), anyInt());
+
+        assertEquals("TEXT_FALLBACK", result.getRetrievalMode());
+    }
+
+    @Test
     void recallForFamily_usesOnlyPermissionFilteredCandidates() {
         Long familyId = 10L;
         Long viewerUserId = 101L;

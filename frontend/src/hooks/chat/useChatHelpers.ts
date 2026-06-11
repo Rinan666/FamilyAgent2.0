@@ -42,13 +42,6 @@ const activationScenes: FamilyActivationScene[] = [
   },
 ];
 
-const familyContextTerms = [
-  'family', 'diary', 'memory', 'growth', 'parent', 'child', 'health', 'sleep',
-  'exercise', 'emotion', 'relationship', 'career', 'choice', 'record', 'save',
-  '家庭', '家族', '家人', '亲子', '沟通', '成长', '观察', '记录', '经验', '传承',
-  '健康', '睡眠', '视力', '牙', '屏幕', '情绪', '压力', '选择', '后悔', '复盘',
-];
-
 export function withTimeout<T>(promise: Promise<T>, fallback: T, timeoutMs: number): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<T>((resolve) => {
@@ -150,10 +143,22 @@ export function formatMemoryContext({
   return sections.join('\n\n');
 }
 
-export function shouldRecallFamilyContext(query: string) {
-  const normalized = query.trim().toLowerCase();
-  if (!normalized) return true;
-  return familyContextTerms.some((term) => normalized.includes(term.toLowerCase()));
+export function buildFamilyRecallQuery(
+  query: string,
+  history: Pick<ChatMessage, 'role' | 'content'>[] = [],
+) {
+  const normalizedQuery = query.trim();
+  const parts = history
+    .filter((item) => item.role === 'user')
+    .map((item) => item.content.trim())
+    .filter(Boolean)
+    .slice(-2);
+
+  if (normalizedQuery) {
+    parts.push(normalizedQuery);
+  }
+
+  return Array.from(new Set(parts)).join(' ').trim();
 }
 
 export function detectFamilyActivationScene(query: string): FamilyActivationScene | null {

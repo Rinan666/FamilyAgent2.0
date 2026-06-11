@@ -63,8 +63,18 @@ public class AuthorizedMemoryRecallService {
             String query,
             int diaryLimit,
             int memoryLimit) {
+        return recallForFamily(familyId, viewerUserId, query, null, diaryLimit, memoryLimit);
+    }
+
+    public AuthorizedMemoryRecallResult recallForFamily(
+            Long familyId,
+            Long viewerUserId,
+            String query,
+            String scene,
+            int diaryLimit,
+            int memoryLimit) {
         familyService.checkMembership(familyId);
-        return recallForFamilyAfterViewerValidated(familyId, viewerUserId, query, diaryLimit, memoryLimit);
+        return recallForFamilyAfterViewerValidated(familyId, viewerUserId, query, scene, diaryLimit, memoryLimit);
     }
 
     /**
@@ -77,8 +87,18 @@ public class AuthorizedMemoryRecallService {
             String query,
             int diaryLimit,
             int memoryLimit) {
+        return recallForFamilyAfterViewerValidated(familyId, viewerUserId, query, null, diaryLimit, memoryLimit);
+    }
+
+    public AuthorizedMemoryRecallResult recallForFamilyAfterViewerValidated(
+            Long familyId,
+            Long viewerUserId,
+            String query,
+            String scene,
+            int diaryLimit,
+            int memoryLimit) {
         String normalizedQuery = normalize(query);
-        if (!shouldRecallFamilyContext(normalizedQuery)) {
+        if (!shouldRecallFamilyContext(normalizedQuery, scene)) {
             return emptyRecall(normalizedQuery, "SKIPPED_UNRELATED_QUERY");
         }
         int diaryCandidateLimit = Math.max(diaryLimit * CANDIDATE_MULTIPLIER, diaryLimit);
@@ -141,7 +161,7 @@ public class AuthorizedMemoryRecallService {
             int diaryLimit,
             int memoryLimit) {
         String normalizedQuery = normalize(query);
-        if (!shouldRecallFamilyContext(normalizedQuery)) {
+        if (!shouldRecallFamilyContext(normalizedQuery, null)) {
             return emptyRecall(normalizedQuery, "SKIPPED_UNRELATED_QUERY");
         }
         int diaryCandidateLimit = Math.max(diaryLimit * CANDIDATE_MULTIPLIER, diaryLimit);
@@ -758,7 +778,10 @@ public class AuthorizedMemoryRecallService {
                 .trim();
     }
 
-    private static boolean shouldRecallFamilyContext(String normalizedQuery) {
+    private static boolean shouldRecallFamilyContext(String normalizedQuery, String scene) {
+        if ("FAMILY_AGENT".equalsIgnoreCase(firstNonBlank(scene, ""))) {
+            return true;
+        }
         if (normalizedQuery == null || normalizedQuery.isBlank()) {
             return true;
         }

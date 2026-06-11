@@ -91,6 +91,7 @@ public class MemoryController {
                 familyId,
                 viewerUserId,
                 request.getQuery(),
+                request.getScene(),
                 diaryLimit,
                 memoryLimit));
     }

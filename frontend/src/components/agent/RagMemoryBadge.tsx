@@ -11,12 +11,24 @@ export default function RagMemoryBadge({ metadata }: RagMemoryBadgeProps) {
   if (!rag) return null;
 
   const growthRecordCount = rag.growthRecordCount || 0;
-  const hasHits = rag.diaryCount > 0 || rag.memoryCount > 0 || growthRecordCount > 0 || rag.sources.length > 0;
+  const libraryCount = rag.libraryCount || 0;
+  const heritageTaskCount = rag.heritageTaskCount || 0;
+  const sessionSavedCount = rag.sessionSavedCount || 0;
+  const totalReferenceCount = rag.totalReferenceCount
+    ?? (rag.diaryCount + rag.memoryCount + growthRecordCount + libraryCount + heritageTaskCount + sessionSavedCount);
   const modeLabel = rag.retrievalMode === 'VECTOR_WITH_TEXT_FALLBACK' ? 'Vector + text' : 'Text fallback';
-  const label = hasHits
-    ? `Family memory referenced · Diary ${rag.diaryCount} · Experience ${rag.memoryCount} · Growth ${growthRecordCount}`
+  const detailParts = [
+    `Diary ${rag.diaryCount}`,
+    `Experience ${rag.memoryCount}`,
+    `Growth ${growthRecordCount}`,
+    libraryCount > 0 ? `Library ${libraryCount}` : '',
+    heritageTaskCount > 0 ? `Tasks ${heritageTaskCount}` : '',
+    sessionSavedCount > 0 ? `Recent ${sessionSavedCount}` : '',
+  ].filter(Boolean);
+  const label = totalReferenceCount > 0
+    ? `Family context referenced · ${detailParts.join(' · ')}`
     : 'No matching family memory';
-  const toneClass = hasHits
+  const toneClass = totalReferenceCount > 0
     ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
     : 'border-gray-100 bg-white/70 text-gray-500';
 
