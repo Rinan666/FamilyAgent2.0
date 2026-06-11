@@ -18,6 +18,8 @@ import com.familyagent.module.memory.entity.MemoryEntryVote;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
 import com.familyagent.module.memory.repository.MemoryEntryVoteRepository;
 import lombok.RequiredArgsConstructor;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +31,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -47,6 +50,7 @@ public class MemoryService {
     private final MemoryEntryVoteRepository voteRepository;
     private final FamilyService familyService;
     private final MemoryEmbeddingService memoryEmbeddingService;
+    private final RedissonClient redissonClient;
 
     @Transactional
     public MemoryEntry createMemory(CreateMemoryEntryRequest request) {
@@ -74,30 +78,45 @@ public class MemoryService {
             }
         }
 
-        MemoryEntry similar = findSimilarFamilyMemory(request, metadata, userId);
-        if (similar != null) {
-            return mergeFamilyMemory(similar, request, metadata, userId);
-        }
+        String lockKey = "memory:create:family:" + request.getFamilyId() + ":user:" + userId;
+        RLock lock = redissonClient.getLock(lockKey);
+        try {
+            boolean acquired = lock.tryLock(5, 10, TimeUnit.SECONDS);
+            if (!acquired) {
+                throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED, "操作过于频繁，请稍后重试");
+            }
+            MemoryEntry similar = findSimilarFamilyMemory(request, metadata, userId);
+            if (similar != null) {
+                return mergeFamilyMemory(similar, request, metadata, userId);
+            }
 
-        MemoryEntry entry = new MemoryEntry();
-        entry.setUserId(userId);
-        entry.setFamilyId(request.getFamilyId());
-        entry.setType(normalizeFamilyMemoryType(request.getType()));
-        entry.setScope(normalizeFamilyMemoryScope(request.getScope()));
-        entry.setContent(request.getContent().trim());
-        entry.setSummary(blankToNull(request.getSummary()));
-        entry.setImportance(clamp(request.getImportance() == null ? 3 : request.getImportance(), 1, 5));
-        entry.setConfidence(BigDecimal.valueOf(0.85));
-        entry.setStatus(EntityStatus.ACTIVE.name());
-        entry.setMetadata(MemoryIndexMetadataBuilder.enrichFamilyMemory(
-                metadata,
-                entry.getContent(),
-                entry.getSummary(),
-                entry.getType(),
-                entry.getImportance()));
-        memoryRepository.insert(entry);
-        memoryEmbeddingService.indexMemoryAfterCommit(entry);
-        return entry;
+            MemoryEntry entry = new MemoryEntry();
+            entry.setUserId(userId);
+            entry.setFamilyId(request.getFamilyId());
+            entry.setType(normalizeFamilyMemoryType(request.getType()));
+            entry.setScope(normalizeFamilyMemoryScope(request.getScope()));
+            entry.setContent(request.getContent().trim());
+            entry.setSummary(blankToNull(request.getSummary()));
+            entry.setImportance(clamp(request.getImportance() == null ? 3 : request.getImportance(), 1, 5));
+            entry.setConfidence(BigDecimal.valueOf(0.85));
+            entry.setStatus(EntityStatus.ACTIVE.name());
+            entry.setMetadata(MemoryIndexMetadataBuilder.enrichFamilyMemory(
+                    metadata,
+                    entry.getContent(),
+                    entry.getSummary(),
+                    entry.getType(),
+                    entry.getImportance()));
+            memoryRepository.insert(entry);
+            memoryEmbeddingService.indexMemoryAfterCommit(entry);
+            return entry;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "操作被中断，请重试");
+        } finally {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
     }
 
     private MemoryEntry findSimilarFamilyMemory(
