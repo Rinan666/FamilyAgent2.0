@@ -42,6 +42,7 @@ out/
 .classpath
 .settings/
 *.iml
+.trae/
 
 # --- OS ---
 .DS_Store
@@ -76,3 +77,7 @@ checkpoints/
 coverage/
 .nyc_output/
 jacoco.exec
+
+# --- Docs ---
+OPTIMIZATION_PLAN.md
+项目类图-精简重构版.md

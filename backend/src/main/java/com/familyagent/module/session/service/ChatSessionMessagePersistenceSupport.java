@@ -8,28 +8,24 @@ import com.familyagent.module.session.entity.ChatSession;
 import com.familyagent.module.session.entity.ChatSessionMessage;
 import com.familyagent.module.session.repository.ChatSessionMessageRepository;
 import com.familyagent.module.session.repository.ChatSessionRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
 
-final class ChatSessionMessagePersistenceSupport {
+@Component
+@RequiredArgsConstructor
+class ChatSessionMessagePersistenceSupport {
+
+    private static final int STORAGE_VERSION = 2;
 
     private final ChatSessionRepository sessionRepository;
     private final ChatSessionMessageRepository messageRepository;
     private final ObjectMapper objectMapper;
-    private final int storageVersion;
-
-    ChatSessionMessagePersistenceSupport(ChatSessionRepository sessionRepository,
-                                         ChatSessionMessageRepository messageRepository,
-                                         ObjectMapper objectMapper,
-                                         int storageVersion) {
-        this.sessionRepository = sessionRepository;
-        this.messageRepository = messageRepository;
-        this.objectMapper = objectMapper;
-        this.storageVersion = storageVersion;
-    }
 
     void appendMessagesInternal(Long sessionId, List<ChatSessionMessagePayload> payloads) {
         if (payloads == null || payloads.isEmpty()) {
@@ -72,7 +68,7 @@ final class ChatSessionMessagePersistenceSupport {
                 .sum());
         session.setMetadata(ChatSessionSupportUtils.withStorageVersion(
                 ChatSessionSupportUtils.toMutableMap(session.getMetadata()),
-                storageVersion));
+                STORAGE_VERSION));
         if (session.getArchiveMetadata() == null) {
             session.setArchiveMetadata(new HashMap<>());
         }

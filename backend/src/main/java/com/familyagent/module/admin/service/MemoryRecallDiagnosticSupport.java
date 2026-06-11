@@ -7,22 +7,18 @@ import com.familyagent.module.admin.dto.MemoryRecallDiagnosticResponse;
 import com.familyagent.module.family.repository.FamilyMemberRepository;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
 import com.familyagent.module.memory.service.AuthorizedMemoryRecallService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 
 import java.util.List;
 
-final class MemoryRecallDiagnosticSupport {
+@Component
+@RequiredArgsConstructor
+class MemoryRecallDiagnosticSupport {
 
     private final PlatformAdminAccessSupport adminAccessSupport;
     private final FamilyMemberRepository familyMemberRepository;
     private final AuthorizedMemoryRecallService memoryRecallService;
-
-    MemoryRecallDiagnosticSupport(PlatformAdminAccessSupport adminAccessSupport,
-                                  FamilyMemberRepository familyMemberRepository,
-                                  AuthorizedMemoryRecallService memoryRecallService) {
-        this.adminAccessSupport = adminAccessSupport;
-        this.familyMemberRepository = familyMemberRepository;
-        this.memoryRecallService = memoryRecallService;
-    }
 
     MemoryRecallDiagnosticResponse diagnoseMemoryRecall(MemoryRecallDiagnosticRequest request) {
         adminAccessSupport.requirePlatformAdmin();

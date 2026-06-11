@@ -17,10 +17,10 @@ import com.familyagent.module.memory.dto.RecallSourceSummary;
 import com.familyagent.module.memory.service.AuthorizedMemoryRecallService;
 import com.familyagent.module.user.entity.User;
 import com.familyagent.module.user.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -38,11 +38,11 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.doReturn;
 
 @ExtendWith(MockitoExtension.class)
 class DatabaseHealthServiceTest {
@@ -53,7 +53,20 @@ class DatabaseHealthServiceTest {
     @Mock private FamilyMemberRepository familyMemberRepository;
     @Mock private FamilyLifecycleService familyLifecycleService;
     @Mock private AuthorizedMemoryRecallService memoryRecallService;
-    @InjectMocks private DatabaseHealthService databaseHealthService;
+
+    private DatabaseHealthService databaseHealthService;
+
+    @BeforeEach
+    void setUp() {
+        PlatformAdminAccessSupport adminAccessSupport = new PlatformAdminAccessSupport(userRepository);
+        DatabaseHealthQuerySupport querySupport = new DatabaseHealthQuerySupport(
+                adminAccessSupport, jdbcTemplate, familyRepository, familyMemberRepository);
+        AdminUserMaintenanceSupport userMaintenanceSupport = new AdminUserMaintenanceSupport(
+                adminAccessSupport, jdbcTemplate, userRepository, familyLifecycleService);
+        MemoryRecallDiagnosticSupport diagnosticSupport = new MemoryRecallDiagnosticSupport(
+                adminAccessSupport, familyMemberRepository, memoryRecallService);
+        databaseHealthService = new DatabaseHealthService(querySupport, userMaintenanceSupport, diagnosticSupport);
+    }
 
     @Test
     void deleteUser_requiresPlatformAdmin() {

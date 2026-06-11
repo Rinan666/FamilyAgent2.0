@@ -7,45 +7,18 @@ import com.familyagent.module.admin.dto.FamilyDatabaseSummary;
 import com.familyagent.module.admin.dto.MemoryRecallDiagnosticRequest;
 import com.familyagent.module.admin.dto.MemoryRecallDiagnosticResponse;
 import com.familyagent.module.family.dto.FamilyMemberVO;
-import com.familyagent.module.family.repository.FamilyMemberRepository;
-import com.familyagent.module.family.repository.FamilyRepository;
-import com.familyagent.module.family.service.FamilyLifecycleService;
-import com.familyagent.module.memory.service.AuthorizedMemoryRecallService;
-import com.familyagent.module.user.repository.UserRepository;
-import org.springframework.jdbc.core.JdbcTemplate;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class DatabaseHealthService {
 
     private final DatabaseHealthQuerySupport querySupport;
     private final AdminUserMaintenanceSupport userMaintenanceSupport;
     private final MemoryRecallDiagnosticSupport diagnosticSupport;
-
-    public DatabaseHealthService(JdbcTemplate jdbcTemplate,
-                                 UserRepository userRepository,
-                                 FamilyRepository familyRepository,
-                                 FamilyMemberRepository familyMemberRepository,
-                                 FamilyLifecycleService familyLifecycleService,
-                                 AuthorizedMemoryRecallService memoryRecallService) {
-        PlatformAdminAccessSupport adminAccessSupport = new PlatformAdminAccessSupport(userRepository);
-        this.querySupport = new DatabaseHealthQuerySupport(
-                adminAccessSupport,
-                jdbcTemplate,
-                familyRepository,
-                familyMemberRepository);
-        this.userMaintenanceSupport = new AdminUserMaintenanceSupport(
-                adminAccessSupport,
-                jdbcTemplate,
-                userRepository,
-                familyLifecycleService);
-        this.diagnosticSupport = new MemoryRecallDiagnosticSupport(
-                adminAccessSupport,
-                familyMemberRepository,
-                memoryRecallService);
-    }
 
     public void deleteUser(Long userId) {
         userMaintenanceSupport.deleteUser(userId);

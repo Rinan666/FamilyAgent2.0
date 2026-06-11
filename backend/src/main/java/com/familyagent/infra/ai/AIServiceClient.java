@@ -4,12 +4,12 @@ import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
@@ -24,12 +24,14 @@ import java.util.Map;
 
 /**
  * AI service client for the Python FastAPI service.
+ * <p>
+ * All external dependencies ({@link RestTemplate}, {@link ObjectMapper}) are
+ * managed by Spring and injected — no manual construction.
  */
 @Slf4j
 @Component
 public class AIServiceClient {
 
-    private static final int MILLIS_PER_SECOND = 1000;
     private static final int MAX_CONNECT_TIMEOUT_MILLIS = 10_000;
     private static final int STREAM_TIMEOUT_MILLIS = 300_000;
     private static final int STREAM_BUFFER_SIZE = 1024;
@@ -38,22 +40,16 @@ public class AIServiceClient {
     private final RestTemplate restTemplate;
     private final String baseUrl;
     private final String internalToken;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
-    public AIServiceClient(@Value("${ai-service.base-url:http://localhost:8000}") String baseUrl,
-                           @Value("${ai-service.timeout:60}") int timeout,
-                           @Value("${ai-service.internal-token:}") String internalToken) {
+    public AIServiceClient(@Qualifier("aiServiceRestTemplate") RestTemplate restTemplate,
+                           @Value("${ai-service.base-url:http://localhost:8000}") String baseUrl,
+                           @Value("${ai-service.internal-token:}") String internalToken,
+                           ObjectMapper objectMapper) {
+        this.restTemplate = restTemplate;
         this.baseUrl = baseUrl;
         this.internalToken = internalToken;
-        this.restTemplate = new RestTemplate(createRequestFactory(timeout));
-    }
-
-    private static SimpleClientHttpRequestFactory createRequestFactory(int timeoutSeconds) {
-        int readTimeoutMillis = Math.max(1, timeoutSeconds) * MILLIS_PER_SECOND;
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(Math.min(readTimeoutMillis, MAX_CONNECT_TIMEOUT_MILLIS));
-        requestFactory.setReadTimeout(readTimeoutMillis);
-        return requestFactory;
+        this.objectMapper = objectMapper;
     }
 
     /**

@@ -7,13 +7,18 @@ import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
-@Component
+/**
+ * Writes common response headers (X-Content-Type-Options, charset, Cache-Control).
+ * <p>
+ * Registered explicitly via {@link FilterRegistrationBean} in {@link FilterConfig}
+ * rather than as a generic {@code @Component}, so that its servlet lifecycle
+ * (URL patterns, order) is declared in one place.
+ */
 public class ResponseHeaderFilter implements Filter {
 
     private static final String NO_STORE = "no-store, max-age=0, must-revalidate";

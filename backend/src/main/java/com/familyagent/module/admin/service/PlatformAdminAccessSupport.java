@@ -5,14 +5,14 @@ import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.user.entity.User;
 import com.familyagent.module.user.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 
-final class PlatformAdminAccessSupport {
+@Component
+@RequiredArgsConstructor
+class PlatformAdminAccessSupport {
 
     private final UserRepository userRepository;
-
-    PlatformAdminAccessSupport(UserRepository userRepository) {
-        this.userRepository = userRepository;
-    }
 
     void requirePlatformAdmin() {
         Long userId = CurrentUserGuard.currentUserId();

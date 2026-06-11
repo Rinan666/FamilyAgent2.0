@@ -1,6 +1,5 @@
 package com.familyagent.module.session.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
@@ -18,6 +17,7 @@ import com.familyagent.module.session.entity.ChatSessionMessage;
 import com.familyagent.module.session.repository.ChatSessionArchiveRepository;
 import com.familyagent.module.session.repository.ChatSessionMessageRepository;
 import com.familyagent.module.session.repository.ChatSessionRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +34,7 @@ import java.util.Objects;
 @Slf4j
 @SuppressWarnings("deprecation")
 @Service
+@RequiredArgsConstructor
 public class ChatSessionService {
 
     private static final String STATUS_ACTIVE = "ACTIVE";
@@ -42,9 +43,6 @@ public class ChatSessionService {
     private static final int MAX_SESSION_LIMIT = 100;
     private static final int DEFAULT_MESSAGE_PAGE_SIZE = 40;
     private static final int MAX_MESSAGE_PAGE_SIZE = 120;
-    private static final int ARCHIVE_TRIGGER_MESSAGE_COUNT = 100;
-    private static final int ARCHIVE_CHUNK_SIZE = 50;
-    private static final int ARCHIVE_RETAIN_RECENT_COUNT = 30;
     private static final int STORAGE_VERSION = 2;
 
     private final ChatSessionRepository sessionRepository;
@@ -53,34 +51,6 @@ public class ChatSessionService {
     private final FamilyService familyService;
     private final ChatSessionMessagePersistenceSupport messagePersistenceSupport;
     private final ChatSessionArchiveSupport archiveSupport;
-
-    public ChatSessionService(ChatSessionRepository sessionRepository,
-                              ChatSessionMessageRepository messageRepository,
-                              ChatSessionArchiveRepository archiveRepository,
-                              FamilyService familyService,
-                              ObjectMapper objectMapper,
-                              ChatSessionArchiveStorageService archiveStorageService,
-                              ChatSessionArchiveSummaryService archiveSummaryService) {
-        this.sessionRepository = sessionRepository;
-        this.messageRepository = messageRepository;
-        this.archiveRepository = archiveRepository;
-        this.familyService = familyService;
-        this.messagePersistenceSupport = new ChatSessionMessagePersistenceSupport(
-                sessionRepository,
-                messageRepository,
-                objectMapper,
-                STORAGE_VERSION);
-        this.archiveSupport = new ChatSessionArchiveSupport(
-                sessionRepository,
-                messageRepository,
-                archiveRepository,
-                archiveStorageService,
-                archiveSummaryService,
-                ARCHIVE_TRIGGER_MESSAGE_COUNT,
-                ARCHIVE_CHUNK_SIZE,
-                ARCHIVE_RETAIN_RECENT_COUNT,
-                STORAGE_VERSION);
-    }
 
     @Transactional
     public ChatSessionDetail createSession(ChatSession session, List<ChatSessionMessagePayload> initialMessages) {

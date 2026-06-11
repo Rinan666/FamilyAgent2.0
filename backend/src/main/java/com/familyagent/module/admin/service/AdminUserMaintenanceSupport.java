@@ -6,25 +6,19 @@ import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.family.service.FamilyLifecycleService;
 import com.familyagent.module.user.entity.User;
 import com.familyagent.module.user.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-final class AdminUserMaintenanceSupport {
+@Component
+@RequiredArgsConstructor
+class AdminUserMaintenanceSupport {
 
     private final PlatformAdminAccessSupport adminAccessSupport;
     private final JdbcTemplate jdbcTemplate;
     private final UserRepository userRepository;
     private final FamilyLifecycleService familyLifecycleService;
-
-    AdminUserMaintenanceSupport(PlatformAdminAccessSupport adminAccessSupport,
-                                JdbcTemplate jdbcTemplate,
-                                UserRepository userRepository,
-                                FamilyLifecycleService familyLifecycleService) {
-        this.adminAccessSupport = adminAccessSupport;
-        this.jdbcTemplate = jdbcTemplate;
-        this.userRepository = userRepository;
-        this.familyLifecycleService = familyLifecycleService;
-    }
 
     @Transactional
     void deleteUser(Long userId) {
