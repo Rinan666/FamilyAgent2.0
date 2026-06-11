@@ -81,7 +81,8 @@ jacoco.exec
 # --- Docs ---
 OPTIMIZATION_PLAN.md
 项目类图-精简重构版.md
-dip-*.md
+CLAUDE.md
+AGENTS.md
 
 # --- DIP homework (datasets + experiment outputs, not production code) ---
 ai-service/dip/data/
@@ -91,3 +92,4 @@ ai-service/dip/setup_data.py
 ai-service/dip/visualize.py 
 docs/dip-proposal.md
 docs/dip-plan.md
+docs/dip-report.md
