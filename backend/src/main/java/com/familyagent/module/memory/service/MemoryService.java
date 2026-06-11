@@ -1,6 +1,10 @@
 package com.familyagent.module.memory.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.familyagent.common.constant.EntityStatus;
+import com.familyagent.common.constant.HeritageSource;
+import com.familyagent.common.constant.MemoryScope;
+import com.familyagent.common.constant.MemoryType;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.response.PageResult;
@@ -34,12 +38,9 @@ public class MemoryService {
     private static final int MAX_LIMIT = 30;
     private static final int DEFAULT_PAGE_SIZE = 6;
     private static final int MAX_PAGE_SIZE = 20;
-    private static final Set<String> FAMILY_MEMORY_TYPES = Set.of(
-            "FAMILY_STORY", "ELDER_ADVICE", "HEALTH_REMINDER", "GROWTH_RISK", "VALUE", "PLAN");
-    private static final Set<String> FAMILY_MEMORY_SCOPES = Set.of(
-            "PRIVATE", "PARENT_VISIBLE", "CARE_VISIBLE", "FAMILY_VISIBLE");
-    private static final Set<String> MANUAL_HERITAGE_SOURCES = Set.of(
-            "HERITAGE_ENTRY", "HERITAGE_INTERVIEW", "HERITAGE_ATOM");
+    private static final Set<String> FAMILY_MEMORY_TYPES = MemoryType.names();
+    private static final Set<String> FAMILY_MEMORY_SCOPES = MemoryScope.familyNames();
+    private static final Set<String> MANUAL_HERITAGE_SOURCES = HeritageSource.names();
     private static final int SIMILAR_MEMORY_SCAN_LIMIT = 30;
 
     private final MemoryEntryRepository memoryRepository;
@@ -87,7 +88,7 @@ public class MemoryService {
         entry.setSummary(blankToNull(request.getSummary()));
         entry.setImportance(clamp(request.getImportance() == null ? 3 : request.getImportance(), 1, 5));
         entry.setConfidence(BigDecimal.valueOf(0.85));
-        entry.setStatus("ACTIVE");
+        entry.setStatus(EntityStatus.ACTIVE.name());
         entry.setMetadata(MemoryIndexMetadataBuilder.enrichFamilyMemory(
                 metadata,
                 entry.getContent(),
@@ -209,7 +210,7 @@ public class MemoryService {
         Long viewerUserId = CurrentUserGuard.currentUserId();
         String normalizedVote = normalizeVoteType(voteType);
         MemoryEntry entry = memoryRepository.selectById(memoryId);
-        if (entry == null || !"ACTIVE".equals(entry.getStatus()) || entry.getFamilyId() == null) {
+        if (entry == null || !EntityStatus.ACTIVE.name().equals(entry.getStatus()) || entry.getFamilyId() == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         if (!FAMILY_MEMORY_TYPES.contains(entry.getType())) {
@@ -248,11 +249,11 @@ public class MemoryService {
     @Transactional
     public void archiveMemory(Long id) {
         MemoryEntry entry = memoryRepository.selectById(id);
-        if (entry == null || !"ACTIVE".equals(entry.getStatus())) {
+        if (entry == null || !EntityStatus.ACTIVE.name().equals(entry.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         CurrentUserGuard.requireSelf(entry.getUserId());
-        entry.setStatus("ARCHIVED");
+        entry.setStatus(EntityStatus.ARCHIVED.name());
         memoryRepository.updateById(entry);
     }
 
@@ -284,7 +285,7 @@ public class MemoryService {
     }
 
     private static String normalizeFamilyMemoryType(String type) {
-        String normalized = type == null ? "ELDER_ADVICE" : type.trim().toUpperCase(Locale.ROOT);
+        String normalized = type == null ? MemoryType.DEFAULT.name() : type.trim().toUpperCase(Locale.ROOT);
         if (!FAMILY_MEMORY_TYPES.contains(normalized)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "家族经验类型不支持");
         }
@@ -292,7 +293,7 @@ public class MemoryService {
     }
 
     private static String normalizeFamilyMemoryScope(String scope) {
-        String normalized = scope == null ? "FAMILY_VISIBLE" : scope.trim().toUpperCase(Locale.ROOT);
+        String normalized = scope == null ? MemoryScope.DEFAULT_MEMORY.name() : scope.trim().toUpperCase(Locale.ROOT);
         if (!FAMILY_MEMORY_SCOPES.contains(normalized)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "可见范围不支持");
         }
@@ -600,7 +601,7 @@ public class MemoryService {
         if (request.getMemoryCard() != null) {
             metadata.put("memoryCard", request.getMemoryCard());
         }
-        metadata.putIfAbsent("source", "HERITAGE_ENTRY");
+        metadata.putIfAbsent("source", HeritageSource.HERITAGE_ENTRY.name());
         return metadata;
     }
 
