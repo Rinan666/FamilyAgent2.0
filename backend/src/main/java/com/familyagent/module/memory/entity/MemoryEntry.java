@@ -1,7 +1,7 @@
 package com.familyagent.module.memory.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
-import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
+import com.familyagent.common.handler.PgJsonbTypeHandler;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -26,7 +26,7 @@ public class MemoryEntry {
     private Long sourceSessionId;
     private String status;
 
-    @TableField(typeHandler = JacksonTypeHandler.class)
+    @TableField(typeHandler = PgJsonbTypeHandler.class)
     private Object metadata;
 
     @TableField(fill = FieldFill.INSERT)

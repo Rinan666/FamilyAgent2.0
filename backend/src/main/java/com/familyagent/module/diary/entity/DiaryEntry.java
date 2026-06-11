@@ -5,7 +5,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
+import com.familyagent.common.handler.PgJsonbTypeHandler;
 import com.familyagent.common.handler.StringArrayTypeHandler;
 import lombok.Data;
 
@@ -22,7 +22,7 @@ public class DiaryEntry {
     private Long familyId;
     private String rawText;
 
-    @TableField(typeHandler = JacksonTypeHandler.class)
+    @TableField(typeHandler = PgJsonbTypeHandler.class)
     private Object structured;
 
     private String mood;
@@ -33,13 +33,13 @@ public class DiaryEntry {
     private String privacyLevel;
     private String visibility;
 
-    @TableField(typeHandler = JacksonTypeHandler.class)
+    @TableField(typeHandler = PgJsonbTypeHandler.class)
     private Object permissionScope;
 
     private String source;
     private String voiceUrl;
 
-    @TableField(typeHandler = JacksonTypeHandler.class)
+    @TableField(typeHandler = PgJsonbTypeHandler.class)
     private Object metadata;
 
     @TableField(fill = FieldFill.INSERT)

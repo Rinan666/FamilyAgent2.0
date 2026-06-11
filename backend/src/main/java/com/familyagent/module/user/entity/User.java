@@ -1,7 +1,7 @@
 package com.familyagent.module.user.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
-import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
+import com.familyagent.common.handler.PgJsonbTypeHandler;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
@@ -31,7 +31,7 @@ public class User {
     private String role;
     private String status;
 
-    @TableField(typeHandler = JacksonTypeHandler.class)
+    @TableField(typeHandler = PgJsonbTypeHandler.class)
     private Object metadata;
 
     private LocalDateTime lastLoginAt;

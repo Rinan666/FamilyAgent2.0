@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
+import com.familyagent.common.handler.PgJsonbTypeHandler;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -23,7 +23,7 @@ public class ChatSessionMessage {
     private String content;
     private String toolName;
 
-    @TableField(typeHandler = JacksonTypeHandler.class)
+    @TableField(typeHandler = PgJsonbTypeHandler.class)
     private Object metadata;
 
     private LocalDateTime createdAt;

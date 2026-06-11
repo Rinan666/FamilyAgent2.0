@@ -1,6 +1,7 @@
 package com.familyagent.module.family.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.familyagent.common.handler.PgJsonbTypeHandler;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -20,7 +21,7 @@ public class Family {
     private String avatarUrl;
     private String inviteCode;
     private Integer maxMembers;
-    @TableField(typeHandler = com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler.class)
+    @TableField(typeHandler = PgJsonbTypeHandler.class)
     private Object settings;
 
     private Long createdBy;

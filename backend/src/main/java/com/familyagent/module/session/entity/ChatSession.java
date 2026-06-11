@@ -1,7 +1,7 @@
 package com.familyagent.module.session.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
-import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
+import com.familyagent.common.handler.PgJsonbTypeHandler;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -21,7 +21,7 @@ public class ChatSession {
     private String subject;
 
     @Deprecated
-    @TableField(typeHandler = JacksonTypeHandler.class)
+    @TableField(typeHandler = PgJsonbTypeHandler.class)
     private Object messages;
 
     private String title;
@@ -34,15 +34,15 @@ public class ChatSession {
     private Integer archivedBeforeSeq;
     private String archiveStatus;
 
-    @TableField(typeHandler = JacksonTypeHandler.class)
+    @TableField(typeHandler = PgJsonbTypeHandler.class)
     private Object permissionScope;
 
     private String source;
 
-    @TableField(typeHandler = JacksonTypeHandler.class)
+    @TableField(typeHandler = PgJsonbTypeHandler.class)
     private Object metadata;
 
-    @TableField(typeHandler = JacksonTypeHandler.class)
+    @TableField(typeHandler = PgJsonbTypeHandler.class)
     private Object archiveMetadata;
 
     @TableField(fill = FieldFill.INSERT)

@@ -83,8 +83,8 @@ public interface ChatSessionRepository extends BaseMapper<ChatSession> {
 
     @Update("""
             UPDATE chat_sessions
-            SET metadata = CAST(#{metadata, typeHandler=com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler} AS jsonb),
-                archive_metadata = CAST(#{archiveMetadata, typeHandler=com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler} AS jsonb)
+            SET metadata = CAST(#{metadata, typeHandler=com.familyagent.common.handler.PgJsonbTypeHandler} AS jsonb),
+                archive_metadata = CAST(#{archiveMetadata, typeHandler=com.familyagent.common.handler.PgJsonbTypeHandler} AS jsonb)
             WHERE id = #{sessionId}
             """)
     int updateStorageMetadata(@Param("sessionId") Long sessionId,
