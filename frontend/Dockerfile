@@ -28,6 +28,11 @@ COPY --from=build /app/next.config.js ./next.config.js
 COPY --from=build /app/.next ./.next
 COPY --from=build /app/node_modules ./node_modules
 
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup && \
+    chown -R appuser:appgroup /app
+
+USER appuser
+
 EXPOSE 3000
 
 CMD ["npm", "run", "start", "--", "--hostname", "0.0.0.0", "--port", "3000"]

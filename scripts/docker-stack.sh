@@ -8,7 +8,8 @@ ENV_FILE="${STACK_ENV_FILE:-$ROOT_DIR/.env.docker}"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "[ERROR] Missing env file: $ENV_FILE"
-  echo "        Copy $ROOT_DIR/.env.docker.example to $ENV_FILE and fill in real secrets first."
+  echo "        cp $ROOT_DIR/.env.docker.example $ENV_FILE"
+  echo "        Then edit $ENV_FILE and set your API keys and secrets."
   exit 1
 fi
 
@@ -24,16 +25,17 @@ case "${1:-help}" in
     docker_compose down
     ;;
   restart)
-    docker_compose up -d --build
+    docker_compose up -d --build --remove-orphans
     ;;
   logs)
     shift || true
     docker_compose logs -f "$@"
     ;;
-  ps)
+  status|ps)
     docker_compose ps
     ;;
   config)
+    echo "=== Resolved compose config ==="
     docker_compose config
     ;;
   pull)
@@ -44,13 +46,18 @@ case "${1:-help}" in
 Usage: scripts/docker-stack.sh <command>
 
 Commands:
-  up       Build and start the full stack
+  up       Build and start the full stack (7 services)
   down     Stop and remove the stack
-  restart  Rebuild and restart the stack
-  logs     Follow logs, optionally for selected services
-  ps       Show service status
-  config   Render the resolved compose config
+  restart  Rebuild and restart (adds --remove-orphans)
+  logs     Follow logs, e.g. ./scripts/docker-stack.sh logs backend
+  status   Show service status
+  config   Render the resolved compose config (useful for debugging env vars)
   pull     Pull referenced base images
+
+First-time setup:
+  cp .env.docker.example .env.docker
+  # Edit .env.docker — replace API keys and secrets
+  ./scripts/docker-stack.sh up
 EOF
     ;;
   *)

@@ -69,6 +69,11 @@ services:
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - fa-network
 
@@ -113,14 +118,21 @@ services:
       SERVER_PORT: 8080
       DB_HOST: postgres
       DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-familyagent}
+      DB_USER: ${DB_USER:-fa_user}
+      DB_PASSWORD: ${DB_PASSWORD}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-fa_user}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       AI_SERVICE_URL: http://ai-service:8000
+      AI_INTERNAL_SERVICE_TOKEN: ${AI_INTERNAL_SERVICE_TOKEN}
       MINIO_ENDPOINT: http://minio:9000
-      JAVA_OPTS: ${JAVA_OPTS:--Xms256m -Xmx768m}
-    command: sh -c 'java $$JAVA_OPTS -jar /app/app.jar --spring.profiles.active=prod'
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      JAVA_TOOL_OPTIONS: ${JAVA_OPTS:--Xms256m -Xmx768m}
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     depends_on:
@@ -131,7 +143,7 @@ services:
       rabbitmq:
         condition: service_healthy
       minio:
-        condition: service_started
+        condition: service_healthy
       ai-service:
         condition: service_started
     networks:
