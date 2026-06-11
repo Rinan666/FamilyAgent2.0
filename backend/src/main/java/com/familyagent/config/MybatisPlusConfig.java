@@ -11,7 +11,10 @@ import org.springframework.context.annotation.Configuration;
  * MyBatis-Plus configuration.
  */
 @Configuration
-@MapperScan("com.familyagent.module.**.repository")
+@MapperScan({
+        "com.familyagent.module.**.repository",
+        "com.familyagent.module.**.mapper"
+})
 public class MybatisPlusConfig {
 
     @Bean

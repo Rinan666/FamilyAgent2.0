@@ -13,14 +13,18 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
@@ -34,10 +38,17 @@ class MemoryServiceTest {
     @Mock private MemoryEntryVoteRepository voteRepository;
     @Mock private FamilyService familyService;
     @Mock private MemoryEmbeddingService memoryEmbeddingService;
+    @Mock private RedissonClient redissonClient;
+    @Mock private RLock familyCreateLock;
 
     @Test
     void createFamilyMemory_shouldRejectManualHeritageWithoutPositiveJudge() {
-        MemoryService service = new MemoryService(memoryRepository, voteRepository, familyService, memoryEmbeddingService);
+        MemoryService service = new MemoryService(
+                memoryRepository,
+                voteRepository,
+                familyService,
+                memoryEmbeddingService,
+                redissonClient);
         CreateFamilyMemoryRequest request = requestWithMetadata(Map.of("source", "HERITAGE_ENTRY"));
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
@@ -53,8 +64,8 @@ class MemoryServiceTest {
     }
 
     @Test
-    void createFamilyMemory_shouldAllowManualHeritageWithPositiveJudge() {
-        MemoryService service = new MemoryService(memoryRepository, voteRepository, familyService, memoryEmbeddingService);
+    void createFamilyMemory_shouldAllowManualHeritageWithPositiveJudge() throws InterruptedException {
+        MemoryService service = serviceWithAcquiredLock();
         CreateFamilyMemoryRequest request = requestWithMetadata(Map.of(
                 "source", "HERITAGE_INTERVIEW",
                 "saveJudge", Map.of("shouldSave", true, "learningValueScore", 4)));
@@ -75,8 +86,8 @@ class MemoryServiceTest {
     }
 
     @Test
-    void createFamilyMemory_shouldNotRequireJudgeForDiaryPromotion() {
-        MemoryService service = new MemoryService(memoryRepository, voteRepository, familyService, memoryEmbeddingService);
+    void createFamilyMemory_shouldNotRequireJudgeForDiaryPromotion() throws InterruptedException {
+        MemoryService service = serviceWithAcquiredLock();
         CreateFamilyMemoryRequest request = requestWithMetadata(Map.of("source", "DIARY_PROMOTION", "sourceDiaryId", 99));
         when(memoryRepository.findActiveBySourceDiaryId(1L, "99")).thenReturn(null);
         when(memoryRepository.findActiveFamilyMemories(eq(1L), eq(10L), any(Integer.class))).thenReturn(List.of());
@@ -92,7 +103,12 @@ class MemoryServiceTest {
 
     @Test
     void searchFamilyMemories_shouldClampPageAndAttachVoteStats() {
-        MemoryService service = new MemoryService(memoryRepository, voteRepository, familyService, memoryEmbeddingService);
+        MemoryService service = new MemoryService(
+                memoryRepository,
+                voteRepository,
+                familyService,
+                memoryEmbeddingService,
+                redissonClient);
         MemoryEntry entry = new MemoryEntry();
         entry.setId(301L);
         entry.setFamilyId(1L);
@@ -118,6 +134,18 @@ class MemoryServiceTest {
             assertEquals(1, result.getItems().size());
             assertTrue(((Map<?, ?>) result.getItems().get(0).getMetadata()).containsKey("voteStats"));
         }
+    }
+
+    private MemoryService serviceWithAcquiredLock() throws InterruptedException {
+        when(redissonClient.getLock(anyString())).thenReturn(familyCreateLock);
+        when(familyCreateLock.tryLock(5, 10, TimeUnit.SECONDS)).thenReturn(true);
+        when(familyCreateLock.isHeldByCurrentThread()).thenReturn(true);
+        return new MemoryService(
+                memoryRepository,
+                voteRepository,
+                familyService,
+                memoryEmbeddingService,
+                redissonClient);
     }
 
     private static CreateFamilyMemoryRequest requestWithMetadata(Map<String, Object> metadata) {

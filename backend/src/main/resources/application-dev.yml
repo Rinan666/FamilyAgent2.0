@@ -6,7 +6,7 @@ spring:
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:familyagent}?stringtype=unspecified
     username: ${DB_USER:fa_user}
-    password: ${DB_PASSWORD:fa_dev_pass}
+    password: ${DB_PASSWORD:ASDFGZXCVB008}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
@@ -18,7 +18,7 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
+      password: ${REDIS_PASSWORD:ASDFGZXCVB008}
       database: 0
       lettuce:
         pool:
@@ -30,7 +30,7 @@ spring:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USER:fa_user}
-    password: ${RABBITMQ_PASSWORD:fa_dev_pass}
+    password: ${RABBITMQ_PASSWORD:ASDFGZXCVB008}
     listener:
       simple:
         acknowledge-mode: auto

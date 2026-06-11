@@ -29,11 +29,16 @@ services:
     container_name: fa-redis
     ports:
       - "${REDIS_PORT:-6379}:6379"
-    command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass $REDIS_PASSWORD}
+    command:
+      - redis-server
+      - --appendonly
+      - yes
+      - --requirepass
+      - ${REDIS_PASSWORD:-ASDFGZXCVB008}
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"${REDIS_PASSWORD:-ASDFGZXCVB008}\" ping"]
       interval: 10s
       timeout: 5s
       retries: 5
