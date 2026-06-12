@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
 interface LegacyWorkpageNoticeProps {
-  tab: 'heritage' | 'library';
+  tab: 'growth' | 'heritage' | 'library';
   label: string;
 }
 

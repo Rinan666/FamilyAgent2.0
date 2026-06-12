@@ -151,7 +151,6 @@ export default function FamilyPage() {
   const [tasks, setTasks] = useState<HeritageTask[]>([]);
   const [loadingData, setLoadingData] = useState(false);
   const [error, setError] = useState('');
-  const [pendingFamilyId, setPendingFamilyId] = useState<number | null>(null);
 
   const [streamFilter, setStreamFilter] = useState<StreamFilter>('all');
   const [streamQuery, setStreamQuery] = useState('');
@@ -174,7 +173,7 @@ export default function FamilyPage() {
       || null;
   }, [activeFamilyId, families, requestedFamilyId]);
 
-  const displayFamilyId = pendingFamilyId ?? selectedFamilyId;
+  const displayFamilyId = selectedFamilyId;
 
   const selectedFamily = useMemo(
     () => families.find((family) => family.id === displayFamilyId) || null,
@@ -198,12 +197,6 @@ export default function FamilyPage() {
       setActiveFamilyId(displayFamilyId);
     }
   }, [activeFamilyId, displayFamilyId, setActiveFamilyId]);
-
-  useEffect(() => {
-    if (pendingFamilyId && pendingFamilyId === selectedFamilyId) {
-      setPendingFamilyId(null);
-    }
-  }, [pendingFamilyId, selectedFamilyId]);
 
   const loadFamilySpaceData = useCallback(async () => {
     if (!displayFamilyId) {
@@ -239,8 +232,12 @@ export default function FamilyPage() {
   }, [displayFamilyId]);
 
   useEffect(() => {
+    if (currentTab === 'library') {
+      setError('');
+      return;
+    }
     void loadFamilySpaceData();
-  }, [loadFamilySpaceData]);
+  }, [currentTab, loadFamilySpaceData]);
 
   const streamItems = useMemo(() => {
     const familyId = displayFamilyId;
@@ -256,8 +253,8 @@ export default function FamilyPage() {
         href: familyLibraryItemHref(familyId, `diary-${entry.id}`),
         sourceLabel: '记录',
         accentClass: 'bg-rose-50 text-rose-700',
-        actionHref: `/dashboard/heritage?familyId=${familyId}&type=ELDER_ADVICE`,
-        actionLabel: '整理为经验',
+        actionHref: `/dashboard/diary?familyId=${familyId}&writeCategory=EXPERIENCE&memoryType=ELDER_ADVICE`,
+        actionLabel: '补充成经验',
       })),
       ...memories.map((memory) => ({
         id: `memory-${memory.id}`,
@@ -280,8 +277,8 @@ export default function FamilyPage() {
         href: familyLibraryItemHref(familyId, `growth-${record.id}`),
         sourceLabel: '守护',
         accentClass: 'bg-emerald-50 text-emerald-700',
-        actionHref: `/dashboard/heritage?familyId=${familyId}&type=GROWTH_RISK`,
-        actionLabel: '沉淀为提醒',
+        actionHref: `/dashboard/diary?familyId=${familyId}&writeCategory=EXPERIENCE&memoryType=GROWTH_RISK`,
+        actionLabel: '补充成提醒',
       })),
     ];
 
@@ -317,7 +314,7 @@ export default function FamilyPage() {
     return [
       {
         href: `/dashboard/diary?familyId=${displayFamilyId}`,
-        label: '写记录',
+        label: '写下',
         icon: BookHeart,
       },
       {
@@ -326,8 +323,8 @@ export default function FamilyPage() {
         icon: Bot,
       },
       {
-        href: `/dashboard/diary?familyId=${displayFamilyId}&tab=growth`,
-        label: '成长守护',
+        href: `/dashboard/diary?familyId=${displayFamilyId}&writeCategory=OBSERVATION`,
+        label: '写观察',
         icon: Shield,
       },
       {
@@ -358,34 +355,31 @@ export default function FamilyPage() {
             家族空间
           </span>
         )}
-        title="一个入口管理家族内容"
-        description="总览、记忆流、经验沉淀和成员视图都在这里。"
+        title="家庭内容总览"
+        description="查看当前家族的记录、经验、守护和成员。"
         aside={(
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.2em] text-stone-400">当前家族</p>
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-3 space-y-3">
               {families.length === 0 && (
                 <span className="rounded-full bg-stone-100 px-3 py-1.5 text-xs text-stone-500">
                   暂无家族
                 </span>
               )}
-              {families.map((family) => (
-                <button
-                  key={family.id}
-                  type="button"
-                  onClick={() => {
-                    setPendingFamilyId(family.id);
-                    updateUrl(currentTab, family.id);
-                  }}
-                  className={`rounded-full border px-3 py-1.5 text-sm transition ${
-                    displayFamilyId === family.id
-                      ? 'border-stone-900 bg-stone-900 text-white'
-                      : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300 hover:bg-stone-50'
-                  }`}
-                >
-                  {family.name}
-                </button>
-              ))}
+              {selectedFamily && (
+                <span className="block text-base font-semibold text-stone-950">
+                  {selectedFamily.name}
+                </span>
+              )}
+              <p className="text-xs leading-5 text-stone-500">
+                家族切换已收进设置页，这里只保留当前空间内容。
+              </p>
+              <Link
+                href="/dashboard/settings"
+                className="inline-flex h-9 items-center rounded-full border border-stone-200 bg-white px-3 text-xs font-medium text-stone-600 hover:bg-stone-50"
+              >
+                去设置切换
+              </Link>
             </div>
           </div>
         )}
@@ -498,7 +492,7 @@ export default function FamilyPage() {
                     ))}
                     {streamItems.length === 0 && (
                       <p className="rounded-2xl border border-dashed border-stone-200 px-3 py-6 text-center text-sm text-stone-400">
-                        还没有最近动态，先写一条记录会更容易开始。
+                        还没有最近动态，先写一条记录。
                       </p>
                     )}
                   </div>
@@ -527,7 +521,7 @@ export default function FamilyPage() {
                     ))}
                     {memories.length === 0 && (
                       <p className="rounded-2xl border border-dashed border-stone-200 px-3 py-6 text-center text-sm text-stone-400">
-                        还没有沉淀经验，可以从一条日记或一次观察开始整理。
+                        还没有沉淀经验。
                       </p>
                     )}
                   </div>
@@ -626,7 +620,7 @@ export default function FamilyPage() {
                 </div>
               ) : filteredStreamTotal === 0 ? (
                 <div className="rounded-2xl border border-dashed border-stone-200 px-4 py-10 text-center text-sm text-stone-400">
-                  当前筛选下还没有内容，先写一条记录或切换分类看看。
+                  当前筛选下还没有内容。
                 </div>
               ) : (
                 <div className="space-y-3">

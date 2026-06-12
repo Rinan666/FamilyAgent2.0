@@ -4,6 +4,7 @@ export * from './family';
 export * from './diary';
 export * from './session';
 export * from './memory';
+export * from './writeMemory';
 export * from './memoryLibrary';
 export * from './admin';
 export * from './heritage';

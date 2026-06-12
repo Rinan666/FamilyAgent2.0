@@ -102,6 +102,25 @@ class UserServiceTest {
     }
 
     @Test
+    void register_shouldNotTranslateNonDuplicateUsernameMentionIntoConflict() {
+        RegisterRequest req = new RegisterRequest();
+        req.setUsername("existing");
+        req.setPassword("pass123");
+        req.setInviteCode("ASDFGZXCVB");
+
+        when(userRepository.countByUsername("existing")).thenReturn(0);
+        mockInviteCode("ASDFGZXCVB", 20, 0);
+        when(inviteCodeRepository.incrementUsedCountByCode("ASDFGZXCVB")).thenReturn(1);
+        doThrow(new DataIntegrityViolationException(
+                "PreparedStatementCallback; SQL [select u.username from users u]; numeric value out of range for column username"))
+                .when(userRepository).insert(any(User.class));
+
+        BusinessException error = assertThrows(BusinessException.class, () -> userService.register(req));
+
+        assertEquals(ErrorCode.DATA_PERSIST_FAILED.getCode(), error.getCode());
+    }
+
+    @Test
     void register_shouldRethrowInsertDatabaseAccessFailure() {
         RegisterRequest req = new RegisterRequest();
         req.setUsername("existing");

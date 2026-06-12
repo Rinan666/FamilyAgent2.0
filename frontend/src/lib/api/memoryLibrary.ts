@@ -10,6 +10,9 @@ export const memoryLibraryApi = {
     type?: MemoryLibraryItemType | 'ALL';
     memberUserId?: number;
     visibility?: string;
+    tag?: string;
+    dateFrom?: string;
+    dateTo?: string;
   }) => {
     const sp = new URLSearchParams();
     sp.set('familyId', String(params.familyId));
@@ -19,6 +22,9 @@ export const memoryLibraryApi = {
     if (params.type && params.type !== 'ALL') sp.set('type', params.type);
     if (params.memberUserId) sp.set('memberUserId', String(params.memberUserId));
     if (params.visibility && params.visibility !== 'ALL') sp.set('visibility', params.visibility);
+    if (params.tag?.trim()) sp.set('tag', params.tag.trim());
+    if (params.dateFrom?.trim()) sp.set('dateFrom', params.dateFrom.trim());
+    if (params.dateTo?.trim()) sp.set('dateTo', params.dateTo.trim());
     return request<PageResult<MemoryLibraryItem>>(`/memory-library/search?${sp}`);
   },
   maintenanceSuggestions: (familyId: number) =>
@@ -47,6 +53,9 @@ export const memoryLibraryApi = {
     type?: MemoryLibraryItemType | 'ALL';
     memberUserId?: number;
     visibility?: string;
+    tag?: string;
+    dateFrom?: string;
+    dateTo?: string;
   }) => {
     const sp = new URLSearchParams();
     sp.set('familyId', String(params.familyId));
@@ -56,6 +65,9 @@ export const memoryLibraryApi = {
     if (params.type && params.type !== 'ALL') sp.set('type', params.type);
     if (params.memberUserId) sp.set('memberUserId', String(params.memberUserId));
     if (params.visibility && params.visibility !== 'ALL') sp.set('visibility', params.visibility);
+    if (params.tag?.trim()) sp.set('tag', params.tag.trim());
+    if (params.dateFrom?.trim()) sp.set('dateFrom', params.dateFrom.trim());
+    if (params.dateTo?.trim()) sp.set('dateTo', params.dateTo.trim());
     return request<PageResult<MemoryLibraryItem>>(`/memory-library/archived?${sp}`);
   },
   archiveItem: (familyId: number, itemId: string) => {

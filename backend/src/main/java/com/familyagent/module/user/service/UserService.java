@@ -11,6 +11,7 @@ import com.familyagent.module.user.dto.ChangePasswordRequest;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import com.familyagent.module.user.dto.LoginRequest;
+import com.familyagent.common.exception.UsernameConflictDetector;
 import com.familyagent.module.user.dto.LoginResponse;
 import com.familyagent.module.user.dto.RegisterRequest;
 import com.familyagent.module.user.dto.UpdateProfileRequest;
@@ -296,18 +297,6 @@ public class UserService {
     }
 
     private boolean isUsernameConflict(Throwable error) {
-        Throwable current = error;
-        while (current != null) {
-            String message = current.getMessage();
-            if (message != null) {
-                String normalized = message.toLowerCase(Locale.ROOT);
-                if (normalized.contains("users_username_key")
-                        || (normalized.contains("users") && normalized.contains("username"))) {
-                    return true;
-                }
-            }
-            current = current.getCause();
-        }
-        return false;
+        return UsernameConflictDetector.isUsernameConflict(error);
     }
 }

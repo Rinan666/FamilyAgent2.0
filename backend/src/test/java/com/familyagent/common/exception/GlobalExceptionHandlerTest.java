@@ -35,6 +35,18 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void handleDataIntegrityException_shouldNotTreatSqlMentioningUsersUsernameAsConflict() {
+        Result<?> result = handler.handleDataIntegrityException(
+                new DataIntegrityViolationException(
+                        "PreparedStatementCallback; SQL [select u.username from users u]; numeric value out of range for column username"
+                )
+        );
+
+        assertEquals(ErrorCode.DATA_PERSIST_FAILED.getCode(), result.getCode());
+        assertEquals(ErrorCode.DATA_PERSIST_FAILED.getMessage(), result.getMessage());
+    }
+
+    @Test
     void handleDataAccessException_shouldReturnDatabaseAccessError() {
         Result<?> result = handler.handleDataAccessException(
                 new DataAccessResourceFailureException("db offline")

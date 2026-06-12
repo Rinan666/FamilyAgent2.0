@@ -64,6 +64,13 @@ class MemoryLibraryQuerySql {
               AND (? = 'ALL' OR ? = 'LIFE_RECORD')
               AND (CAST(? AS BIGINT) IS NULL OR de.user_id = CAST(? AS BIGINT))
               AND (CAST(? AS TEXT) IS NULL OR de.visibility = CAST(? AS TEXT))
+              AND (CAST(? AS TEXT) IS NULL OR EXISTS (
+                SELECT 1
+                FROM unnest(COALESCE(de.tags, ARRAY[]::TEXT[])) AS tag
+                WHERE LOWER(tag) = LOWER(CAST(? AS TEXT))
+              ))
+              AND (CAST(? AS DATE) IS NULL OR de.created_at::date >= CAST(? AS DATE))
+              AND (CAST(? AS DATE) IS NULL OR de.created_at::date <= CAST(? AS DATE))
             """).replace("{DIARY_STATUS}", diaryStatus);
     }
 
@@ -141,6 +148,19 @@ class MemoryLibraryQuerySql {
               AND (? = 'ALL' OR ? = 'GROWTH_OBSERVATION')
               AND (CAST(? AS BIGINT) IS NULL OR COALESCE(gr.target_user_id, gr.created_by) = CAST(? AS BIGINT))
               AND (CAST(? AS TEXT) IS NULL OR gr.visibility = CAST(? AS TEXT))
+              AND (CAST(? AS TEXT) IS NULL OR EXISTS (
+                SELECT 1
+                FROM unnest(ARRAY_REMOVE(ARRAY[
+                  gr.category,
+                  gr.metadata->>'followUpStatus'
+                ], NULL)
+                || COALESCE(ARRAY(
+                  SELECT jsonb_array_elements_text(gr.metadata->'tags')
+                ), ARRAY[]::TEXT[])) AS tag
+                WHERE LOWER(tag) = LOWER(CAST(? AS TEXT))
+              ))
+              AND (CAST(? AS DATE) IS NULL OR COALESCE(gr.observed_at, gr.created_at::date) >= CAST(? AS DATE))
+              AND (CAST(? AS DATE) IS NULL OR COALESCE(gr.observed_at, gr.created_at::date) <= CAST(? AS DATE))
             """).replace("{ROW_STATUS}", rowStatus);
     }
 
@@ -205,6 +225,9 @@ class MemoryLibraryQuerySql {
               AND (? = 'ALL' OR ? = 'AI_SUMMARY')
               AND (CAST(? AS BIGINT) IS NULL OR COALESCE(rp.target_user_id, rp.created_by) = CAST(? AS BIGINT))
               AND (CAST(? AS TEXT) IS NULL OR rp.visibility = CAST(? AS TEXT))
+              AND (CAST(? AS TEXT) IS NULL OR LOWER('成长观察摘要') = LOWER(CAST(? AS TEXT)))
+              AND (CAST(? AS DATE) IS NULL OR COALESCE(rp.week_end, rp.created_at::date) >= CAST(? AS DATE))
+              AND (CAST(? AS DATE) IS NULL OR COALESCE(rp.week_end, rp.created_at::date) <= CAST(? AS DATE))
             """).replace("{ROW_STATUS}", rowStatus);
     }
 
@@ -293,6 +316,20 @@ class MemoryLibraryQuerySql {
               END)
               AND (CAST(? AS BIGINT) IS NULL OR me.user_id = CAST(? AS BIGINT))
               AND (CAST(? AS TEXT) IS NULL OR me.scope = CAST(? AS TEXT))
+              AND (CAST(? AS TEXT) IS NULL OR EXISTS (
+                SELECT 1
+                FROM unnest(ARRAY_REMOVE(ARRAY[
+                  CASE WHEN COALESCE(me.metadata->>'coreMemory', '') = 'true' THEN '核心记忆' ELSE NULL END,
+                  me.type,
+                  me.metadata->>'scenario'
+                ], NULL)
+                || COALESCE(ARRAY(
+                  SELECT jsonb_array_elements_text(me.metadata->'tags')
+                ), ARRAY[]::TEXT[])) AS tag
+                WHERE LOWER(tag) = LOWER(CAST(? AS TEXT))
+              ))
+              AND (CAST(? AS DATE) IS NULL OR COALESCE(me.updated_at::date, me.created_at::date) >= CAST(? AS DATE))
+              AND (CAST(? AS DATE) IS NULL OR COALESCE(me.updated_at::date, me.created_at::date) <= CAST(? AS DATE))
             """).replace("{ROW_STATUS}", rowStatus);
     }
 }

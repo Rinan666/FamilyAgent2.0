@@ -1,14 +1,13 @@
 import type {
   AgentSaveTool,
   AgentSaveToolPlan,
-  CreateDiaryEntryRequest,
-  CreateFamilyMemoryRequest,
-  CreateGrowthGuardRecordRequest,
   DiaryEntryType,
   DiaryVisibility,
   GrowthGuardCategory,
   MemoryEntryType,
   MemoryScope,
+  WriteCategory,
+  WriteMemoryRequest,
 } from '../types';
 
 const SAVE_TOOLS = new Set<AgentSaveTool>(['NONE', 'DIARY', 'FAMILY_MEMORY', 'GROWTH_GUARD']);
@@ -134,6 +133,12 @@ export function savedRecordType(tool: AgentSaveTool): SavedRecordType {
   return 'NONE';
 }
 
+export function writeCategoryFromTool(tool: AgentSaveTool): WriteCategory {
+  if (tool === 'FAMILY_MEMORY') return 'EXPERIENCE';
+  if (tool === 'GROWTH_GUARD') return 'OBSERVATION';
+  return 'RECORD';
+}
+
 export function savePlanDetail(plan: AgentSaveToolPlan, savedRecordId?: number) {
   const idPart = savedRecordId ? ` · #${savedRecordId}` : '';
   return `${toolLabel(plan.tool)} · ${plan.title} · ${visibilityLabel(plan.visibility || plan.scope)}${idPart}`;
@@ -157,53 +162,24 @@ export function saveMemorySkillMetadata(plan: AgentSaveToolPlan, savedAt?: strin
   };
 }
 
-export function buildDiarySaveRequest(
+export function buildWriteMemorySaveRequest(
   familyId: number,
   plan: AgentSaveToolPlan,
-  metadata: Record<string, unknown>,
-): CreateDiaryEntryRequest {
-  return {
-    familyId,
-    content: plan.content,
-    entryType: entryTypeFromPlan(plan),
-    title: plan.title,
-    tags: plan.tags,
-    visibility: visibilityFromPlan(plan),
-    metadata,
-  };
-}
-
-export function buildFamilyMemorySaveRequest(
-  familyId: number,
-  plan: AgentSaveToolPlan,
-  metadata: Record<string, unknown>,
-): CreateFamilyMemoryRequest {
-  return {
-    familyId,
-    content: plan.content,
-    type: memoryTypeFromPlan(plan),
-    scope: scopeFromPlan(plan),
-    summary: plan.summary,
-    importance: plan.importance,
-    metadata,
-  };
-}
-
-export function buildGrowthGuardSaveRequest(
-  familyId: number,
-  plan: AgentSaveToolPlan,
-  observedAt: string,
   metadata: Record<string, unknown>,
   targetUserId?: number,
-): CreateGrowthGuardRecordRequest {
+): WriteMemoryRequest {
   return {
     familyId,
-    targetUserId,
-    category: growthCategoryFromPlan(plan),
+    writeCategory: writeCategoryFromTool(plan.tool),
     content: plan.content,
-    severity: plan.severity,
-    observedAt,
-    visibility: scopeFromPlan(plan),
+    title: plan.title,
+    tags: plan.tags,
+    visibility: plan.tool === 'GROWTH_GUARD' ? scopeFromPlan(plan) : visibilityFromPlan(plan),
+    relatedUserId: targetUserId,
+    diaryEntryType: entryTypeFromPlan(plan),
+    memoryType: memoryTypeFromPlan(plan),
+    growthCategory: growthCategoryFromPlan(plan),
+    growthSeverity: plan.severity,
     metadata,
   };
 }

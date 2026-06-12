@@ -2,6 +2,8 @@ package com.familyagent.module.memorylibrary.dto;
 
 import lombok.Data;
 
+import java.time.LocalDate;
+
 @Data
 public class MemoryLibrarySearchRequest {
     private Long familyId;
@@ -11,4 +13,7 @@ public class MemoryLibrarySearchRequest {
     private String type;
     private Long memberUserId;
     private String visibility;
+    private String tag;
+    private LocalDate dateFrom;
+    private LocalDate dateTo;
 }

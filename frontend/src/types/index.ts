@@ -55,6 +55,7 @@ export interface RegisterRequest {
 
 export type AgentMode = 'family' | 'mirror';
 export type AgentResponseMode = 'quick' | 'think';
+export type WriteCategory = 'RECORD' | 'EXPERIENCE' | 'OBSERVATION';
 
 export interface MirrorSourceRef {
   code: string;
@@ -464,6 +465,29 @@ export interface CreateFamilyMemoryRequest {
   importance?: number;
   memoryCard?: FamilyMemoryCard;
   metadata?: Record<string, unknown>;
+}
+
+export interface WriteMemoryRequest {
+  familyId: number;
+  writeCategory: WriteCategory;
+  content: string;
+  title?: string;
+  tags?: string[];
+  visibility?: DiaryVisibility | MemoryScope;
+  relatedUserId?: number;
+  diaryEntryType?: DiaryEntryType;
+  memoryType?: MemoryEntryType;
+  growthCategory?: GrowthGuardCategory;
+  growthSeverity?: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface WriteMemoryResult {
+  savedRecordType: 'DIARY_ENTRY' | 'FAMILY_MEMORY' | 'GROWTH_GUARD' | string;
+  savedRecordId: number;
+  writeCategory: WriteCategory | string;
+  visibility: string;
+  title: string;
 }
 
 export type AgentSaveTool = 'NONE' | 'DIARY' | 'FAMILY_MEMORY' | 'GROWTH_GUARD';

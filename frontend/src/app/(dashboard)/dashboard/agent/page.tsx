@@ -40,12 +40,10 @@ import { normalizeAssistantMetadata } from '@/hooks/chat/useChatHelpers';
 import { useAuthStore } from '@/stores/authStore';
 import { useChatStore } from '@/stores/chatStore';
 import { cn, generateId } from '@/lib/utils';
-import { diaryApi, familyApi, growthGuardApi, memoryApi, mirrorApi, sessionApi, skillRunApi } from '@/lib/api';
+import { familyApi, memoryApi, mirrorApi, sessionApi, skillRunApi, writeMemoryApi } from '@/lib/api';
 import { loadSessionMessagesChronologically } from '@/lib/sessionHistory';
 import {
-  buildDiarySaveRequest,
-  buildFamilyMemorySaveRequest,
-  buildGrowthGuardSaveRequest,
+  buildWriteMemorySaveRequest,
   normalizeSaveToolPlan,
   saveMemorySkillMetadata,
   savePlanDetail,
@@ -107,9 +105,11 @@ function fallbackSavePlan(content: string): AgentSaveToolPlan {
 function savedMemoryHref(plan: AgentSaveToolPlan, familyId?: number | null) {
   const familyQuery = familyId ? `?familyId=${familyId}` : '';
   if (plan.tool === 'DIARY') return `/dashboard/diary${familyQuery}`;
-  if (plan.tool === 'FAMILY_MEMORY') return `/dashboard/heritage${familyQuery}`;
+  if (plan.tool === 'FAMILY_MEMORY') {
+    return `/dashboard/diary${familyId ? `?familyId=${familyId}&writeCategory=EXPERIENCE` : '?writeCategory=EXPERIENCE'}`;
+  }
   if (plan.tool === 'GROWTH_GUARD') {
-    return `/dashboard/diary${familyId ? `?familyId=${familyId}&tab=growth` : '?tab=growth'}`;
+    return `/dashboard/diary${familyId ? `?familyId=${familyId}&writeCategory=OBSERVATION` : '?writeCategory=OBSERVATION'}`;
   }
   return `/dashboard/memory${familyQuery}`;
 }
@@ -799,42 +799,28 @@ export default function AgentPage() {
             ...saveMemorySkillMetadata(plan, savedAt),
           };
 
-      let savedRecordId: number | undefined;
-      if (plan.tool === 'DIARY') {
-        const saved = await diaryApi.create(buildDiarySaveRequest(activeFamilyId, plan, commonMetadata));
-        savedRecordId = saved.id;
-      } else if (plan.tool === 'FAMILY_MEMORY') {
-        const saved = await memoryApi.createFamilyMemory(buildFamilyMemorySaveRequest(activeFamilyId, plan, {
+      const saved = await writeMemoryApi.create(buildWriteMemorySaveRequest(
+        activeFamilyId,
+        plan,
+        {
           ...commonMetadata,
-          ...(currentMode === 'mirror'
+          ...(plan.tool === 'FAMILY_MEMORY' && currentMode === 'mirror'
             ? {
                 sourceType: 'FAMILY_EXPERIENCE',
                 scenario: '镜像对话保存',
                 target: currentTargetName,
               }
             : {}),
-        }));
-        savedRecordId = saved.id;
-      } else if (plan.tool === 'GROWTH_GUARD') {
-        const saved = await growthGuardApi.createRecord(
-          buildGrowthGuardSaveRequest(
-            activeFamilyId,
-            plan,
-            todayString(),
-            {
-              ...commonMetadata,
-              ...(currentMode === 'mirror'
-                ? {
-                    sourceType: 'GROWTH_OBSERVATION',
-                    followUpStatus: 'PENDING',
-                  }
-                : {}),
-            },
-            currentMode === 'mirror' ? (mirrorTargetUserId || undefined) : undefined,
-          ),
-        );
-        savedRecordId = saved.id;
-      }
+          ...(plan.tool === 'GROWTH_GUARD' && currentMode === 'mirror'
+            ? {
+                sourceType: 'GROWTH_OBSERVATION',
+                followUpStatus: 'PENDING',
+              }
+            : {}),
+        },
+        currentMode === 'mirror' ? (mirrorTargetUserId || undefined) : undefined,
+      ));
+      const savedRecordId = saved.savedRecordId;
 
       if (skillRunId) {
         await skillRunApi.update(skillRunId, {

@@ -217,6 +217,9 @@ public class DiaryEntryService {
     }
 
     private static boolean shouldAutoMerge(CreateDiaryEntryRequest request, Map<String, Object> metadata) {
+        if (metadata != null && Boolean.TRUE.equals(metadata.get("disableAutoMerge"))) {
+            return false;
+        }
         if (hasRelatedUser(metadata)) {
             return false;
         }

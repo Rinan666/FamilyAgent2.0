@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentSaveToolPlan } from '../types';
 import {
-  buildDiarySaveRequest,
-  buildFamilyMemorySaveRequest,
-  buildGrowthGuardSaveRequest,
+  buildWriteMemorySaveRequest,
   normalizeSaveToolPlan,
   savePlanDetail,
   savedRecordType,
+  writeCategoryFromTool,
 } from './savePlan';
 
 function plan(overrides: Partial<AgentSaveToolPlan> = {}): AgentSaveToolPlan {
@@ -60,51 +59,59 @@ describe('savePlan helpers', () => {
     expect(normalized.tool).toBe('NONE');
   });
 
-  it('builds diary save request from normalized plan', () => {
+  it('builds unified write request for record plan', () => {
     const normalized = normalizeSaveToolPlan(plan());
-    const request = buildDiarySaveRequest(10, normalized, { source: 'TEST' });
+    const request = buildWriteMemorySaveRequest(10, normalized, { source: 'TEST' });
 
     expect(request).toMatchObject({
       familyId: 10,
-      entryType: 'SELF_REFLECTION',
+      writeCategory: 'RECORD',
+      diaryEntryType: 'SELF_REFLECTION',
       visibility: 'PRIVATE',
       metadata: { source: 'TEST' },
     });
   });
 
-  it('builds family memory save request with backend-safe type and scope', () => {
+  it('builds unified write request for experience plan', () => {
     const normalized = normalizeSaveToolPlan(plan({
       tool: 'FAMILY_MEMORY',
       memory_type: 'GROWTH_RISK',
       scope: 'CARE_VISIBLE',
     }));
-    const request = buildFamilyMemorySaveRequest(10, normalized, { source: 'TEST' });
+    const request = buildWriteMemorySaveRequest(10, normalized, { source: 'TEST' });
 
     expect(request).toMatchObject({
       familyId: 10,
-      type: 'GROWTH_RISK',
-      scope: 'CARE_VISIBLE',
+      writeCategory: 'EXPERIENCE',
+      memoryType: 'GROWTH_RISK',
+      visibility: 'FAMILY_VISIBLE',
       metadata: { source: 'TEST' },
     });
     expect(savedRecordType(normalized.tool)).toBe('FAMILY_MEMORY');
     expect(savePlanDetail(normalized, 88)).toContain('#88');
   });
 
-  it('builds growth guard save request for a target member', () => {
+  it('builds unified write request for observation plan', () => {
     const normalized = normalizeSaveToolPlan(plan({
       tool: 'GROWTH_GUARD',
       category: 'VISION',
       visibility: 'FAMILY_VISIBLE',
     }));
-    const request = buildGrowthGuardSaveRequest(10, normalized, '2026-06-08', { source: 'TEST' }, 20);
+    const request = buildWriteMemorySaveRequest(10, normalized, { source: 'TEST' }, 20);
 
     expect(request).toMatchObject({
       familyId: 10,
-      targetUserId: 20,
-      category: 'VISION',
-      observedAt: '2026-06-08',
+      writeCategory: 'OBSERVATION',
+      relatedUserId: 20,
+      growthCategory: 'VISION',
       visibility: 'CARE_VISIBLE',
       metadata: { source: 'TEST' },
     });
+  });
+
+  it('maps save tool to write category', () => {
+    expect(writeCategoryFromTool('DIARY')).toBe('RECORD');
+    expect(writeCategoryFromTool('FAMILY_MEMORY')).toBe('EXPERIENCE');
+    expect(writeCategoryFromTool('GROWTH_GUARD')).toBe('OBSERVATION');
   });
 });

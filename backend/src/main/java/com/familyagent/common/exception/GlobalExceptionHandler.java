@@ -3,6 +3,7 @@ package com.familyagent.common.exception;
 import cn.dev33.satoken.exception.NotLoginException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.response.Result;
+import com.familyagent.common.exception.UsernameConflictDetector;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -16,7 +17,6 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.util.Locale;
 import java.util.stream.Collectors;
 
 /**
@@ -90,18 +90,6 @@ public class GlobalExceptionHandler {
     }
 
     private boolean isUsernameConflict(Throwable error) {
-        Throwable current = error;
-        while (current != null) {
-            String message = current.getMessage();
-            if (message != null) {
-                String normalized = message.toLowerCase(Locale.ROOT);
-                if (normalized.contains("users_username_key")
-                        || (normalized.contains("users") && normalized.contains("username"))) {
-                    return true;
-                }
-            }
-            current = current.getCause();
-        }
-        return false;
+        return UsernameConflictDetector.isUsernameConflict(error);
     }
 }

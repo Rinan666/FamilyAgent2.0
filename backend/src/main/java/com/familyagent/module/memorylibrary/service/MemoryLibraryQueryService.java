@@ -21,6 +21,7 @@ import java.sql.Array;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -66,15 +67,18 @@ public class MemoryLibraryQueryService {
         List<String> searchTerms = MemoryLibrarySupport.searchTerms(keyword);
         Long memberUserId = request.getMemberUserId();
         String visibility = MemoryLibrarySupport.blankToNull(request.getVisibility());
+        String tag = MemoryLibrarySupport.blankToNull(request.getTag());
+        LocalDate dateFrom = request.getDateFrom();
+        LocalDate dateTo = request.getDateTo();
         int page = normalizePage(request.getPage());
         int pageSize = normalizePageSize(request.getPageSize());
         int offset = (page - 1) * pageSize;
 
         Object[] args = concat(
-                sectionArgs(request.getFamilyId(), viewerUserId, searchTerms, type, memberUserId, visibility),
-                sectionArgs(request.getFamilyId(), viewerUserId, searchTerms, type, memberUserId, visibility),
-                growthSectionArgs(request.getFamilyId(), viewerUserId, searchTerms, type, memberUserId, visibility),
-                growthSectionArgs(request.getFamilyId(), viewerUserId, searchTerms, type, memberUserId, visibility));
+                sectionArgs(request.getFamilyId(), viewerUserId, searchTerms, type, memberUserId, visibility, tag, dateFrom, dateTo),
+                sectionArgs(request.getFamilyId(), viewerUserId, searchTerms, type, memberUserId, visibility, tag, dateFrom, dateTo),
+                growthSectionArgs(request.getFamilyId(), viewerUserId, searchTerms, type, memberUserId, visibility, tag, dateFrom, dateTo),
+                growthSectionArgs(request.getFamilyId(), viewerUserId, searchTerms, type, memberUserId, visibility, tag, dateFrom, dateTo));
 
         String sql = MemoryLibraryQuerySql.fullQuery(archived);
         long total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM (" + sql + ") items", Long.class, args);
@@ -132,15 +136,17 @@ public class MemoryLibraryQueryService {
     }
 
     private static Object[] sectionArgs(Long familyId, Long viewerUserId, List<String> searchTerms,
-            String type, Long memberUserId, String visibility) {
+            String type, Long memberUserId, String visibility, String tag, LocalDate dateFrom, LocalDate dateTo) {
         return new Object[] { familyId, viewerUserId, viewerUserId, viewerUserId,
-                searchTerms.toArray(String[]::new), type, type, memberUserId, memberUserId, visibility, visibility };
+                searchTerms.toArray(String[]::new), type, type, memberUserId, memberUserId, visibility, visibility,
+                tag, tag, dateFrom, dateFrom, dateTo, dateTo };
     }
 
     private static Object[] growthSectionArgs(Long familyId, Long viewerUserId, List<String> searchTerms,
-            String type, Long memberUserId, String visibility) {
+            String type, Long memberUserId, String visibility, String tag, LocalDate dateFrom, LocalDate dateTo) {
         return new Object[] { familyId, viewerUserId, viewerUserId, viewerUserId, viewerUserId,
-                searchTerms.toArray(String[]::new), type, type, memberUserId, memberUserId, visibility, visibility };
+                searchTerms.toArray(String[]::new), type, type, memberUserId, memberUserId, visibility, visibility,
+                tag, tag, dateFrom, dateFrom, dateTo, dateTo };
     }
 
     static Object[] concat(Object[] args, Object... tail) {

@@ -16,7 +16,7 @@ function member(userId: number, relationshipLabel: string): FamilyMember {
     username: `user-${userId}`,
     role: 'MEMBER',
     relationshipLabel,
-    createdAt: '2026-06-13T00:00:00.000Z',
+    joinedAt: '2026-06-13T00:00:00.000Z',
   };
 }
 
