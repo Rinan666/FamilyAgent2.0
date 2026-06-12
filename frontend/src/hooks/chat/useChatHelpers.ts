@@ -176,6 +176,7 @@ export function normalizeAssistantMetadata(metadata: Record<string, unknown>): N
     webSearch: {
       needed: Boolean(data.needed),
       used: Boolean(data.used),
+      pending: Boolean(data.pending),
       resultCount: Number(data.result_count) || 0,
       sources: rawSources
         .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')

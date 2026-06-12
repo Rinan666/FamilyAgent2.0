@@ -182,6 +182,7 @@ export interface ChatMessage {
     webSearch?: {
       needed: boolean;
       used: boolean;
+      pending?: boolean;
       resultCount: number;
       sources: { title: string; url: string; snippet?: string }[];
     };

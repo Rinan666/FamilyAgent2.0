@@ -4,29 +4,45 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 45 24% 97%;
+    --foreground: 164 16% 15%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --card-foreground: 164 16% 15%;
+    --border: 40 14% 86%;
+    --input: 40 14% 86%;
+    --ring: 158 45% 34%;
   }
 
   html {
+    color-scheme: light;
     text-size-adjust: 100%;
     -webkit-text-size-adjust: 100%;
   }
 
+  * {
+    border-color: hsl(var(--border));
+  }
+
   body {
-    @apply bg-gray-50 text-gray-900 antialiased;
+    @apply antialiased;
+    min-height: 100vh;
+    background:
+      radial-gradient(circle at top left, rgba(22, 118, 84, 0.08), transparent 22%),
+      radial-gradient(circle at top right, rgba(180, 149, 84, 0.08), transparent 20%),
+      linear-gradient(180deg, #f7f5ef 0%, #f4f6f2 46%, #f8f8f4 100%);
+    color: #18231d;
+    font-family: "Avenir Next", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  }
+
+  ::selection {
+    background: rgba(21, 128, 100, 0.18);
+    color: #14211b;
   }
 }
 
 @layer components {
-  /* 聊天打字机光标 */
   .typing-cursor::after {
-    content: '▊';
+    content: '|';
     animation: blink 1s step-end infinite;
   }
 

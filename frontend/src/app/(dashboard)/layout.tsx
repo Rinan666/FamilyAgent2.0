@@ -5,8 +5,10 @@ import DashboardShell from '@/components/layout/DashboardShell';
 
 function LoadingShell() {
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-gray-500">加载中...</div>
+    <div className="flex min-h-screen items-center justify-center px-4">
+      <div className="rounded-full border border-white/70 bg-white/85 px-5 py-3 text-sm text-stone-500 shadow-[0_18px_48px_rgba(24,39,32,0.08)] backdrop-blur">
+        正在准备工作区...
+      </div>
     </div>
   );
 }

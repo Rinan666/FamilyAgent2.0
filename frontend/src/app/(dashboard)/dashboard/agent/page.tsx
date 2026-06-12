@@ -3,24 +3,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { Bot, History, Loader2, Plus, Send, Sparkles, Square, UserRound } from 'lucide-react';
+import AgentContextPanel from '@/components/agent/AgentContextPanel';
+import AgentMessageList from '@/components/agent/AgentMessageList';
+import AgentSessionDrawer from '@/components/agent/AgentSessionDrawer';
 import {
-  BookHeart,
-  Bot,
-  CheckCircle,
-  History,
-  Loader2,
-  Plus,
-  Save,
-  Send,
-  Sparkles,
-  Square,
-  Trash2,
-  UserRound,
-  Users,
-} from 'lucide-react';
-import MathRenderer from '@/components/agent/MathRenderer';
-import RagMemoryBadge from '@/components/agent/RagMemoryBadge';
-import WebSearchBadge from '@/components/agent/WebSearchBadge';
+  diarySourceCode,
+  diarySourceLabel,
+  diaryTitle,
+  getSessionTitle,
+  memberName,
+  memorySourceLabel,
+  memoryTitle,
+  normalizeAgentSessionMetadata,
+  parsePositiveNumber,
+  readinessLevel,
+  temporalLayerClass,
+  temporalLayerLabel,
+  type ActivationSceneState,
+  type SaveFeedback,
+  isRelatedDiary,
+} from '@/components/agent/agentDisplay';
 import VoiceInputButton from '@/components/voice/VoiceInputButton';
 import { useChat, type SessionSavedMemory, type UseChatRequestConfig } from '@/hooks/useChat';
 import { useViewerRole } from '@/hooks/useViewerRole';
@@ -44,73 +47,15 @@ import {
 } from '@/lib/savePlan';
 import type {
   AgentMode,
+  AgentSaveToolPlan,
   AgentSessionMetadata,
   ChatMessage,
   ChatSessionDetail,
   ChatSessionSummary,
-  DiaryEntry,
   FamilyMember,
-  MemoryEntry,
   MirrorContextResponse,
   MirrorSourceRef,
-  AgentSaveToolPlan,
 } from '@/types';
-
-type SaveFeedback = {
-  status: 'saving' | 'saved' | 'error';
-  detail: string;
-  href?: string;
-};
-
-type ActivationSceneState = {
-  label: string;
-  instruction: string;
-};
-
-function formatSessionTime(value?: string) {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleString('zh-CN', {
-    month: 'numeric',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function getSessionTitle(session: Pick<ChatSessionSummary, 'title' | 'summary'>) {
-  return (session.title || session.summary || '未命名会话').slice(0, 32);
-}
-
-function parsePositiveNumber(value: unknown) {
-  const number = Number(value);
-  return Number.isFinite(number) && number > 0 ? number : null;
-}
-
-function memberName(member?: FamilyMember | null) {
-  if (!member) return '家庭成员';
-  return member.relationshipLabel?.trim()
-    || member.nickname?.trim()
-    || member.username?.trim()
-    || `用户 ${member.userId}`;
-}
-
-function normalizeAgentSessionMetadata(metadata?: Record<string, unknown> | null): AgentSessionMetadata {
-  const targetUserId = parsePositiveNumber(metadata?.targetUserId);
-  const targetMemberName = typeof metadata?.targetMemberName === 'string' && metadata.targetMemberName.trim()
-    ? metadata.targetMemberName.trim()
-    : null;
-  return {
-    ...(metadata || {}),
-    entry: typeof metadata?.entry === 'string' ? metadata.entry : 'agent',
-    contextLabel: typeof metadata?.contextLabel === 'string' ? metadata.contextLabel : undefined,
-    agentMode: metadata?.agentMode === 'mirror' ? 'mirror' : 'family',
-    targetUserId,
-    targetMemberName,
-    hasTargetSwitches: Boolean(metadata?.hasTargetSwitches),
-  };
-}
 
 function buildSessionMetadata(
   mode: AgentMode,
@@ -124,26 +69,6 @@ function buildSessionMetadata(
     targetUserId: mode === 'mirror' ? targetMember?.userId ?? null : null,
     targetMemberName: mode === 'mirror' ? memberName(targetMember) : null,
     hasTargetSwitches,
-  };
-}
-
-function sessionBadge(metadata?: Record<string, unknown> | null) {
-  const normalized = normalizeAgentSessionMetadata(metadata);
-  if (normalized.hasTargetSwitches) {
-    return {
-      label: '曾切换对象',
-      className: 'bg-amber-50 text-amber-700 ring-amber-200',
-    };
-  }
-  if (normalized.agentMode === 'mirror') {
-    return {
-      label: '镜像参考',
-      className: 'bg-purple-50 text-purple-700 ring-purple-200',
-    };
-  }
-  return {
-    label: '家族 Agent',
-    className: 'bg-blue-50 text-blue-700 ring-blue-200',
   };
 }
 
@@ -192,68 +117,8 @@ function savedMemoryFromPlan(plan: AgentSaveToolPlan, savedAt: string): SessionS
   };
 }
 
-function diaryTitle(entry: DiaryEntry) {
-  return entry.structured?.title || entry.structured?.summary || entry.rawText.slice(0, 28) || '未命名记录';
-}
-
-function isRelatedDiary(entry: DiaryEntry) {
-  return entry.metadata?.mirrorSourceType === 'RELATED_BY_FAMILY' || Boolean(entry.metadata?.relatedUserId);
-}
-
-function diarySourceCode(entry: DiaryEntry, index: number) {
-  return `${isRelatedDiary(entry) ? 'R' : 'D'}${index + 1}`;
-}
-
-function diarySourceLabel(entry: DiaryEntry) {
-  return isRelatedDiary(entry) ? '家人补充' : '本人记录';
-}
-
-function temporalLayerLabel(item: DiaryEntry | MemoryEntry) {
-  const label = item.metadata?.temporalLayerLabel;
-  return typeof label === 'string' && label.trim() ? label.trim() : '未分层';
-}
-
-function temporalLayerClass(item: DiaryEntry | MemoryEntry) {
-  switch (item.metadata?.temporalLayer) {
-    case 'FRESH':
-      return 'bg-green-50 text-green-700';
-    case 'FADING':
-      return 'bg-yellow-50 text-yellow-700';
-    case 'CORE_MEMORY':
-      return 'bg-purple-50 text-purple-700';
-    case 'IMPRESSION':
-      return 'bg-gray-100 text-gray-600';
-    default:
-      return 'bg-gray-100 text-gray-500';
-  }
-}
-
-function memoryTitle(memory: MemoryEntry) {
-  if (memory.summary?.trim()) return memory.summary.trim();
-  if (typeof memory.metadata?.scenario === 'string' && memory.metadata.scenario.trim()) {
-    return `${memory.metadata.scenario.trim()}相关经验`;
-  }
-  return memory.content.slice(0, 28) || '未命名经验';
-}
-
-function memorySourceLabel(memory: MemoryEntry) {
-  return memory.metadata?.coreMemory === true ? '核心记忆' : '经验沉淀';
-}
-
 function hasMirrorProfile(context?: MirrorContextResponse | null) {
   return Boolean(context?.mirrorProfile && Object.keys(context.mirrorProfile).length > 0);
-}
-
-function readinessLevel(context?: MirrorContextResponse | null) {
-  if (!context) return { label: '等待资料', tone: 'gray' as const };
-  const diaryCount = context.diaries?.length || 0;
-  const memoryCount = context.memories?.length || 0;
-  const libraryCount = context.libraryItems?.length || 0;
-  const profileBonus = hasMirrorProfile(context) ? 1 : 0;
-  const score = Math.min(5, diaryCount + memoryCount + libraryCount + profileBonus);
-  if (score >= 5) return { label: '资料较充足', tone: 'green' as const };
-  if (score >= 3) return { label: '可谨慎参考', tone: 'blue' as const };
-  return { label: '资料偏少', tone: 'yellow' as const };
 }
 
 function sourceLead(context?: MirrorContextResponse | null) {
@@ -321,6 +186,7 @@ function normalizeMirrorAssistantMetadata(metadata: Record<string, unknown>): No
     webSearch: {
       needed: Boolean(data.needed),
       used: Boolean(data.used),
+      pending: Boolean(data.pending),
       resultCount: Number(data.result_count) || 0,
       sources: rawSources
         .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
@@ -340,8 +206,8 @@ function buildTargetSwitchMessage(
   nextTarget: FamilyMember | null,
 ): ChatMessage {
   const targetLabel = nextMode === 'mirror'
-    ? `已切换到“${memberName(nextTarget)}”镜像参考模式。后续回答只基于已授权可见记录，不代表本人真实意图。`
-    : '已切回家族 Agent 自身上下文。后续回答将基于当前家庭共享记忆与记录。';
+    ? `已切换到 “${memberName(nextTarget)}” 的镜像参考模式。后续回答只基于授权可见记录，不代表本人真实意图。`
+    : '已切回家庭 Agent 自身上下文。后续回答将基于当前家庭共享记忆与记录。';
   const sessionContextPatch = buildSessionMetadata(nextMode, nextTarget, true);
   return {
     id: generateId(),
@@ -354,58 +220,6 @@ function buildTargetSwitchMessage(
       sessionContextPatch,
     },
   };
-}
-
-function AnswerEvidenceDisclosure({ message }: { message: ChatMessage }) {
-  const sourceRefs = message.metadata?.sourceRefs || [];
-  const insufficientSources = Boolean(message.metadata?.insufficientSources);
-  const sourceSummary = typeof message.metadata?.sourceSummary === 'string' ? message.metadata.sourceSummary : '';
-  const retrievalQuery = typeof message.metadata?.retrievalQuery === 'string' ? message.metadata.retrievalQuery : '';
-
-  if (!sourceRefs.length && !insufficientSources) return null;
-
-  const summaryText = insufficientSources
-    ? '资料偏少，回答仅供参考'
-    : `已参考 ${sourceRefs.length} 条授权资料`;
-
-  return (
-    <details className="mt-2 overflow-hidden rounded-lg border border-purple-100 bg-white/80 text-xs text-gray-600">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2">
-        <span className="inline-flex items-center gap-1.5">
-          <Bot className="h-3.5 w-3.5 text-purple-600" />
-          <span className="font-medium text-gray-700">查看回答依据</span>
-        </span>
-        <span className="text-[11px] text-gray-500">{summaryText}</span>
-      </summary>
-      <div className="space-y-2 border-t border-purple-100 px-3 py-3">
-        {sourceSummary && <p className="leading-5 text-gray-600">{sourceSummary}</p>}
-        {retrievalQuery && (
-          <p className="rounded-md bg-purple-50 px-2 py-1.5 text-[11px] leading-5 text-purple-700">
-            本轮按“{retrievalQuery}”召回相关资料。
-          </p>
-        )}
-        {insufficientSources && (
-          <p className="rounded-md bg-amber-50 px-2 py-1.5 text-[11px] leading-5 text-amber-700">
-            资料较少，回答仅供参考，不视为当事人原话。
-          </p>
-        )}
-        {sourceRefs.slice(0, 5).map((source) => (
-          <div key={`${message.id}-${source.code}`} className="rounded-md bg-gray-50 px-2.5 py-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded bg-white px-1.5 py-0.5 font-medium text-gray-500 ring-1 ring-gray-200">
-                {source.code}
-              </span>
-              <span className={`rounded-full px-2 py-0.5 ${source.toneClass}`}>
-                {source.sourceLabel}
-              </span>
-              <span className="text-[11px] text-gray-400">{source.temporalLabel}</span>
-            </div>
-            <p className="mt-1 text-sm text-gray-700">{source.title}</p>
-          </div>
-        ))}
-      </div>
-    </details>
-  );
 }
 
 export default function AgentPage() {
@@ -436,6 +250,8 @@ export default function AgentPage() {
   const [contextError, setContextError] = useState('');
   const [activationScene, setActivationScene] = useState<ActivationSceneState | null>(null);
   const [saveFeedback, setSaveFeedback] = useState<Record<string, SaveFeedback>>({});
+  const [isSessionsOpen, setIsSessionsOpen] = useState(false);
+  const [isContextOpen, setIsContextOpen] = useState(false);
 
   const {
     viewerRole,
@@ -598,7 +414,7 @@ export default function AgentPage() {
     }
     return {
       ...defaultRequest,
-      message: `请以"${memberName(targetMember)}的镜像参考"模式回答：${message}`,
+      message: `请以 "${memberName(targetMember)}" 的镜像参考模式回答：${message}`,
       subject: 'MirrorAgent',
       contextLabel: 'mirror_agent',
       targetRole: 'MEMBER' as const,
@@ -742,6 +558,8 @@ export default function AgentPage() {
     setSaveFeedback({});
     setActivationScene(null);
     sessionSavedMemoriesRef.current = [];
+    setIsSessionsOpen(false);
+    setIsContextOpen(false);
 
     if (!activeFamilyId) {
       setSessions([]);
@@ -1030,7 +848,7 @@ export default function AgentPage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center text-sm text-gray-500">
+      <div className="flex min-h-[60vh] items-center justify-center text-sm text-stone-500">
         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
         正在加载家庭上下文...
       </div>
@@ -1040,15 +858,17 @@ export default function AgentPage() {
   if (!activeFamilyId) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-10">
-        <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center">
-          <Sparkles className="mx-auto h-10 w-10 text-blue-600" />
-          <h1 className="mt-4 text-xl font-semibold text-gray-900">请先选择家庭</h1>
-          <p className="mt-2 text-sm text-gray-600">
-            FamilyAgent 会把家庭记忆、日记和成长记录作为对话上下文。
+        <div className="rounded-[32px] border border-dashed border-stone-300 bg-white/88 p-10 text-center shadow-[0_18px_48px_rgba(24,39,32,0.06)]">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-800">
+            <Sparkles className="h-6 w-6" />
+          </div>
+          <h1 className="mt-5 text-2xl font-semibold text-stone-950">请先选择家庭</h1>
+          <p className="mt-3 text-sm leading-7 text-stone-500">
+            FamilyAgent 会把家庭记忆、日记和成长记录作为对话上下文，先进入一个家庭空间再开始聊天。
           </p>
           <Link
             href="/dashboard/family"
-            className="mt-5 inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            className="mt-6 inline-flex h-11 items-center rounded-full bg-stone-950 px-5 text-sm font-medium text-white transition hover:bg-stone-800"
           >
             打开家庭空间
           </Link>
@@ -1057,452 +877,220 @@ export default function AgentPage() {
     );
   }
 
+  const targetLabel = mode === 'mirror' ? memberName(targetMember) : '自己 / FamilyAgent';
+
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] flex-col gap-4 px-4 py-4 lg:flex-row">
-      <aside className="w-full rounded-2xl border border-gray-200 bg-white lg:w-80">
-        <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-          <div>
-            <div className="text-sm font-semibold text-gray-900">FamilyAgent</div>
-            <div className="text-xs text-gray-500">{activeFamily?.name || '当前家庭'}</div>
-          </div>
-          <button
-            type="button"
-            onClick={handleNewChat}
-            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            新对话
-          </button>
-        </div>
-
-        <div className="border-b border-gray-100 px-4 py-3">
-          <div className={cn(
-            'rounded-xl px-3 py-3 text-sm',
-            mode === 'mirror' ? 'bg-purple-50 text-purple-900' : 'bg-blue-50 text-blue-900',
-          )}
-          >
-            <div className="flex items-center gap-2 font-medium">
-              {mode === 'mirror' ? <Bot className="h-4 w-4" /> : <BookHeart className="h-4 w-4" />}
-              {mode === 'mirror' ? '镜像参考模式' : '家族记忆陪伴'}
-            </div>
-            <p className={cn(
-              'mt-2 text-xs leading-5',
-              mode === 'mirror' ? 'text-purple-800' : 'text-blue-800',
-            )}
-            >
-              {mode === 'mirror'
-                ? `正在参考 ${memberName(targetMember)} 的授权可见记录，回答不会冒充本人。`
-                : '轻松聊天、无缝恢复长历史，并把重要时刻保存回家庭资产里。'}
-            </p>
-          </div>
-        </div>
-
-        <div className="px-4 py-3">
-          <div className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-900">
-            <History className="h-4 w-4" />
-            会话历史
-          </div>
-
-          {sessionError && (
-            <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-              {sessionError}
-            </div>
-          )}
-
-          {isLoadingSessions ? (
-            <div className="py-8 text-center text-xs text-gray-500">
-              <Loader2 className="mx-auto mb-2 h-4 w-4 animate-spin" />
-              正在加载会话...
-            </div>
-          ) : sessions.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-gray-200 px-3 py-6 text-center text-xs text-gray-500">
-              还没有保存的会话，开始第一次家庭对话吧。
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {sessions.map((session) => {
-                const badge = sessionBadge(session.metadata);
-                const metadata = normalizeAgentSessionMetadata(session.metadata);
-                return (
-                  <div
-                    key={session.id}
-                    className={cn(
-                      'rounded-xl border px-3 py-2',
-                      sessionId === session.id ? 'border-blue-200 bg-blue-50' : 'border-gray-200 bg-white',
-                    )}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => { void handleLoadSession(session.id); }}
-                      className="w-full text-left"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="text-sm font-medium text-gray-900">{getSessionTitle(session)}</div>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${badge.className}`}>
-                          {badge.label}
-                        </span>
-                      </div>
-                      {metadata.targetMemberName && metadata.agentMode === 'mirror' && !metadata.hasTargetSwitches && (
-                        <div className="mt-1 text-[11px] text-purple-600">
-                          对象：{metadata.targetMemberName}
-                        </div>
-                      )}
-                      {session.summary && (
-                        <div className="mt-1 line-clamp-2 text-xs text-gray-500">{session.summary}</div>
-                      )}
-                      <div className="mt-2 flex items-center justify-between text-[11px] text-gray-500">
-                        <span>{formatSessionTime(session.lastMessageAt || session.startedAt)}</span>
-                        <span>{session.messageCount || 0} 条消息</span>
-                      </div>
-                    </button>
-                    <div className="mt-2 flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => { void handleDeleteSession(session.id); }}
-                        className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-rose-600"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        删除
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </aside>
-
-      <section className="flex min-h-[70vh] min-w-0 flex-1 overflow-hidden rounded-2xl border border-gray-200 bg-white">
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="border-b border-gray-100 px-5 py-4">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-lg font-semibold text-gray-900">
-                    {mode === 'mirror' ? '镜像参考对话' : '家庭对话'}
-                  </h1>
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                    mode === 'mirror' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'
-                  }`}
-                  >
-                    {mode === 'mirror' ? '镜像参考' : '家族 Agent'}
+    <div className="min-h-[calc(100vh-4rem)] px-4 py-4 md:px-5 lg:px-6">
+      <div className="mx-auto flex max-w-[1440px] flex-col gap-4">
+        <div className="rounded-[28px] border border-white/80 bg-white/82 px-5 py-4 shadow-[0_18px_48px_rgba(24,39,32,0.08)] backdrop-blur-xl">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-400">
+                {activeFamily?.name || 'FamilyAgent'}
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl font-semibold tracking-tight text-stone-950">FamilyAgent</h1>
+                <span className={cn(
+                  'rounded-full px-2.5 py-1 text-xs font-medium',
+                  mode === 'mirror' ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-200 text-stone-700',
+                )}>
+                  {mode === 'mirror' ? '镜像参考' : '家庭对话'}
+                </span>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-stone-500">
+                <span className="inline-flex items-center gap-1">
+                  <UserRound className="h-4 w-4" />
+                  当前对象：{targetLabel}
+                </span>
+                {activeSessionDetail && (
+                  <span className="truncate rounded-full bg-stone-100 px-2.5 py-1 text-xs text-stone-600">
+                    会话：{getSessionTitle(activeSessionDetail)}
                   </span>
-                </div>
-                <p className="mt-1 text-sm text-gray-600">
+                )}
+                {!!(activeSessionDetail?.messageCount || messages.filter((message) => message.role !== 'system').length) && (
+                  <span className="text-xs text-stone-400">
+                    {activeSessionDetail?.messageCount || messages.filter((message) => message.role !== 'system').length} 条消息
+                    {activeSessionDetail?.archives?.length ? ` · ${activeSessionDetail.archives.length} 段归档` : ''}
+                  </span>
+                )}
+                {activeSessionMetadata.hasTargetSwitches && (
+                  <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs text-amber-800">
+                    该会话已切换过对象
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsSessionsOpen((current) => !current)}
+                className={cn(
+                  'inline-flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-medium transition',
+                  isSessionsOpen
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                    : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50',
+                )}
+              >
+                <History className="h-4 w-4" />
+                会话历史
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsContextOpen((current) => !current)}
+                className={cn(
+                  'inline-flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-medium transition',
+                  isContextOpen
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                    : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50',
+                )}
+              >
+                <Bot className="h-4 w-4" />
+                上下文
+              </button>
+              <button
+                type="button"
+                onClick={handleNewChat}
+                className="inline-flex h-11 items-center gap-2 rounded-full bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800"
+              >
+                <Plus className="h-4 w-4" />
+                新会话
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {sessionError && (
+          <div className="rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {sessionError}
+          </div>
+        )}
+
+        <section className="flex min-h-[70vh] flex-col overflow-hidden rounded-[32px] border border-white/80 bg-white/84 shadow-[0_22px_60px_rgba(24,39,32,0.08)] backdrop-blur-xl">
+          <div className="border-b border-stone-200/70 px-5 py-4 md:px-6">
+            <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+              <div className="min-w-0">
+                <h2 className="truncate text-lg font-semibold text-stone-950">
+                  {activeSessionDetail
+                    ? getSessionTitle(activeSessionDetail)
+                    : (mode === 'mirror' ? `与 ${targetLabel} 的镜像对话` : '新的家庭对话')}
+                </h2>
+                <p className="mt-1 text-sm text-stone-500">
                   {mode === 'mirror'
-                    ? '统一入口下的镜像参考模式，会继续使用同一会话列表，但后续回答只基于当前选择对象的授权记录。'
-                    : '当前会话会继续沿用家庭共享记忆、成长记录和会话归档历史。'}
+                    ? '基于授权可见资料提供镜像参考，并明确保留不确定性边界。'
+                    : '围绕当前家庭的共享记忆、会话归档和长期上下文继续对话。'}
                 </p>
               </div>
 
-              <div className="w-full max-w-xl space-y-2">
-                <label htmlFor="agent-target" className="text-xs font-medium text-gray-500">
-                  对话对象
-                </label>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <select
-                    id="agent-target"
-                    value={targetUserId ?? ''}
-                    onChange={(event) => {
-                      const nextTargetId = parsePositiveNumber(event.target.value);
-                      void handleTargetChange(nextTargetId);
-                    }}
-                    className="h-10 flex-1 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">自己 / 家族 Agent</option>
-                    {selectorOptions.map((member) => (
-                      <option key={member.userId} value={member.userId}>
-                        {memberName(member)}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
-                    <Users className="h-3.5 w-3.5 text-gray-400" />
-                    {isLoadingMembers
-                      ? '正在加载成员...'
-                      : selectorOptions.length > 0
-                        ? `可切换 ${selectorOptions.length} 位家庭成员`
-                        : '当前暂无其他可切换成员'}
-                  </div>
-                </div>
-                {activeSessionDetail && (
-                  <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
-                    <div className="font-medium text-gray-800">{getSessionTitle(activeSessionDetail)}</div>
-                    <div className="mt-1">
-                      {activeSessionDetail.messageCount || 0} 条消息
-                      {activeSessionDetail.archives?.length ? ` · ${activeSessionDetail.archives.length} 段归档` : ''}
-                    </div>
-                    {activeSessionMetadata.hasTargetSwitches && (
-                      <div className="mt-1 text-amber-700">这条会话里已经发生过对象切换。</div>
-                    )}
-                  </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                <span className="rounded-full bg-stone-100 px-2.5 py-1">对象：{targetLabel}</span>
+                <span className="rounded-full bg-stone-100 px-2.5 py-1">
+                  {activeSessionDetail?.messageCount || messages.filter((message) => message.role !== 'system').length} 条消息
+                </span>
+                {!!activeSessionDetail?.archives?.length && (
+                  <span className="rounded-full bg-stone-100 px-2.5 py-1">
+                    {activeSessionDetail.archives.length} 段归档
+                  </span>
+                )}
+                {activeSessionMetadata.hasTargetSwitches && (
+                  <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800">含对象切换</span>
                 )}
               </div>
             </div>
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-col xl:flex-row">
-            <div className="flex min-h-0 flex-1 flex-col">
-              <div className="flex-1 space-y-4 overflow-y-auto bg-gray-50/60 px-4 py-4">
-                {isLoadingMessages && (
-                  <div className="py-6 text-center text-sm text-gray-500">
-                    <Loader2 className="mx-auto mb-2 h-4 w-4 animate-spin" />
-                    正在恢复会话...
-                  </div>
-                )}
+          <AgentMessageList
+            messages={messages}
+            isLoadingMessages={isLoadingMessages}
+            mode={mode}
+            targetLabel={targetLabel}
+            saveFeedback={saveFeedback}
+            onSaveMessage={(message) => { void handleSaveMessage(message); }}
+            onOpenContext={() => setIsContextOpen(true)}
+          />
 
-                {!isLoadingMessages && messages.length === 0 ? (
-                  <div className="mx-auto max-w-2xl rounded-2xl border border-dashed border-gray-200 bg-white px-6 py-10 text-center">
-                    <Sparkles className="mx-auto h-10 w-10 text-blue-600" />
-                    <h2 className="mt-4 text-lg font-semibold text-gray-900">
-                      {mode === 'mirror' ? `开始和 ${memberName(targetMember)} 的镜像参考对话` : '开始一段家庭对话'}
-                    </h2>
-                    <p className="mt-2 text-sm leading-6 text-gray-600">
-                      {mode === 'mirror'
-                        ? '你可以追问“如果以他的经历来看，我现在该怎么选择”，也可以直接讨论关系、照护和家族经验。'
-                        : '可以聊家庭记忆、成长记录、照护、价值观，或任何值得留下来的内容。'}
-                    </p>
-                  </div>
-                ) : (
-                  messages.map((message) => {
-                    const feedback = saveFeedback[message.id];
-                    if (message.role === 'system') {
-                      return (
-                        <div key={message.id} className="mx-auto max-w-2xl text-center">
-                          <div className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-xs leading-5 text-amber-800">
-                            {message.content}
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    const isAssistant = message.role === 'assistant';
-                    const isMirrorAssistant = message.metadata?.agentMode === 'mirror' || Boolean(message.metadata?.sourceRefs?.length);
-                    return (
-                      <div
-                        key={message.id}
-                        className={`mx-auto max-w-3xl rounded-2xl border px-4 py-3 shadow-sm ${isAssistant ? 'border-blue-100 bg-white' : 'border-gray-200 bg-gray-900 text-white'}`}
-                      >
-                        <div className="mb-2 flex items-center justify-between gap-3">
-                          <div className={`text-xs font-medium ${isAssistant ? 'text-blue-700' : 'text-gray-200'}`}>
-                            {isAssistant ? (isMirrorAssistant ? 'MirrorAgent' : 'FamilyAgent') : '你'}
-                          </div>
-                          <div className={`text-[11px] ${isAssistant ? 'text-gray-400' : 'text-gray-300'}`}>
-                            {formatSessionTime(message.timestamp)}
-                          </div>
-                        </div>
-
-                        <div className={`text-sm leading-7 ${isAssistant ? 'text-gray-800' : 'text-white'}`}>
-                          {isAssistant ? <MathRenderer content={message.content} /> : message.content}
-                        </div>
-
-                        {isAssistant && <RagMemoryBadge metadata={message.metadata} />}
-                        {isAssistant && <WebSearchBadge metadata={message.metadata} />}
-                        {isAssistant && isMirrorAssistant && <AnswerEvidenceDisclosure message={message} />}
-
-                        <div className="mt-3 flex items-center justify-between gap-3">
-                          <button
-                            type="button"
-                            onClick={() => { void handleSaveMessage(message); }}
-                            disabled={feedback?.status === 'saving'}
-                            className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium ${
-                              isAssistant
-                                ? 'border border-gray-200 text-gray-700 hover:bg-gray-50'
-                                : 'border border-white/20 text-white hover:bg-white/10'
-                            }`}
-                          >
-                            {feedback?.status === 'saving'
-                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              : <Save className="h-3.5 w-3.5" />}
-                            保存这条消息
-                          </button>
-
-                          {feedback && (
-                            <div className={`text-xs ${feedback.status === 'error' ? 'text-rose-600' : 'text-emerald-600'}`}>
-                              {feedback.status === 'saved' && <CheckCircle className="mr-1 inline h-3.5 w-3.5" />}
-                              {feedback.detail}
-                              {feedback.href && (
-                                <Link href={feedback.href} className="ml-2 underline underline-offset-2">
-                                  打开
-                                </Link>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (isStreaming) {
+                stopStreaming();
+                return;
+              }
+              void handleSubmit();
+            }}
+            className="border-t border-stone-200/70 bg-white/88 px-4 py-4 md:px-6"
+          >
+            <div className="mx-auto max-w-3xl">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-xs text-stone-500">
+                  {mode === 'mirror'
+                    ? `当前将以 ${targetLabel} 的授权资料作为镜像参考。`
+                    : '当前将优先参考家庭共享记忆、归档会话与长期上下文。'}
+                </p>
+                <VoiceInputButton
+                  compact
+                  onTranscript={(text) => setInput((current) => (current ? `${current}\n${text}` : text))}
+                  disabled={isStreaming}
+                />
               </div>
 
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  if (isStreaming) {
-                    stopStreaming();
-                    return;
-                  }
-                  void handleSubmit();
-                }}
-                className="border-t border-gray-100 bg-white px-4 py-3"
-              >
-                <div className="mx-auto max-w-3xl">
-                  <div className="mb-2 flex justify-end">
-                    <VoiceInputButton
-                      onTranscript={(text) => setInput((current) => (current ? `${current}\n${text}` : text))}
-                      disabled={isStreaming}
-                    />
-                  </div>
-                  <div className="flex items-end gap-3">
-                    <textarea
-                      value={input}
-                      onChange={(event) => setInput(event.target.value)}
-                      placeholder={mode === 'mirror'
-                        ? `可以问“如果站在 ${memberName(targetMember)} 的经验里，会怎么建议我？”`
-                        : '可以聊家庭记忆、成长记录、照护、价值观，或任何值得保存下来的内容...'}
-                      disabled={isStreaming}
-                      rows={4}
-                      className="min-h-[96px] flex-1 resize-none rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-gray-50"
-                    />
-                    <button
-                      type="submit"
-                      disabled={isStreaming ? false : !input.trim()}
-                      className="inline-flex h-12 items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {isStreaming ? <Square className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
-              </form>
+              <div className="flex items-end gap-3">
+                <textarea
+                  value={input}
+                  onChange={(event) => setInput(event.target.value)}
+                  placeholder={mode === 'mirror'
+                    ? `可以问：“如果站在 ${targetLabel} 的经历里，会怎么建议我？”`
+                    : '可以聊家庭记忆、成长观察、照护安排，或任何值得长期保留的内容...'}
+                  disabled={isStreaming}
+                  rows={4}
+                  className="min-h-[116px] flex-1 resize-none rounded-[26px] border border-stone-200 bg-stone-50/80 px-4 py-3 text-sm text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-100 disabled:bg-stone-100"
+                />
+                <button
+                  type="submit"
+                  disabled={isStreaming ? false : !input.trim()}
+                  className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-950 text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label={isStreaming ? '停止输出' : '发送消息'}
+                >
+                  {isStreaming ? <Square className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
+          </form>
+        </section>
+      </div>
 
-            <aside className="w-full shrink-0 border-t border-gray-100 bg-white xl:w-80 xl:border-l xl:border-t-0">
-              <div className="h-full space-y-4 overflow-y-auto px-4 py-4">
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                  <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-900">
-                    <UserRound className="h-4 w-4 text-purple-600" />
-                    当前对象
-                  </div>
-                  <p className="text-sm font-medium text-gray-900">
-                    {mode === 'mirror' ? memberName(targetMember) : '自己 / 家族 Agent'}
-                  </p>
-                  <p className="mt-1 text-xs leading-5 text-gray-500">
-                    {mode === 'mirror'
-                      ? '镜像模式只参考已授权可见资料，并明确保留“不确定”的边界。'
-                      : '普通模式聚焦当前家庭共享记忆、成长记录、记忆库和本次会话历史。'}
-                  </p>
-                </div>
+      <AgentSessionDrawer
+        open={isSessionsOpen}
+        familyName={activeFamily?.name}
+        sessions={sessions}
+        sessionId={sessionId}
+        isLoadingSessions={isLoadingSessions}
+        sessionError={sessionError}
+        onClose={() => setIsSessionsOpen(false)}
+        onLoadSession={(targetSessionId) => { void handleLoadSession(targetSessionId); }}
+        onDeleteSession={(targetSessionId) => { void handleDeleteSession(targetSessionId); }}
+      />
 
-                {mode === 'family' ? (
-                  <>
-                    {activationScene && (
-                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800">
-                        <div className="font-medium">已激活上下文：{activationScene.label}</div>
-                        <div className="mt-1 leading-5">{activationScene.instruction}</div>
-                      </div>
-                    )}
-                    <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
-                      <div className="flex items-center gap-2 text-sm font-semibold text-blue-900">
-                        <BookHeart className="h-4 w-4" />
-                        家族 Agent 说明
-                      </div>
-                      <p className="mt-2 text-xs leading-5 text-blue-800">
-                        这里会综合家庭记忆、会话归档、记忆库、成长守护和待办传承任务，尽量把建议落到当前家庭语境。
-                      </p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    {contextError && (
-                      <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700">
-                        {contextError}
-                      </div>
-                    )}
-                    <div className="rounded-xl border border-purple-100 bg-purple-50 p-4">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-sm font-semibold text-purple-900">资料充分度</div>
-                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                          modeReadiness.tone === 'green'
-                            ? 'bg-green-50 text-green-700'
-                            : modeReadiness.tone === 'blue'
-                              ? 'bg-blue-50 text-blue-700'
-                              : modeReadiness.tone === 'yellow'
-                                ? 'bg-yellow-50 text-yellow-700'
-                                : 'bg-gray-100 text-gray-600'
-                        }`}
-                        >
-                          {modeReadiness.label}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-xs leading-5 text-purple-800">
-                        {isLoadingMirrorContext
-                          ? '正在刷新镜像资料...'
-                          : mirrorContext?.sourceSummary || '当前还没有可展示的镜像来源摘要。'}
-                      </p>
-                    </div>
-
-                    {mirrorContext?.disclaimer && (
-                      <div className="rounded-xl border border-yellow-100 bg-yellow-50 p-4 text-xs leading-5 text-yellow-800">
-                        {mirrorContext.disclaimer}
-                      </div>
-                    )}
-
-                    {mirrorContext?.suggestedQuestions?.length ? (
-                      <div className="rounded-xl border border-gray-200 p-4">
-                        <div className="text-sm font-semibold text-gray-900">可以这样问</div>
-                        <div className="mt-3 space-y-2">
-                          {mirrorContext.suggestedQuestions.slice(0, 4).map((question) => (
-                            <button
-                              key={question}
-                              type="button"
-                              onClick={() => setInput(question)}
-                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-xs leading-5 text-gray-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-                            >
-                              {question}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {mirrorContext?.missingRecordSuggestions?.length ? (
-                      <div className="rounded-xl border border-dashed border-gray-200 p-4">
-                        <div className="text-sm font-semibold text-gray-900">让镜像更准确</div>
-                        <div className="mt-3 space-y-2">
-                          {mirrorContext.missingRecordSuggestions.slice(0, 3).map((suggestion) => (
-                            <p key={suggestion} className="text-xs leading-5 text-gray-600">
-                              {suggestion}
-                            </p>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-xs text-gray-600">
-                      <div className="font-medium text-gray-800">快速入口</div>
-                      <div className="mt-2 space-y-2">
-                        <Link
-                          href={`/dashboard/family/member?familyId=${activeFamilyId}&userId=${targetUserId || ''}`}
-                          className="block rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-700 hover:border-purple-200 hover:bg-purple-50 hover:text-purple-700"
-                        >
-                          查看成员授权资料
-                        </Link>
-                        <Link
-                          href={`/dashboard/diary?familyId=${activeFamilyId}${targetUserId ? `&relatedUserId=${targetUserId}&relatedMemberName=${encodeURIComponent(memberName(targetMember))}` : ''}`}
-                          className="block rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-700 hover:border-purple-200 hover:bg-purple-50 hover:text-purple-700"
-                        >
-                          去补充相关记录
-                        </Link>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </aside>
-          </div>
-        </div>
-      </section>
+      <AgentContextPanel
+        open={isContextOpen}
+        mode={mode}
+        targetLabel={targetLabel}
+        targetUserId={targetUserId}
+        selectorOptions={selectorOptions}
+        isLoadingMembers={isLoadingMembers}
+        activationScene={activationScene}
+        modeReadiness={modeReadiness}
+        mirrorContext={mirrorContext}
+        isLoadingMirrorContext={isLoadingMirrorContext}
+        contextError={contextError}
+        activeFamilyId={activeFamilyId}
+        onClose={() => setIsContextOpen(false)}
+        onTargetChange={(nextTargetUserId) => { void handleTargetChange(nextTargetUserId); }}
+        onSuggestedQuestion={(question) => {
+          setInput(question);
+          setIsContextOpen(false);
+        }}
+      />
     </div>
   );
 }

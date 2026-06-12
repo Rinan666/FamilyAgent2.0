@@ -20,7 +20,7 @@ const navItems: readonly NavItem[] = [
   { href: '/dashboard/diary', label: '日记', icon: BookHeart, roles: ['MEMBER', 'ADMIN'] },
   { href: '/album', label: '相册', icon: Images, roles: ['MEMBER', 'ADMIN'] },
   { href: '/dashboard/family', label: '家庭空间', icon: Users, roles: ['MEMBER', 'ADMIN'] },
-  { href: '/dashboard/admin/database', label: '数据库健康', icon: Database, roles: ['ADMIN'], platformAdminOnly: true },
+  { href: '/dashboard/admin/database', label: '系统巡检', icon: Database, roles: ['ADMIN'], platformAdminOnly: true },
   { href: '/dashboard/settings', label: '设置', icon: Settings, roles: ['MEMBER', 'ADMIN'] },
 ] as const;
 
@@ -68,11 +68,18 @@ function NavigationLinks({
               onClick={onNavigate}
               title={item.label}
               className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors lg:py-2.5',
-                isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
+                'group flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition-all',
+                isActive
+                  ? 'bg-stone-950 text-white shadow-[0_16px_36px_rgba(24,39,32,0.14)]'
+                  : 'text-stone-600 hover:bg-white/82 hover:text-stone-950',
               )}
             >
-              <Icon className="h-5 w-5 shrink-0" />
+              <Icon
+                className={cn(
+                  'h-5 w-5 shrink-0 transition-colors',
+                  isActive ? 'text-emerald-300' : 'text-stone-400 group-hover:text-emerald-700',
+                )}
+              />
               <span className="flex-1">{item.label}</span>
             </Link>
           );
@@ -90,8 +97,8 @@ export function MobileBottomNav({
   const items = mobilePrimaryNav.filter((item) => item.roles.includes(viewerRole)).slice(0, 5);
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur lg:hidden">
-      <div className="mx-auto grid max-w-md grid-cols-5 gap-1">
+    <nav className="fixed inset-x-0 bottom-0 z-40 px-4 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-2 lg:hidden">
+      <div className="mx-auto grid max-w-lg grid-cols-5 gap-1 rounded-[24px] border border-white/70 bg-white/92 p-2 shadow-[0_20px_48px_rgba(24,39,32,0.12)] backdrop-blur-xl">
         {items.map((item) => {
           const Icon = item.icon;
           const isActive = isActivePath(pathname, item.href);
@@ -102,8 +109,8 @@ export function MobileBottomNav({
               href={item.href}
               aria-label={item.label}
               className={cn(
-                'flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 text-[11px] font-medium transition-colors',
-                isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800',
+                'flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-[11px] font-medium transition-colors',
+                isActive ? 'bg-stone-950 text-white' : 'text-stone-500 hover:bg-stone-100 hover:text-stone-800',
               )}
             >
               <Icon className="h-5 w-5" />
@@ -118,20 +125,35 @@ export function MobileBottomNav({
 
 export default function Sidebar({ viewerRole = 'MEMBER', isPlatformAdmin = false, className }: SidebarProps) {
   return (
-    <aside className={cn('hidden w-60 shrink-0 flex-col border-r border-gray-200 bg-white lg:flex xl:w-64', className)}>
-      <div className="flex h-16 items-center border-b border-gray-200 px-6">
-        <Link href="/dashboard/agent" className="flex items-center gap-2">
-          <BookHeart className="h-6 w-6 text-blue-600" />
-          <span className="text-lg font-bold text-gray-900">FamilyAgent</span>
+    <aside className={cn('hidden w-72 shrink-0 border-r border-white/70 bg-[#f5f4ee]/86 backdrop-blur xl:flex', className)}>
+      <div className="flex h-full flex-col px-5 pb-5 pt-6">
+        <Link
+          href="/dashboard/agent"
+          className="rounded-[28px] border border-white/80 bg-white/78 px-4 py-4 shadow-[0_16px_36px_rgba(24,39,32,0.08)]"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-stone-950 text-white">
+              <BookHeart className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-base font-semibold text-stone-950">FamilyAgent</p>
+              <p className="text-sm text-stone-500">家庭记忆工作台</p>
+            </div>
+          </div>
         </Link>
-      </div>
 
-      <nav className="flex-1 space-y-1 px-3 py-4">
-        <NavigationLinks viewerRole={viewerRole} isPlatformAdmin={isPlatformAdmin} />
-      </nav>
+        <div className="mt-8 px-2">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-400">Workspace</p>
+        </div>
 
-      <div className="border-t border-gray-200 p-4">
-        <p className="text-xs text-gray-400">v0.1.0 测试版</p>
+        <nav className="mt-3 flex-1 space-y-1.5">
+          <NavigationLinks viewerRole={viewerRole} isPlatformAdmin={isPlatformAdmin} />
+        </nav>
+
+        <div className="rounded-[24px] border border-white/80 bg-white/74 p-4 shadow-[0_16px_30px_rgba(24,39,32,0.06)]">
+          <p className="text-sm font-medium leading-6 text-stone-900">减少噪音，把真正重要的家庭内容留在同一个地方。</p>
+          <p className="mt-2 text-xs text-stone-400">v0.1.0 beta</p>
+        </div>
       </div>
     </aside>
   );
@@ -151,7 +173,7 @@ export function MobileNav({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 lg:hidden"
+        className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-stone-200/80 bg-white text-stone-600 shadow-sm lg:hidden"
         aria-label="打开导航"
       >
         <Menu className="h-5 w-5" />
@@ -161,27 +183,32 @@ export function MobileNav({
         <div className="fixed inset-0 z-50 lg:hidden">
           <button
             type="button"
-            className="absolute inset-0 bg-gray-900/35"
+            className="absolute inset-0 bg-stone-950/30 backdrop-blur-sm"
             aria-label="关闭导航"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute inset-y-0 left-0 flex w-[min(20rem,86vw)] flex-col bg-white shadow-xl">
-            <div className="flex h-16 items-center justify-between border-b border-gray-200 px-4">
+          <div className="absolute inset-y-0 left-0 flex w-[min(22rem,88vw)] flex-col border-r border-white/70 bg-[#f5f4ee]/95 shadow-[0_20px_60px_rgba(24,39,32,0.18)] backdrop-blur-xl">
+            <div className="flex h-20 items-center justify-between px-4">
               <Link href="/dashboard/agent" onClick={() => setOpen(false)} className="flex items-center gap-2">
-                <BookHeart className="h-6 w-6 text-blue-600" />
-                <span className="text-lg font-bold text-gray-900">FamilyAgent</span>
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-stone-950 text-white">
+                  <BookHeart className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-base font-semibold text-stone-950">FamilyAgent</p>
+                  <p className="text-xs text-stone-500">家庭记忆工作台</p>
+                </div>
               </Link>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-50"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl text-stone-500 transition hover:bg-white/70"
                 aria-label="关闭导航"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 py-4">
+            <nav className="flex-1 space-y-1.5 overflow-y-auto px-4 py-2">
               <NavigationLinks
                 viewerRole={viewerRole}
                 isPlatformAdmin={isPlatformAdmin}
@@ -189,8 +216,11 @@ export function MobileNav({
               />
             </nav>
 
-            <div className="border-t border-gray-200 p-4">
-              <p className="text-xs text-gray-400">v0.1.0 测试版</p>
+            <div className="p-4 pt-2">
+              <div className="rounded-[22px] border border-white/80 bg-white/78 p-4">
+                <p className="text-sm font-medium leading-6 text-stone-900">保持简洁，让重要内容自然浮出来。</p>
+                <p className="mt-2 text-xs text-stone-400">v0.1.0 beta</p>
+              </div>
             </div>
           </div>
         </div>

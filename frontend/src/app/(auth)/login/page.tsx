@@ -1,21 +1,38 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { BookHeart, Brain, LockKeyhole, Sparkles, Users } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { BookHeart, Brain, Users } from 'lucide-react';
+import AuthShell, {
+  authInputClassName,
+  authLabelClassName,
+  authPrimaryButtonClassName,
+} from '@/components/auth/AuthShell';
 import { userApi } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 
 const highlights = [
-  { icon: BookHeart, text: '记录生活片段、家庭日记与成长观察。' },
-  { icon: Users, text: '把长辈经验沉淀成家人共享的知识资产。' },
-  { icon: Brain, text: '让 AI 在授权范围内更懂这个家庭。' },
-];
+  {
+    icon: BookHeart,
+    title: '把日常留住',
+    description: '用日记、片段和观察，慢慢积累属于这个家庭的长期记忆。',
+  },
+  {
+    icon: Users,
+    title: '让家人共享同一语境',
+    description: '把经验、角色和共同经历沉淀下来，减少信息散落和重复沟通。',
+  },
+  {
+    icon: Brain,
+    title: '让 AI 真正理解家庭',
+    description: '在授权范围内调用上下文，让每一次协助都更贴近真实关系。',
+  },
+] as const;
 
 export default function LoginPage() {
   const router = useRouter();
-  const login = useAuthStore((s) => s.login);
+  const login = useAuthStore((state) => state.login);
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -25,12 +42,12 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (window.location.search.includes('registered=true')) {
-      setNotice('注册完成，请登录进入你的家庭空间。');
+      setNotice('注册完成，请登录后进入你的家庭空间。');
     }
   }, []);
 
-  const handleSubmit = async (e?: React.FormEvent) => {
-    e?.preventDefault();
+  const handleSubmit = async (event?: React.FormEvent) => {
+    event?.preventDefault();
     setError('');
     setLoading(true);
 
@@ -52,115 +69,77 @@ export default function LoginPage() {
       );
       router.push('/dashboard');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : '登录失败，请稍后重试');
+      setError(err instanceof Error ? err.message : '登录失败，请稍后重试。');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-[linear-gradient(135deg,#f7faf9_0%,#eef6f3_48%,#f4f7fb_100%)] px-4 py-6">
-      <div className="grid w-full max-w-5xl overflow-hidden rounded-lg border border-emerald-100 bg-white/95 shadow-lg shadow-emerald-900/5 lg:grid-cols-[1.04fr_0.96fr]">
-        <section className="flex min-h-[420px] flex-col justify-between border-b border-emerald-100 bg-emerald-50/80 p-7 text-gray-900 sm:p-9 lg:border-b-0 lg:border-r">
-          <div>
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white/70 px-3 py-1 text-xs font-medium text-emerald-800">
-              <Sparkles className="h-3.5 w-3.5" />
-              长期家庭记忆 · 共享家族智慧
-            </div>
-            <h1 className="max-w-xl text-3xl font-bold leading-tight sm:text-4xl">
-              FamilyAgent
-            </h1>
-            <p className="mt-4 max-w-lg text-sm leading-6 text-gray-600 sm:text-base">
-              把日记、长辈经验、成长观察与彼此理解汇聚进同一个家庭语境里，让 AI 不只是回答问题。
-            </p>
+    <AuthShell
+      badge="家庭记忆"
+      heroTitle="让每一段重要经历，都有稳定的落点。"
+      heroDescription="FamilyAgent 帮你整理家庭日记、成员角色、成长观察与共享知识，让协作和陪伴都回到同一个空间里。"
+      highlights={highlights}
+      formTitle="欢迎回来"
+      formDescription="登录后继续整理家庭记忆、查看协作内容，并在授权范围内获得更懂家庭语境的 AI 协助。"
+      footer={(
+        <p className="text-center">
+          还没有账号？{' '}
+          <Link href="/register" className="font-semibold text-emerald-700 transition hover:text-emerald-800">
+            立即注册
+          </Link>
+        </p>
+      )}
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {error && (
+          <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+            {error}
           </div>
-
-          <div className="space-y-3">
-            {highlights.map((item) => {
-              const Icon = item.icon;
-              return (
-                <div key={item.text} className="flex items-center gap-3 rounded-lg border border-emerald-100 bg-white/70 px-3 py-2.5 text-sm text-gray-700">
-                  <Icon className="h-4 w-4 shrink-0 text-emerald-700" />
-                  <span>{item.text}</span>
-                </div>
-              );
-            })}
+        )}
+        {notice && (
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            {notice}
           </div>
-        </section>
+        )}
 
-        <section className="p-6 sm:p-8">
-          <div className="mb-7">
-            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
-              <LockKeyhole className="h-5 w-5" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900">登录</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              进入你的家庭空间，继续整理家人的记忆与经验。
-            </p>
-          </div>
+        <div>
+          <label htmlFor="login-username" className={authLabelClassName}>
+            用户名
+          </label>
+          <input
+            id="login-username"
+            name="username"
+            type="text"
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            className={authInputClassName}
+            placeholder="请输入用户名"
+            required
+          />
+        </div>
 
-          <form action="javascript:void(0)" onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">
-                {error}
-              </div>
-            )}
-            {notice && (
-              <div className="rounded-lg bg-green-50 px-4 py-2 text-sm text-green-700">
-                {notice}
-              </div>
-            )}
+        <div>
+          <label htmlFor="login-password" className={authLabelClassName}>
+            密码
+          </label>
+          <input
+            id="login-password"
+            name="password"
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            className={authInputClassName}
+            placeholder="请输入密码"
+            required
+          />
+        </div>
 
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                用户名
-              </label>
-              <input
-                id="login-username"
-                name="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                placeholder="请输入用户名"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                密码
-              </label>
-              <input
-                id="login-password"
-                name="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                placeholder="请输入密码"
-                required
-              />
-            </div>
-
-            <button
-              type="button"
-              onClick={() => void handleSubmit()}
-              disabled={loading}
-              className="w-full rounded-lg bg-emerald-700 py-2.5 font-medium text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
-            >
-              {loading ? '登录中...' : '登录'}
-            </button>
-          </form>
-
-          <p className="mt-6 text-center text-sm text-gray-500">
-            还没有账号？{' '}
-            <Link href="/register" className="font-medium text-emerald-700 hover:underline">
-              立即注册
-            </Link>
-          </p>
-        </section>
-      </div>
-    </div>
+        <button type="submit" disabled={loading} className={authPrimaryButtonClassName}>
+          {loading ? '登录中...' : '登录'}
+        </button>
+      </form>
+    </AuthShell>
   );
 }
