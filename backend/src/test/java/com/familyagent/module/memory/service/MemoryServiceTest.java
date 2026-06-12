@@ -38,24 +38,22 @@ class MemoryServiceTest {
     @Mock private MemoryEntryVoteRepository voteRepository;
     @Mock private FamilyService familyService;
     @Mock private MemoryEmbeddingService memoryEmbeddingService;
+    @Mock private MemoryMergeService memoryMergeService;
+    @Mock private MemorySearchService memorySearchService;
+    @Mock private MemoryVoteService memoryVoteService;
     @Mock private RedissonClient redissonClient;
     @Mock private RLock familyCreateLock;
 
+    // --- createFamilyMemory ---
+
     @Test
     void createFamilyMemory_shouldRejectManualHeritageWithoutPositiveJudge() {
-        MemoryService service = new MemoryService(
-                memoryRepository,
-                voteRepository,
-                familyService,
-                memoryEmbeddingService,
-                redissonClient);
+        MemoryService service = newService();
         CreateFamilyMemoryRequest request = requestWithMetadata(Map.<String, Object>of("source", "HERITAGE_ENTRY"));
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
-
             BusinessException error = assertThrows(BusinessException.class, () -> service.createFamilyMemory(request));
-
             assertEquals("请先完成家族经验保存价值判断", error.getMessage());
         }
 
@@ -69,13 +67,11 @@ class MemoryServiceTest {
         CreateFamilyMemoryRequest request = requestWithMetadata(Map.<String, Object>of(
                 "source", "HERITAGE_INTERVIEW",
                 "saveJudge", Map.of("shouldSave", true, "learningValueScore", 4)));
-        when(memoryRepository.findActiveFamilyMemories(eq(1L), eq(10L), any(Integer.class))).thenReturn(List.of());
+        when(memoryMergeService.findSimilar(any(), any(), eq(10L), any(), any())).thenReturn(null);
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
-
             MemoryEntry result = service.createFamilyMemory(request);
-
             assertEquals("ELDER_ADVICE", result.getType());
         }
 
@@ -88,27 +84,83 @@ class MemoryServiceTest {
     @Test
     void createFamilyMemory_shouldNotRequireJudgeForDiaryPromotion() throws InterruptedException {
         MemoryService service = serviceWithAcquiredLock();
-        CreateFamilyMemoryRequest request = requestWithMetadata(Map.<String, Object>of("source", "DIARY_PROMOTION", "sourceDiaryId", 99));
+        CreateFamilyMemoryRequest request = requestWithMetadata(
+                Map.<String, Object>of("source", "DIARY_PROMOTION", "sourceDiaryId", 99));
         when(memoryRepository.findActiveBySourceDiaryId(1L, "99")).thenReturn(null);
-        when(memoryRepository.findActiveFamilyMemories(eq(1L), eq(10L), any(Integer.class))).thenReturn(List.of());
+        when(memoryMergeService.findSimilar(any(), any(), eq(10L), any(), any())).thenReturn(null);
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
-
             service.createFamilyMemory(request);
         }
 
         verify(memoryRepository).insert(any(MemoryEntry.class));
     }
 
+    // --- MemoryMergeService ---
+
+    @Test
+    void merge_setsSourceAsMergedHeritageAndCallsPersistence() {
+        MemoryMergeService mergeService = new MemoryMergeService(memoryRepository, memoryEmbeddingService, memoryVoteService);
+        MemoryEntry existing = existingEntry(42L, "ELDER_ADVICE", "FAMILY_VISIBLE",
+                "第一段经验内容", new java.util.HashMap<>(Map.of("mergedSourceCount", 0)));
+
+        mergeService.merge(existing, requestWithMetadata(Map.of()),
+                Map.<String, Object>of("source", "HERITAGE_INTERVIEW"), 99L);
+
+        ArgumentCaptor<MemoryEntry> captor = ArgumentCaptor.forClass(MemoryEntry.class);
+        verify(memoryRepository).updateById(captor.capture());
+        verify(memoryEmbeddingService).indexMemoryAfterCommit(captor.getValue());
+        Map<?, ?> meta = (Map<?, ?>) captor.getValue().getMetadata();
+        assertEquals("MERGED_HERITAGE", meta.get("source"));
+        assertTrue(meta.containsKey("mergedAt"));
+        assertTrue(meta.containsKey("mergedReason"));
+    }
+
+    @Test
+    void merge_incrementsMergedSourceCount() {
+        MemoryMergeService mergeService = new MemoryMergeService(memoryRepository, memoryEmbeddingService, memoryVoteService);
+        MemoryEntry existing = existingEntry(43L, "ELDER_ADVICE", "FAMILY_VISIBLE",
+                "原有内容", new java.util.HashMap<>(Map.of("mergedSourceCount", 2)));
+
+        mergeService.merge(existing, requestWithMetadata(Map.of()), Map.<String, Object>of(), 99L);
+
+        ArgumentCaptor<MemoryEntry> captor = ArgumentCaptor.forClass(MemoryEntry.class);
+        verify(memoryRepository).updateById(captor.capture());
+        assertTrue(((Number) ((Map<?, ?>) captor.getValue().getMetadata()).get("mergedSourceCount")).intValue() >= 3);
+    }
+
+    @Test
+    void merge_takesHigherImportanceFromIncoming() {
+        MemoryMergeService mergeService = new MemoryMergeService(memoryRepository, memoryEmbeddingService, memoryVoteService);
+        MemoryEntry existing = existingEntry(44L, "ELDER_ADVICE", "FAMILY_VISIBLE",
+                "已有内容", new java.util.HashMap<>());
+        existing.setImportance(2);
+        CreateFamilyMemoryRequest request = requestWithMetadata(Map.of());
+        request.setImportance(5);
+
+        assertEquals(5, mergeService.merge(existing, request, Map.of(), 99L).getImportance());
+    }
+
+    @Test
+    void merge_keepsHigherImportanceFromExisting() {
+        MemoryMergeService mergeService = new MemoryMergeService(memoryRepository, memoryEmbeddingService, memoryVoteService);
+        MemoryEntry existing = existingEntry(45L, "ELDER_ADVICE", "FAMILY_VISIBLE",
+                "已有内容", new java.util.HashMap<>());
+        existing.setImportance(5);
+        CreateFamilyMemoryRequest request = requestWithMetadata(Map.of());
+        request.setImportance(1);
+
+        assertEquals(5, mergeService.merge(existing, request, Map.of(), 99L).getImportance());
+    }
+
+    // --- MemorySearchService ---
+
     @Test
     void searchFamilyMemories_shouldClampPageAndAttachVoteStats() {
-        MemoryService service = new MemoryService(
-                memoryRepository,
-                voteRepository,
-                familyService,
-                memoryEmbeddingService,
-                redissonClient);
+        MemoryVoteService realVoteService = new MemoryVoteService(memoryRepository, voteRepository, familyService);
+        MemorySearchService searchService = new MemorySearchService(memoryRepository, familyService, realVoteService);
+
         MemoryEntry entry = new MemoryEntry();
         entry.setId(301L);
         entry.setFamilyId(1L);
@@ -125,8 +177,7 @@ class MemoryServiceTest {
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
-
-            var result = service.searchFamilyMemories(1L, 22L, " 晨读 ", 4, 0);
+            var result = searchService.searchFamilyMemories(1L, 22L, " 晨读 ", 4, 0);
 
             assertEquals(2L, result.getPage());
             assertEquals(6L, result.getPageSize());
@@ -136,83 +187,18 @@ class MemoryServiceTest {
         }
     }
 
+    // --- helpers ---
+
+    private MemoryService newService() {
+        return new MemoryService(memoryRepository, familyService, memoryEmbeddingService,
+                memoryMergeService, memorySearchService, memoryVoteService, redissonClient);
+    }
+
     private MemoryService serviceWithAcquiredLock() throws InterruptedException {
         when(redissonClient.getLock(anyString())).thenReturn(familyCreateLock);
         when(familyCreateLock.tryLock(5, 10, TimeUnit.SECONDS)).thenReturn(true);
         when(familyCreateLock.isHeldByCurrentThread()).thenReturn(true);
-        return new MemoryService(
-                memoryRepository,
-                voteRepository,
-                familyService,
-                memoryEmbeddingService,
-                redissonClient);
-    }
-
-    @Test
-    void mergeFamilyMemory_setsSourceAsMergedHeritageAndCallsPersistence() {
-        MemoryService service = new MemoryService(
-                memoryRepository, voteRepository, familyService, memoryEmbeddingService, redissonClient);
-        MemoryEntry existing = existingEntry(42L, "ELDER_ADVICE", "FAMILY_VISIBLE",
-                "第一段经验内容", new java.util.HashMap<>(Map.of("mergedSourceCount", 0)));
-        when(voteRepository.statsByMemoryId(42L, 99L)).thenReturn(null);
-
-        service.mergeFamilyMemory(existing, requestWithMetadata(Map.<String, Object>of()), Map.<String, Object>of("source", "HERITAGE_INTERVIEW"), 99L);
-
-        ArgumentCaptor<MemoryEntry> captor = ArgumentCaptor.forClass(MemoryEntry.class);
-        verify(memoryRepository).updateById(captor.capture());
-        verify(memoryEmbeddingService).indexMemoryAfterCommit(captor.getValue());
-        Map<?, ?> meta = (Map<?, ?>) captor.getValue().getMetadata();
-        assertEquals("MERGED_HERITAGE", meta.get("source"));
-        assertTrue(meta.containsKey("mergedAt"));
-        assertTrue(meta.containsKey("mergedReason"));
-    }
-
-    @Test
-    void mergeFamilyMemory_incrementsMergedSourceCount() {
-        MemoryService service = new MemoryService(
-                memoryRepository, voteRepository, familyService, memoryEmbeddingService, redissonClient);
-        MemoryEntry existing = existingEntry(43L, "ELDER_ADVICE", "FAMILY_VISIBLE",
-                "原有内容", new java.util.HashMap<>(Map.of("mergedSourceCount", 2)));
-        when(voteRepository.statsByMemoryId(43L, 99L)).thenReturn(null);
-
-        service.mergeFamilyMemory(existing, requestWithMetadata(Map.<String, Object>of()), Map.<String, Object>of(), 99L);
-
-        ArgumentCaptor<MemoryEntry> captor = ArgumentCaptor.forClass(MemoryEntry.class);
-        verify(memoryRepository).updateById(captor.capture());
-        Map<?, ?> meta = (Map<?, ?>) captor.getValue().getMetadata();
-        assertTrue(((Number) meta.get("mergedSourceCount")).intValue() >= 3);
-    }
-
-    @Test
-    void mergeFamilyMemory_takesHigherImportanceFromIncoming() {
-        MemoryService service = new MemoryService(
-                memoryRepository, voteRepository, familyService, memoryEmbeddingService, redissonClient);
-        MemoryEntry existing = existingEntry(44L, "ELDER_ADVICE", "FAMILY_VISIBLE",
-                "已有内容", new java.util.HashMap<>());
-        existing.setImportance(2);
-        CreateFamilyMemoryRequest request = requestWithMetadata(Map.<String, Object>of());
-        request.setImportance(5);
-        when(voteRepository.statsByMemoryId(44L, 99L)).thenReturn(null);
-
-        MemoryEntry result = service.mergeFamilyMemory(existing, request, Map.<String, Object>of(), 99L);
-
-        assertEquals(5, result.getImportance());
-    }
-
-    @Test
-    void mergeFamilyMemory_keepsHigherImportanceFromExisting() {
-        MemoryService service = new MemoryService(
-                memoryRepository, voteRepository, familyService, memoryEmbeddingService, redissonClient);
-        MemoryEntry existing = existingEntry(45L, "ELDER_ADVICE", "FAMILY_VISIBLE",
-                "已有内容", new java.util.HashMap<>());
-        existing.setImportance(5);
-        CreateFamilyMemoryRequest request = requestWithMetadata(Map.<String, Object>of());
-        request.setImportance(1);
-        when(voteRepository.statsByMemoryId(45L, 99L)).thenReturn(null);
-
-        MemoryEntry result = service.mergeFamilyMemory(existing, request, Map.<String, Object>of(), 99L);
-
-        assertEquals(5, result.getImportance());
+        return newService();
     }
 
     private static CreateFamilyMemoryRequest requestWithMetadata(Map<String, Object> metadata) {
@@ -226,9 +212,9 @@ class MemoryServiceTest {
         return request;
     }
 
-    private static com.familyagent.module.memory.entity.MemoryEntry existingEntry(
-            Long id, String type, String scope, String content, java.util.Map<String, Object> metadata) {
-        com.familyagent.module.memory.entity.MemoryEntry entry = new com.familyagent.module.memory.entity.MemoryEntry();
+    private static MemoryEntry existingEntry(
+            Long id, String type, String scope, String content, Map<String, Object> metadata) {
+        MemoryEntry entry = new MemoryEntry();
         entry.setId(id);
         entry.setFamilyId(1L);
         entry.setUserId(10L);

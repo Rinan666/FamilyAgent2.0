@@ -1,36 +1,31 @@
 package com.familyagent.module.memory.service;
 
-import com.familyagent.infra.ai.AIServiceClient;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.repository.DiaryEntryRepository;
 import com.familyagent.module.family.service.FamilyService;
-import com.familyagent.module.growth.dto.GrowthStalenessStats;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
-import com.familyagent.module.growth.repository.GrowthGuardStalenessVoteRepository;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
-import com.familyagent.module.memory.dto.MemoryVoteStats;
+import com.familyagent.module.memory.dto.RecallSourceSummary;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEmbeddingRepository;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
-import com.familyagent.module.memory.repository.MemoryEntryVoteRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -41,13 +36,11 @@ class AuthorizedMemoryRecallServiceTest {
 
     @Mock private DiaryEntryRepository diaryRepository;
     @Mock private MemoryEntryRepository memoryRepository;
-    @Mock private MemoryEntryVoteRepository memoryVoteRepository;
     @Mock private GrowthGuardRecordRepository growthRecordRepository;
-    @Mock private GrowthGuardStalenessVoteRepository stalenessVoteRepository;
     @Mock private MemoryEmbeddingRepository embeddingRepository;
-    @Mock private AIServiceClient aiServiceClient;
-    @Mock private JdbcTemplate jdbcTemplate;
     @Mock private FamilyService familyService;
+    @Mock private AuthorizedMemoryRecallSocialSupport socialSupport;
+    @Mock private AuthorizedMemoryRecallRankingService rankingService;
     @InjectMocks private AuthorizedMemoryRecallService recallService;
 
     @Test
@@ -66,8 +59,8 @@ class AuthorizedMemoryRecallServiceTest {
         verify(diaryRepository, never()).findVisibleByFamily(any(), any(), anyInt());
         verify(memoryRepository, never()).findActiveFamilyMemories(any(), any(), anyInt());
         verify(growthRecordRepository, never()).findVisibleByFamily(any(), any(), anyInt());
-        verify(embeddingRepository, never()).countReadyByFamilyId(any());
-        verify(aiServiceClient, never()).embedText(any());
+        verify(embeddingRepository, never()).countReadyByFamilyId(anyLong());
+        verify(rankingService, never()).rank(any(), any(), any(), any(), any(), anyInt(), anyInt(), anyLong());
 
         assertEquals(List.of(), result.getDiaries());
         assertEquals(List.of(), result.getMemories());
@@ -91,6 +84,14 @@ class AuthorizedMemoryRecallServiceTest {
         when(growthRecordRepository.findVisibleByFamily(eq(familyId), eq(viewerUserId), anyInt()))
                 .thenReturn(List.of(visibleGrowth));
         when(embeddingRepository.countReadyByFamilyId(familyId)).thenReturn(0L);
+        when(rankingService.rank(eq(familyId), eq("那我该怎么跟他说"), any(), any(), any(), eq(3), eq(3), eq(0L)))
+                .thenReturn(new AuthorizedMemoryRecallRankingService.RankedRecall(
+                        List.of(visibleDiary),
+                        List.of(visibleMemory),
+                        List.of(visibleGrowth),
+                        false));
+        when(rankingService.buildSourceSummaries(List.of(visibleDiary), List.of(visibleMemory), List.of(visibleGrowth)))
+                .thenReturn(List.of());
 
         AuthorizedMemoryRecallResult result = recallService.recallForFamily(
                 familyId,
@@ -104,6 +105,7 @@ class AuthorizedMemoryRecallServiceTest {
         verify(diaryRepository).findVisibleByFamily(eq(familyId), eq(viewerUserId), anyInt());
         verify(memoryRepository).findActiveFamilyMemories(eq(familyId), eq(viewerUserId), anyInt());
         verify(growthRecordRepository).findVisibleByFamily(eq(familyId), eq(viewerUserId), anyInt());
+        verify(socialSupport).attachSocialWeights(any(), any(), eq(viewerUserId));
 
         assertEquals("TEXT_FALLBACK", result.getRetrievalMode());
     }
@@ -115,6 +117,10 @@ class AuthorizedMemoryRecallServiceTest {
         DiaryEntry visibleDiary = diary(1L, familyId, 201L, "孩子最近刷牙需要提醒", "CARE_VISIBLE");
         MemoryEntry visibleMemory = memory(2L, familyId, 202L, "爷爷的牙齿经验", "牙齿健康要早留意", "FAMILY_VISIBLE");
         GrowthGuardRecord visibleGrowth = growth(3L, familyId, 201L, "DENTAL", "最近刷牙敷衍，继续观察", "CARE_VISIBLE");
+        List<RecallSourceSummary> summaries = List.of(
+                RecallSourceSummary.builder().id("diary-1").build(),
+                RecallSourceSummary.builder().id("memory-2").build(),
+                RecallSourceSummary.builder().id("growth-3").build());
 
         when(diaryRepository.findVisibleByFamily(eq(familyId), eq(viewerUserId), anyInt()))
                 .thenReturn(List.of(visibleDiary));
@@ -123,6 +129,14 @@ class AuthorizedMemoryRecallServiceTest {
         when(growthRecordRepository.findVisibleByFamily(eq(familyId), eq(viewerUserId), anyInt()))
                 .thenReturn(List.of(visibleGrowth));
         when(embeddingRepository.countReadyByFamilyId(familyId)).thenReturn(0L);
+        when(rankingService.rank(eq(familyId), eq("牙齿 刷牙"), any(), any(), any(), eq(3), eq(3), eq(0L)))
+                .thenReturn(new AuthorizedMemoryRecallRankingService.RankedRecall(
+                        List.of(visibleDiary),
+                        List.of(visibleMemory),
+                        List.of(visibleGrowth),
+                        false));
+        when(rankingService.buildSourceSummaries(List.of(visibleDiary), List.of(visibleMemory), List.of(visibleGrowth)))
+                .thenReturn(summaries);
 
         AuthorizedMemoryRecallResult result = recallService.recallForFamily(
                 familyId,
@@ -135,7 +149,6 @@ class AuthorizedMemoryRecallServiceTest {
         verify(diaryRepository).findVisibleByFamily(eq(familyId), eq(viewerUserId), anyInt());
         verify(memoryRepository).findActiveFamilyMemories(eq(familyId), eq(viewerUserId), anyInt());
         verify(growthRecordRepository).findVisibleByFamily(eq(familyId), eq(viewerUserId), anyInt());
-        verify(aiServiceClient, never()).embedText(org.mockito.ArgumentMatchers.any());
 
         assertEquals(List.of(visibleDiary), result.getDiaries());
         assertEquals(List.of(visibleMemory), result.getMemories());
@@ -164,6 +177,14 @@ class AuthorizedMemoryRecallServiceTest {
         when(growthRecordRepository.findVisibleByFamily(eq(familyId), eq(viewerUserId), anyInt()))
                 .thenReturn(List.of());
         when(embeddingRepository.countReadyByFamilyId(familyId)).thenReturn(0L);
+        when(rankingService.rank(eq(familyId), eq("志愿 专业"), any(), any(), any(), eq(5), eq(5), eq(0L)))
+                .thenReturn(new AuthorizedMemoryRecallRankingService.RankedRecall(
+                        List.of(targetDiary, relatedDiary),
+                        List.of(familyExperience),
+                        List.of(),
+                        false));
+        when(rankingService.buildSourceSummaries(List.of(targetDiary, relatedDiary), List.of(familyExperience), List.of()))
+                .thenReturn(List.of());
 
         AuthorizedMemoryRecallResult result = recallService.recallForMirror(
                 familyId,
@@ -186,89 +207,57 @@ class AuthorizedMemoryRecallServiceTest {
     }
 
     @Test
-    void recallForFamily_usesFamilyVotesAsMemoryWeight() {
+    void recallForFamily_delegatesSocialWeightAttachmentBeforeRanking() {
         Long familyId = 10L;
         Long viewerUserId = 101L;
-        MemoryEntry normalMemory = memory(31L, familyId, 202L, "tooth care", "tooth care reminder", "FAMILY_VISIBLE");
-        MemoryEntry trustedMemory = memory(32L, familyId, 203L, "tooth care", "tooth care reminder", "FAMILY_VISIBLE");
+        MemoryEntry memory = memory(31L, familyId, 202L, "tooth care", "tooth care reminder", "FAMILY_VISIBLE");
+        GrowthGuardRecord growth = growth(41L, familyId, 201L, "SCREEN_TIME", "screen time signal", "FAMILY_VISIBLE");
 
         when(diaryRepository.findVisibleByFamily(eq(familyId), eq(viewerUserId), anyInt()))
                 .thenReturn(List.of());
         when(memoryRepository.findActiveFamilyMemories(eq(familyId), eq(viewerUserId), anyInt()))
-                .thenReturn(List.of(normalMemory, trustedMemory));
+                .thenReturn(List.of(memory));
         when(growthRecordRepository.findVisibleByFamily(eq(familyId), eq(viewerUserId), anyInt()))
-                .thenReturn(List.of());
-        when(memoryVoteRepository.statsByMemoryId(31L, viewerUserId))
-                .thenReturn(new MemoryVoteStats(31L, 0, 0, 0, 1.0, null));
-        when(memoryVoteRepository.statsByMemoryId(32L, viewerUserId))
-                .thenReturn(new MemoryVoteStats(32L, 6, 0, 6, 3.0, "UP"));
+                .thenReturn(List.of(growth));
         when(embeddingRepository.countReadyByFamilyId(familyId)).thenReturn(0L);
+        when(rankingService.rank(eq(familyId), eq("tooth"), any(), any(), any(), eq(3), eq(2), eq(0L)))
+                .thenReturn(new AuthorizedMemoryRecallRankingService.RankedRecall(
+                        List.of(),
+                        List.of(memory),
+                        List.of(growth),
+                        false));
+        when(rankingService.buildSourceSummaries(List.of(), List.of(memory), List.of(growth)))
+                .thenReturn(List.of());
 
-        AuthorizedMemoryRecallResult result = recallService.recallForFamily(
-                familyId,
-                viewerUserId,
-                "tooth",
-                3,
-                2);
+        recallService.recallForFamily(familyId, viewerUserId, "tooth", 3, 2);
 
-        assertEquals(2, result.getMemories().size());
-        assertEquals(32L, result.getMemories().get(0).getId());
-        assertEquals("UP", ((java.util.Map<?, ?>) ((java.util.Map<?, ?>) trustedMemory.getMetadata()).get("voteStats")).get("myVote"));
+        ArgumentCaptor<List<MemoryEntry>> memoryCaptor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<GrowthGuardRecord>> growthCaptor = ArgumentCaptor.forClass(List.class);
+        verify(socialSupport).attachSocialWeights(memoryCaptor.capture(), growthCaptor.capture(), eq(viewerUserId));
+        assertEquals(List.of(memory), memoryCaptor.getValue());
+        assertEquals(List.of(growth), growthCaptor.getValue());
     }
 
     @Test
-    void recallForFamily_usesStalenessVotesAsGrowthWeight() {
+    void recallForFamily_usesRankingModeToSetRetrievalMode() {
         Long familyId = 10L;
         Long viewerUserId = 101L;
-        GrowthGuardRecord freshRecord = growth(41L, familyId, 201L, "SCREEN_TIME", "screen time signal", "FAMILY_VISIBLE");
-        GrowthGuardRecord staleRecord = growth(42L, familyId, 201L, "SCREEN_TIME", "screen time signal", "FAMILY_VISIBLE");
-        freshRecord.setObservedAt(LocalDate.now());
-        freshRecord.setCreatedAt(LocalDateTime.now());
-        staleRecord.setObservedAt(LocalDate.now());
-        staleRecord.setCreatedAt(LocalDateTime.now());
 
         when(diaryRepository.findVisibleByFamily(eq(familyId), eq(viewerUserId), anyInt()))
                 .thenReturn(List.of());
         when(memoryRepository.findActiveFamilyMemories(eq(familyId), eq(viewerUserId), anyInt()))
                 .thenReturn(List.of());
-        when(growthRecordRepository.findVisibleByFamily(eq(familyId), eq(viewerUserId), anyInt()))
-                .thenReturn(List.of(staleRecord, freshRecord));
-        when(stalenessVoteRepository.statsByRecordId(41L, viewerUserId))
-                .thenReturn(new GrowthStalenessStats(41L, 0, 1.0, false));
-        when(stalenessVoteRepository.statsByRecordId(42L, viewerUserId))
-                .thenReturn(new GrowthStalenessStats(42L, 4, 0.35, true));
-        when(embeddingRepository.countReadyByFamilyId(familyId)).thenReturn(0L);
-
-        AuthorizedMemoryRecallResult result = recallService.recallForFamily(
-                familyId,
-                viewerUserId,
-                "screen",
-                3,
-                2);
-
-        assertEquals(2, result.getGrowthRecords().size());
-        assertEquals(41L, result.getGrowthRecords().get(0).getId());
-        assertEquals(true, ((java.util.Map<?, ?>) ((java.util.Map<?, ?>) staleRecord.getMetadata()).get("stalenessStats")).get("myVoted"));
-    }
-
-    @Test
-    void recallForFamily_dropsVectorHitsWithoutTextOrIndexSupport() {
-        Long familyId = 10L;
-        Long viewerUserId = 101L;
-        MemoryEntry unrelatedMemory = memory(21L, familyId, 202L, "做饭经验", "炖汤要小火慢熬", "FAMILY_VISIBLE");
-
-        when(diaryRepository.findVisibleByFamily(eq(familyId), eq(viewerUserId), anyInt()))
-                .thenReturn(List.of());
-        when(memoryRepository.findActiveFamilyMemories(eq(familyId), eq(viewerUserId), anyInt()))
-                .thenReturn(List.of(unrelatedMemory));
         when(growthRecordRepository.findVisibleByFamily(eq(familyId), eq(viewerUserId), anyInt()))
                 .thenReturn(List.of());
         when(embeddingRepository.countReadyByFamilyId(familyId)).thenReturn(1L);
-        when(aiServiceClient.embedText(any())).thenReturn(Map.of(
-                "success", true,
-                "embedding", List.of(0.1, 0.2, 0.3)));
-        when(jdbcTemplate.queryForList(anyString(), eq(Long.class), any(Object[].class)))
-                .thenReturn(List.of(21L));
+        when(rankingService.rank(eq(familyId), eq("牙齿 刷牙"), any(), any(), any(), eq(3), eq(3), eq(1L)))
+                .thenReturn(new AuthorizedMemoryRecallRankingService.RankedRecall(
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        true));
+        when(rankingService.buildSourceSummaries(List.of(), List.of(), List.of()))
+                .thenReturn(List.of());
 
         AuthorizedMemoryRecallResult result = recallService.recallForFamily(
                 familyId,
@@ -277,9 +266,7 @@ class AuthorizedMemoryRecallServiceTest {
                 3,
                 3);
 
-        assertEquals(List.of(), result.getMemories());
-        assertEquals(0, result.getMemoryCount());
-        assertEquals("TEXT_FALLBACK", result.getRetrievalMode());
+        assertEquals("VECTOR_WITH_TEXT_FALLBACK", result.getRetrievalMode());
     }
 
     private static DiaryEntry diary(Long id, Long familyId, Long userId, String rawText, String visibility) {

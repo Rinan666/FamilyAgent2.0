@@ -293,6 +293,8 @@ class MirrorContextServiceTest {
     }
 
     private MirrorContextService service() {
+        MirrorContextLibraryService libraryService = new MirrorContextLibraryService(memoryLibraryService);
+        MirrorContextPromptBuilder promptBuilder = new MirrorContextPromptBuilder();
         return new MirrorContextService(
                 familyService,
                 familyMemberRepository,
@@ -300,8 +302,9 @@ class MirrorContextServiceTest {
                 memoryRepository,
                 growthRecordRepository,
                 memoryRecallService,
-                memoryLibraryService,
-                mirrorAgentDataRepository);
+                mirrorAgentDataRepository,
+                libraryService,
+                promptBuilder);
     }
 
     private static AuthorizedMemoryRecallResult recall(List<DiaryEntry> diaries, List<MemoryEntry> memories, String query) {

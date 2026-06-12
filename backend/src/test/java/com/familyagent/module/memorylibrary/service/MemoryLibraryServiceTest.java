@@ -9,15 +9,16 @@ import com.familyagent.module.diary.repository.DiaryEntryRepository;
 import com.familyagent.module.family.service.FamilyService;
 import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
 import com.familyagent.module.growth.repository.GrowthGuardReportRepository;
+import com.familyagent.module.growth.repository.GrowthGuardStalenessVoteRepository;
 import com.familyagent.module.growth.service.GrowthGuardService;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
+import com.familyagent.module.memory.repository.MemoryEntryVoteRepository;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryItem;
 import com.familyagent.module.memorylibrary.dto.MemoryLibrarySearchRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.Spy;
@@ -46,11 +47,18 @@ class MemoryLibraryServiceTest {
     @Mock private GrowthGuardService growthGuardService;
     @Mock private GrowthGuardRecordRepository growthRecordRepository;
     @Mock private GrowthGuardReportRepository growthReportRepository;
-    @Spy private ObjectMapper objectMapper = new ObjectMapper();
-    @InjectMocks private MemoryLibraryService memoryLibraryService;
+    @Mock private MemoryEntryVoteRepository memoryEntryVoteRepository;
+    @Mock private GrowthGuardStalenessVoteRepository growthGuardStalenessVoteRepository;
+    @Spy  private ObjectMapper objectMapper = new ObjectMapper();
+
+    // --- MemoryLibraryQueryService ---
 
     @Test
     void search_checksMembershipAndUsesCurrentViewerForEveryPermissionSection() {
+        MemoryLibraryQueryService queryService = new MemoryLibraryQueryService(
+                jdbcTemplate, familyService, objectMapper,
+                memoryEntryVoteRepository, growthGuardStalenessVoteRepository);
+
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(101L);
             when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), any(Object[].class))).thenReturn(0L);
@@ -64,7 +72,7 @@ class MemoryLibraryServiceTest {
             request.setPage(2);
             request.setPageSize(3);
 
-            PageResult<MemoryLibraryItem> result = memoryLibraryService.search(request);
+            PageResult<MemoryLibraryItem> result = queryService.search(request);
 
             verify(familyService).checkMembership(10L);
             assertEquals(2, result.getPage());
@@ -82,13 +90,17 @@ class MemoryLibraryServiceTest {
 
     @Test
     void search_rejectsUnsupportedTypeBeforeQueryingDatabase() {
+        MemoryLibraryQueryService queryService = new MemoryLibraryQueryService(
+                jdbcTemplate, familyService, objectMapper,
+                memoryEntryVoteRepository, growthGuardStalenessVoteRepository);
+
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(101L);
             MemoryLibrarySearchRequest request = new MemoryLibrarySearchRequest();
             request.setFamilyId(10L);
             request.setType("PRIVATE_RAW");
 
-            BusinessException exception = assertThrows(BusinessException.class, () -> memoryLibraryService.search(request));
+            BusinessException exception = assertThrows(BusinessException.class, () -> queryService.search(request));
 
             assertEquals(ErrorCode.BAD_REQUEST.getCode(), exception.getCode());
             verify(familyService).checkMembership(10L);
@@ -97,15 +109,28 @@ class MemoryLibraryServiceTest {
 
     @Test
     void search_requiresFamilyId() {
-        MemoryLibrarySearchRequest request = new MemoryLibrarySearchRequest();
+        MemoryLibraryQueryService queryService = new MemoryLibraryQueryService(
+                jdbcTemplate, familyService, objectMapper,
+                memoryEntryVoteRepository, growthGuardStalenessVoteRepository);
 
-        BusinessException exception = assertThrows(BusinessException.class, () -> memoryLibraryService.search(request));
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> queryService.search(new MemoryLibrarySearchRequest()));
 
         assertEquals(ErrorCode.BAD_REQUEST.getCode(), exception.getCode());
     }
 
+    // --- MemoryLibraryMaintenanceService ---
+
     @Test
     void deleteArchivedLibraryItem_deletesArchivedMemoryAndEmbeddings() {
+        MemoryLibraryQueryService queryService = new MemoryLibraryQueryService(
+                jdbcTemplate, familyService, objectMapper,
+                memoryEntryVoteRepository, growthGuardStalenessVoteRepository);
+        MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
+                familyService, diaryEntryRepository, memoryEntryRepository,
+                growthRecordRepository, growthReportRepository, growthGuardService,
+                queryService, jdbcTemplate);
+
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(101L);
             MemoryEntry entry = new MemoryEntry();
@@ -115,19 +140,26 @@ class MemoryLibraryServiceTest {
             entry.setStatus("ARCHIVED");
             when(memoryEntryRepository.selectById(88L)).thenReturn(entry);
 
-            memoryLibraryService.deleteArchivedLibraryItem(10L, "memory-88");
+            maintenanceService.deleteArchivedItem(10L, "memory-88");
 
             verify(familyService).checkMembership(10L);
             verify(jdbcTemplate).update(
                     "DELETE FROM memory_embeddings WHERE source_type = ? AND source_id = ?",
-                    "MEMORY",
-                    88L);
+                    "MEMORY", 88L);
             verify(memoryEntryRepository).deleteById(88L);
         }
     }
 
     @Test
     void deleteArchivedLibraryItem_rejectsActiveMemory() {
+        MemoryLibraryQueryService queryService = new MemoryLibraryQueryService(
+                jdbcTemplate, familyService, objectMapper,
+                memoryEntryVoteRepository, growthGuardStalenessVoteRepository);
+        MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
+                familyService, diaryEntryRepository, memoryEntryRepository,
+                growthRecordRepository, growthReportRepository, growthGuardService,
+                queryService, jdbcTemplate);
+
         MemoryEntry entry = new MemoryEntry();
         entry.setId(88L);
         entry.setFamilyId(10L);
@@ -135,14 +167,15 @@ class MemoryLibraryServiceTest {
         entry.setStatus("ACTIVE");
         when(memoryEntryRepository.selectById(88L)).thenReturn(entry);
 
-        BusinessException exception = assertThrows(
-                BusinessException.class,
-                () -> memoryLibraryService.deleteArchivedLibraryItem(10L, "memory-88"));
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> maintenanceService.deleteArchivedItem(10L, "memory-88"));
 
         assertEquals(ErrorCode.NOT_FOUND.getCode(), exception.getCode());
         verify(familyService).checkMembership(10L);
         verify(memoryEntryRepository, never()).deleteById(88L);
     }
+
+    // --- helpers ---
 
     private static void assertPermissionSectionArgs(Object[] args, boolean includesPagination) {
         int expectedLength = includesPagination ? 52 : 50;
