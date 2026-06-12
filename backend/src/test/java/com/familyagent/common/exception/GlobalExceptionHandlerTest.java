@@ -5,6 +5,8 @@ import com.familyagent.common.response.Result;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -40,6 +42,26 @@ class GlobalExceptionHandlerTest {
 
         assertEquals(ErrorCode.DATABASE_ACCESS_ERROR.getCode(), result.getCode());
         assertEquals(ErrorCode.DATABASE_ACCESS_ERROR.getMessage(), result.getMessage());
+    }
+
+    @Test
+    void handleMaxUploadSizeExceededException_shouldReturnReadableUploadLimitMessage() {
+        Result<?> result = handler.handleMaxUploadSizeExceededException(
+                new MaxUploadSizeExceededException(40L * 1024 * 1024)
+        );
+
+        assertEquals(ErrorCode.BAD_REQUEST.getCode(), result.getCode());
+        assertEquals("The selected photos exceed the upload limit of 10 MB per image and 40 MB total.", result.getMessage());
+    }
+
+    @Test
+    void handleMultipartException_shouldReturnReadableUploadFailureMessage() {
+        Result<?> result = handler.handleMultipartException(
+                new MultipartException("boundary missing")
+        );
+
+        assertEquals(ErrorCode.BAD_REQUEST.getCode(), result.getCode());
+        assertEquals("Photo upload request could not be processed. Please reselect the files and try again.", result.getMessage());
     }
 
     @Test

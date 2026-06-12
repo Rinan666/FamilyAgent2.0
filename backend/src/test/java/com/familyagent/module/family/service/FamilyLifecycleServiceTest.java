@@ -122,6 +122,54 @@ class FamilyLifecycleServiceTest {
         verify(familyRepository, never()).deleteById(12L);
     }
 
+    @Test
+    void dissolveFamily_deletesAllThirteenTablesInOrder() {
+        when(familyRepository.selectById(10L)).thenReturn(family(10L, "Test Family"));
+        when(jdbcTemplate.queryForObject(eq("SELECT to_regclass(?) IS NOT NULL"), eq(Boolean.class), anyString()))
+                .thenReturn(true);
+
+        familyLifecycleService.dissolveFamily(10L, "TEST");
+
+        verify(familyMemberRepository).removeByFamilyId(10L);
+        verify(jdbcTemplate).update("DELETE FROM family_relationships WHERE family_id = ?", 10L);
+        verify(jdbcTemplate).update("DELETE FROM care_authorizations WHERE family_id = ?", 10L);
+        verify(jdbcTemplate).update("DELETE FROM growth_guard_staleness_votes WHERE family_id = ?", 10L);
+        verify(jdbcTemplate).update("DELETE FROM memory_entry_votes WHERE family_id = ?", 10L);
+        verify(jdbcTemplate).update("DELETE FROM heritage_tasks WHERE family_id = ?", 10L);
+        verify(jdbcTemplate).update("DELETE FROM growth_guard_reports WHERE family_id = ?", 10L);
+        verify(jdbcTemplate).update("DELETE FROM growth_guard_records WHERE family_id = ?", 10L);
+        verify(jdbcTemplate).update("DELETE FROM memory_embeddings WHERE family_id = ?", 10L);
+        verify(jdbcTemplate).update("DELETE FROM skill_runs WHERE family_id = ?", 10L);
+        verify(jdbcTemplate).update("DELETE FROM diary_entries WHERE family_id = ?", 10L);
+        verify(jdbcTemplate).update("DELETE FROM memory_entries WHERE family_id = ?", 10L);
+        verify(jdbcTemplate).update("DELETE FROM chat_sessions WHERE family_id = ?", 10L);
+        verify(jdbcTemplate).update("DELETE FROM mirror_agent_data WHERE primary_family_id = ?", 10L);
+        verify(familyRepository).deleteById(10L);
+    }
+
+    @Test
+    void dissolveFamily_isNoOpWhenFamilyNotFound() {
+        when(familyRepository.selectById(99L)).thenReturn(null);
+
+        familyLifecycleService.dissolveFamily(99L, "TEST");
+
+        verify(familyMemberRepository, never()).removeByFamilyId(99L);
+        verify(familyRepository, never()).deleteById(99L);
+    }
+
+    @Test
+    void dissolveFamily_skipsTableDeleteWhenTableDoesNotExist() {
+        when(familyRepository.selectById(10L)).thenReturn(family(10L, "Test Family"));
+        when(jdbcTemplate.queryForObject(eq("SELECT to_regclass(?) IS NOT NULL"), eq(Boolean.class), anyString()))
+                .thenReturn(false);
+
+        familyLifecycleService.dissolveFamily(10L, "TEST");
+
+        verify(familyMemberRepository).removeByFamilyId(10L);
+        verify(jdbcTemplate, never()).update(anyString(), eq(10L));
+        verify(familyRepository).deleteById(10L);
+    }
+
     private static Family family(Long id, String name) {
         Family family = new Family();
         family.setId(id);
