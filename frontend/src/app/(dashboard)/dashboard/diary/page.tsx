@@ -215,7 +215,7 @@ export default function DiaryPage() {
   const suppressDraftSaveRef = useRef(false);
   const writeCategoryAppliedKeyRef = useRef('');
   const prefillAppliedKeyRef = useRef('');
-  const successTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const successTimerRef = useRef<number | null>(null);
 
   const requestedFamilyId = useMemo(() => {
     const value = Number(searchParams.get('familyId'));
