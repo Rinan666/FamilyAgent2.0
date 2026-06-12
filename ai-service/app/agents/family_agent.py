@@ -15,6 +15,8 @@ from app.utils.safety_limits import (
     validate_text_budget,
 )
 
+_WEB_SEARCH_TIMEOUT_FALLBACK = "联网搜索未在时限内完成，本轮不使用搜索结果。"
+
 
 class FamilyAgent:
     async def chat_stream(
@@ -61,27 +63,32 @@ class FamilyAgent:
                         "sources": [],
                     },
                 }
+                # Proceed immediately — do NOT await web_search_task again.
 
-            if web_search_context is None:
-                web_search_context = await web_search_task
+            if web_search_context is not None:
+                yield {
+                    "type": "metadata",
+                    "web_search": {
+                        "needed": web_search_context.needed,
+                        "used": len(web_search_context.results) > 0,
+                        "pending": False,
+                        "result_count": len(web_search_context.results),
+                        "sources": [
+                            {
+                                "title": item.title,
+                                "url": item.url,
+                                "snippet": item.snippet,
+                            }
+                            for item in web_search_context.results
+                        ],
+                    },
+                }
 
-            yield {
-                "type": "metadata",
-                "web_search": {
-                    "needed": web_search_context.needed,
-                    "used": len(web_search_context.results) > 0,
-                    "pending": False,
-                    "result_count": len(web_search_context.results),
-                    "sources": [
-                        {
-                            "title": item.title,
-                            "url": item.url,
-                            "snippet": item.snippet,
-                        }
-                        for item in web_search_context.results
-                    ],
-                },
-            }
+            web_prompt = (
+                web_search_context.prompt_context
+                if web_search_context is not None
+                else _WEB_SEARCH_TIMEOUT_FALLBACK
+            )
 
             messages = [
                 {
@@ -94,7 +101,7 @@ class FamilyAgent:
                         target_role=target_role,
                         client_timestamp=client_timestamp,
                         client_timezone=client_timezone,
-                        public_web_context=web_search_context.prompt_context,
+                        public_web_context=web_prompt,
                     ),
                 },
                 *(history or []),

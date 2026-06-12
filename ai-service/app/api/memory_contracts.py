@@ -277,3 +277,30 @@ SESSION_ARCHIVE_SUMMARY_SCHEMA = {
         },
     },
 }
+
+WEEKLY_REPORT_SCHEMA = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "growth_guard_weekly_report",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "summary": {"type": "string"},
+                "affirmations": {"type": "array", "items": {"type": "string"}},
+                "concerns": {"type": "array", "items": {"type": "string"}},
+                "signals": {"type": "array", "items": {"type": "string"}},
+                "uncertainty_notes": {"type": "array", "items": {"type": "string"}},
+                "family_experience_refs": {"type": "array", "items": {"type": "string"}},
+                "suggested_actions": {"type": "array", "items": {"type": "string"}},
+                "follow_up_questions": {"type": "array", "items": {"type": "string"}},
+                "safety_note": {"type": "string"},
+            },
+            "required": [
+                "title", "summary", "affirmations", "concerns", "signals",
+                "uncertainty_notes", "family_experience_refs", "suggested_actions",
+                "follow_up_questions", "safety_note",
+            ],
+        },
+    },
+}

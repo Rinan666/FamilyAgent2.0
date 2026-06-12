@@ -7,6 +7,8 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from app.api.memory_contracts import WEEKLY_REPORT_SCHEMA
+from app.api.memory_helpers import _compact_string_list
 from app.llm.client import llm_client
 from app.llm.prompts.growth import WEEKLY_REPORT_SYSTEM_PROMPT
 from app.middleware.auth import verify_token
@@ -26,62 +28,6 @@ class WeeklyReportRequest(BaseModel):
     records: list[dict] = Field(default_factory=list)
     memories: list[dict] = Field(default_factory=list)
     target: str = ""
-
-
-WEEKLY_REPORT_SCHEMA = {
-    "type": "json_schema",
-    "json_schema": {
-        "name": "growth_guard_weekly_report",
-        "schema": {
-            "type": "object",
-            "properties": {
-                "title": {"type": "string"},
-                "summary": {"type": "string"},
-                "affirmations": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                },
-                "concerns": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                },
-                "signals": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                },
-                "uncertainty_notes": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                },
-                "family_experience_refs": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                },
-                "suggested_actions": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                },
-                "follow_up_questions": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                },
-                "safety_note": {"type": "string"},
-            },
-            "required": [
-                "title",
-                "summary",
-                "affirmations",
-                "concerns",
-                "signals",
-                "uncertainty_notes",
-                "family_experience_refs",
-                "suggested_actions",
-                "follow_up_questions",
-                "safety_note",
-            ],
-        },
-    },
-}
 
 
 @router.post("/weekly-report")
@@ -150,31 +96,17 @@ def _sanitize_report(data: dict) -> dict:
         "affirmations": _compact_string_list(data.get("affirmations"), 3, 100),
         "concerns": _compact_string_list(data.get("concerns"), 3, 100),
         "signals": _compact_string_list(data.get("signals"), 5, 100),
-        "uncertainty_notes": _compact_string_list(
-            data.get("uncertainty_notes"),
-            3,
-            120,
-        ) or ["现有记录只代表已授权观察视角，不等于本人完整状态。"],
+        "uncertainty_notes": _compact_string_list(data.get("uncertainty_notes"), 3, 120)
+            or ["现有记录只代表已授权观察视角，不等于本人完整状态。"],
         "family_experience_refs": _compact_string_list(data.get("family_experience_refs"), 3, 100),
-        "suggested_actions": _compact_string_list(data.get("suggested_actions"), 3, 120) or ["本周先补充 1-2 条观察记录。"],
-        "follow_up_questions": _compact_string_list(data.get("follow_up_questions"), 3, 100) or ["下周最值得继续观察的一件小事是什么？"],
+        "suggested_actions": _compact_string_list(data.get("suggested_actions"), 3, 120)
+            or ["本周先补充 1-2 条观察记录。"],
+        "follow_up_questions": _compact_string_list(data.get("follow_up_questions"), 3, 100)
+            or ["下周最值得继续观察的一件小事是什么？"],
         "safety_note": str(
             data.get("safety_note", "这是一份照护者可见的成长观察摘要，不构成医疗或心理诊断。")
         ).strip()[:120],
     }
-
-
-def _compact_string_list(value: object, limit: int, max_len: int) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    result: list[str] = []
-    for item in value:
-        text = str(item).strip()
-        if text:
-            result.append(text[:max_len])
-        if len(result) >= limit:
-            break
-    return result
 
 
 def _metadata_follow_up_status(item: dict) -> str:
