@@ -79,7 +79,7 @@ coverage/
 jacoco.exec
 
 # --- Docs ---
-OPTIMIZATION_PLAN.md
+*_PLAN.md
 项目类图-精简重构版.md
 CLAUDE.md
 AGENTS.md

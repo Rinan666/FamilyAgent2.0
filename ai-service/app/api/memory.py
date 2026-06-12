@@ -16,16 +16,7 @@ from app.api.memory_contracts import (
     COMPRESSED_DIARY_SCHEMA,
     FAMILY_WEEKLY_DIGEST_SCHEMA,
     HERITAGE_TASK_DRAFT_SCHEMA,
-    FAMILY_CARD_SYSTEM_PROMPT,
-    SAVE_TOOL_PLAN_SYSTEM_PROMPT,
-    ORGANIZE_DRAFT_SYSTEM_PROMPT,
-    HERITAGE_SAVE_JUDGE_SYSTEM_PROMPT,
-    COMPRESS_DIARY_SYSTEM_PROMPT,
-    FAMILY_WEEKLY_DIGEST_SYSTEM_PROMPT,
-    HERITAGE_TASK_DRAFT_SYSTEM_PROMPT,
-    HERITAGE_CLASSICAL_SYSTEM_PROMPT,
     SESSION_ARCHIVE_SUMMARY_SCHEMA,
-    SESSION_ARCHIVE_SUMMARY_SYSTEM_PROMPT,
 )
 from app.api.memory_models import (
     ExtractMemoryRequest,
@@ -71,6 +62,17 @@ from app.api.memory_helpers import (
     _unavailable_save_tool_plan,
 )
 from app.llm.client import llm_client
+from app.llm.prompts.memory import (
+    COMPRESS_DIARY_SYSTEM_PROMPT,
+    FAMILY_CARD_SYSTEM_PROMPT,
+    FAMILY_WEEKLY_DIGEST_SYSTEM_PROMPT,
+    HERITAGE_CLASSICAL_SYSTEM_PROMPT,
+    HERITAGE_SAVE_JUDGE_SYSTEM_PROMPT,
+    HERITAGE_TASK_DRAFT_SYSTEM_PROMPT,
+    ORGANIZE_DRAFT_SYSTEM_PROMPT,
+    SAVE_TOOL_PLAN_SYSTEM_PROMPT,
+    SESSION_ARCHIVE_SUMMARY_SYSTEM_PROMPT,
+)
 from app.middleware.auth import verify_token, verify_token_or_internal_service
 from app.utils.input_guard import InputGuardError, enforce_input_guard
 from app.utils.privacy_guard import redact_with_note

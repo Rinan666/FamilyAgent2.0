@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.llm.client import llm_client
+from app.llm.prompts.growth import WEEKLY_REPORT_SYSTEM_PROMPT
 from app.middleware.auth import verify_token
 from app.utils.safety_limits import enforce_ai_concurrency, enforce_ai_rate_limit
 
@@ -83,35 +84,6 @@ WEEKLY_REPORT_SCHEMA = {
 }
 
 
-SYSTEM_PROMPT = """你是 FamilyAgent 的成长观察摘要助手。
-你要根据家庭成员记录的成长观察、来源视角、证据类型、置信度和家族经验卡，生成一份温和、简短、可执行的照护摘要。
-
-严格原则：
-- 不做医疗诊断，不判断孩子有病或有心理问题。
-- 不把观察者的主观判断当作事实；要区分“可观察事实”“观察者感受/担心”“推测”。
-- 人可能会隐藏真实状态，因此不能声称看穿对方，只能说明现有记录覆盖了哪些视角、缺少哪些视角。
-- 如果只有单一照护者视角，必须降低置信度，并建议补充本人记录或其他场景观察。
-- 如果记录中标明本人未确认，不能推断本人真实想法。
-- 只输出照护提醒、观察线索、不确定性说明、轻量行动建议和必要时的专业咨询建议。
-- 默认面向照护者或被授权成员，不是全家公开的家族记忆摘要。
-- 不制造焦虑，不用恐吓语气。
-- 如果证据不足，要明确说“记录还少，建议继续观察”。
-- 建议行动必须轻量，适合家庭下周执行。
-- 不暴露未成年人或被观察成员的敏感隐私，只做授权范围内摘要。
-
-输出要求：
-- title 不超过 18 字。
-- summary 不超过 100 字。
-- affirmations 1-3 条，先肯定家庭或孩子已有的积极变化。
-- concerns 0-3 条，只写需要温和留意的风险，不制造焦虑。
-- signals 0-5 条，只描述观察到的信号，不写诊断结论。
-- uncertainty_notes 1-3 条，说明来源偏差、缺失视角、本人是否确认、记录是否单一等不确定性。
-- family_experience_refs 0-3 条，引用家族经验中的可用提醒。
-- suggested_actions 1-3 条，每条必须可执行。
-- follow_up_questions 1-3 条，用于下次家长记录。
-- safety_note 一句话，说明照护可见和非诊断边界。"""
-
-
 @router.post("/weekly-report")
 async def weekly_report(request: WeeklyReportRequest):
     try:
@@ -127,7 +99,7 @@ async def weekly_report(request: WeeklyReportRequest):
 请生成成长观察照护摘要。"""
         raw = await llm_client.chat(
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": WEEKLY_REPORT_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
             temperature=0.2,
