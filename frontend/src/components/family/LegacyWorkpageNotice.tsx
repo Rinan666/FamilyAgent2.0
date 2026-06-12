@@ -9,12 +9,15 @@ interface LegacyWorkpageNoticeProps {
 }
 
 export default function LegacyWorkpageNotice({ tab, label }: LegacyWorkpageNoticeProps) {
+  const targetTab = 'stream';
+  const targetLabel = '记忆流';
+
   return (
     <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <p>这个独立页面已移动到“家庭空间 &gt; {label}”。</p>
+        <p>这个独立页面入口已收口，请改从“家庭空间 &gt; {targetLabel}”继续查看 {label} 相关内容。</p>
         <Link
-          href={`/dashboard/family?tab=${tab}`}
+          href={`/dashboard/family?tab=${targetTab}`}
           className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-white px-3 text-xs font-medium text-blue-700 hover:bg-blue-100"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
