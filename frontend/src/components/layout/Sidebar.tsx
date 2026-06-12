@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BookHeart, Bot, Database, Images, Menu, Settings, Sparkles, Users, X } from 'lucide-react';
+import { BookHeart, Database, Images, Menu, Settings, Sparkles, Users, X } from 'lucide-react';
 import type { ViewerRole } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 
@@ -17,7 +17,6 @@ type NavItem = {
 
 const navItems: readonly NavItem[] = [
   { href: '/dashboard/agent', label: '家庭助手', icon: Sparkles, roles: ['MEMBER', 'ADMIN'] },
-  { href: '/dashboard/mirror', label: '镜像陪伴', icon: Bot, roles: ['MEMBER', 'ADMIN'] },
   { href: '/dashboard/diary', label: '日记', icon: BookHeart, roles: ['MEMBER', 'ADMIN'] },
   { href: '/album', label: '相册', icon: Images, roles: ['MEMBER', 'ADMIN'] },
   { href: '/dashboard/family', label: '家庭空间', icon: Users, roles: ['MEMBER', 'ADMIN'] },
@@ -27,9 +26,9 @@ const navItems: readonly NavItem[] = [
 
 const mobilePrimaryNav: readonly NavItem[] = [
   { href: '/dashboard/agent', label: '助手', icon: Sparkles, roles: ['MEMBER', 'ADMIN'] },
-  { href: '/dashboard/mirror', label: '镜像', icon: Bot, roles: ['MEMBER', 'ADMIN'] },
   { href: '/dashboard/diary', label: '日记', icon: BookHeart, roles: ['MEMBER', 'ADMIN'] },
   { href: '/album', label: '相册', icon: Images, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/dashboard/family', label: '家庭', icon: Users, roles: ['MEMBER', 'ADMIN'] },
   { href: '/dashboard/settings', label: '设置', icon: Settings, roles: ['MEMBER', 'ADMIN'] },
 ] as const;
 

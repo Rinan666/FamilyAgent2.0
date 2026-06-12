@@ -18,6 +18,12 @@ import java.util.Map;
 
 final class ChatSessionSupportUtils {
 
+    private static final String SESSION_CONTEXT_PATCH_KEY = "sessionContextPatch";
+    private static final String AGENT_MODE_KEY = "agentMode";
+    private static final String TARGET_USER_ID_KEY = "targetUserId";
+    private static final String TARGET_MEMBER_NAME_KEY = "targetMemberName";
+    private static final String HAS_TARGET_SWITCHES_KEY = "hasTargetSwitches";
+
     private ChatSessionSupportUtils() {
     }
 
@@ -119,6 +125,28 @@ final class ChatSessionSupportUtils {
         return metadata;
     }
 
+    static Map<String, Object> applySessionContextPatch(
+            Map<String, Object> sessionMetadata,
+            List<ChatSessionMessagePayload> payloads) {
+        if (payloads == null || payloads.isEmpty()) {
+            return sessionMetadata;
+        }
+        for (ChatSessionMessagePayload payload : payloads) {
+            if (payload == null || payload.getMetadata() == null) {
+                continue;
+            }
+            Map<String, Object> patch = castMap(payload.getMetadata().get(SESSION_CONTEXT_PATCH_KEY));
+            if (patch.isEmpty()) {
+                continue;
+            }
+            copyPatchedValue(patch, sessionMetadata, AGENT_MODE_KEY);
+            copyPatchedValue(patch, sessionMetadata, TARGET_USER_ID_KEY);
+            copyPatchedValue(patch, sessionMetadata, TARGET_MEMBER_NAME_KEY);
+            copyPatchedValue(patch, sessionMetadata, HAS_TARGET_SWITCHES_KEY);
+        }
+        return sessionMetadata;
+    }
+
     static ChatSessionArchiveMetadata toArchiveMetadata(Object raw) {
         Map<String, Object> map = castMap(raw);
         Object idRaw = map.get("lastArchiveId");
@@ -196,6 +224,15 @@ final class ChatSessionSupportUtils {
 
     static Map<String, Object> toMutableMap(Object value) {
         return castMap(value);
+    }
+
+    private static void copyPatchedValue(
+            Map<String, Object> patch,
+            Map<String, Object> sessionMetadata,
+            String key) {
+        if (patch.containsKey(key)) {
+            sessionMetadata.put(key, patch.get(key));
+        }
     }
 
     static String blankToNull(String value) {

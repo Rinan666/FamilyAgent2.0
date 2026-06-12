@@ -29,6 +29,14 @@ type MemoryContextResult = {
   metadata?: NonNullable<ChatMessage['metadata']>;
 };
 
+export type UseChatRequestConfig = {
+  message: string;
+  subject?: string;
+  contextLabel?: string;
+  memoryContext?: string;
+  targetRole?: ViewerRole;
+};
+
 const FAMILY_CONTEXT_TIMEOUT_MS = 1800;
 
 interface UseChatOptions {
@@ -42,6 +50,18 @@ interface UseChatOptions {
   getSessionSavedMemories?: () => SessionSavedMemory[];
   subject?: string;
   contextLabel?: string;
+  memoryContextResolver?: (params: {
+    query: string;
+    history: Pick<ChatMessage, 'role' | 'content'>[];
+    defaultRecall: () => Promise<MemoryContextResult>;
+  }) => Promise<MemoryContextResult>;
+  prepareRequest?: (params: {
+    message: string;
+    history: Pick<ChatMessage, 'role' | 'content'>[];
+    memoryContext: MemoryContextResult;
+    defaultRequest: UseChatRequestConfig;
+  }) => Promise<UseChatRequestConfig> | UseChatRequestConfig;
+  normalizeStreamMetadata?: (metadata: Record<string, unknown>) => NonNullable<ChatMessage['metadata']>;
 }
 
 export function useChat(options: UseChatOptions = {}) {
@@ -67,6 +87,9 @@ export function useChat(options: UseChatOptions = {}) {
     getSessionSavedMemories,
     subject = 'FamilyAgent',
     contextLabel = 'family_memory',
+    memoryContextResolver,
+    prepareRequest,
+    normalizeStreamMetadata,
   } = options;
 
   const activeStreamRef = useRef<AIStreamHandle | null>(null);
@@ -246,7 +269,13 @@ export function useChat(options: UseChatOptions = {}) {
     }
 
     const timeContext = currentTimeContext();
-    const memoryContext = await recallMemoryContext(message, history);
+    const memoryContext = await (memoryContextResolver
+      ? memoryContextResolver({
+          query: message,
+          history,
+          defaultRecall: () => recallMemoryContext(message, history),
+        })
+      : recallMemoryContext(message, history));
 
     if (!isRunActive(runId) || stoppedRunsRef.current.has(runId)) {
       removeMessageById(assistantMessage.id);
@@ -258,15 +287,37 @@ export function useChat(options: UseChatOptions = {}) {
       mergeLastAssistantMetadata(memoryContext.metadata);
     }
 
+    const defaultRequest: UseChatRequestConfig = {
+      message,
+      subject,
+      contextLabel,
+      memoryContext: memoryContext.context,
+      targetRole,
+    };
+    const requestConfig = prepareRequest
+      ? await prepareRequest({
+          message,
+          history,
+          memoryContext,
+          defaultRequest,
+        })
+      : defaultRequest;
+
+    if (!isRunActive(runId) || stoppedRunsRef.current.has(runId)) {
+      removeMessageById(assistantMessage.id);
+      setStreaming(false);
+      return;
+    }
+
     const handle = agentApi.streamChat(
       {
-        message,
+        message: requestConfig.message,
         history,
-        subject,
-        contextLabel,
-        memoryContext: memoryContext.context,
+        subject: requestConfig.subject || subject,
+        contextLabel: requestConfig.contextLabel || contextLabel,
+        memoryContext: requestConfig.memoryContext || '',
         viewerRole,
-        targetRole,
+        targetRole: requestConfig.targetRole || targetRole,
         ...timeContext,
       },
       (chunk) => {
@@ -291,7 +342,7 @@ export function useChat(options: UseChatOptions = {}) {
       },
       (metadata) => {
         if (!isRunActive(runId)) return;
-        mergeLastAssistantMetadata(normalizeAssistantMetadata(metadata));
+        mergeLastAssistantMetadata((normalizeStreamMetadata || normalizeAssistantMetadata)(metadata));
       },
       () => {
         const isCurrentRun = isRunActive(runId);
@@ -330,6 +381,9 @@ export function useChat(options: UseChatOptions = {}) {
     mergeLastAssistantMetadata,
     onChatDone,
     enqueuePersist,
+    memoryContextResolver,
+    normalizeStreamMetadata,
+    prepareRequest,
     recallMemoryContext,
     removeMessageById,
     setStreaming,

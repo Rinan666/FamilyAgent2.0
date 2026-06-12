@@ -211,6 +211,18 @@ public class ChatSessionService {
     }
 
     @Transactional
+    public ChatSessionDetail patchMetadata(Long sessionId, Map<String, Object> patch) {
+        ChatSession session = getOwnedSessionHeader(sessionId);
+        Map<String, Object> current = ChatSessionSupportUtils.toMutableMap(session.getMetadata());
+        if (patch != null) {
+            current.putAll(patch);
+        }
+        session.setMetadata(current);
+        sessionRepository.updateById(session);
+        return getSessionDetailOwned(sessionId);
+    }
+
+    @Transactional
     public void deleteSession(Long sessionId) {
         ChatSession session = getOwnedSessionHeader(sessionId);
         sessionRepository.deleteById(session.getId());

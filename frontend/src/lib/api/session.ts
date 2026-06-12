@@ -56,5 +56,10 @@ export const sessionApi = {
     request<ChatSessionArchiveSummary[]>(`/sessions/${id}/archives`).then((items) => (items || []).map(normalizeSessionArchiveSummary)),
   getSessionArchive: (id: number, archiveId: number) =>
     request<ChatSessionArchiveDetail>(`/sessions/${id}/archives/${archiveId}`).then(normalizeSessionArchiveDetail),
+  patchSession: (id: number, data: { metadata?: Record<string, unknown> }) =>
+    request<ChatSessionDetail>(`/sessions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }).then(normalizeSessionDetail),
   deleteSession: (id: number) => request<void>(`/sessions/${id}`, { method: 'DELETE' }),
 };

@@ -67,7 +67,9 @@ class ChatSessionMessagePersistenceSupport {
                 .mapToInt(Integer::intValue)
                 .sum());
         session.setMetadata(ChatSessionSupportUtils.withStorageVersion(
-                ChatSessionSupportUtils.toMutableMap(session.getMetadata()),
+                ChatSessionSupportUtils.applySessionContextPatch(
+                        ChatSessionSupportUtils.toMutableMap(session.getMetadata()),
+                        payloads),
                 STORAGE_VERSION));
         if (session.getArchiveMetadata() == null) {
             session.setArchiveMetadata(new HashMap<>());

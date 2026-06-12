@@ -315,7 +315,7 @@ export default function FamilyPage() {
         icon: BookHeart,
       },
       {
-        href: `/dashboard/mirror?familyId=${displayFamilyId}`,
+        href: `/dashboard/agent?familyId=${displayFamilyId}`,
         label: '镜像 Agent',
         description: '基于授权资料查看成员镜像参考。',
         icon: Bot,

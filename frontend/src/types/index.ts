@@ -53,6 +53,25 @@ export interface RegisterRequest {
   email?: string;
 }
 
+export type AgentMode = 'family' | 'mirror';
+
+export interface MirrorSourceRef {
+  code: string;
+  title: string;
+  sourceLabel: string;
+  temporalLabel: string;
+  toneClass: string;
+}
+
+export interface AgentSessionMetadata extends Record<string, unknown> {
+  entry?: string;
+  contextLabel?: string;
+  agentMode?: AgentMode;
+  targetUserId?: number | null;
+  targetMemberName?: string | null;
+  hasTargetSwitches?: boolean;
+}
+
 // --- Families ---
 export interface Family {
   id: number;
@@ -178,6 +197,16 @@ export interface ChatMessage {
       totalReferenceCount?: number;
       sources: RagRecallSource[];
     };
+    agentMode?: AgentMode;
+    targetUserId?: number | null;
+    targetMemberName?: string | null;
+    hasTargetSwitches?: boolean;
+    switchMarker?: boolean;
+    sessionContextPatch?: AgentSessionMetadata;
+    sourceRefs?: MirrorSourceRef[];
+    sourceSummary?: string;
+    insufficientSources?: boolean;
+    retrievalQuery?: string;
   } & Record<string, unknown>;
 }
 
@@ -194,7 +223,7 @@ export interface ChatSessionSummary {
   messageCount?: number;
   tokenCount?: number;
   lastMessageAt?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: AgentSessionMetadata;
   startedAt: string;
   endedAt?: string;
 }
@@ -232,7 +261,7 @@ export interface ChatSessionMessageItem {
   role: ChatMessage['role'] | string;
   content: string;
   toolName?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: ChatMessage['metadata'];
   createdAt: string;
   tokenCount?: number;
 }

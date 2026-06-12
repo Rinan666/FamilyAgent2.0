@@ -10,6 +10,7 @@ import com.familyagent.module.session.dto.ChatSessionMessagePage;
 import com.familyagent.module.session.dto.ChatSessionSummary;
 import com.familyagent.module.session.dto.CreateChatSessionRequest;
 import com.familyagent.module.session.dto.EndChatSessionRequest;
+import com.familyagent.module.session.dto.PatchChatSessionRequest;
 import com.familyagent.module.session.dto.UpdateSessionMessagesRequest;
 import com.familyagent.module.session.entity.ChatSession;
 import com.familyagent.module.session.service.ChatSessionService;
@@ -86,6 +87,14 @@ public class ChatSessionController {
             @RequestBody(required = false) EndChatSessionRequest request) {
         String summary = request == null ? null : request.getSummary();
         return Result.success(sessionService.endSession(id, summary, authorization));
+    }
+
+    @Operation(summary = "局部更新会话元数据")
+    @PatchMapping("/{id}")
+    public Result<ChatSessionDetail> patchSession(
+            @PathVariable Long id,
+            @RequestBody PatchChatSessionRequest request) {
+        return Result.success(sessionService.patchMetadata(id, request.getMetadata()));
     }
 
     @Operation(summary = "删除会话")

@@ -214,6 +214,56 @@ class ChatSessionServiceTest {
         assertEquals(3L, page.getNextBeforeSeq());
     }
 
+    @Test
+    void appendMessages_updatesSessionMetadataFromContextPatch() {
+        ChatSession session = sessionHeader(100L, 10L, "ACTIVE");
+        session.setStartedAt(LocalDateTime.of(2026, 6, 9, 10, 0));
+        session.setLastMessageAt(session.getStartedAt());
+        session.setMetadata(Map.of("entry", "agent", "agentMode", "family", "storageVersion", 2));
+
+        ChatSessionMessage first = message(1, "user", "hello");
+        ChatSessionMessage switchMarker = message(2, "system", "switched");
+        switchMarker.setMetadata(Map.of(
+                "agentMode", "mirror",
+                "sessionContextPatch", Map.of(
+                        "agentMode", "mirror",
+                        "targetUserId", 22,
+                        "targetMemberName", "Mom",
+                        "hasTargetSwitches", true)));
+
+        when(sessionRepository.findHeaderById(100L)).thenReturn(session, session);
+        when(sessionRepository.selectById(100L)).thenReturn(session, session);
+        when(sessionRepository.updateById(any(ChatSession.class))).thenReturn(1);
+        when(messageRepository.findMaxSeqBySessionId(100L)).thenReturn(1);
+        when(messageRepository.findBySessionId(100L)).thenReturn(List.of(first, switchMarker));
+        when(archiveRepository.findBySessionId(100L)).thenReturn(List.of());
+
+        ChatSessionMessagePayload payload = payload("m2", "system", "switched");
+        payload.setMetadata(Map.of(
+                "agentMode", "mirror",
+                "sessionContextPatch", Map.of(
+                        "agentMode", "mirror",
+                        "targetUserId", 22,
+                        "targetMemberName", "Mom",
+                        "hasTargetSwitches", true)));
+
+        try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
+            stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
+
+            ChatSessionDetail result = service.appendMessages(100L, List.of(payload));
+
+            assertEquals("mirror", result.getMetadata().get("agentMode"));
+            assertEquals(22, result.getMetadata().get("targetUserId"));
+            assertEquals("Mom", result.getMetadata().get("targetMemberName"));
+            assertEquals(true, result.getMetadata().get("hasTargetSwitches"));
+        }
+
+        ArgumentCaptor<ChatSession> captor = ArgumentCaptor.forClass(ChatSession.class);
+        verify(sessionRepository).updateById(captor.capture());
+        Map<String, Object> persistedMetadata = ChatSessionSupportUtils.castMap(captor.getValue().getMetadata());
+        assertEquals("mirror", persistedMetadata.get("agentMode"));
+    }
+
     private static <T> T withUser(Long userId, java.util.concurrent.Callable<T> action) {
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(userId);

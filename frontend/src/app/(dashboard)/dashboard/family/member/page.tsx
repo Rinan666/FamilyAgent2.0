@@ -617,7 +617,7 @@ export default function FamilyMemberMemoryPage() {
                   <p className="mt-1 text-sm leading-6 text-purple-800">{mirrorContext.sourceSummary}</p>
                 </div>
                 <Link
-                  href={`/dashboard/mirror${selectedFamilyId && targetUserId ? `?familyId=${selectedFamilyId}&targetUserId=${targetUserId}` : ''}`}
+                  href={`/dashboard/agent${selectedFamilyId && targetUserId ? `?familyId=${selectedFamilyId}&targetUserId=${targetUserId}` : ''}`}
                   className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-purple-600 px-4 text-sm font-medium text-white hover:bg-purple-700"
                 >
                   查看镜像 Agent
