@@ -233,6 +233,15 @@ function maintenanceMeta(action?: string) {
   return { label: '建议归档', tone: 'border-amber-100 bg-amber-50 text-amber-700' };
 }
 
+let cachedMembersByFamilyId: Record<number, FamilyMember[]> = {};
+let cachedCountsByFamilyId: Record<number, Record<LibraryItemType, number | null>> = {};
+
+function invalidateMemoryLibraryPageCache(familyId?: number | null) {
+  if (!familyId) return;
+  delete cachedMembersByFamilyId[familyId];
+  delete cachedCountsByFamilyId[familyId];
+}
+
 export default function MemoryLibraryPage({ embedded = false }: { embedded?: boolean }) {
   const searchParams = useSearchParams();
   const {
@@ -251,6 +260,7 @@ export default function MemoryLibraryPage({ embedded = false }: { embedded?: boo
   const [maintenanceSuggestions, setMaintenanceSuggestions] = useState<MemoryMaintenanceSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMaintenance, setLoadingMaintenance] = useState(false);
+  const [maintenanceLoaded, setMaintenanceLoaded] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [query, setQuery] = useState('');
@@ -286,6 +296,23 @@ export default function MemoryLibraryPage({ embedded = false }: { embedded?: boo
   );
 
   const canManageLibrary = activeMembership?.role === 'OWNER' || viewerRole === 'ADMIN';
+  const canLoadSummaryCounts = useMemo(() => (
+    viewMode === 'ACTIVE'
+    && memberFilter === 'ALL'
+    && visibilityFilter === 'ALL'
+    && !debouncedQuery
+    && !debouncedTagFilter
+    && !debouncedDateFrom
+    && !debouncedDateTo
+  ), [
+    debouncedDateFrom,
+    debouncedDateTo,
+    debouncedQuery,
+    debouncedTagFilter,
+    memberFilter,
+    viewMode,
+    visibilityFilter,
+  ]);
 
   const memberOptions = useMemo(
     () => members.map((member) => ({ id: member.userId, name: memberDisplayName(member) })),
@@ -302,15 +329,15 @@ export default function MemoryLibraryPage({ embedded = false }: { embedded?: boo
   const pageEnd = Math.min(pageData.page * pageData.pageSize, pageData.total);
   const totalPages = Math.max(1, pageData.totalPages || 1);
 
-  const loadCounts = useCallback(async (
-    familyId: number,
-    keyword: string,
-    memberUserId?: number,
-    visibility?: string,
-    tag?: string,
-    dateFromValue?: string,
-    dateToValue?: string,
-  ) => {
+  const loadCounts = useCallback(async (familyId: number, forceRefresh: boolean = false) => {
+    if (!forceRefresh) {
+      const cachedCounts = cachedCountsByFamilyId[familyId];
+      if (cachedCounts) {
+        setCounts(cachedCounts);
+        return;
+      }
+    }
+
     const nextCounts = await Promise.all(
       typeOptions
         .filter((option) => option.value !== 'ALL')
@@ -319,26 +346,37 @@ export default function MemoryLibraryPage({ embedded = false }: { embedded?: boo
             familyId,
             page: 1,
             pageSize: 1,
-            keyword,
             type: option.value as LibraryItemType,
-            memberUserId,
-            visibility,
-            tag,
-            dateFrom: dateFromValue,
-            dateTo: dateToValue,
           });
           return [option.value, result.total] as const;
         }),
     );
-    setCounts(Object.fromEntries(nextCounts) as Record<LibraryItemType, number | null>);
+    const nextRecord = Object.fromEntries(nextCounts) as Record<LibraryItemType, number | null>;
+    cachedCountsByFamilyId[familyId] = nextRecord;
+    setCounts(nextRecord);
+  }, []);
+
+  const loadMembers = useCallback(async (familyId: number, forceRefresh: boolean = false) => {
+    if (!forceRefresh) {
+      const cachedMembers = cachedMembersByFamilyId[familyId];
+      if (cachedMembers) {
+        setMembers(cachedMembers);
+        return;
+      }
+    }
+
+    const memberList = await familyApi.getMembers(familyId).catch(() => [] as FamilyMember[]);
+    const nextMembers = Array.isArray(memberList) ? memberList : [];
+    cachedMembersByFamilyId[familyId] = nextMembers;
+    setMembers(nextMembers);
   }, []);
 
   const loadData = useCallback(async () => {
     if (!activeFamilyId) {
-      setMembers([]);
       setPageData(emptyPage(pageSize));
       setCounts(emptyCounts());
       setMaintenanceSuggestions([]);
+      setMaintenanceLoaded(false);
       return;
     }
 
@@ -349,36 +387,19 @@ export default function MemoryLibraryPage({ embedded = false }: { embedded?: boo
     setIsLoading(true);
     setError('');
     try {
-      const [memberList, nextPage] = await Promise.all([
-        familyApi.getMembers(activeFamilyId).catch(() => [] as FamilyMember[]),
-        (viewMode === 'ARCHIVED' ? memoryLibraryApi.archived : memoryLibraryApi.search)({
-          familyId: activeFamilyId,
-          page: currentPage,
-          pageSize,
-          keyword: debouncedQuery,
-          type: typeFilter,
-          memberUserId,
-          visibility,
-          tag,
-          dateFrom: debouncedDateFrom || undefined,
-          dateTo: debouncedDateTo || undefined,
-        }),
-      ]);
-      setMembers(Array.isArray(memberList) ? memberList : []);
+      const nextPage = await (viewMode === 'ARCHIVED' ? memoryLibraryApi.archived : memoryLibraryApi.search)({
+        familyId: activeFamilyId,
+        page: currentPage,
+        pageSize,
+        keyword: debouncedQuery,
+        type: typeFilter,
+        memberUserId,
+        visibility,
+        tag,
+        dateFrom: debouncedDateFrom || undefined,
+        dateTo: debouncedDateTo || undefined,
+      });
       setPageData(nextPage);
-      if (viewMode === 'ACTIVE') {
-        void loadCounts(
-          activeFamilyId,
-          debouncedQuery,
-          memberUserId,
-          visibility,
-          tag,
-          debouncedDateFrom || undefined,
-          debouncedDateTo || undefined,
-        ).catch(() => setCounts(emptyCounts()));
-      } else {
-        setCounts(emptyCounts());
-      }
       setSelectedItemId((current) => (
         current && nextPage.items.some((item) => item.id === current) ? current : ''
       ));
@@ -395,7 +416,6 @@ export default function MemoryLibraryPage({ embedded = false }: { embedded?: boo
     debouncedDateTo,
     debouncedQuery,
     debouncedTagFilter,
-    loadCounts,
     memberFilter,
     pageSize,
     typeFilter,
@@ -406,14 +426,17 @@ export default function MemoryLibraryPage({ embedded = false }: { embedded?: boo
   const loadMaintenanceSuggestions = useCallback(async () => {
     if (!activeFamilyId || viewMode !== 'ACTIVE') {
       setMaintenanceSuggestions([]);
+      setMaintenanceLoaded(false);
       return;
     }
     setLoadingMaintenance(true);
     try {
       const suggestions = await memoryLibraryApi.maintenanceSuggestions(activeFamilyId);
       setMaintenanceSuggestions(Array.isArray(suggestions) ? suggestions : []);
+      setMaintenanceLoaded(true);
     } catch {
       setMaintenanceSuggestions([]);
+      setMaintenanceLoaded(true);
     } finally {
       setLoadingMaintenance(false);
     }
@@ -474,12 +497,33 @@ export default function MemoryLibraryPage({ embedded = false }: { embedded?: boo
   }, [canManageLibrary, viewMode]);
 
   useEffect(() => {
+    if (!activeFamilyId) {
+      setMembers([]);
+      return;
+    }
+
+    void loadMembers(activeFamilyId).catch(() => setMembers([]));
+  }, [activeFamilyId, loadMembers]);
+
+  useEffect(() => {
+    if (!activeFamilyId || !canLoadSummaryCounts) {
+      setCounts(emptyCounts());
+      return;
+    }
+
+    void loadCounts(activeFamilyId).catch(() => setCounts(emptyCounts()));
+  }, [activeFamilyId, canLoadSummaryCounts, loadCounts]);
+
+  useEffect(() => {
     void loadData();
   }, [loadData]);
 
   useEffect(() => {
-    void loadMaintenanceSuggestions();
-  }, [loadMaintenanceSuggestions]);
+    if (viewMode !== 'ACTIVE' || !canManageLibrary) {
+      setMaintenanceSuggestions([]);
+      setMaintenanceLoaded(false);
+    }
+  }, [canManageLibrary, viewMode]);
 
   useEffect(() => {
     if (!requestedItemId) return;
@@ -495,11 +539,20 @@ export default function MemoryLibraryPage({ embedded = false }: { embedded?: boo
   }, [currentPage, pageData.totalPages]);
 
   const refreshAll = useCallback(async () => {
+    if (!activeFamilyId) {
+      await loadData();
+      return;
+    }
+
+    invalidateMemoryLibraryPageCache(activeFamilyId);
+
     await Promise.all([
+      loadMembers(activeFamilyId, true),
       loadData(),
-      loadMaintenanceSuggestions(),
+      canLoadSummaryCounts ? loadCounts(activeFamilyId, true) : Promise.resolve(),
+      maintenanceLoaded ? loadMaintenanceSuggestions() : Promise.resolve(),
     ]);
-  }, [loadData, loadMaintenanceSuggestions]);
+  }, [activeFamilyId, canLoadSummaryCounts, loadCounts, loadData, loadMaintenanceSuggestions, loadMembers, maintenanceLoaded]);
 
   const handleMergeSuggestion = useCallback(async (suggestion: MemoryMaintenanceSuggestion) => {
     if (!activeFamilyId) return;
@@ -697,12 +750,19 @@ export default function MemoryLibraryPage({ embedded = false }: { embedded?: boo
                 }`}
               >
                 <Icon className={`mb-2 h-5 w-5 rounded ${meta.tone}`} />
-                <p className="text-lg font-bold text-gray-900">{counts[option.value as LibraryItemType] ?? '-'}</p>
+                <p className="text-lg font-bold text-gray-900">
+                  {canLoadSummaryCounts ? (counts[option.value as LibraryItemType] ?? '-') : '-'}
+                </p>
                 <p className="text-xs text-gray-500">{option.label}</p>
               </button>
             );
           })}
         </div>
+        {!canLoadSummaryCounts && (
+          <p className="mt-2 text-xs text-gray-400">
+            当前卡片统计仅在默认筛选下展示，避免筛选时额外触发多次搜索请求。
+          </p>
+        )}
       </section>
 
       {error && <div className="mb-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
@@ -730,6 +790,10 @@ export default function MemoryLibraryPage({ embedded = false }: { embedded?: boo
             <div className="flex h-20 items-center justify-center text-sm text-gray-400">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               正在评估...
+            </div>
+          ) : !maintenanceLoaded ? (
+            <div className="rounded-lg border border-dashed border-gray-200 px-3 py-2 text-sm text-gray-500">
+              点击“重新评估”后再加载整理建议，默认不在进入页面时自动请求。
             </div>
           ) : maintenanceSuggestions.length === 0 ? (
             <div className="rounded-lg border border-green-100 bg-green-50 px-3 py-2 text-sm text-green-700">
