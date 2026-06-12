@@ -1,5 +1,6 @@
 package com.familyagent.module.session.service;
 
+import com.familyagent.module.session.dto.ChatSessionArchiveMetadata;
 import com.familyagent.module.session.entity.ChatSession;
 import com.familyagent.module.session.entity.ChatSessionArchive;
 import com.familyagent.module.session.entity.ChatSessionMessage;
@@ -82,11 +83,12 @@ class ChatSessionArchiveSupport {
             if (ChatSessionSupportUtils.blankToNull(session.getSummary()) == null) {
                 session.setSummary(archive.getSummary());
             }
-            Map<String, Object> archiveMetadata = ChatSessionSupportUtils.toMutableMap(session.getArchiveMetadata());
-            archiveMetadata.put("lastArchiveId", archive.getId());
-            archiveMetadata.put("lastArchiveAt", archive.getCreatedAt().toString());
-            archiveMetadata.put("lastArchiveRange", startSeq + "-" + endSeq);
-            archiveMetadata.put("storageVersion", STORAGE_VERSION);
+            Map<String, Object> archiveMetadata = ChatSessionSupportUtils.archiveMetadataToMap(
+                    new ChatSessionArchiveMetadata(
+                            archive.getId(),
+                            archive.getCreatedAt().toString(),
+                            startSeq + "-" + endSeq,
+                            STORAGE_VERSION));
             session.setArchiveMetadata(archiveMetadata);
             session.setMetadata(ChatSessionSupportUtils.withStorageVersion(
                     ChatSessionSupportUtils.toMutableMap(session.getMetadata()),

@@ -315,7 +315,7 @@ public class ChatSessionService {
                 .startedAt(session.getStartedAt())
                 .endedAt(session.getEndedAt())
                 .metadata(ChatSessionSupportUtils.castMap(session.getMetadata()))
-                .archiveMetadata(ChatSessionSupportUtils.castMap(session.getArchiveMetadata()))
+                .archiveMetadata(ChatSessionSupportUtils.toArchiveMetadata(session.getArchiveMetadata()))
                 .archives(listArchives(sessionId))
                 .build();
     }

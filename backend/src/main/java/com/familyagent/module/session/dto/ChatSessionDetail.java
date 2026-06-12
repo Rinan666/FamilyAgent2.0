@@ -28,6 +28,6 @@ public class ChatSessionDetail {
     private LocalDateTime startedAt;
     private LocalDateTime endedAt;
     private Map<String, Object> metadata;
-    private Map<String, Object> archiveMetadata;
+    private ChatSessionArchiveMetadata archiveMetadata;
     private List<ChatSessionArchiveSummary> archives;
 }

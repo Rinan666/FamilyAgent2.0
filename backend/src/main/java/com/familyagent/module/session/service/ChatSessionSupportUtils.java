@@ -2,6 +2,7 @@ package com.familyagent.module.session.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.familyagent.module.session.dto.ChatSessionArchiveMetadata;
 import com.familyagent.module.session.dto.ChatSessionMessagePayload;
 import com.familyagent.module.session.entity.ChatSession;
 import com.familyagent.module.session.entity.ChatSessionMessage;
@@ -116,6 +117,28 @@ final class ChatSessionSupportUtils {
     static Map<String, Object> withStorageVersion(Map<String, Object> metadata, int storageVersion) {
         metadata.put("storageVersion", storageVersion);
         return metadata;
+    }
+
+    static ChatSessionArchiveMetadata toArchiveMetadata(Object raw) {
+        Map<String, Object> map = castMap(raw);
+        Object idRaw = map.get("lastArchiveId");
+        Long lastArchiveId = idRaw == null ? null
+                : idRaw instanceof Number n ? n.longValue()
+                : Long.parseLong(String.valueOf(idRaw));
+        String lastArchiveAt = stringValue(map.get("lastArchiveAt"), null);
+        String lastArchiveRange = stringValue(map.get("lastArchiveRange"), null);
+        Object vRaw = map.get("storageVersion");
+        int storageVersion = vRaw instanceof Number n ? n.intValue() : 0;
+        return new ChatSessionArchiveMetadata(lastArchiveId, lastArchiveAt, lastArchiveRange, storageVersion);
+    }
+
+    static Map<String, Object> archiveMetadataToMap(ChatSessionArchiveMetadata m) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("lastArchiveId", m.lastArchiveId());
+        map.put("lastArchiveAt", m.lastArchiveAt());
+        map.put("lastArchiveRange", m.lastArchiveRange());
+        map.put("storageVersion", m.storageVersion());
+        return map;
     }
 
     static int normalizeSessionLimit(int limit, int defaultLimit, int maxLimit) {
