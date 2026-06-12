@@ -54,6 +54,7 @@ export interface RegisterRequest {
 }
 
 export type AgentMode = 'family' | 'mirror';
+export type AgentResponseMode = 'quick' | 'think';
 
 export interface MirrorSourceRef {
   code: string;
@@ -186,6 +187,8 @@ export interface ChatMessage {
       resultCount: number;
       sources: { title: string; url: string; snippet?: string }[];
     };
+    responseMode?: AgentResponseMode;
+    thinkingSummary?: string;
     rag?: {
       retrievalMode?: string;
       embeddingReadyCount?: number;

@@ -9,10 +9,11 @@ import { memoryApi } from '@/lib/api/memory';
 import { memoryLibraryApi } from '@/lib/api/memoryLibrary';
 import type { AIStreamHandle } from '@/lib/api/shared';
 import { enqueuePersistMessages } from '@/lib/sessionPersistence';
-import type { ChatMessage, GrowthGuardRecord, HeritageTask } from '@/types';
+import type { AgentResponseMode, ChatMessage, GrowthGuardRecord, HeritageTask } from '@/types';
 import type { ViewerRole } from '@/lib/roles';
 import {
   buildFamilyRecallQuery,
+  buildLibrarySearchKeyword,
   currentTimeContext,
   detectFamilyActivationScene,
   formatMemoryContext,
@@ -35,6 +36,7 @@ export type UseChatRequestConfig = {
   contextLabel?: string;
   memoryContext?: string;
   targetRole?: ViewerRole;
+  responseMode?: AgentResponseMode;
 };
 
 const FAMILY_CONTEXT_TIMEOUT_MS = 1800;
@@ -42,6 +44,7 @@ const FAMILY_CONTEXT_TIMEOUT_MS = 1800;
 interface UseChatOptions {
   viewerRole?: ViewerRole;
   targetRole?: ViewerRole;
+  responseMode?: AgentResponseMode;
   activeFamilyId?: number | null;
   appendSessionMessages?: (messages: ChatMessage[]) => Promise<void>;
   onChatDone?: (message: string) => void;
@@ -79,6 +82,7 @@ export function useChat(options: UseChatOptions = {}) {
   const {
     viewerRole = 'MEMBER',
     targetRole = 'MEMBER',
+    responseMode = 'think',
     activeFamilyId,
     appendSessionMessages,
     onChatDone,
@@ -157,6 +161,11 @@ export function useChat(options: UseChatOptions = {}) {
     history: Pick<ChatMessage, 'role' | 'content'>[] = [],
   ) => {
     try {
+      if (responseMode === 'quick') {
+        onActivationSceneChange?.(null);
+        return { context: '' } satisfies MemoryContextResult;
+      }
+
       const recallQuery = buildFamilyRecallQuery(query, history);
       const activationScene = detectFamilyActivationScene(recallQuery);
       onActivationSceneChange?.(
@@ -165,9 +174,7 @@ export function useChat(options: UseChatOptions = {}) {
           : null,
       );
 
-      const libraryKeyword = activationScene
-        ? `${recallQuery} ${activationScene.label} ${activationScene.searchKeywords.join(' ')}`
-        : recallQuery;
+      const libraryKeyword = buildLibrarySearchKeyword(recallQuery, activationScene);
 
       const [familyRecall, libraryResult, growthRecords, heritageTasks] = await Promise.all([
         activeFamilyId
@@ -244,7 +251,7 @@ export function useChat(options: UseChatOptions = {}) {
       console.log('Family context memories not loaded:', error);
       return { context: '' } satisfies MemoryContextResult;
     }
-  }, [activeFamilyId, getSessionSavedMemories, onActivationSceneChange, viewerIdentityContext]);
+  }, [activeFamilyId, getSessionSavedMemories, onActivationSceneChange, responseMode, viewerIdentityContext]);
 
   const sendMessage = useCallback(async (message: string) => {
     if (isStreaming) return;
@@ -293,6 +300,7 @@ export function useChat(options: UseChatOptions = {}) {
       contextLabel,
       memoryContext: memoryContext.context,
       targetRole,
+      responseMode,
     };
     const requestConfig = prepareRequest
       ? await prepareRequest({
@@ -318,6 +326,7 @@ export function useChat(options: UseChatOptions = {}) {
         memoryContext: requestConfig.memoryContext || '',
         viewerRole,
         targetRole: requestConfig.targetRole || targetRole,
+        responseMode: requestConfig.responseMode || responseMode,
         ...timeContext,
       },
       (chunk) => {
@@ -390,6 +399,7 @@ export function useChat(options: UseChatOptions = {}) {
     subject,
     targetRole,
     viewerRole,
+    responseMode,
   ]);
 
   return {

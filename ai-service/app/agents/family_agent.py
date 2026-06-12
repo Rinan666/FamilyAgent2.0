@@ -16,6 +16,8 @@ from app.utils.safety_limits import (
 )
 
 _WEB_SEARCH_TIMEOUT_FALLBACK = "联网搜索未在时限内完成，本轮不使用搜索结果。"
+_QUICK_MODE_WEB_CONTEXT = "- 本轮为快速模式，禁止联网搜索。"
+_THINKING_SUMMARY = "我会先梳理问题、判断是否需要外部信息，再结合已授权上下文给出结论。"
 
 
 class FamilyAgent:
@@ -29,6 +31,7 @@ class FamilyAgent:
         memory_context: str = "",
         viewer_role: str = "MEMBER",
         target_role: str = "MEMBER",
+        response_mode: str = "think",
         client_timestamp: str = "",
         client_timezone: str = "",
     ) -> AsyncIterator[dict]:
@@ -43,31 +46,56 @@ class FamilyAgent:
             label="family agent stream request",
         )
 
-        web_search_task = asyncio.create_task(build_web_search_context(member_message))
+        normalized_mode = (response_mode or "").strip().lower()
+        is_quick_mode = normalized_mode == "quick"
+
+        yield {
+            "type": "metadata",
+            "response_mode": "quick" if is_quick_mode else "think",
+            **({"thinking_summary": _THINKING_SUMMARY} if not is_quick_mode else {}),
+        }
+
+        web_search_task = None if is_quick_mode else asyncio.create_task(
+            build_web_search_context(member_message, normalized_mode)
+        )
         web_search_context = None
 
         try:
-            try:
-                web_search_context = await asyncio.wait_for(
-                    asyncio.shield(web_search_task),
-                    timeout=settings.web_search_stream_metadata_timeout_seconds,
-                )
-            except asyncio.TimeoutError:
+            if is_quick_mode:
                 yield {
                     "type": "metadata",
+                    "response_mode": "quick",
                     "web_search": {
                         "needed": False,
                         "used": False,
-                        "pending": True,
+                        "pending": False,
                         "result_count": 0,
                         "sources": [],
                     },
                 }
-                # Proceed immediately — do NOT await web_search_task again.
+            else:
+                try:
+                    web_search_context = await asyncio.wait_for(
+                        asyncio.shield(web_search_task),
+                        timeout=settings.web_search_stream_metadata_timeout_seconds,
+                    )
+                except asyncio.TimeoutError:
+                    yield {
+                        "type": "metadata",
+                        "response_mode": "think",
+                        "web_search": {
+                            "needed": False,
+                            "used": False,
+                            "pending": True,
+                            "result_count": 0,
+                            "sources": [],
+                        },
+                    }
 
             if web_search_context is not None:
                 yield {
                     "type": "metadata",
+                    "response_mode": "think",
                     "web_search": {
                         "needed": web_search_context.needed,
                         "used": len(web_search_context.results) > 0,
@@ -87,7 +115,7 @@ class FamilyAgent:
             web_prompt = (
                 web_search_context.prompt_context
                 if web_search_context is not None
-                else _WEB_SEARCH_TIMEOUT_FALLBACK
+                else (_QUICK_MODE_WEB_CONTEXT if is_quick_mode else _WEB_SEARCH_TIMEOUT_FALLBACK)
             )
 
             messages = [
@@ -99,6 +127,7 @@ class FamilyAgent:
                         memory_context=memory_context,
                         viewer_role=viewer_role,
                         target_role=target_role,
+                        response_mode=normalized_mode,
                         client_timestamp=client_timestamp,
                         client_timezone=client_timezone,
                         public_web_context=web_prompt,
@@ -111,7 +140,7 @@ class FamilyAgent:
             async for chunk in llm_client.chat_stream(messages, temperature=0.7):
                 yield {"type": "content", "content": chunk}
         finally:
-            if not web_search_task.done():
+            if web_search_task is not None and not web_search_task.done():
                 web_search_task.cancel()
                 with suppress(asyncio.CancelledError):
                     await web_search_task

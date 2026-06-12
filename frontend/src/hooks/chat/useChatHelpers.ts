@@ -161,6 +161,18 @@ export function buildFamilyRecallQuery(
   return Array.from(new Set(parts)).join(' ').trim();
 }
 
+export function buildLibrarySearchKeyword(
+  query: string,
+  activationScene: FamilyActivationScene | null,
+) {
+  const parts = [query.trim()];
+  if (activationScene) {
+    parts.push(activationScene.label);
+    parts.push(...activationScene.searchKeywords.slice(0, 4));
+  }
+  return Array.from(new Set(parts.filter(Boolean))).join(' ').trim();
+}
+
 export function detectFamilyActivationScene(query: string): FamilyActivationScene | null {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return null;
@@ -169,10 +181,20 @@ export function detectFamilyActivationScene(query: string): FamilyActivationScen
 
 export function normalizeAssistantMetadata(metadata: Record<string, unknown>): NonNullable<ChatMessage['metadata']> {
   const webSearch = metadata.web_search;
-  if (!webSearch || typeof webSearch !== 'object') return {};
+  const responseMode = metadata.response_mode;
+  const baseMetadata: NonNullable<ChatMessage['metadata']> = {
+    ...(responseMode === 'quick' || responseMode === 'think'
+      ? { responseMode }
+      : {}),
+    ...(typeof metadata.thinking_summary === 'string' && metadata.thinking_summary.trim()
+      ? { thinkingSummary: metadata.thinking_summary.trim() }
+      : {}),
+  };
+  if (!webSearch || typeof webSearch !== 'object') return baseMetadata;
   const data = webSearch as Record<string, unknown>;
   const rawSources = Array.isArray(data.sources) ? data.sources : [];
   return {
+    ...baseMetadata,
     webSearch: {
       needed: Boolean(data.needed),
       used: Boolean(data.used),

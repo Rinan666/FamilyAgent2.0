@@ -1,5 +1,6 @@
 import { sseStreamRequest } from './shared';
 import type { ViewerRole } from '@/lib/roles';
+import type { AgentResponseMode } from '@/types';
 
 export const agentApi = {
   streamChat: (
@@ -11,6 +12,7 @@ export const agentApi = {
       memoryContext?: string;
       viewerRole?: ViewerRole;
       targetRole?: ViewerRole;
+      responseMode?: AgentResponseMode;
       clientTimestamp?: string;
       clientTimezone?: string;
     },
@@ -27,6 +29,7 @@ export const agentApi = {
     memory_context: body.memoryContext || '',
     viewer_role: body.viewerRole || 'MEMBER',
     target_role: body.targetRole || 'MEMBER',
+    response_mode: body.responseMode || 'think',
     client_timestamp: body.clientTimestamp || new Date().toISOString(),
     client_timezone: body.clientTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
   }, onChunk, onDone, onError, onMetadata, onAbort),

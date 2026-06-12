@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { BookHeart, Loader2, UserRound, X } from 'lucide-react';
+import type { AgentTargetSelection } from '@/components/agent/agentTarget';
 import type { ActivationSceneState, ModeReadiness } from '@/components/agent/agentDisplay';
 import type { AgentMode, FamilyMember, MirrorContextResponse } from '@/types';
 
@@ -9,7 +10,7 @@ interface AgentContextPanelProps {
   open: boolean;
   mode: AgentMode;
   targetLabel: string;
-  targetUserId: number | null;
+  targetSelection: AgentTargetSelection;
   selectorOptions: FamilyMember[];
   isLoadingMembers: boolean;
   activationScene: ActivationSceneState | null;
@@ -19,7 +20,7 @@ interface AgentContextPanelProps {
   contextError: string;
   activeFamilyId: number | null | undefined;
   onClose: () => void;
-  onTargetChange: (nextTargetUserId: number | null) => void;
+  onTargetChange: (nextTargetSelection: AgentTargetSelection) => void;
   onSuggestedQuestion: (question: string) => void;
 }
 
@@ -34,7 +35,7 @@ export default function AgentContextPanel({
   open,
   mode,
   targetLabel,
-  targetUserId,
+  targetSelection,
   selectorOptions,
   isLoadingMembers,
   activationScene,
@@ -82,7 +83,7 @@ export default function AgentContextPanel({
               <UserRound className="h-4 w-4 text-emerald-700" />
               当前对象
             </div>
-            <p className="text-sm font-medium text-stone-900">{mode === 'mirror' ? targetLabel : '自己 / FamilyAgent'}</p>
+            <p className="text-sm font-medium text-stone-900">{targetLabel}</p>
             <p className="mt-1 text-xs leading-5 text-stone-500">
               {mode === 'mirror'
                 ? '镜像模式只参考授权可见资料，并明确保留不确定性边界。'
@@ -100,11 +101,19 @@ export default function AgentContextPanel({
             <div className="mt-3 space-y-2">
               <select
                 id="agent-target-selector"
-                value={targetUserId ?? ''}
-                onChange={(event) => onTargetChange(event.target.value ? Number(event.target.value) : null)}
+                value={targetSelection === 'NONE' || targetSelection === 'SELF' ? targetSelection : String(targetSelection)}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (value === 'NONE' || value === 'SELF') {
+                    onTargetChange(value);
+                    return;
+                  }
+                  onTargetChange(Number(value));
+                }}
                 className="h-11 w-full rounded-2xl border border-stone-200 bg-stone-50/80 px-3 text-sm text-stone-800 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-100"
               >
-                <option value="">自己 / FamilyAgent</option>
+                <option value="NONE">无</option>
+                <option value="SELF">镜像自己</option>
                 {selectorOptions.map((member) => (
                   <option key={member.userId} value={member.userId}>
                     {member.relationshipLabel || member.nickname || member.username || `用户 ${member.userId}`}
@@ -204,13 +213,13 @@ export default function AgentContextPanel({
                 <div className="font-semibold text-stone-900">快速入口</div>
                 <div className="mt-3 space-y-2">
                   <Link
-                    href={`/dashboard/family/member?familyId=${activeFamilyId}&userId=${targetUserId || ''}`}
+                    href={`/dashboard/family/member?familyId=${activeFamilyId}&userId=${mirrorContext?.targetMember?.userId || ''}`}
                     className="block rounded-2xl border border-stone-200 bg-white px-3 py-2.5 text-stone-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800"
                   >
                     查看成员授权资料
                   </Link>
                   <Link
-                    href={`/dashboard/diary?familyId=${activeFamilyId}${targetUserId ? `&relatedUserId=${targetUserId}&relatedMemberName=${encodeURIComponent(targetLabel)}` : ''}`}
+                    href={`/dashboard/diary?familyId=${activeFamilyId}${mirrorContext?.targetMember?.userId ? `&relatedUserId=${mirrorContext.targetMember.userId}&relatedMemberName=${encodeURIComponent(targetLabel)}` : ''}`}
                     className="block rounded-2xl border border-stone-200 bg-white px-3 py-2.5 text-stone-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800"
                   >
                     去补充相关记录

@@ -92,8 +92,14 @@ class WebSearchContext:
     prompt_context: str
 
 
-def needs_web_search(query: str) -> bool:
+def is_thinking_mode(response_mode: str | None) -> bool:
+    return (response_mode or "").strip().lower() == "think"
+
+
+def needs_web_search(query: str, response_mode: str | None = "think") -> bool:
     """Return true when a public query likely needs fresh information."""
+    if not is_thinking_mode(response_mode):
+        return False
     normalized = (query or "").strip()
     if len(normalized) < 4:
         return False
@@ -110,8 +116,10 @@ def needs_web_search(query: str) -> bool:
     return explicit_search or time_sensitive
 
 
-def format_web_context(results: list[WebSearchResult], query: str) -> str:
-    if not needs_web_search(query):
+def format_web_context(results: list[WebSearchResult], query: str, response_mode: str | None = "think") -> str:
+    if not is_thinking_mode(response_mode):
+        return "- 本轮为快速模式，禁止联网搜索，只基于当前输入和已有上下文回答。"
+    if not needs_web_search(query, response_mode):
         return (
             "- 本轮问题未明显涉及公共时效信息，不需要联网搜索。\n"
             "- 如果用户追问最新事实、新闻、价格、政策、版本或现任人物，应提醒需要联网确认。"
@@ -133,9 +141,9 @@ def format_web_context(results: list[WebSearchResult], query: str) -> str:
     return "\n".join(lines)
 
 
-async def search_public_web(query: str) -> list[WebSearchResult]:
+async def search_public_web(query: str, response_mode: str | None = "think") -> list[WebSearchResult]:
     """Search public web results when enabled and needed."""
-    if not settings.web_search_enabled or not needs_web_search(query):
+    if not settings.web_search_enabled or not needs_web_search(query, response_mode):
         return []
     try:
         if settings.tavily_api_key:
@@ -147,17 +155,17 @@ async def search_public_web(query: str) -> list[WebSearchResult]:
     return []
 
 
-async def build_web_context(query: str) -> str:
-    return format_web_context(await search_public_web(query), query)
+async def build_web_context(query: str, response_mode: str | None = "think") -> str:
+    return format_web_context(await search_public_web(query, response_mode), query, response_mode)
 
 
-async def build_web_search_context(query: str) -> WebSearchContext:
-    needed = needs_web_search(query)
-    results = await search_public_web(query) if needed else []
+async def build_web_search_context(query: str, response_mode: str | None = "think") -> WebSearchContext:
+    needed = needs_web_search(query, response_mode)
+    results = await search_public_web(query, response_mode) if needed else []
     return WebSearchContext(
         needed=needed,
         results=results,
-        prompt_context=format_web_context(results, query),
+        prompt_context=format_web_context(results, query, response_mode),
     )
 
 

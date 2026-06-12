@@ -104,6 +104,13 @@ export default function AgentMessageList({
                 {isAssistant ? <MathRenderer content={message.content} /> : message.content}
               </div>
 
+              {isAssistant && message.metadata?.thinkingSummary && (
+                <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/80 px-3 py-2 text-xs leading-6 text-emerald-800">
+                  <span className="font-medium">思路摘要：</span>
+                  {message.metadata.thinkingSummary}
+                </div>
+              )}
+
               {isAssistant && <RagMemoryBadge metadata={message.metadata} />}
               {isAssistant && <WebSearchBadge metadata={message.metadata} />}
               {isAssistant && isMirrorAssistant && <AnswerEvidenceDisclosure message={message} />}

@@ -8,6 +8,15 @@ import AgentContextPanel from '@/components/agent/AgentContextPanel';
 import AgentMessageList from '@/components/agent/AgentMessageList';
 import AgentSessionDrawer from '@/components/agent/AgentSessionDrawer';
 import {
+  normalizeTargetSelection,
+  selectionFromRequestedTargetUserId,
+  selectionLabel,
+  selectionMirrorTargetUserId,
+  selectionMode,
+  selectionTargetMember,
+  type AgentTargetSelection,
+} from '@/components/agent/agentTarget';
+import {
   diarySourceCode,
   diarySourceLabel,
   diaryTitle,
@@ -47,6 +56,7 @@ import {
 } from '@/lib/savePlan';
 import type {
   AgentMode,
+  AgentResponseMode,
   AgentSaveToolPlan,
   AgentSessionMetadata,
   ChatMessage,
@@ -59,6 +69,7 @@ import type {
 
 function buildSessionMetadata(
   mode: AgentMode,
+  targetLabel: string,
   targetMember?: FamilyMember | null,
   hasTargetSwitches = false,
 ): AgentSessionMetadata {
@@ -67,7 +78,7 @@ function buildSessionMetadata(
     contextLabel: mode === 'mirror' ? 'mirror_agent' : 'family_memory',
     agentMode: mode,
     targetUserId: mode === 'mirror' ? targetMember?.userId ?? null : null,
-    targetMemberName: mode === 'mirror' ? memberName(targetMember) : null,
+    targetMemberName: mode === 'mirror' ? targetLabel : null,
     hasTargetSwitches,
   };
 }
@@ -179,10 +190,20 @@ function buildMirrorAnswerMetadata(
 
 function normalizeMirrorAssistantMetadata(metadata: Record<string, unknown>): NonNullable<ChatMessage['metadata']> {
   const webSearch = metadata.web_search;
-  if (!webSearch || typeof webSearch !== 'object') return {};
+  const responseMode = metadata.response_mode;
+  const baseMetadata: NonNullable<ChatMessage['metadata']> = {
+    ...(responseMode === 'quick' || responseMode === 'think'
+      ? { responseMode }
+      : {}),
+    ...(typeof metadata.thinking_summary === 'string' && metadata.thinking_summary.trim()
+      ? { thinkingSummary: metadata.thinking_summary.trim() }
+      : {}),
+  };
+  if (!webSearch || typeof webSearch !== 'object') return baseMetadata;
   const data = webSearch as Record<string, unknown>;
   const rawSources = Array.isArray(data.sources) ? data.sources : [];
   return {
+    ...baseMetadata,
     webSearch: {
       needed: Boolean(data.needed),
       used: Boolean(data.used),
@@ -203,12 +224,13 @@ function normalizeMirrorAssistantMetadata(metadata: Record<string, unknown>): No
 
 function buildTargetSwitchMessage(
   nextMode: AgentMode,
+  nextTargetLabel: string,
   nextTarget: FamilyMember | null,
 ): ChatMessage {
   const targetLabel = nextMode === 'mirror'
-    ? `已切换到 “${memberName(nextTarget)}” 的镜像参考模式。后续回答只基于授权可见记录，不代表本人真实意图。`
+    ? `已切换到 “${nextTargetLabel}” 的镜像参考模式。后续回答只基于授权可见记录，不代表本人真实意图。`
     : '已切回家庭 Agent 自身上下文。后续回答将基于当前家庭共享记忆与记录。';
-  const sessionContextPatch = buildSessionMetadata(nextMode, nextTarget, true);
+  const sessionContextPatch = buildSessionMetadata(nextMode, nextTargetLabel, nextTarget, true);
   return {
     id: generateId(),
     role: 'system',
@@ -238,7 +260,7 @@ export default function AgentPage() {
 
   const [input, setInput] = useState('');
   const [members, setMembers] = useState<FamilyMember[]>([]);
-  const [targetUserId, setTargetUserId] = useState<number | null>(null);
+  const [targetSelection, setTargetSelection] = useState<AgentTargetSelection>('NONE');
   const [mirrorContext, setMirrorContext] = useState<MirrorContextResponse | null>(null);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [isLoadingMirrorContext, setIsLoadingMirrorContext] = useState(false);
@@ -252,6 +274,7 @@ export default function AgentPage() {
   const [saveFeedback, setSaveFeedback] = useState<Record<string, SaveFeedback>>({});
   const [isSessionsOpen, setIsSessionsOpen] = useState(false);
   const [isContextOpen, setIsContextOpen] = useState(false);
+  const [responseMode, setResponseMode] = useState<AgentResponseMode>('think');
 
   const {
     viewerRole,
@@ -280,13 +303,21 @@ export default function AgentPage() {
     }
   }, [activeFamilyId, requestedFamilyId, setActiveFamilyId]);
 
+  const mirrorTargetUserId = useMemo(
+    () => selectionMirrorTargetUserId(targetSelection, selfUserId),
+    [selfUserId, targetSelection],
+  );
   const targetMember = useMemo(
-    () => members.find((member) => member.userId === targetUserId) || mirrorContext?.targetMember || null,
-    [members, mirrorContext?.targetMember, targetUserId],
+    () => selectionTargetMember(targetSelection, members, mirrorTargetUserId, mirrorContext?.targetMember || null),
+    [members, mirrorContext?.targetMember, mirrorTargetUserId, targetSelection],
   );
   const mode = useMemo<AgentMode>(
-    () => (targetUserId && selfUserId && targetUserId !== selfUserId ? 'mirror' : 'family'),
-    [selfUserId, targetUserId],
+    () => selectionMode(targetSelection, selfUserId),
+    [selfUserId, targetSelection],
+  );
+  const targetLabel = useMemo(
+    () => selectionLabel(targetSelection, targetMember),
+    [targetMember, targetSelection],
   );
   const modeReadiness = useMemo(() => readinessLevel(mirrorContext), [mirrorContext]);
   const activeSessionMetadata = useMemo(
@@ -308,21 +339,19 @@ export default function AgentPage() {
       const memberList = await familyApi.getMembers(familyId);
       const nextMembers = Array.isArray(memberList) ? memberList : [];
       setMembers(nextMembers);
-      setTargetUserId((current) => {
-        const preferred = requestedTargetUserId
-          && requestedTargetUserId !== selfUserId
-          && nextMembers.some((member) => member.userId === requestedTargetUserId)
-          ? requestedTargetUserId
-          : null;
-        if (preferred) return preferred;
-        if (current && nextMembers.some((member) => member.userId === current && member.userId !== selfUserId)) {
-          return current;
+      setTargetSelection((current) => {
+        const preferred = selectionFromRequestedTargetUserId(requestedTargetUserId, selfUserId, nextMembers);
+        if (preferred !== 'NONE') return preferred;
+        const normalizedCurrent = normalizeTargetSelection(current, selfUserId);
+        if (normalizedCurrent === 'SELF') return 'SELF';
+        if (typeof normalizedCurrent === 'number' && nextMembers.some((member) => member.userId === normalizedCurrent)) {
+          return normalizedCurrent;
         }
-        return null;
+        return 'NONE';
       });
     } catch (error) {
       setMembers([]);
-      setTargetUserId(null);
+      setTargetSelection('NONE');
       setContextError(error instanceof Error ? error.message : '加载家庭成员失败。');
     } finally {
       setIsLoadingMembers(false);
@@ -332,7 +361,7 @@ export default function AgentPage() {
   useEffect(() => {
     if (!activeFamilyId) {
       setMembers([]);
-      setTargetUserId(null);
+      setTargetSelection('NONE');
       setMirrorContext(null);
       setContextError('');
       return;
@@ -347,7 +376,7 @@ export default function AgentPage() {
   }, []);
 
   useEffect(() => {
-    if (mode !== 'mirror' || !activeFamilyId || !targetUserId) {
+    if (mode !== 'mirror' || !activeFamilyId || !mirrorTargetUserId || responseMode === 'quick') {
       setMirrorContext(null);
       setIsLoadingMirrorContext(false);
       if (mode === 'family') {
@@ -358,7 +387,7 @@ export default function AgentPage() {
     let active = true;
     setIsLoadingMirrorContext(true);
     setContextError('');
-    mirrorApi.getContext(activeFamilyId, targetUserId)
+    mirrorApi.getContext(activeFamilyId, mirrorTargetUserId)
       .then((context) => {
         if (active) setMirrorContext(context);
       })
@@ -374,7 +403,7 @@ export default function AgentPage() {
     return () => {
       active = false;
     };
-  }, [activeFamilyId, mode, targetUserId]);
+  }, [activeFamilyId, mirrorTargetUserId, mode, responseMode]);
 
   const memoryContextResolver = useCallback(async ({
     query,
@@ -384,11 +413,23 @@ export default function AgentPage() {
     history: Pick<ChatMessage, 'role' | 'content'>[];
     defaultRecall: () => Promise<{ context: string; metadata?: NonNullable<ChatMessage['metadata']> }>;
   }) => {
-    if (mode !== 'mirror' || !activeFamilyId || !targetUserId) {
+    if (responseMode === 'quick') {
+      const quickMetadata: NonNullable<ChatMessage['metadata']> = {
+        agentMode: 'mirror',
+        responseMode: 'quick',
+        targetUserId: targetMember?.userId ?? mirrorTargetUserId,
+        targetMemberName: targetLabel,
+      };
+      return {
+        context: '',
+        metadata: quickMetadata,
+      };
+    }
+    if (mode !== 'mirror' || !activeFamilyId || !mirrorTargetUserId) {
       return defaultRecall();
     }
     try {
-      const context = await refreshMirrorContext(activeFamilyId, targetUserId, query);
+      const context = await refreshMirrorContext(activeFamilyId, mirrorTargetUserId, query);
       setContextError('');
       return {
         context: context.memoryContext || '',
@@ -401,7 +442,7 @@ export default function AgentPage() {
         metadata: buildMirrorAnswerMetadata(mirrorContext, targetMember),
       };
     }
-  }, [activeFamilyId, mirrorContext, mode, refreshMirrorContext, targetMember, targetUserId]);
+  }, [activeFamilyId, mirrorContext, mirrorTargetUserId, mode, refreshMirrorContext, responseMode, targetLabel, targetMember]);
 
   const prepareRequest = useCallback(async ({ message, defaultRequest }: {
     message: string;
@@ -455,7 +496,7 @@ export default function AgentPage() {
         familyId: activeFamilyId,
         subject: 'FamilyAgent',
         source: 'FAMILY_AGENT',
-        metadata: buildSessionMetadata(mode, targetMember, false),
+        metadata: buildSessionMetadata(mode, targetLabel, targetMember, false),
       });
       let createRequest: Promise<ChatSessionDetail>;
       createRequest = createPromise
@@ -477,7 +518,7 @@ export default function AgentPage() {
       createSessionPromiseRef.current = createRequest;
     }
     return createSessionPromiseRef.current;
-  }, [activeFamilyId, mode, setSessionId, targetMember, upsertSession]);
+  }, [activeFamilyId, mode, setSessionId, targetLabel, targetMember, upsertSession]);
 
   const appendSessionMessages = useCallback(async (newMessages: ChatMessage[]) => {
     if (!newMessages.length || !activeFamilyId) return;
@@ -518,6 +559,7 @@ export default function AgentPage() {
     getSessionSavedMemories: () => sessionSavedMemoriesRef.current,
     subject: 'FamilyAgent',
     contextLabel: 'family_memory',
+    responseMode,
     memoryContextResolver,
     prepareRequest,
     normalizeStreamMetadata,
@@ -650,29 +692,30 @@ export default function AgentPage() {
     }
   }, [handleNewChat, sessionId]);
 
-  const handleTargetChange = useCallback(async (nextTargetUserId: number | null) => {
-    const normalizedTargetUserId = nextTargetUserId && nextTargetUserId !== selfUserId ? nextTargetUserId : null;
-    if (normalizedTargetUserId === targetUserId || (!normalizedTargetUserId && !targetUserId)) {
+  const handleTargetChange = useCallback(async (nextTargetSelection: AgentTargetSelection) => {
+    const normalizedSelection = normalizeTargetSelection(nextTargetSelection, selfUserId);
+    const currentSelection = normalizeTargetSelection(targetSelection, selfUserId);
+    if (normalizedSelection === currentSelection) {
       return;
     }
     if (isStreaming) {
       stopStreaming();
     }
 
-    const nextMode: AgentMode = normalizedTargetUserId ? 'mirror' : 'family';
-    const nextTargetMember = normalizedTargetUserId
-      ? members.find((member) => member.userId === normalizedTargetUserId) || null
-      : null;
+    const nextMode: AgentMode = selectionMode(normalizedSelection, selfUserId);
+    const nextMirrorTargetUserId = selectionMirrorTargetUserId(normalizedSelection, selfUserId);
+    const nextTargetMember = selectionTargetMember(normalizedSelection, members, nextMirrorTargetUserId, null);
+    const nextTargetLabel = selectionLabel(normalizedSelection, nextTargetMember);
     const hasConversation = useChatStore.getState().messages.length > 0 || Boolean(activeSessionDetailRef.current?.messageCount);
 
-    setTargetUserId(normalizedTargetUserId);
+    setTargetSelection(normalizedSelection);
     setSaveFeedback({});
 
     if (!hasConversation) {
       return;
     }
 
-    const marker = buildTargetSwitchMessage(nextMode, nextTargetMember);
+    const marker = buildTargetSwitchMessage(nextMode, nextTargetLabel, nextTargetMember);
     setMessages([...useChatStore.getState().messages, marker]);
     try {
       await appendSessionMessages([marker]);
@@ -688,7 +731,7 @@ export default function AgentPage() {
         // non-critical
       }
     }
-  }, [appendSessionMessages, isStreaming, members, selfUserId, setMessages, stopStreaming, targetUserId]);
+  }, [appendSessionMessages, isStreaming, members, selfUserId, setMessages, stopStreaming, targetSelection]);
 
   const handleSaveMessage = useCallback(async (message: ChatMessage) => {
     if (!activeFamilyId) {
@@ -740,7 +783,7 @@ export default function AgentPage() {
         ? {
             source: 'MIRROR_AGENT_TOOL',
             relationSource: 'MIRROR_AGENT_TOOL',
-            relatedUserId: targetUserId,
+            relatedUserId: mirrorTargetUserId,
             relatedMemberName: currentTargetName,
             savedFromMessageRole: message.role,
             familyName: activeFamily?.name || '',
@@ -787,7 +830,7 @@ export default function AgentPage() {
                   }
                 : {}),
             },
-            currentMode === 'mirror' ? (targetUserId || undefined) : undefined,
+            currentMode === 'mirror' ? (mirrorTargetUserId || undefined) : undefined,
           ),
         );
         savedRecordId = saved.id;
@@ -839,7 +882,7 @@ export default function AgentPage() {
         },
       }));
     }
-  }, [activeFamily?.name, activeFamilyId, activeMembership?.relationshipLabel, mode, recentMessages, targetMember, targetUserId, viewerRole]);
+  }, [activeFamily?.name, activeFamilyId, activeMembership?.relationshipLabel, mirrorTargetUserId, mode, recentMessages, targetMember, viewerRole]);
 
   const selectorOptions = useMemo(
     () => members.filter((member) => member.userId !== selfUserId),
@@ -877,8 +920,6 @@ export default function AgentPage() {
     );
   }
 
-  const targetLabel = mode === 'mirror' ? memberName(targetMember) : '自己 / FamilyAgent';
-
   return (
     <div className="min-h-[calc(100vh-4rem)] px-4 py-4 md:px-5 lg:px-6">
       <div className="mx-auto flex max-w-[1440px] flex-col gap-4">
@@ -901,6 +942,9 @@ export default function AgentPage() {
                 <span className="inline-flex items-center gap-1">
                   <UserRound className="h-4 w-4" />
                   当前对象：{targetLabel}
+                </span>
+                <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs text-stone-600">
+                  {responseMode === 'quick' ? '快速模式' : '思考模式'}
                 </span>
                 {activeSessionDetail && (
                   <span className="truncate rounded-full bg-stone-100 px-2.5 py-1 text-xs text-stone-600">
@@ -1022,11 +1066,43 @@ export default function AgentPage() {
           >
             <div className="mx-auto max-w-3xl">
               <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="text-xs text-stone-500">
-                  {mode === 'mirror'
-                    ? `当前将以 ${targetLabel} 的授权资料作为镜像参考。`
-                    : '当前将优先参考家庭共享记忆、归档会话与长期上下文。'}
-                </p>
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setResponseMode('quick')}
+                      disabled={isStreaming}
+                      className={cn(
+                        'inline-flex h-9 items-center rounded-full px-3 text-xs font-medium transition',
+                        responseMode === 'quick'
+                          ? 'bg-stone-950 text-white'
+                          : 'bg-stone-100 text-stone-600 hover:bg-stone-200',
+                      )}
+                    >
+                      快速
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setResponseMode('think')}
+                      disabled={isStreaming}
+                      className={cn(
+                        'inline-flex h-9 items-center rounded-full px-3 text-xs font-medium transition',
+                        responseMode === 'think'
+                          ? 'bg-emerald-700 text-white'
+                          : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100',
+                      )}
+                    >
+                      思考
+                    </button>
+                  </div>
+                  <p className="text-xs text-stone-500">
+                    {responseMode === 'quick'
+                      ? '快速模式不会联网，也不会触发家族记忆、记忆库、成长记录或历史会话召回。'
+                      : mode === 'mirror'
+                        ? `思考模式会结合 ${targetLabel} 的授权资料，并在必要时联网核验。`
+                        : '思考模式会优先参考家庭共享记忆、记忆库、归档会话与长期上下文。'}
+                  </p>
+                </div>
                 <VoiceInputButton
                   compact
                   onTranscript={(text) => setInput((current) => (current ? `${current}\n${text}` : text))}
@@ -1075,7 +1151,7 @@ export default function AgentPage() {
         open={isContextOpen}
         mode={mode}
         targetLabel={targetLabel}
-        targetUserId={targetUserId}
+        targetSelection={targetSelection}
         selectorOptions={selectorOptions}
         isLoadingMembers={isLoadingMembers}
         activationScene={activationScene}
@@ -1085,7 +1161,7 @@ export default function AgentPage() {
         contextError={contextError}
         activeFamilyId={activeFamilyId}
         onClose={() => setIsContextOpen(false)}
-        onTargetChange={(nextTargetUserId) => { void handleTargetChange(nextTargetUserId); }}
+        onTargetChange={(nextTargetSelection) => { void handleTargetChange(nextTargetSelection); }}
         onSuggestedQuestion={(question) => {
           setInput(question);
           setIsContextOpen(false);

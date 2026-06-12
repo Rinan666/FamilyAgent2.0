@@ -8,6 +8,7 @@ def test_build_family_agent_system_prompt_uses_defaults():
         memory_context="",
         viewer_role="",
         target_role="",
+        response_mode="think",
         client_timestamp="",
         client_timezone="",
         public_web_context="",
@@ -19,7 +20,7 @@ def test_build_family_agent_system_prompt_uses_defaults():
     assert "- target_role: MEMBER" in prompt
     assert "- 用户提问时间：未提供。" in prompt
     assert "未触发联网搜索。" in prompt
-    assert "当前没有命中明确的授权家族上下文。" in prompt
+    assert "当前没有命中明确的已授权家族上下文。" in prompt
 
 
 def test_build_family_agent_system_prompt_includes_full_context():
@@ -29,6 +30,7 @@ def test_build_family_agent_system_prompt_includes_full_context():
         memory_context="授权记忆片段",
         viewer_role="PARENT",
         target_role="MEMBER",
+        response_mode="think",
         client_timestamp="2026-06-12T09:00:00+08:00",
         client_timezone="Asia/Shanghai",
         public_web_context="已联网搜索并整理公共信息。",
@@ -40,6 +42,6 @@ def test_build_family_agent_system_prompt_includes_full_context():
     assert "- target_role: MEMBER" in prompt
     assert "- 用户提问时间：2026-06-12T09:00:00+08:00" in prompt
     assert "- 用户本地时区：Asia/Shanghai" in prompt
-    assert "用户提到今天、明天、本周、最近、刚才或截止时间时，以这个时间为基准。" in prompt
+    assert "当用户提到今天、明天、本周、最近、刚才等相对时间时，以这个时间为基准。" in prompt
     assert "已联网搜索并整理公共信息。" in prompt
     assert "授权记忆片段" in prompt

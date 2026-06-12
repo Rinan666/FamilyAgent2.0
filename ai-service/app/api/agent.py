@@ -35,6 +35,7 @@ class AgentChatRequest(BaseModel):
     memory_context: str = Field(default="", description="Authorized memory context")
     viewer_role: str = Field(default="MEMBER", description="Viewer role label")
     target_role: str = Field(default="MEMBER", description="Target role label")
+    response_mode: str = Field(default="think", description="Agent response mode: quick or think")
     client_timestamp: str = Field(default="", description="Client timestamp in ISO format")
     client_timezone: str = Field(default="", description="Client timezone")
 
@@ -81,6 +82,7 @@ async def stream_chat(request: AgentChatRequest):
                     memory_context=memory_context,
                     viewer_role=request.viewer_role,
                     target_role=request.target_role,
+                    response_mode=request.response_mode,
                     client_timestamp=request.client_timestamp,
                     client_timezone=request.client_timezone,
                 ):

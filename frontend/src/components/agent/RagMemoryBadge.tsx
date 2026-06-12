@@ -7,6 +7,7 @@ interface RagMemoryBadgeProps {
 }
 
 export default function RagMemoryBadge({ metadata }: RagMemoryBadgeProps) {
+  if (metadata?.responseMode === 'quick') return null;
   const rag = metadata?.rag;
   if (!rag) return null;
 

@@ -18,8 +18,9 @@ class _WebSearchContext:
 async def test_family_agent_chat_stream_builds_messages_without_behavior_drift(monkeypatch):
     captured: dict = {}
 
-    async def fake_build_web_search_context(message: str):
+    async def fake_build_web_search_context(message: str, response_mode: str = "think"):
         captured["member_message"] = message
+        captured["response_mode"] = response_mode
         return _WebSearchContext()
 
     async def fake_chat_stream(messages, temperature=0.7):
@@ -49,9 +50,23 @@ async def test_family_agent_chat_stream_builds_messages_without_behavior_drift(m
         chunks.append(chunk)
 
     assert chunks[0]["type"] == "metadata"
-    assert chunks[1] == {"type": "content", "content": "第一段"}
-    assert chunks[2] == {"type": "content", "content": "第二段"}
+    assert chunks[0]["response_mode"] == "think"
+    assert chunks[0]["thinking_summary"]
+    assert chunks[1] == {
+        "type": "metadata",
+        "response_mode": "think",
+        "web_search": {
+            "needed": False,
+            "used": False,
+            "pending": False,
+            "result_count": 0,
+            "sources": [],
+        },
+    }
+    assert chunks[2] == {"type": "content", "content": "第一段"}
+    assert chunks[3] == {"type": "content", "content": "第二段"}
     assert captured["member_message"] == "请帮我分析这段家庭冲突"
+    assert captured["response_mode"] == "think"
     assert captured["temperature"] == 0.7
     assert captured["messages"][0]["role"] == "system"
     assert "MirrorAgent" in captured["messages"][0]["content"]

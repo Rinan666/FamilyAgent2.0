@@ -21,6 +21,11 @@ def test_does_not_search_private_or_stable_query():
     assert not needs_web_search("把爷爷刚才说的保存一下")
 
 
+def test_quick_mode_never_uses_web_search():
+    assert not needs_web_search("现在 OpenAI 最新模型是什么", "quick")
+    assert "快速模式" in format_web_context([], "现在 OpenAI 最新模型是什么", "quick")
+
+
 def test_empty_web_context_requires_uncertainty():
     context = format_web_context([], "今天有什么新闻")
 
