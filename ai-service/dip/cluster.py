@@ -5,16 +5,19 @@ from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import normalize
 
 
-def _auto_eps(X: np.ndarray, k: int = 5, metric: str = "cosine", percentile: float = 10.0) -> float:
+def _auto_eps(X: np.ndarray, k: int = 3, metric: str = "cosine", percentile: float = 10.0) -> float:
     """Estimate eps as a low percentile of k-NN distances.
-    Low percentile keeps eps tight, producing meaningful sub-clusters
-    rather than one giant cluster — important for high-dim histogram features.
+    For small datasets, clamp k to ~n/5 so the kth neighbor stays within
+    the expected cluster, avoiding cross-cluster contamination in eps estimation.
     """
-    k = min(k, len(X) - 1)
+    n = len(X)
+    k = min(k, max(1, n // 5), n - 1)
     nbrs = NearestNeighbors(n_neighbors=k, metric=metric).fit(X)
     dists, _ = nbrs.kneighbors(X)
     kth_dists = np.sort(dists[:, -1])
-    return float(np.percentile(kth_dists, percentile))
+    val = float(max(np.percentile(kth_dists, percentile), 1e-6))
+    print(f"[DIP] auto_eps={val:.6f} k={k} n={n}", flush=True)
+    return val
 
 
 def cluster(

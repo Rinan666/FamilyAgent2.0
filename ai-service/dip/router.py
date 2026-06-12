@@ -1,4 +1,4 @@
-import io
+import asyncio
 from typing import Optional
 
 import cv2
@@ -6,14 +6,12 @@ import httpx
 import numpy as np
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
+from insightface.app import FaceAnalysis
 from pydantic import BaseModel
 
 from app.config import settings
 from app.middleware.auth import verify_token
 from app.utils.safety_limits import enforce_ai_concurrency, enforce_ai_rate_limit
-from dip.detect import detect_faces, crop_faces
-from dip.preprocess import batch as preprocess_batch
-from dip.features import EigenfaceExtractor
 from dip.cluster import cluster
 
 router = APIRouter(dependencies=[
@@ -22,60 +20,68 @@ router = APIRouter(dependencies=[
     Depends(enforce_ai_concurrency),
 ])
 
-_N_COMPONENTS = 50
+_face_app = FaceAnalysis(name="buffalo_sc", providers=["CPUExecutionProvider"])
+_face_app.prepare(ctx_id=0, det_size=(640, 640))
 
 
-def _decode(file_bytes: bytes) -> np.ndarray:
-    arr = np.frombuffer(file_bytes, np.uint8)
-    img = cv2.imdecode(arr, cv2.IMREAD_GRAYSCALE)
+def _decode_bgr(data: bytes) -> np.ndarray:
+    arr = np.frombuffer(data, np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
     if img is None:
         raise ValueError("Cannot decode image")
     return img
 
 
+def _ensure_min_size(img: np.ndarray, min_side: int = 160) -> np.ndarray:
+    h, w = img.shape[:2]
+    if min(h, w) < min_side:
+        scale = min_side / min(h, w)
+        img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_CUBIC)
+    return img
+
+
+def _extract(img_bgr: np.ndarray) -> list[tuple[np.ndarray, tuple]]:
+    """Return [(embedding_512, (x,y,w,h)), ...]. Falls back to whole-image if no face detected."""
+    img_bgr = _ensure_min_size(img_bgr)
+    faces = _face_app.get(img_bgr)
+    if faces:
+        return [
+            (face.embedding.astype(np.float32),
+             tuple(int(v) for v in [face.bbox[0], face.bbox[1],
+                                    face.bbox[2] - face.bbox[0],
+                                    face.bbox[3] - face.bbox[1]]))
+            for face in faces
+        ]
+    h, w = img_bgr.shape[:2]
+    return [(np.zeros(512, dtype=np.float32), (0, 0, w, h))]
+
+
 @router.post("/faces/cluster")
 async def cluster_faces(files: list[UploadFile] = File(...)) -> JSONResponse:
-    """
-    Accept multiple images, detect faces, cluster by identity.
-    Returns groups: each group is a list of (file_index, face_index, bbox).
-    """
-    all_faces: list[np.ndarray] = []
+    all_embeddings: list[np.ndarray] = []
     face_meta: list[dict] = []
 
     for file_idx, upload in enumerate(files):
         raw = await upload.read()
         try:
-            img = _decode(raw)
+            img = _decode_bgr(raw)
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"File {upload.filename} is not a valid image.")
-        boxes = detect_faces(img)
-        crops = crop_faces(img, boxes)
-        # If no face detected, treat the whole image as a face crop
-        if not crops:
-            crops = [img]
-            boxes = [(0, 0, img.shape[1], img.shape[0])]
-        for face_idx, (crop, box) in enumerate(zip(crops, boxes)):
-            all_faces.append(crop)
+            raise HTTPException(status_code=400, detail=f"{upload.filename} is not a valid image.")
+        for face_idx, (emb, box) in enumerate(_extract(img)):
+            all_embeddings.append(emb)
             face_meta.append({
                 "file_index": file_idx,
                 "filename": upload.filename,
                 "face_index": face_idx,
-                "bbox": {"x": int(box[0]), "y": int(box[1]), "w": int(box[2]), "h": int(box[3])},
+                "bbox": {"x": box[0], "y": box[1], "w": box[2], "h": box[3]},
             })
 
-    if len(all_faces) < 2:
+    if len(all_embeddings) < 2:
         return JSONResponse(content={
-            "success": True,
-            "groups": [],
-            "total_faces": len(all_faces),
-            "silhouette_score": None,
+            "success": True, "groups": [], "total_faces": len(all_embeddings), "silhouette_score": None,
         })
 
-    X = preprocess_batch(all_faces)
-    k = min(_N_COMPONENTS, X.shape[0] - 1)
-    features = EigenfaceExtractor(n_components=k).fit(X).transform(X)
-    labels, score = cluster(features)
-
+    labels, score = cluster(np.array(all_embeddings), eps=0.5)
     groups: dict[int, list] = {}
     for meta, label in zip(face_meta, labels.tolist()):
         groups.setdefault(label, []).append(meta)
@@ -83,7 +89,7 @@ async def cluster_faces(files: list[UploadFile] = File(...)) -> JSONResponse:
     return JSONResponse(content={
         "success": True,
         "groups": [{"group_id": gid, "faces": faces} for gid, faces in sorted(groups.items())],
-        "total_faces": len(all_faces),
+        "total_faces": len(all_embeddings),
         "silhouette_score": score,
     })
 
@@ -101,52 +107,47 @@ def _resolve_photo_url(url: str) -> str:
 
 @router.post("/faces/cluster-by-urls")
 async def cluster_faces_by_urls(req: ClusterByUrlsRequest, request: Request) -> JSONResponse:
-    """
-    Accept pre-uploaded image URLs, download and cluster faces.
-    photo_ids must correspond 1:1 with urls.
-    """
     if len(req.urls) != len(req.photo_ids):
         raise HTTPException(status_code=400, detail="urls and photo_ids must have the same length")
 
-    all_faces: list[np.ndarray] = []
-    face_meta: list[dict] = []
     authorization: Optional[str] = request.headers.get("Authorization")
     request_headers = {"Authorization": authorization} if authorization else {}
 
-    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-        for file_idx, (url, photo_id) in enumerate(zip(req.urls, req.photo_ids)):
-            resolved_url = _resolve_photo_url(url)
-            try:
-                resp = await client.get(resolved_url, headers=request_headers)
-                resp.raise_for_status()
-            except Exception as e:
-                raise HTTPException(status_code=400, detail=f"Failed to fetch {resolved_url}: {e}")
-            try:
-                img = _decode(resp.content)
-            except ValueError:
-                raise HTTPException(status_code=400, detail=f"Cannot decode image at {resolved_url}")
-            boxes = detect_faces(img)
-            crops = crop_faces(img, boxes)
-            if not crops:
-                crops = [img]
-                boxes = [(0, 0, img.shape[1], img.shape[0])]
-            for face_idx, (crop, box) in enumerate(zip(crops, boxes)):
-                all_faces.append(crop)
-                face_meta.append({
-                    "photo_id": photo_id,
-                    "file_index": file_idx,
-                    "face_index": face_idx,
-                    "bbox": {"x": int(box[0]), "y": int(box[1]), "w": int(box[2]), "h": int(box[3])},
-                })
+    async def _fetch(file_idx: int, url: str, photo_id: int):
+        resolved_url = _resolve_photo_url(url)
+        try:
+            resp = await client.get(resolved_url, headers=request_headers)
+            resp.raise_for_status()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to fetch {resolved_url}: {e}")
+        try:
+            img = _decode_bgr(resp.content)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Cannot decode image at {resolved_url}")
+        return [
+            (emb, {"photo_id": photo_id, "file_index": file_idx, "face_index": fi,
+                   "bbox": {"x": box[0], "y": box[1], "w": box[2], "h": box[3]}})
+            for fi, (emb, box) in enumerate(_extract(img))
+        ]
 
-    if len(all_faces) < 2:
-        return JSONResponse(content={"success": True, "groups": [], "total_faces": len(all_faces), "silhouette_score": None})
+    async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
+        fetched = await asyncio.gather(*[
+            _fetch(i, url, pid) for i, (url, pid) in enumerate(zip(req.urls, req.photo_ids))
+        ])
 
-    X = preprocess_batch(all_faces)
-    k = min(_N_COMPONENTS, X.shape[0] - 1)
-    features = EigenfaceExtractor(n_components=k).fit(X).transform(X)
-    labels, score = cluster(features)
+    all_embeddings: list[np.ndarray] = []
+    face_meta: list[dict] = []
+    for file_results in fetched:
+        for emb, meta in file_results:
+            all_embeddings.append(emb)
+            face_meta.append(meta)
 
+    if len(all_embeddings) < 2:
+        return JSONResponse(content={
+            "success": True, "groups": [], "total_faces": len(all_embeddings), "silhouette_score": None,
+        })
+
+    labels, score = cluster(np.array(all_embeddings), eps=0.5)
     groups: dict[int, list] = {}
     for meta, label in zip(face_meta, labels.tolist()):
         groups.setdefault(label, []).append(meta)
@@ -154,6 +155,6 @@ async def cluster_faces_by_urls(req: ClusterByUrlsRequest, request: Request) -> 
     return JSONResponse(content={
         "success": True,
         "groups": [{"group_id": gid, "faces": faces} for gid, faces in sorted(groups.items())],
-        "total_faces": len(all_faces),
+        "total_faces": len(all_embeddings),
         "silhouette_score": score,
     })
