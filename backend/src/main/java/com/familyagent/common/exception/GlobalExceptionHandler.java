@@ -8,6 +8,8 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -64,6 +66,20 @@ public class GlobalExceptionHandler {
     public Result<?> handleDataAccessException(DataAccessException e) {
         log.error("Database access exception", e);
         return Result.error(ErrorCode.DATABASE_ACCESS_ERROR);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    @ResponseStatus(HttpStatus.OK)
+    public Result<?> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException e) {
+        log.warn("Upload exceeds configured size limit", e);
+        return Result.error(ErrorCode.BAD_REQUEST, "The selected photos exceed the upload limit of 10 MB per image and 40 MB total.");
+    }
+
+    @ExceptionHandler(MultipartException.class)
+    @ResponseStatus(HttpStatus.OK)
+    public Result<?> handleMultipartException(MultipartException e) {
+        log.warn("Multipart request failed: {}", e.getMessage());
+        return Result.error(ErrorCode.BAD_REQUEST, "Photo upload request could not be processed. Please reselect the files and try again.");
     }
 
     @ExceptionHandler(Exception.class)

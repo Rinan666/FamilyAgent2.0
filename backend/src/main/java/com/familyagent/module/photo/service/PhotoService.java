@@ -26,10 +26,27 @@ public class PhotoService {
     private final PhotoMapper photoMapper;
     private final FamilyService familyService;
 
+    private static final int MAX_FILES = 50;
+    private static final long MAX_FILE_BYTES = 10L * 1024 * 1024;
+    private static final long MAX_TOTAL_BYTES = 200L * 1024 * 1024;
+
     public List<PhotoUploadResponse> upload(Long familyId, List<MultipartFile> files) {
         familyService.checkMembership(familyId);
         if (files == null || files.isEmpty()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Please upload at least one photo");
+        }
+        if (files.size() > MAX_FILES) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "You can upload up to " + MAX_FILES + " photos at a time");
+        }
+        long totalBytes = 0;
+        for (MultipartFile file : files) {
+            if (file.getSize() > MAX_FILE_BYTES) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, file.getOriginalFilename() + " exceeds the 10 MB per-file limit");
+            }
+            totalBytes += file.getSize();
+        }
+        if (totalBytes > MAX_TOTAL_BYTES) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Total upload size exceeds the 40 MB limit");
         }
 
         Long uploaderId = CurrentUserGuard.currentUserId();

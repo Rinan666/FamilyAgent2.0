@@ -16,8 +16,8 @@ public class ExternalClientConfig {
 
     private static final int MAX_CONNECT_TIMEOUT_MILLIS = 10_000;
     private static final int MINIO_CONNECT_TIMEOUT_SECONDS = 10;
-    private static final int MINIO_WRITE_TIMEOUT_SECONDS = 60;
-    private static final int MINIO_READ_TIMEOUT_SECONDS = 60;
+    private static final int MINIO_WRITE_TIMEOUT_SECONDS = 120;
+    private static final int MINIO_READ_TIMEOUT_SECONDS = 120;
 
     @Bean
     public MinioClient minioClient(@Value("${minio.endpoint}") String endpoint,

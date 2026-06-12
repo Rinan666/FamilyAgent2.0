@@ -4,6 +4,7 @@ import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.photo.dto.PhotoContentResource;
 import io.minio.*;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,8 +23,12 @@ public class PhotoStorageService {
     @Value("${minio.bucket-name}")
     private String bucketName;
 
-    public String upload(Long familyId, MultipartFile file) {
+    @PostConstruct
+    public void init() {
         ensureBucket();
+    }
+
+    public String upload(Long familyId, MultipartFile file) {
         String ext = getExtension(file.getOriginalFilename());
         String objectKey = "family-photos/" + familyId + "/" + UUID.randomUUID() + ext;
         try {
@@ -36,8 +41,9 @@ public class PhotoStorageService {
                     .build()
             );
         } catch (Exception e) {
-            log.error("MinIO upload failed: {}", e.getMessage());
-            throw new BusinessException(ErrorCode.OSS_UPLOAD_FAILED);
+            log.error("MinIO upload failed: familyId={}, filename={}, error={}",
+                    familyId, file.getOriginalFilename(), e.getMessage(), e);
+            throw new BusinessException(ErrorCode.OSS_UPLOAD_FAILED, "Photo upload failed: " + e.getMessage());
         }
         return objectKey;
     }
@@ -56,8 +62,8 @@ public class PhotoStorageService {
             }
             return new PhotoContentResource(response, contentType);
         } catch (Exception e) {
-            log.error("MinIO read failed: {}", e.getMessage());
-            throw new BusinessException(ErrorCode.OSS_UPLOAD_FAILED);
+            log.error("MinIO read failed: objectKey={}, error={}", objectKey, e.getMessage(), e);
+            throw new BusinessException(ErrorCode.OSS_UPLOAD_FAILED, "Failed to read photo content: " + e.getMessage());
         }
     }
 
@@ -68,8 +74,8 @@ public class PhotoStorageService {
                 minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucketName).build());
             }
         } catch (Exception e) {
-            log.error("MinIO ensureBucket failed: {}", e.getMessage());
-            throw new BusinessException(ErrorCode.OSS_UPLOAD_FAILED);
+            log.error("MinIO ensureBucket failed: bucket={}, error={}", bucketName, e.getMessage(), e);
+            throw new BusinessException(ErrorCode.OSS_UPLOAD_FAILED, "Failed to prepare photo storage: " + e.getMessage());
         }
     }
 
