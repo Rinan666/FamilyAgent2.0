@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { familyApi } from '@/lib/api/family';
 import { deriveViewerRole, type ViewerRole } from '@/lib/roles';
 import { useFamilyContextStore } from '@/stores/familyContextStore';
@@ -11,7 +11,13 @@ const ROLE_EVENT = 'familyagent:family-membership-changed';
 
 let cachedUserId: number | null = null;
 let cachedFamilies: Family[] = [];
-let cachedMemberships: FamilyMember[] = [];
+let cachedMembershipByFamilyId: Record<number, FamilyMember | null> = {};
+
+function resetViewerRoleCache() {
+  cachedUserId = null;
+  cachedFamilies = [];
+  cachedMembershipByFamilyId = {};
+}
 
 export function notifyViewerRoleChanged() {
   if (typeof window !== 'undefined') {
@@ -24,73 +30,146 @@ export function useViewerRole() {
   const { activeFamilyId, hasHydrated, hydrate, setActiveFamilyId } = useFamilyContextStore();
   const userId = user?.id ?? null;
   const hasCachedUser = userId != null && cachedUserId === userId;
+  const activeFamilyIdRef = useRef(activeFamilyId);
+
   const [families, setFamilies] = useState<Family[]>(() => (hasCachedUser ? cachedFamilies : []));
-  const [memberships, setMemberships] = useState<FamilyMember[]>(() => (hasCachedUser ? cachedMemberships : []));
-  const [isLoading, setIsLoading] = useState(!hasCachedUser);
+  const [activeMembership, setActiveMembership] = useState<FamilyMember | null>(() => {
+    if (!hasCachedUser || activeFamilyId == null) return null;
+    return cachedMembershipByFamilyId[activeFamilyId] ?? null;
+  });
+  const [isFamiliesLoading, setIsFamiliesLoading] = useState(!hasCachedUser);
+  const [isMembershipLoading, setIsMembershipLoading] = useState(false);
 
   useEffect(() => {
     hydrate();
   }, [hydrate]);
 
   useEffect(() => {
+    activeFamilyIdRef.current = activeFamilyId;
+  }, [activeFamilyId]);
+
+  useEffect(() => {
     let cancelled = false;
 
-    async function load() {
+    async function loadFamilies() {
       if (!userId) return;
-      setIsLoading(true);
+
+      if (!hasCachedUser) {
+        setIsFamiliesLoading(true);
+      }
+
       try {
         const familyList = await familyApi.getMyFamilies();
         if (cancelled) return;
+
         const nextFamilies = Array.isArray(familyList) ? familyList : [];
+        const currentActiveFamilyId = activeFamilyIdRef.current;
+        const validFamilyIds = new Set(nextFamilies.map((family) => family.id));
+
+        cachedUserId = userId;
+        cachedFamilies = nextFamilies;
+        cachedMembershipByFamilyId = Object.fromEntries(
+          Object.entries(cachedMembershipByFamilyId)
+            .filter(([familyId]) => validFamilyIds.has(Number(familyId)))
+            .map(([familyId, membership]) => [Number(familyId), membership]),
+        );
+
         setFamilies(nextFamilies);
 
-        const memberLists = await Promise.all(
-          nextFamilies.map((family) => familyApi.getMembers(family.id).catch(() => [] as FamilyMember[])),
-        );
-        if (!cancelled) {
-          const nextMemberships = memberLists
-            .flat()
-            .filter((member) => member.userId === userId);
-          const selectedFamilyExists = nextFamilies.some((family) => family.id === activeFamilyId);
-          const nextActiveFamilyId = selectedFamilyExists ? activeFamilyId : nextFamilies[0]?.id ?? null;
-          if (nextActiveFamilyId !== activeFamilyId) {
-            setActiveFamilyId(nextActiveFamilyId);
-          }
-          cachedUserId = userId;
-          cachedFamilies = nextFamilies;
-          cachedMemberships = nextMemberships;
-          setMemberships(nextMemberships);
+        const selectedFamilyExists = nextFamilies.some((family) => family.id === currentActiveFamilyId);
+        const nextActiveFamilyId = selectedFamilyExists ? currentActiveFamilyId : nextFamilies[0]?.id ?? null;
+        if (nextActiveFamilyId !== currentActiveFamilyId) {
+          setActiveFamilyId(nextActiveFamilyId);
         }
       } catch {
         if (!cancelled) {
-          cachedUserId = userId;
-          cachedFamilies = [];
-          cachedMemberships = [];
+          resetViewerRoleCache();
           setFamilies([]);
-          setMemberships([]);
+          setActiveMembership(null);
         }
       } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) setIsFamiliesLoading(false);
       }
     }
 
     if (!userId) {
-      cachedUserId = null;
-      cachedFamilies = [];
-      cachedMemberships = [];
+      resetViewerRoleCache();
       setFamilies([]);
-      setMemberships([]);
-      setIsLoading(false);
+      setActiveMembership(null);
+      setIsFamiliesLoading(false);
+      setIsMembershipLoading(false);
       return;
     }
 
-    void load();
-    window.addEventListener(ROLE_EVENT, load);
+    if (hasCachedUser) {
+      setFamilies(cachedFamilies);
+      setIsFamiliesLoading(false);
+    }
+
+    void loadFamilies();
+    window.addEventListener(ROLE_EVENT, loadFamilies);
+
     return () => {
       cancelled = true;
-      window.removeEventListener(ROLE_EVENT, load);
+      window.removeEventListener(ROLE_EVENT, loadFamilies);
     };
-  }, [activeFamilyId, setActiveFamilyId, userId]);
+  }, [hasCachedUser, setActiveFamilyId, userId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMembership() {
+      if (!userId || !activeFamilyId) {
+        setActiveMembership(null);
+        setIsMembershipLoading(false);
+        return;
+      }
+
+      const cachedMembership = cachedMembershipByFamilyId[activeFamilyId];
+      if (cachedMembership !== undefined) {
+        setActiveMembership(cachedMembership);
+        setIsMembershipLoading(false);
+        return;
+      }
+
+      setIsMembershipLoading(true);
+
+      try {
+        const memberList = await familyApi.getMembers(activeFamilyId).catch(() => [] as FamilyMember[]);
+        if (cancelled) return;
+
+        const nextMembership = memberList.find((member) => member.userId === userId) || null;
+        cachedMembershipByFamilyId = {
+          ...cachedMembershipByFamilyId,
+          [activeFamilyId]: nextMembership,
+        };
+        setActiveMembership(nextMembership);
+      } catch {
+        if (!cancelled) {
+          cachedMembershipByFamilyId = {
+            ...cachedMembershipByFamilyId,
+            [activeFamilyId]: null,
+          };
+          setActiveMembership(null);
+        }
+      } finally {
+        if (!cancelled) setIsMembershipLoading(false);
+      }
+    }
+
+    void loadMembership();
+    window.addEventListener(ROLE_EVENT, loadMembership);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener(ROLE_EVENT, loadMembership);
+    };
+  }, [activeFamilyId, userId]);
+
+  const memberships = useMemo(
+    () => (activeMembership ? [activeMembership] : []),
+    [activeMembership],
+  );
 
   const viewerRole: ViewerRole = useMemo(
     () => deriveViewerRole(user, memberships, activeFamilyId),
@@ -101,12 +180,12 @@ export function useViewerRole() {
     () => families.find((family) => family.id === activeFamilyId) || null,
     [activeFamilyId, families],
   );
-  const activeMembership = useMemo(
-    () => memberships.find((member) => member.familyId === activeFamilyId) || null,
-    [activeFamilyId, memberships],
-  );
 
-  const isRoleLoading = userId != null && (!hasHydrated || isLoading || cachedUserId !== userId);
+  const needsMembershipBootstrap = userId != null
+    && activeFamilyId != null
+    && cachedMembershipByFamilyId[activeFamilyId] === undefined;
+  const isRoleLoading = userId != null
+    && (!hasHydrated || isFamiliesLoading || isMembershipLoading || needsMembershipBootstrap);
 
   return {
     viewerRole,

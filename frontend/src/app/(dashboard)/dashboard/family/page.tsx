@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -35,8 +36,24 @@ import type {
   HeritageTask,
   MemoryEntry,
 } from '@/types';
-import HeritagePage from '../heritage/page';
-import MemoryLibraryPage from '../memory/page';
+
+const HeritagePage = dynamic(() => import('../heritage/page'), {
+  loading: () => (
+    <div className="flex h-48 items-center justify-center text-stone-400">
+      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+      正在加载经验沉淀...
+    </div>
+  ),
+});
+
+const MemoryLibraryPage = dynamic(() => import('../memory/page'), {
+  loading: () => (
+    <div className="flex h-48 items-center justify-center text-stone-400">
+      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+      正在加载记忆库...
+    </div>
+  ),
+});
 
 const tabs: { value: FamilyTab; label: string }[] = [
   { value: 'overview', label: '总览' },
@@ -61,7 +78,8 @@ type StreamItem = {
   actionLabel?: string;
 };
 
-const FETCH_LIMIT = 100;
+const OVERVIEW_FETCH_LIMIT = 24;
+const STREAM_FETCH_LIMIT = 40;
 const PAGE_SIZE = 8;
 
 function parseFamilyTab(value: string | null): FamilyTab {
@@ -211,12 +229,24 @@ export default function FamilyPage() {
     setLoadingData(true);
     setError('');
     try {
+      const shouldLoadOverviewData = currentTab === 'overview';
+      const shouldLoadStreamData = currentTab === 'stream';
+      const listLimit = shouldLoadStreamData ? STREAM_FETCH_LIMIT : OVERVIEW_FETCH_LIMIT;
+
       const [memberList, diaryList, memoryList, growthList, taskList] = await Promise.all([
         familyApi.getMembers(displayFamilyId).catch(() => [] as FamilyMember[]),
-        diaryApi.listFamilyEntries(displayFamilyId, FETCH_LIMIT).catch(() => [] as DiaryEntry[]),
-        memoryApi.listFamilyMemories(displayFamilyId, FETCH_LIMIT).catch(() => [] as MemoryEntry[]),
-        growthGuardApi.listFamilyRecords(displayFamilyId, FETCH_LIMIT).catch(() => [] as GrowthGuardRecord[]),
-        heritageTaskApi.listFamilyTasks(displayFamilyId, 8).catch(() => [] as HeritageTask[]),
+        (shouldLoadOverviewData || shouldLoadStreamData)
+          ? diaryApi.listFamilyEntries(displayFamilyId, listLimit).catch(() => [] as DiaryEntry[])
+          : Promise.resolve([] as DiaryEntry[]),
+        (shouldLoadOverviewData || shouldLoadStreamData)
+          ? memoryApi.listFamilyMemories(displayFamilyId, listLimit).catch(() => [] as MemoryEntry[])
+          : Promise.resolve([] as MemoryEntry[]),
+        (shouldLoadOverviewData || shouldLoadStreamData)
+          ? growthGuardApi.listFamilyRecords(displayFamilyId, listLimit).catch(() => [] as GrowthGuardRecord[])
+          : Promise.resolve([] as GrowthGuardRecord[]),
+        shouldLoadOverviewData
+          ? heritageTaskApi.listFamilyTasks(displayFamilyId, 8).catch(() => [] as HeritageTask[])
+          : Promise.resolve([] as HeritageTask[]),
       ]);
 
       setMembers(Array.isArray(memberList) ? memberList : []);
@@ -229,10 +259,10 @@ export default function FamilyPage() {
     } finally {
       setLoadingData(false);
     }
-  }, [displayFamilyId]);
+  }, [currentTab, displayFamilyId]);
 
   useEffect(() => {
-    if (currentTab === 'library') {
+    if (currentTab === 'library' || currentTab === 'heritage' || currentTab === 'members') {
       setError('');
       return;
     }
