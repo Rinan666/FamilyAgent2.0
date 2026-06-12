@@ -1,9 +1,14 @@
 'use client';
 
-import { History, Loader2, Trash2, X } from 'lucide-react';
+import { History, Loader2, RefreshCw, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ChatSessionSummary } from '@/types';
-import { formatSessionTime, getSessionTitle, normalizeAgentSessionMetadata, sessionBadge } from '@/components/agent/agentDisplay';
+import {
+  formatSessionTime,
+  getSessionTitle,
+  normalizeAgentSessionMetadata,
+  sessionBadge,
+} from '@/components/agent/agentDisplay';
 
 interface AgentSessionDrawerProps {
   open: boolean;
@@ -13,6 +18,7 @@ interface AgentSessionDrawerProps {
   isLoadingSessions: boolean;
   sessionError: string;
   onClose: () => void;
+  onRefresh: () => void;
   onLoadSession: (sessionId: number) => void;
   onDeleteSession: (sessionId: number) => void;
 }
@@ -25,6 +31,7 @@ export default function AgentSessionDrawer({
   isLoadingSessions,
   sessionError,
   onClose,
+  onRefresh,
   onLoadSession,
   onDeleteSession,
 }: AgentSessionDrawerProps) {
@@ -48,14 +55,24 @@ export default function AgentSessionDrawer({
             </div>
             <p className="mt-1 text-sm text-stone-500">{familyName || '当前家庭'}</p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl text-stone-500 transition hover:bg-white/80"
-            aria-label="关闭会话历史"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onRefresh}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl text-stone-500 transition hover:bg-white/80"
+              aria-label="刷新会话历史"
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoadingSessions ? 'animate-spin' : ''}`} />
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl text-stone-500 transition hover:bg-white/80"
+              aria-label="关闭会话历史"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-4">

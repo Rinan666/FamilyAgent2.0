@@ -24,6 +24,7 @@ import com.familyagent.module.growth.repository.GrowthGuardStalenessVoteReposito
 import com.familyagent.module.memory.service.MemoryEmbeddingService;
 import com.familyagent.module.memory.service.MemoryIndexMetadataBuilder;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -185,11 +186,7 @@ public class GrowthGuardService {
                         .eq(GrowthGuardStalenessVote::getUserId, viewerUserId)
                         .last("LIMIT 1"));
         if (existing == null) {
-            GrowthGuardStalenessVote vote = new GrowthGuardStalenessVote();
-            vote.setRecordId(id);
-            vote.setFamilyId(record.getFamilyId());
-            vote.setUserId(viewerUserId);
-            stalenessVoteRepository.insert(vote);
+            insertStalenessVoteIfMissing(id, record.getFamilyId(), viewerUserId);
         }
         attachStalenessStats(record, viewerUserId);
         return record;
@@ -323,6 +320,25 @@ public class GrowthGuardService {
                 "stalenessWeight", stats.getStalenessWeight(),
                 "myVoted", stats.isMyVoted()));
         record.setMetadata(metadata);
+    }
+
+    private void insertStalenessVoteIfMissing(Long recordId, Long familyId, Long viewerUserId) {
+        GrowthGuardStalenessVote vote = new GrowthGuardStalenessVote();
+        vote.setRecordId(recordId);
+        vote.setFamilyId(familyId);
+        vote.setUserId(viewerUserId);
+        try {
+            stalenessVoteRepository.insert(vote);
+        } catch (DataIntegrityViolationException ex) {
+            GrowthGuardStalenessVote existing = stalenessVoteRepository.selectOne(
+                    new LambdaQueryWrapper<GrowthGuardStalenessVote>()
+                            .eq(GrowthGuardStalenessVote::getRecordId, recordId)
+                            .eq(GrowthGuardStalenessVote::getUserId, viewerUserId)
+                            .last("LIMIT 1"));
+            if (existing == null) {
+                throw ex;
+            }
+        }
     }
 
     private static String blankToNull(String value) {

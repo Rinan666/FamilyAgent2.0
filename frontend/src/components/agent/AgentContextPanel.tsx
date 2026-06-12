@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { BookHeart, Loader2, UserRound, X } from 'lucide-react';
+import { BookHeart, UserRound, X } from 'lucide-react';
 import type { AgentTargetSelection } from '@/components/agent/agentTarget';
 import type { ActivationSceneState, ModeReadiness } from '@/components/agent/agentDisplay';
 import type { AgentMode, FamilyMember, MirrorContextResponse } from '@/types';
@@ -17,6 +17,7 @@ interface AgentContextPanelProps {
   modeReadiness: ModeReadiness;
   mirrorContext: MirrorContextResponse | null;
   isLoadingMirrorContext: boolean;
+  contextLoaded: boolean;
   contextError: string;
   activeFamilyId: number | null | undefined;
   onClose: () => void;
@@ -42,6 +43,7 @@ export default function AgentContextPanel({
   modeReadiness,
   mirrorContext,
   isLoadingMirrorContext,
+  contextLoaded,
   contextError,
   activeFamilyId,
   onClose,
@@ -166,7 +168,9 @@ export default function AgentContextPanel({
                 <p className="mt-2 text-xs leading-6 text-emerald-800">
                   {isLoadingMirrorContext
                     ? '正在刷新镜像资料...'
-                    : mirrorContext?.sourceSummary || '当前还没有可展示的镜像来源摘要。'}
+                    : !contextLoaded
+                      ? '首次切换对象时会自动准备镜像资料，后续优先复用已加载内容。'
+                      : mirrorContext?.sourceSummary || '当前还没有可展示的镜像来源摘要。'}
                 </p>
               </div>
 

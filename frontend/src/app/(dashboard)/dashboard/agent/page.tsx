@@ -222,6 +222,10 @@ function normalizeMirrorAssistantMetadata(metadata: Record<string, unknown>): No
   };
 }
 
+let cachedAgentMembersByFamilyId: Record<number, FamilyMember[]> = {};
+let cachedAgentSessionsByFamilyId: Record<number, ChatSessionSummary[]> = {};
+let cachedMirrorContextByFamilyTarget: Record<string, MirrorContextResponse> = {};
+
 function buildTargetSwitchMessage(
   nextMode: AgentMode,
   nextTargetLabel: string,
@@ -275,6 +279,8 @@ export default function AgentPage() {
   const [isSessionsOpen, setIsSessionsOpen] = useState(false);
   const [isContextOpen, setIsContextOpen] = useState(false);
   const [responseMode, setResponseMode] = useState<AgentResponseMode>('think');
+  const [sessionsLoaded, setSessionsLoaded] = useState(false);
+  const [contextLoaded, setContextLoaded] = useState(false);
 
   const {
     viewerRole,
@@ -328,16 +334,37 @@ export default function AgentPage() {
   const upsertSession = useCallback((session: ChatSessionSummary) => {
     setSessions((current) => {
       const next = current.filter((item) => item.id !== session.id);
-      return [session, ...next];
+      const updated = [session, ...next];
+      if (session.familyId) {
+        cachedAgentSessionsByFamilyId[session.familyId] = updated;
+      }
+      return updated;
     });
   }, []);
 
-  const loadMembers = useCallback(async (familyId: number) => {
+  const loadMembers = useCallback(async (familyId: number, forceRefresh: boolean = false) => {
+    if (!forceRefresh && cachedAgentMembersByFamilyId[familyId]) {
+      const cachedMembers = cachedAgentMembersByFamilyId[familyId];
+      setMembers(cachedMembers);
+      setTargetSelection((current) => {
+        const preferred = selectionFromRequestedTargetUserId(requestedTargetUserId, selfUserId, cachedMembers);
+        if (preferred !== 'NONE') return preferred;
+        const normalizedCurrent = normalizeTargetSelection(current, selfUserId);
+        if (normalizedCurrent === 'SELF') return 'SELF';
+        if (typeof normalizedCurrent === 'number' && cachedMembers.some((member) => member.userId === normalizedCurrent)) {
+          return normalizedCurrent;
+        }
+        return 'NONE';
+      });
+      return;
+    }
+
     setIsLoadingMembers(true);
     setContextError('');
     try {
       const memberList = await familyApi.getMembers(familyId);
       const nextMembers = Array.isArray(memberList) ? memberList : [];
+      cachedAgentMembersByFamilyId[familyId] = nextMembers;
       setMembers(nextMembers);
       setTargetSelection((current) => {
         const preferred = selectionFromRequestedTargetUserId(requestedTargetUserId, selfUserId, nextMembers);
@@ -370,8 +397,19 @@ export default function AgentPage() {
   }, [activeFamilyId, loadMembers]);
 
   const refreshMirrorContext = useCallback(async (familyId: number, userId: number, query?: string) => {
+    const cacheKey = `${familyId}:${userId}`;
+    if (!query && cachedMirrorContextByFamilyTarget[cacheKey]) {
+      const cached = cachedMirrorContextByFamilyTarget[cacheKey];
+      setMirrorContext(cached);
+      setContextLoaded(true);
+      return cached;
+    }
     const context = await mirrorApi.getContext(familyId, userId, query);
+    if (!query) {
+      cachedMirrorContextByFamilyTarget[cacheKey] = context;
+    }
     setMirrorContext(context);
+    setContextLoaded(true);
     return context;
   }, []);
 
@@ -379,6 +417,7 @@ export default function AgentPage() {
     if (mode !== 'mirror' || !activeFamilyId || !mirrorTargetUserId || responseMode === 'quick') {
       setMirrorContext(null);
       setIsLoadingMirrorContext(false);
+      setContextLoaded(false);
       if (mode === 'family') {
         setContextError('');
       }
@@ -387,7 +426,7 @@ export default function AgentPage() {
     let active = true;
     setIsLoadingMirrorContext(true);
     setContextError('');
-    mirrorApi.getContext(activeFamilyId, mirrorTargetUserId)
+    refreshMirrorContext(activeFamilyId, mirrorTargetUserId)
       .then((context) => {
         if (active) setMirrorContext(context);
       })
@@ -403,7 +442,7 @@ export default function AgentPage() {
     return () => {
       active = false;
     };
-  }, [activeFamilyId, mirrorTargetUserId, mode, responseMode]);
+  }, [activeFamilyId, mirrorTargetUserId, mode, refreshMirrorContext, responseMode]);
 
   const memoryContextResolver = useCallback(async ({
     query,
@@ -571,6 +610,19 @@ export default function AgentPage() {
   );
 
   const loadSessions = useCallback(async () => {
+    if (!activeFamilyId) {
+      setSessions([]);
+      setSessionsLoaded(false);
+      return;
+    }
+
+    const cachedSessions = cachedAgentSessionsByFamilyId[activeFamilyId];
+    if (cachedSessions) {
+      setSessions(cachedSessions);
+      setSessionsLoaded(true);
+      return;
+    }
+
     setIsLoadingSessions(true);
     setSessionError('');
     try {
@@ -579,7 +631,9 @@ export default function AgentPage() {
         session.familyId === activeFamilyId
           && (!session.source || session.source === 'FAMILY_AGENT' || session.source === 'TUTOR')
       ));
+      cachedAgentSessionsByFamilyId[activeFamilyId] = filtered;
       setSessions(filtered);
+      setSessionsLoaded(true);
     } catch (error) {
       setSessionError(error instanceof Error ? error.message : '加载会话历史失败。');
     } finally {
@@ -605,10 +659,22 @@ export default function AgentPage() {
 
     if (!activeFamilyId) {
       setSessions([]);
+      setSessionsLoaded(false);
       return;
     }
+    if (cachedAgentSessionsByFamilyId[activeFamilyId]) {
+      setSessions(cachedAgentSessionsByFamilyId[activeFamilyId]);
+      setSessionsLoaded(true);
+    } else {
+      setSessions([]);
+      setSessionsLoaded(false);
+    }
+  }, [activeFamilyId, discardStreaming, setMessages, setSessionId]);
+
+  useEffect(() => {
+    if (!isSessionsOpen || sessionsLoaded || !activeFamilyId) return;
     void loadSessions();
-  }, [activeFamilyId, discardStreaming, loadSessions, setMessages, setSessionId]);
+  }, [activeFamilyId, isSessionsOpen, loadSessions, sessionsLoaded]);
 
   useEffect(() => {
     if (!routePrompt || routePromptAppliedRef.current === routePrompt) return;
@@ -683,14 +749,20 @@ export default function AgentPage() {
   const handleDeleteSession = useCallback(async (targetSessionId: number) => {
     try {
       await sessionApi.deleteSession(targetSessionId);
-      setSessions((current) => current.filter((session) => session.id !== targetSessionId));
+      setSessions((current) => {
+        const next = current.filter((session) => session.id !== targetSessionId);
+        if (activeFamilyId) {
+          cachedAgentSessionsByFamilyId[activeFamilyId] = next;
+        }
+        return next;
+      });
       if (sessionId === targetSessionId) {
         handleNewChat();
       }
     } catch (error) {
       setSessionError(error instanceof Error ? error.message : '删除会话失败。');
     }
-  }, [handleNewChat, sessionId]);
+  }, [activeFamilyId, handleNewChat, sessionId]);
 
   const handleTargetChange = useCallback(async (nextTargetSelection: AgentTargetSelection) => {
     const normalizedSelection = normalizeTargetSelection(nextTargetSelection, selfUserId);
@@ -1129,6 +1201,12 @@ export default function AgentPage() {
         isLoadingSessions={isLoadingSessions}
         sessionError={sessionError}
         onClose={() => setIsSessionsOpen(false)}
+        onRefresh={() => {
+          if (!activeFamilyId) return;
+          delete cachedAgentSessionsByFamilyId[activeFamilyId];
+          setSessionsLoaded(false);
+          void loadSessions();
+        }}
         onLoadSession={(targetSessionId) => { void handleLoadSession(targetSessionId); }}
         onDeleteSession={(targetSessionId) => { void handleDeleteSession(targetSessionId); }}
       />
@@ -1144,6 +1222,7 @@ export default function AgentPage() {
         modeReadiness={modeReadiness}
         mirrorContext={mirrorContext}
         isLoadingMirrorContext={isLoadingMirrorContext}
+        contextLoaded={contextLoaded}
         contextError={contextError}
         activeFamilyId={activeFamilyId}
         onClose={() => setIsContextOpen(false)}

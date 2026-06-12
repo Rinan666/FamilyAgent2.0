@@ -14,6 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DuplicateKeyException;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -21,7 +22,9 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -72,5 +75,42 @@ class GrowthGuardServiceTest {
             assertEquals(1, result.getItems().size());
             assertTrue(((Map<?, ?>) result.getItems().get(0).getMetadata()).containsKey("stalenessStats"));
         }
+    }
+
+    @Test
+    void markRecordStale_shouldTreatDuplicateInsertAsExistingVote() {
+        GrowthGuardService service = new GrowthGuardService(
+                recordRepository,
+                reportRepository,
+                stalenessVoteRepository,
+                familyService,
+                memberRepository,
+                careAuthorizationService,
+                memoryEmbeddingService);
+
+        GrowthGuardRecord record = new GrowthGuardRecord();
+        record.setId(401L);
+        record.setFamilyId(1L);
+        record.setTargetUserId(22L);
+        record.setCreatedBy(10L);
+        record.setCategory("SLEEP");
+        record.setContent("鏈€杩戝叆鐫″亸鏅?");
+        record.setObservedAt(LocalDate.of(2026, 6, 8));
+        record.setStatus("ACTIVE");
+        record.setMetadata(Map.of());
+
+        when(recordRepository.selectById(401L)).thenReturn(record);
+        when(stalenessVoteRepository.selectOne(any())).thenReturn(null, new com.familyagent.module.growth.entity.GrowthGuardStalenessVote());
+        when(stalenessVoteRepository.statsByRecordId(401L, 10L)).thenReturn(null);
+        when(stalenessVoteRepository.insert(any())).thenThrow(new DuplicateKeyException("duplicate stale vote"));
+
+        try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
+            stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
+            GrowthGuardRecord result = service.markRecordStale(401L);
+            assertTrue(((Map<?, ?>) result.getMetadata()).containsKey("stalenessStats"));
+        }
+
+        verify(familyService).checkMembership(1L);
+        verify(stalenessVoteRepository).insert(any());
     }
 }

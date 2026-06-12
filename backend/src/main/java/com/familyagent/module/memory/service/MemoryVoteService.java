@@ -13,6 +13,7 @@ import com.familyagent.module.memory.entity.MemoryEntryVote;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
 import com.familyagent.module.memory.repository.MemoryEntryVoteRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,12 +57,7 @@ public class MemoryVoteService {
                 .eq(MemoryEntryVote::getUserId, viewerUserId)
                 .last("LIMIT 1"));
         if (existing == null) {
-            existing = new MemoryEntryVote();
-            existing.setMemoryId(memoryId);
-            existing.setFamilyId(entry.getFamilyId());
-            existing.setUserId(viewerUserId);
-            existing.setVoteType(normalizedVote);
-            voteRepository.insert(existing);
+            existing = insertVoteIfMissing(memoryId, entry.getFamilyId(), viewerUserId, normalizedVote);
         } else if (!normalizedVote.equals(existing.getVoteType())) {
             existing.setVoteType(normalizedVote);
             voteRepository.updateById(existing);
@@ -85,6 +81,27 @@ public class MemoryVoteService {
                 "consensusWeight", stats.getConsensusWeight(),
                 "myVote", stats.getMyVote() == null ? "" : stats.getMyVote()));
         entry.setMetadata(metadata);
+    }
+
+    private MemoryEntryVote insertVoteIfMissing(Long memoryId, Long familyId, Long viewerUserId, String normalizedVote) {
+        MemoryEntryVote vote = new MemoryEntryVote();
+        vote.setMemoryId(memoryId);
+        vote.setFamilyId(familyId);
+        vote.setUserId(viewerUserId);
+        vote.setVoteType(normalizedVote);
+        try {
+            voteRepository.insert(vote);
+            return vote;
+        } catch (DataIntegrityViolationException ex) {
+            MemoryEntryVote existing = voteRepository.selectOne(new LambdaQueryWrapper<MemoryEntryVote>()
+                    .eq(MemoryEntryVote::getMemoryId, memoryId)
+                    .eq(MemoryEntryVote::getUserId, viewerUserId)
+                    .last("LIMIT 1"));
+            if (existing != null) {
+                return existing;
+            }
+            throw ex;
+        }
     }
 
     static MemoryVoteStats voteStatsFromMetadata(MemoryEntry entry) {
