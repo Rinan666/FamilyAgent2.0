@@ -10,7 +10,7 @@ import { useAuthStore } from '@/stores/authStore';
 import type { User as AppUser } from '@/types';
 
 function platformRoleLabel(role?: string) {
-  return (role || '').toUpperCase() === 'ADMIN' ? 'Platform admin' : 'Standard user';
+  return (role || '').toUpperCase() === 'ADMIN' ? '平台管理员' : '普通用户';
 }
 
 function parseMetadata(metadata?: Record<string, unknown> | string | null) {
@@ -51,14 +51,14 @@ function birthDateFromUser(user?: Pick<AppUser, 'birthDate' | 'metadata'> | null
 }
 
 function ageLabel(birthDate: string) {
-  if (!birthDate) return 'Not set';
+  if (!birthDate) return '未设置';
   const date = new Date(birthDate);
-  if (Number.isNaN(date.getTime())) return 'Not set';
+  if (Number.isNaN(date.getTime())) return '未设置';
   const now = new Date();
   let age = now.getFullYear() - date.getFullYear();
   const monthDelta = now.getMonth() - date.getMonth();
   if (monthDelta < 0 || (monthDelta === 0 && now.getDate() < date.getDate())) age -= 1;
-  return age >= 0 && age <= 130 ? `${age}` : 'Not set';
+  return age >= 0 && age <= 130 ? `${age}` : '未设置';
 }
 
 export default function SettingsPage() {
@@ -111,9 +111,9 @@ export default function SettingsPage() {
       const updated = await userApi.updateProfile({ birthDate: birthDate || undefined });
       setUser(updated);
       setBirthDate(birthDateFromUser(updated));
-      setProfileSuccess('Birthday saved. Family member pages will now show birthday and age.');
+      setProfileSuccess('生日已保存，家庭成员页面现在会显示生日和年龄。');
     } catch (err) {
-      setProfileError(err instanceof Error ? err.message : 'Failed to save profile');
+      setProfileError(err instanceof Error ? err.message : '保存资料失败');
     } finally {
       setSavingProfile(false);
     }
@@ -125,18 +125,18 @@ export default function SettingsPage() {
     setPasswordSuccess('');
 
     if (newPassword.length < 6) {
-      setPasswordError('New password must be at least 6 characters.');
+      setPasswordError('新密码至少需要 6 个字符。');
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPasswordError('The new passwords do not match.');
+      setPasswordError('两次输入的新密码不一致。');
       return;
     }
 
     setSavingPassword(true);
     try {
       await userApi.changePassword({ currentPassword, newPassword });
-      setPasswordSuccess('Password updated. Please sign in again.');
+      setPasswordSuccess('密码已更新，请重新登录。');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
@@ -145,7 +145,7 @@ export default function SettingsPage() {
         router.push('/login');
       }, 900);
     } catch (err) {
-      setPasswordError(err instanceof Error ? err.message : 'Failed to change password');
+      setPasswordError(err instanceof Error ? err.message : '修改密码失败');
     } finally {
       setSavingPassword(false);
     }
@@ -154,14 +154,14 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto max-w-2xl">
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">Settings</h1>
-        <p className="text-sm text-gray-500">Manage account details, security, and platform maintenance access</p>
+        <h1 className="text-xl font-bold text-gray-900">设置</h1>
+        <p className="text-sm text-gray-500">管理账号资料、安全设置，以及平台维护入口</p>
       </div>
 
       <div className="mb-4 rounded-xl border border-gray-200 bg-white p-6">
         <div className="mb-4 flex items-center gap-2">
           <CalendarDays className="h-5 w-5 text-blue-600" />
-          <h2 className="text-sm font-semibold text-gray-900">Profile</h2>
+          <h2 className="text-sm font-semibold text-gray-900">个人资料</h2>
         </div>
 
         <form onSubmit={handleUpdateProfile} className="space-y-4">
@@ -178,7 +178,7 @@ export default function SettingsPage() {
           )}
 
           <label className="block text-sm font-medium text-gray-700">
-            Birth date
+            生日
             <input
               name="birthDate"
               type="date"
@@ -188,7 +188,7 @@ export default function SettingsPage() {
             />
           </label>
           <p className="text-xs leading-5 text-gray-500">
-            Current age used for Agent tone and boundary decisions: {ageLabel(birthDate)}. Nothing is filled automatically when birth date is empty.
+            当前年龄会用于 Agent 的语气和边界判断：{ageLabel(birthDate)}。生日为空时不会自动补全。
           </p>
 
           <button
@@ -197,7 +197,7 @@ export default function SettingsPage() {
             className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
           >
             {savingProfile ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CalendarDays className="h-4 w-4" />}
-            Save birthday
+            保存生日
           </button>
         </form>
       </div>
@@ -217,14 +217,14 @@ export default function SettingsPage() {
           <div className="flex items-center gap-3 rounded-lg bg-gray-50 p-3">
             <User className="h-4 w-4 text-gray-400" />
             <div className="flex-1 text-sm">
-              <span className="text-gray-500">Username</span>
+              <span className="text-gray-500">用户名</span>
               <span className="ml-4 text-gray-900">{user?.username}</span>
             </div>
           </div>
           <div className="flex items-center gap-3 rounded-lg bg-gray-50 p-3">
             <Shield className="h-4 w-4 text-gray-400" />
             <div className="flex-1 text-sm">
-              <span className="text-gray-500">Platform role</span>
+              <span className="text-gray-500">平台角色</span>
               <span className="ml-4 text-gray-900">{platformRoleLabel(user?.role)}</span>
             </div>
           </div>
@@ -234,7 +234,7 @@ export default function SettingsPage() {
       <div className="mb-4 rounded-xl border border-gray-200 bg-white p-6">
         <div className="mb-4 flex items-center gap-2">
           <KeyRound className="h-5 w-5 text-blue-600" />
-          <h2 className="text-sm font-semibold text-gray-900">Change password</h2>
+          <h2 className="text-sm font-semibold text-gray-900">修改密码</h2>
         </div>
 
         <form onSubmit={handleChangePassword} className="space-y-4">
@@ -251,7 +251,7 @@ export default function SettingsPage() {
           )}
 
           <label className="block text-sm font-medium text-gray-700">
-            Current password
+            当前密码
             <input
               name="currentPassword"
               type="password"
@@ -264,7 +264,7 @@ export default function SettingsPage() {
           </label>
 
           <label className="block text-sm font-medium text-gray-700">
-            New password
+            新密码
             <input
               name="newPassword"
               type="password"
@@ -278,7 +278,7 @@ export default function SettingsPage() {
           </label>
 
           <label className="block text-sm font-medium text-gray-700">
-            Confirm new password
+            确认新密码
             <input
               name="confirmPassword"
               type="password"
@@ -297,7 +297,7 @@ export default function SettingsPage() {
             className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
           >
             {savingPassword ? <RefreshCw className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
-            Save new password
+            保存新密码
           </button>
         </form>
       </div>
@@ -306,17 +306,17 @@ export default function SettingsPage() {
         <div className="mb-4 rounded-xl border border-gray-200 bg-white p-6">
           <div className="mb-3 flex items-center gap-2">
             <Database className="h-5 w-5 text-purple-600" />
-            <h2 className="text-sm font-semibold text-gray-900">Admin tools</h2>
+            <h2 className="text-sm font-semibold text-gray-900">管理员工具</h2>
           </div>
           <p className="mb-4 text-sm leading-6 text-gray-500">
-            Inspect database health, record counts, and vector index status. This page only shows diagnostic summaries and does not expose private family source text.
+            查看数据库健康、记录数量和向量索引状态。此页面只展示诊断摘要，不暴露家庭私密原文。
           </p>
           <Link
             href="/dashboard/admin/database"
             className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 text-sm font-medium text-white transition-colors hover:bg-purple-700"
           >
             <Database className="h-4 w-4" />
-            Open database health
+            打开数据库健康页
           </Link>
         </div>
       )}
@@ -328,13 +328,13 @@ export default function SettingsPage() {
           className="flex items-center gap-2 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600 transition-colors hover:bg-red-100"
         >
           <LogOut className="h-4 w-4" />
-          Sign out
+          退出登录
         </button>
       </div>
 
       <div className="mt-8 text-center text-xs text-gray-400">
         <p>FamilyAgent v0.1.0</p>
-        <p className="mt-1">Minimum viable release for long-term family memory and the Family Agent</p>
+        <p className="mt-1">面向长期家庭记忆与家庭陪伴的最小可用版本</p>
       </div>
     </div>
   );

@@ -11,10 +11,10 @@ export default function WebSearchBadge({ metadata }: WebSearchBadgeProps) {
   if (!webSearch) return null;
 
   const label = webSearch.used
-    ? `Web verified · ${webSearch.resultCount} sources`
+    ? `已联网核验 · ${webSearch.resultCount} 个来源`
     : webSearch.needed
-      ? 'No reliable recent sources found'
-      : 'Offline · answered from context';
+      ? '暂未找到可靠的近期来源'
+      : '离线回答 · 基于已有上下文';
   const toneClass = webSearch.used
     ? 'border-blue-100 bg-blue-50 text-blue-700'
     : webSearch.needed

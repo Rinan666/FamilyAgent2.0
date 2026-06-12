@@ -111,16 +111,16 @@ export default function VoiceInputButton({
         manualStopRef.current = true;
         listeningRef.current = false;
         setListening(false);
-        setError('Microphone access was denied. Please allow it in your browser.');
+        setError('麦克风权限被拒绝，请在浏览器里允许访问。');
         return;
       }
 
       if (errorType === 'audio-capture') {
-        setError('No available microphone was detected.');
+        setError('没有检测到可用的麦克风。');
         return;
       }
 
-      setError(errorType === 'no-speech' ? 'Could not hear clearly. Still listening...' : 'Speech recognition was interrupted. Retrying...');
+      setError(errorType === 'no-speech' ? '没有听清楚，仍在继续监听...' : '语音识别被中断，正在重试...');
     };
 
     recognition.onend = () => {
@@ -155,7 +155,7 @@ export default function VoiceInputButton({
       recognitionRef.current = null;
       listeningRef.current = false;
       setListening(false);
-      setError('Failed to start speech recognition. Please try again later.');
+      setError('启动语音识别失败，请稍后再试。');
     }
   }, [clearRestartTimer, detachRecognition]);
 
@@ -215,7 +215,7 @@ export default function VoiceInputButton({
   if (!supported) {
     return (
       <span className={`inline-flex h-9 items-center rounded-lg border border-gray-200 px-3 text-xs text-gray-400 ${className}`}>
-        Voice input is not supported in this browser
+        当前浏览器不支持语音输入
       </span>
     );
   }
@@ -226,7 +226,7 @@ export default function VoiceInputButton({
         type="button"
         onClick={toggleListening}
         disabled={disabled}
-        title={listening ? 'Stop voice input' : 'Voice input'}
+        title={listening ? '停止语音输入' : '语音输入'}
         className={`inline-flex h-9 items-center justify-center gap-2 rounded-lg border text-xs font-medium transition-colors disabled:opacity-50 ${
           compact ? 'w-9 px-0' : 'px-3'
         } ${
@@ -236,9 +236,9 @@ export default function VoiceInputButton({
         }`}
       >
         {listening ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
-        {!compact && (listening ? 'Stop voice input' : 'Voice input')}
+        {!compact && (listening ? '停止语音输入' : '语音输入')}
       </button>
-      {listening && !compact && <span className="text-xs text-blue-600">Listening...</span>}
+      {listening && !compact && <span className="text-xs text-blue-600">正在聆听...</span>}
       {error && <span className="text-xs text-red-500">{error}</span>}
     </div>
   );

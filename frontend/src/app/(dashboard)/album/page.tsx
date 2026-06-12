@@ -50,10 +50,10 @@ function getBackendMessage(data: unknown, fallback: string) {
 
 function getUploadFailureMessage(res: Response, rawText: string, fallback: string) {
   if (res.status === 401) {
-    return 'Your session expired. Please sign in again and retry the upload.';
+    return '登录状态已失效，请重新登录后再上传。';
   }
   if (res.status === 413) {
-    return 'The selected photos exceed the upload limit of 10 MB per image and 40 MB total.';
+    return '所选照片超出上传限制：单张 10 MB，总计 40 MB。';
   }
 
   const trimmed = rawText.trim();
@@ -94,8 +94,8 @@ async function uploadPhotos(familyId: number, files: File[]): Promise<PhotoUploa
   if (!res.ok || data?.code !== 200 || !data.data) {
     throw new Error(
       data
-        ? getBackendMessage(data, 'Upload failed. Please try again.')
-        : getUploadFailureMessage(res, rawText, 'Upload failed. Please try again.'),
+        ? getBackendMessage(data, '上传失败，请重试。')
+        : getUploadFailureMessage(res, rawText, '上传失败，请重试。'),
     );
   }
   return data.data;
@@ -115,7 +115,7 @@ async function clusterByUrls(urls: string[], photoIds: number[]): Promise<Cluste
   });
   const data = await res.json();
   if (!res.ok || !data.success) {
-    throw new Error(data.detail || 'Face clustering failed.');
+    throw new Error(data.detail || '人脸聚类失败。');
   }
   return data as ClusterResult;
 }
@@ -132,7 +132,7 @@ async function saveClusterResult(photoId: number, clusterResult: object): Promis
   });
   const data = await res.json().catch(() => null) as ResultEnvelope<null> | null;
   if (!res.ok || data?.code !== 200) {
-    throw new Error(getBackendMessage(data, 'Cluster results could not be saved.'));
+    throw new Error(getBackendMessage(data, '聚类结果保存失败。'));
   }
 }
 
@@ -150,17 +150,17 @@ export default function AlbumPage() {
 
   const validateFiles = useCallback((nextFiles: File[]) => {
     if (nextFiles.length > MAX_FILES) {
-      return `You can upload up to ${MAX_FILES} photos at a time.`;
+      return `一次最多可上传 ${MAX_FILES} 张照片。`;
     }
 
     const tooLarge = nextFiles.find((file) => file.size > MAX_FILE_SIZE_BYTES);
     if (tooLarge) {
-      return `${tooLarge.name} is larger than 10 MB.`;
+      return `${tooLarge.name} 超过 10 MB。`;
     }
 
     const totalBytes = nextFiles.reduce((sum, file) => sum + file.size, 0);
     if (totalBytes > MAX_TOTAL_SIZE_BYTES) {
-      return 'The selected photos exceed the 40 MB total upload limit.';
+      return '所选照片超过总上传限制 40 MB。';
     }
 
     return null;
@@ -171,7 +171,7 @@ export default function AlbumPage() {
 
     const valid = Array.from(incoming).filter((file) => file.type.startsWith('image/'));
     if (valid.length === 0) {
-      setError('Only image files can be added to the album.');
+      setError('相册里只能添加图片文件。');
       return;
     }
 
@@ -210,11 +210,11 @@ export default function AlbumPage() {
       return;
     }
     if (files.length < MIN_FILES) {
-      setError(`Upload at least ${MIN_FILES} photos to start clustering.`);
+      setError(`至少上传 ${MIN_FILES} 张照片后才能开始聚类。`);
       return;
     }
     if (!activeFamilyId) {
-      setError('Choose a family before uploading photos.');
+      setError('请先选择一个家庭，再上传照片。');
       return;
     }
 
@@ -227,7 +227,7 @@ export default function AlbumPage() {
     try {
       photos = await uploadPhotos(Number(activeFamilyId), files);
     } catch (nextError: unknown) {
-      setError(nextError instanceof Error ? nextError.message : 'Upload failed. Please try again.');
+      setError(nextError instanceof Error ? nextError.message : '上传失败，请重试。');
       setStage('idle');
       return;
     }
@@ -247,12 +247,12 @@ export default function AlbumPage() {
       if (failedSaves > 0) {
         setWarning(
           failedSaves === photos.length
-            ? 'Clustering finished, but none of the results could be saved to the family album.'
-            : `Clustering finished, but ${failedSaves} photo result(s) could not be saved.`,
+            ? '聚类已完成，但没有任何结果成功保存到家庭相册。'
+            : `聚类已完成，但有 ${failedSaves} 张照片的结果未能保存。`,
         );
       }
     } catch (nextError: unknown) {
-      setError(nextError instanceof Error ? nextError.message : 'Face clustering failed. Please try again.');
+      setError(nextError instanceof Error ? nextError.message : '人脸聚类失败，请重试。');
     } finally {
       setStage('done');
     }
@@ -272,10 +272,10 @@ export default function AlbumPage() {
   const noiseGroup = result?.groups.find((group) => group.group_id === -1);
   const isLoading = stage === 'uploading' || stage === 'clustering';
   const stageLabel = stage === 'uploading'
-    ? 'Uploading...'
+    ? '上传中...'
     : stage === 'clustering'
-      ? 'Clustering faces...'
-      : `Cluster by person (${files.length})`;
+      ? '正在进行人脸聚类...'
+      : `按人物聚类（${files.length}）`;
 
   return (
     <div className="space-y-6">
@@ -283,8 +283,8 @@ export default function AlbumPage() {
         <div className="flex items-center gap-3">
           <Images className="h-6 w-6 text-blue-600" />
           <div>
-            <h1 className="text-xl font-semibold text-gray-900">Family Album</h1>
-            <p className="text-sm text-gray-500">Experimental face clustering for family photo batches.</p>
+            <h1 className="text-xl font-semibold text-gray-900">家庭相册</h1>
+            <p className="text-sm text-gray-500">面向家庭照片批次的人脸聚类实验功能。</p>
           </div>
         </div>
         {(files.length > 0 || result || warning) && (
@@ -294,7 +294,7 @@ export default function AlbumPage() {
             className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 px-3 text-sm text-gray-600 hover:bg-gray-50"
           >
             <X className="h-4 w-4" />
-            Reset
+            重置
           </button>
         )}
       </div>
@@ -304,7 +304,7 @@ export default function AlbumPage() {
           <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 py-12 transition hover:border-blue-400 hover:bg-blue-50">
             <Upload className="h-8 w-8 text-gray-400" />
             <span className="text-sm text-gray-500">
-              Add at least {MIN_FILES} photos. Up to {MAX_FILES} images, 10 MB each, 40 MB total.
+              至少添加 {MIN_FILES} 张照片。最多 {MAX_FILES} 张图，每张 10 MB，总计 40 MB。
             </span>
             <input
               type="file"
@@ -327,7 +327,7 @@ export default function AlbumPage() {
                     type="button"
                     onClick={() => removeFile(index)}
                     className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition group-hover:opacity-100"
-                    aria-label="Remove image"
+                    aria-label="移除图片"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -357,21 +357,21 @@ export default function AlbumPage() {
 
           <div className="flex flex-wrap items-center gap-4 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
             <span>
-              Detected <strong className="text-gray-900">{result.total_faces}</strong> faces
+              检测到 <strong className="text-gray-900">{result.total_faces}</strong> 张人脸
             </span>
             <span>
-              Found <strong className="text-gray-900">{validGroups.length}</strong> people
+              识别出 <strong className="text-gray-900">{validGroups.length}</strong> 位人物
             </span>
             {result.silhouette_score !== null && (
               <span>
-                Silhouette score <strong className="text-gray-900">{result.silhouette_score.toFixed(3)}</strong>
+                轮廓系数 <strong className="text-gray-900">{result.silhouette_score.toFixed(3)}</strong>
               </span>
             )}
           </div>
 
           {validGroups.length === 0 && (
             <p className="rounded-lg bg-yellow-50 px-4 py-3 text-sm text-yellow-700">
-              No stable person groups were found yet. Try uploading more photos.
+              暂时没有发现稳定的人物分组，可以尝试再多上传一些照片。
             </p>
           )}
 
@@ -380,7 +380,7 @@ export default function AlbumPage() {
               <div className="mb-3 flex items-center gap-2">
                 <User className="h-4 w-4 text-gray-400" />
                 <span className="text-sm font-medium text-gray-700">
-                  Person {index + 1} ({group.faces.length} photos)
+                  人物 {index + 1}（{group.faces.length} 张照片）
                 </span>
               </div>
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-8">
@@ -419,7 +419,7 @@ export default function AlbumPage() {
           {noiseGroup && noiseGroup.faces.length > 0 && (
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
               <h2 className="mb-3 text-sm font-medium text-gray-500">
-                Unclustered ({noiseGroup.faces.length})
+                未归类（{noiseGroup.faces.length}）
               </h2>
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-8">
                 {noiseGroup.faces.map((face, faceIndex) => (

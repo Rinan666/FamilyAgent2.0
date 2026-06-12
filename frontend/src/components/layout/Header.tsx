@@ -40,14 +40,14 @@ export default function Header({
       <div className="flex min-w-0 items-center gap-3">
         {mobileNav}
         <h2 className="truncate text-sm text-gray-500">
-          Welcome back, {user.nickname || user.username}
+          欢迎回来，{user.nickname || user.username}
         </h2>
         <span className="hidden shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 sm:inline-flex">
           {viewerRoleLabel(viewerRole)}
         </span>
         {platformAdmin && (
           <span className="hidden shrink-0 rounded-full bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-700 md:inline-flex">
-            Platform admin
+            平台管理员
           </span>
         )}
       </div>
@@ -55,7 +55,7 @@ export default function Header({
       <div className="flex shrink-0 items-center gap-2 md:gap-4">
         {families.length > 0 && (
           <label className="hidden items-center gap-2 text-xs text-gray-500 sm:flex">
-            <span className="hidden md:inline">Current family</span>
+            <span className="hidden md:inline">当前家庭</span>
             <select
               name="activeFamilyId"
               value={activeFamilyId ?? ''}
@@ -76,7 +76,7 @@ export default function Header({
 
         <Link
           href="/dashboard/settings"
-          title="Settings"
+          title="设置"
           className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-sm font-medium text-white transition-colors hover:bg-blue-700"
         >
           {(user.nickname || user.username).charAt(0).toUpperCase()}
@@ -86,7 +86,7 @@ export default function Header({
           onClick={handleLogout}
           className="text-sm text-gray-500 hover:text-gray-700"
         >
-          Sign out
+          退出登录
         </button>
       </div>
     </header>

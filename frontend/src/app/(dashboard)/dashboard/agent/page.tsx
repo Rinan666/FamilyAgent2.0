@@ -67,7 +67,7 @@ function formatSessionTime(value?: string) {
 }
 
 function getSessionTitle(session: Pick<ChatSessionSummary, 'title' | 'summary'>) {
-  return (session.title || session.summary || 'Untitled session').slice(0, 32);
+  return (session.title || session.summary || '未命名会话').slice(0, 32);
 }
 
 function fallbackSavePlan(content: string): AgentSaveToolPlan {
@@ -76,7 +76,7 @@ function fallbackSavePlan(content: string): AgentSaveToolPlan {
     should_save: true,
     tool: 'DIARY',
     content: cleaned,
-    title: cleaned.slice(0, 24) || 'Chat note',
+    title: cleaned.slice(0, 24) || '聊天记录',
     summary: cleaned.slice(0, 80),
     visibility: 'PRIVATE',
     entry_type: 'DAILY',
@@ -86,8 +86,8 @@ function fallbackSavePlan(content: string): AgentSaveToolPlan {
     severity: 2,
     importance: 3,
     tags: ['family-agent-save'],
-    reason: 'The user explicitly chose to save this message.',
-    confirmation_message: 'Saved as a diary entry.',
+    reason: '用户明确选择保存这条消息。',
+    confirmation_message: '已保存为日记。',
   };
 }
 
@@ -156,7 +156,7 @@ export default function AgentPage() {
 
   const ensureSessionHeader = useCallback(async () => {
     if (!activeFamilyId) {
-      throw new Error('Please choose a family first.');
+      throw new Error('请先选择一个家庭。');
     }
     const generation = sessionGenerationRef.current;
     const currentSessionId = sessionIdRef.current;
@@ -223,7 +223,7 @@ export default function AgentPage() {
       upsertSession(updated);
     } catch (error) {
       if (sessionGenerationRef.current === generation) {
-        setSessionError(error instanceof Error ? error.message : 'Failed to save chat history automatically.');
+        setSessionError(error instanceof Error ? error.message : '自动保存聊天记录失败。');
       }
       throw error;
     }
@@ -263,7 +263,7 @@ export default function AgentPage() {
       ));
       setSessions(filtered);
     } catch (error) {
-      setSessionError(error instanceof Error ? error.message : 'Failed to load session history.');
+      setSessionError(error instanceof Error ? error.message : '加载会话历史失败。');
     } finally {
       setIsLoadingSessions(false);
     }
@@ -351,7 +351,7 @@ export default function AgentPage() {
       upsertSession(detail);
     } catch (error) {
       if (sessionGenerationRef.current === generation) {
-        setSessionError(error instanceof Error ? error.message : 'Failed to load the selected session.');
+        setSessionError(error instanceof Error ? error.message : '加载所选会话失败。');
       }
     } finally {
       if (sessionGenerationRef.current === generation) {
@@ -368,7 +368,7 @@ export default function AgentPage() {
         handleNewChat();
       }
     } catch (error) {
-      setSessionError(error instanceof Error ? error.message : 'Failed to delete the session.');
+      setSessionError(error instanceof Error ? error.message : '删除会话失败。');
     }
   }, [handleNewChat, sessionId]);
 
@@ -376,7 +376,7 @@ export default function AgentPage() {
     if (!activeFamilyId) {
       setSaveFeedback((current) => ({
         ...current,
-        [message.id]: { status: 'error', detail: 'Choose a family before saving.' },
+        [message.id]: { status: 'error', detail: '请先选择一个家庭再保存。' },
       }));
       return;
     }
@@ -386,7 +386,7 @@ export default function AgentPage() {
 
     setSaveFeedback((current) => ({
       ...current,
-      [message.id]: { status: 'saving', detail: 'Saving...' },
+      [message.id]: { status: 'saving', detail: '保存中...' },
     }));
 
     let skillRunId: number | null = null;
@@ -470,7 +470,7 @@ export default function AgentPage() {
           await skillRunApi.update(skillRunId, {
             status: 'FAILED',
             saved: false,
-            outputSummary: error instanceof Error ? error.message : 'Save failed',
+            outputSummary: error instanceof Error ? error.message : '保存失败',
           });
         } catch {
           // ignore secondary failure
@@ -481,7 +481,7 @@ export default function AgentPage() {
         ...current,
         [message.id]: {
           status: 'error',
-          detail: error instanceof Error ? error.message : 'Save failed. Please retry later.',
+          detail: error instanceof Error ? error.message : '保存失败，请稍后重试。',
         },
       }));
     }
@@ -491,7 +491,7 @@ export default function AgentPage() {
     return (
       <div className="flex min-h-[60vh] items-center justify-center text-sm text-gray-500">
         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        Loading family context...
+        正在加载家庭上下文...
       </div>
     );
   }
@@ -501,15 +501,15 @@ export default function AgentPage() {
       <div className="mx-auto max-w-3xl px-4 py-10">
         <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center">
           <Sparkles className="mx-auto h-10 w-10 text-blue-600" />
-          <h1 className="mt-4 text-xl font-semibold text-gray-900">Choose a family first</h1>
+          <h1 className="mt-4 text-xl font-semibold text-gray-900">请先选择家庭</h1>
           <p className="mt-2 text-sm text-gray-600">
-            FamilyAgent uses family memories, diaries, and growth notes as conversation context.
+            FamilyAgent 会把家庭记忆、日记和成长记录作为对话上下文。
           </p>
           <Link
             href="/dashboard/family"
             className="mt-5 inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
           >
-            Open family space
+            打开家庭空间
           </Link>
         </div>
       </div>
@@ -522,7 +522,7 @@ export default function AgentPage() {
         <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
           <div>
             <div className="text-sm font-semibold text-gray-900">FamilyAgent</div>
-            <div className="text-xs text-gray-500">{activeFamily?.name || 'Current family'}</div>
+            <div className="text-xs text-gray-500">{activeFamily?.name || '当前家庭'}</div>
           </div>
           <button
             type="button"
@@ -530,7 +530,7 @@ export default function AgentPage() {
             className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
           >
             <Plus className="h-3.5 w-3.5" />
-            New chat
+            新对话
           </button>
         </div>
 
@@ -538,10 +538,10 @@ export default function AgentPage() {
           <div className="rounded-xl bg-blue-50 px-3 py-3 text-sm text-blue-900">
             <div className="flex items-center gap-2 font-medium">
               <BookHeart className="h-4 w-4" />
-              Family memory companion
+              家庭记忆陪伴
             </div>
             <p className="mt-2 text-xs leading-5 text-blue-800">
-              Chat freely, restore long histories seamlessly, and save important moments back into family assets.
+              轻松聊天、无缝恢复长历史，并把重要时刻保存回家庭资产里。
             </p>
           </div>
         </div>
@@ -549,7 +549,7 @@ export default function AgentPage() {
         <div className="px-4 py-3">
           <div className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-900">
             <History className="h-4 w-4" />
-            Session history
+            会话历史
           </div>
 
           {sessionError && (
@@ -561,11 +561,11 @@ export default function AgentPage() {
           {isLoadingSessions ? (
             <div className="py-8 text-center text-xs text-gray-500">
               <Loader2 className="mx-auto mb-2 h-4 w-4 animate-spin" />
-              Loading sessions...
+              正在加载会话...
             </div>
           ) : sessions.length === 0 ? (
             <div className="rounded-xl border border-dashed border-gray-200 px-3 py-6 text-center text-xs text-gray-500">
-              No saved sessions yet. Start the first family conversation.
+              还没有保存的会话，开始第一次家庭对话吧。
             </div>
           ) : (
             <div className="space-y-2">
@@ -585,7 +585,7 @@ export default function AgentPage() {
                     )}
                     <div className="mt-2 flex items-center justify-between text-[11px] text-gray-500">
                       <span>{formatSessionTime(session.lastMessageAt || session.startedAt)}</span>
-                      <span>{session.messageCount || 0} messages</span>
+                      <span>{session.messageCount || 0} 条消息</span>
                     </div>
                   </button>
                   <div className="mt-2 flex justify-end">
@@ -595,7 +595,7 @@ export default function AgentPage() {
                       className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-rose-600"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
-                      Delete
+                      删除
                     </button>
                   </div>
                 </div>
@@ -609,9 +609,9 @@ export default function AgentPage() {
         <div className="border-b border-gray-100 px-5 py-4">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h1 className="text-lg font-semibold text-gray-900">Family conversation</h1>
+              <h1 className="text-lg font-semibold text-gray-900">家庭对话</h1>
               <p className="mt-1 text-sm text-gray-600">
-                One continuous timeline now includes both recent messages and archived history.
+                现在同一条连续时间线里会同时包含最近消息和归档历史。
               </p>
             </div>
             <div className="flex max-w-xs flex-col gap-2">
@@ -619,14 +619,14 @@ export default function AgentPage() {
                 <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
                   <div className="font-medium text-gray-800">{getSessionTitle(activeSessionDetail)}</div>
                   <div className="mt-1">
-                    {activeSessionDetail.messageCount || 0} messages
-                    {activeSessionDetail.archives?.length ? ` · ${activeSessionDetail.archives.length} archived ranges` : ''}
+                    {activeSessionDetail.messageCount || 0} 条消息
+                    {activeSessionDetail.archives?.length ? ` · ${activeSessionDetail.archives.length} 段归档记录` : ''}
                   </div>
                 </div>
               )}
               {activationScene && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  <div className="font-medium">Activated context: {activationScene.label}</div>
+                  <div className="font-medium">已激活上下文：{activationScene.label}</div>
                   <div className="mt-1 leading-5">{activationScene.instruction}</div>
                 </div>
               )}
@@ -638,16 +638,16 @@ export default function AgentPage() {
           {isLoadingMessages && (
             <div className="py-6 text-center text-sm text-gray-500">
               <Loader2 className="mx-auto mb-2 h-4 w-4 animate-spin" />
-              Restoring session...
+              正在恢复会话...
             </div>
           )}
 
           {!isLoadingMessages && messages.length === 0 ? (
             <div className="mx-auto max-w-2xl rounded-2xl border border-dashed border-gray-200 bg-white px-6 py-10 text-center">
               <Sparkles className="mx-auto h-10 w-10 text-blue-600" />
-              <h2 className="mt-4 text-lg font-semibold text-gray-900">Start a family conversation</h2>
+              <h2 className="mt-4 text-lg font-semibold text-gray-900">开始一段家庭对话</h2>
               <p className="mt-2 text-sm leading-6 text-gray-600">
-                Try topics like family memories, caregiving, values, growth notes, or something worth saving.
+                可以试试聊家庭记忆、照护、价值观、成长记录，或任何值得留下来的内容。
               </p>
             </div>
           ) : (
@@ -661,7 +661,7 @@ export default function AgentPage() {
                 >
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <div className={`text-xs font-medium ${isAssistant ? 'text-blue-700' : 'text-gray-200'}`}>
-                      {isAssistant ? 'FamilyAgent' : 'You'}
+                      {isAssistant ? 'FamilyAgent' : '你'}
                     </div>
                     <div className={`text-[11px] ${isAssistant ? 'text-gray-400' : 'text-gray-300'}`}>
                       {formatSessionTime(message.timestamp)}
@@ -687,7 +687,7 @@ export default function AgentPage() {
                       }`}
                     >
                       {feedback?.status === 'saving' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                      Save this message
+                      保存这条消息
                     </button>
 
                     {feedback && (
@@ -696,7 +696,7 @@ export default function AgentPage() {
                         {feedback.detail}
                         {feedback.href && (
                           <Link href={feedback.href} className="ml-2 underline underline-offset-2">
-                            Open
+                            打开
                           </Link>
                         )}
                       </div>
@@ -730,7 +730,7 @@ export default function AgentPage() {
               <textarea
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
-                placeholder="Ask about family memories, growth notes, caregiving, values, or something worth preserving..."
+                placeholder="可以聊家庭记忆、成长记录、照护、价值观，或任何值得保存下来的内容..."
                 disabled={isStreaming}
                 rows={4}
                 className="min-h-[96px] flex-1 resize-none rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-gray-50"

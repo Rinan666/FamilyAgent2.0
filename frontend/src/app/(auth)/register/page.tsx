@@ -7,9 +7,9 @@ import { NotebookPen, ShieldCheck, Sparkles, Users } from 'lucide-react';
 import { userApi } from '@/lib/api';
 
 const highlights = [
-  { icon: NotebookPen, text: 'Start with a family diary and preserve real life moments that can be passed on.' },
-  { icon: Users, text: 'Bring family members into one shared space instead of scattered chats.' },
-  { icon: ShieldCheck, text: 'Permissions come before AI, and memory boundaries stay protected by default.' },
+  { icon: NotebookPen, text: '从家庭日记开始，把真实生活片段沉淀成可以传下去的内容。' },
+  { icon: Users, text: '让家人进入同一个共享空间，而不是散落在各处聊天记录里。' },
+  { icon: ShieldCheck, text: '先有权限边界，再有 AI 使用，记忆默认受到保护。' },
 ];
 
 export default function RegisterPage() {
@@ -35,7 +35,7 @@ export default function RegisterPage() {
       });
       router.push('/login?registered=true');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Registration failed');
+      setError(err instanceof Error ? err.message : '注册失败，请稍后重试');
     } finally {
       setLoading(false);
     }
@@ -48,11 +48,11 @@ export default function RegisterPage() {
           <div>
             <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white/80 px-3 py-1 text-xs font-medium text-emerald-800">
               <Sparkles className="h-3.5 w-3.5" />
-              Invite code required
+              需要邀请码
             </div>
-            <h1 className="text-3xl font-bold leading-tight">Create a FamilyAgent account</h1>
+            <h1 className="text-3xl font-bold leading-tight">注册 FamilyAgent 账号</h1>
             <p className="mt-4 max-w-md text-sm leading-6 text-gray-600">
-              The account is just the doorway. The important part is the memory, experience, care, and legacy inside the family space.
+              账号只是入口，真正重要的是家庭空间里沉淀下来的记忆、经验、照护与传承。
             </p>
           </div>
 
@@ -74,8 +74,8 @@ export default function RegisterPage() {
 
         <section className="p-6 sm:p-8">
           <div className="mb-7">
-            <h2 className="text-2xl font-bold text-gray-900">Create account</h2>
-            <p className="mt-1 text-sm text-gray-500">Enter a valid invite code to create or join a family space.</p>
+            <h2 className="text-2xl font-bold text-gray-900">创建账号</h2>
+            <p className="mt-1 text-sm text-gray-500">输入有效的邀请码，创建或加入一个家庭空间。</p>
           </div>
 
           <form action="javascript:void(0)" onSubmit={handleSubmit} className="space-y-4">
@@ -87,7 +87,7 @@ export default function RegisterPage() {
 
             <div>
               <label htmlFor="register-username" className="mb-1 block text-sm font-medium text-gray-700">
-                Username
+                用户名
               </label>
               <input
                 id="register-username"
@@ -96,7 +96,7 @@ export default function RegisterPage() {
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
                 className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                placeholder="3-50 characters"
+                placeholder="3-50 个字符"
                 required
                 minLength={3}
                 maxLength={50}
@@ -105,7 +105,7 @@ export default function RegisterPage() {
 
             <div>
               <label htmlFor="register-invite-code" className="mb-1 block text-sm font-medium text-gray-700">
-                Invite code
+                邀请码
               </label>
               <input
                 id="register-invite-code"
@@ -114,7 +114,7 @@ export default function RegisterPage() {
                 value={inviteCode}
                 onChange={(event) => setInviteCode(event.target.value.toUpperCase())}
                 className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 uppercase outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                placeholder="Enter invite code"
+                placeholder="请输入邀请码"
                 required
                 maxLength={50}
               />
@@ -122,7 +122,7 @@ export default function RegisterPage() {
 
             <div>
               <label htmlFor="register-nickname" className="mb-1 block text-sm font-medium text-gray-700">
-                Nickname
+                昵称
               </label>
               <input
                 id="register-nickname"
@@ -131,13 +131,13 @@ export default function RegisterPage() {
                 value={nickname}
                 onChange={(event) => setNickname(event.target.value)}
                 className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                placeholder="Optional, defaults to username"
+                placeholder="可选，默认使用用户名"
               />
             </div>
 
             <div>
               <label htmlFor="register-password" className="mb-1 block text-sm font-medium text-gray-700">
-                Password
+                密码
               </label>
               <input
                 id="register-password"
@@ -146,7 +146,7 @@ export default function RegisterPage() {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                placeholder="At least 6 characters"
+                placeholder="至少 6 个字符"
                 required
                 minLength={6}
               />
@@ -157,14 +157,14 @@ export default function RegisterPage() {
               disabled={loading}
               className="w-full rounded-xl bg-emerald-700 py-2.5 font-medium text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
             >
-              {loading ? 'Creating account...' : 'Create account'}
+              {loading ? '创建中...' : '创建账号'}
             </button>
           </form>
 
           <p className="mt-6 text-center text-sm text-gray-500">
-            Already have an account?{' '}
+            已有账号？{' '}
             <Link href="/login" className="font-medium text-emerald-700 hover:underline">
-              Sign in now
+              去登录
             </Link>
           </p>
         </section>

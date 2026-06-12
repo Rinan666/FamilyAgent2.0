@@ -7,12 +7,12 @@ export function isPlatformAdmin(user?: User | null) {
 }
 
 export function familyRoleLabel(role?: string) {
-  return (role || '').toUpperCase() === 'OWNER' ? 'Owner' : 'Member';
+  return (role || '').toUpperCase() === 'OWNER' ? '拥有者' : '成员';
 }
 
 export function viewerRoleLabel(role: ViewerRole) {
-  if (role === 'ADMIN') return 'Admin view';
-  return 'Member view';
+  if (role === 'ADMIN') return '管理员视角';
+  return '成员视角';
 }
 
 export function deriveViewerRole(

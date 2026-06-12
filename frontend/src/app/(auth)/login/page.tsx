@@ -8,9 +8,9 @@ import { userApi } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 
 const highlights = [
-  { icon: BookHeart, text: 'Capture life events, family diaries, and growth observations.' },
-  { icon: Users, text: 'Turn elder experience into a family knowledge base.' },
-  { icon: Brain, text: 'Let AI understand the family better within the granted scope.' },
+  { icon: BookHeart, text: '记录生活片段、家庭日记与成长观察。' },
+  { icon: Users, text: '把长辈经验沉淀成家人共享的知识资产。' },
+  { icon: Brain, text: '让 AI 在授权范围内更懂这个家庭。' },
 ];
 
 export default function LoginPage() {
@@ -25,7 +25,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (window.location.search.includes('registered=true')) {
-      setNotice('Registration completed. Sign in to enter your family space.');
+      setNotice('注册完成，请登录进入你的家庭空间。');
     }
   }, []);
 
@@ -52,7 +52,7 @@ export default function LoginPage() {
       );
       router.push('/dashboard');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      setError(err instanceof Error ? err.message : '登录失败，请稍后重试');
     } finally {
       setLoading(false);
     }
@@ -65,13 +65,13 @@ export default function LoginPage() {
           <div>
             <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white/70 px-3 py-1 text-xs font-medium text-emerald-800">
               <Sparkles className="h-3.5 w-3.5" />
-              Long-term family memory · Shared family wisdom
+              长期家庭记忆 · 共享家族智慧
             </div>
             <h1 className="max-w-xl text-3xl font-bold leading-tight sm:text-4xl">
               FamilyAgent
             </h1>
             <p className="mt-4 max-w-lg text-sm leading-6 text-gray-600 sm:text-base">
-              Build diaries, elder experience, growth observations, and mutual understanding into one shared family context so AI does more than answer questions.
+              把日记、长辈经验、成长观察与彼此理解汇聚进同一个家庭语境里，让 AI 不只是回答问题。
             </p>
           </div>
 
@@ -93,9 +93,9 @@ export default function LoginPage() {
             <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
               <LockKeyhole className="h-5 w-5" />
             </div>
-            <h2 className="text-2xl font-bold text-gray-900">Sign in</h2>
+            <h2 className="text-2xl font-bold text-gray-900">登录</h2>
             <p className="mt-1 text-sm text-gray-500">
-              Enter your family space and continue organizing family memory.
+              进入你的家庭空间，继续整理家人的记忆与经验。
             </p>
           </div>
 
@@ -113,7 +113,7 @@ export default function LoginPage() {
 
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">
-                Username
+                用户名
               </label>
               <input
                 id="login-username"
@@ -122,14 +122,14 @@ export default function LoginPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                placeholder="Enter username"
+                placeholder="请输入用户名"
                 required
               />
             </div>
 
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">
-                Password
+                密码
               </label>
               <input
                 id="login-password"
@@ -138,7 +138,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                placeholder="Enter password"
+                placeholder="请输入密码"
                 required
               />
             </div>
@@ -149,14 +149,14 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full rounded-lg bg-emerald-700 py-2.5 font-medium text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
             >
-              {loading ? 'Signing in...' : 'Sign in'}
+              {loading ? '登录中...' : '登录'}
             </button>
           </form>
 
           <p className="mt-6 text-center text-sm text-gray-500">
-            No account yet?{' '}
+            还没有账号？{' '}
             <Link href="/register" className="font-medium text-emerald-700 hover:underline">
-              Create one
+              立即注册
             </Link>
           </p>
         </section>

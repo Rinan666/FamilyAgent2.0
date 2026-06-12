@@ -121,10 +121,10 @@ export function growthCategoryFromPlan(plan: Pick<AgentSaveToolPlan, 'category'>
 }
 
 export function toolLabel(tool: AgentSaveTool) {
-  if (tool === 'DIARY') return 'Diary';
-  if (tool === 'FAMILY_MEMORY') return 'Family memory';
-  if (tool === 'GROWTH_GUARD') return 'Growth observation';
-  return 'Not saved';
+  if (tool === 'DIARY') return '日记';
+  if (tool === 'FAMILY_MEMORY') return '家庭记忆';
+  if (tool === 'GROWTH_GUARD') return '成长观察';
+  return '未保存';
 }
 
 export function savedRecordType(tool: AgentSaveTool): SavedRecordType {
@@ -136,7 +136,7 @@ export function savedRecordType(tool: AgentSaveTool): SavedRecordType {
 
 export function savePlanDetail(plan: AgentSaveToolPlan, savedRecordId?: number) {
   const idPart = savedRecordId ? ` · #${savedRecordId}` : '';
-  return `${toolLabel(plan.tool)} · ${plan.title} · ${plan.visibility || plan.scope}${idPart}`;
+  return `${toolLabel(plan.tool)} · ${plan.title} · ${visibilityLabel(plan.visibility || plan.scope)}${idPart}`;
 }
 
 export function truncateAuditText(value: string, maxLength = 500) {
@@ -214,18 +214,28 @@ export function todayString() {
 
 function defaultSaveTitle(tool: AgentSaveTool) {
   return {
-    DIARY: 'Saved diary from chat',
-    FAMILY_MEMORY: 'Saved family memory from chat',
-    GROWTH_GUARD: 'Saved growth observation from chat',
-    NONE: 'No save needed',
+    DIARY: '聊天保存日记',
+    FAMILY_MEMORY: '聊天保存家庭记忆',
+    GROWTH_GUARD: '聊天保存成长观察',
+    NONE: '无需保存',
   }[tool];
 }
 
 function defaultSaveConfirmation(tool: AgentSaveTool) {
   return {
-    DIARY: 'Saved as a diary entry.',
-    FAMILY_MEMORY: 'Saved as a family memory.',
-    GROWTH_GUARD: 'Saved as a growth observation.',
-    NONE: 'This message does not need to be saved.',
+    DIARY: '已保存为日记。',
+    FAMILY_MEMORY: '已保存为家庭记忆。',
+    GROWTH_GUARD: '已保存为成长观察。',
+    NONE: '这条消息无需保存。',
   }[tool];
+}
+
+function visibilityLabel(value?: string) {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (normalized === 'PRIVATE') return '仅自己可见';
+  if (normalized === 'FAMILY_VISIBLE') return '家庭可见';
+  if (normalized === 'CARE_VISIBLE') return '照护可见';
+  if (normalized === 'LEGACY_VISIBLE') return '传承可见';
+  if (normalized === 'PARENT_VISIBLE') return '父母可见';
+  return value || '未设置';
 }

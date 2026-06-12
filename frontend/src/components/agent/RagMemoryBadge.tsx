@@ -16,18 +16,18 @@ export default function RagMemoryBadge({ metadata }: RagMemoryBadgeProps) {
   const sessionSavedCount = rag.sessionSavedCount || 0;
   const totalReferenceCount = rag.totalReferenceCount
     ?? (rag.diaryCount + rag.memoryCount + growthRecordCount + libraryCount + heritageTaskCount + sessionSavedCount);
-  const modeLabel = rag.retrievalMode === 'VECTOR_WITH_TEXT_FALLBACK' ? 'Vector + text' : 'Text fallback';
+  const modeLabel = rag.retrievalMode === 'VECTOR_WITH_TEXT_FALLBACK' ? '向量 + 文本兜底' : '文本兜底';
   const detailParts = [
-    `Diary ${rag.diaryCount}`,
-    `Experience ${rag.memoryCount}`,
-    `Growth ${growthRecordCount}`,
-    libraryCount > 0 ? `Library ${libraryCount}` : '',
-    heritageTaskCount > 0 ? `Tasks ${heritageTaskCount}` : '',
-    sessionSavedCount > 0 ? `Recent ${sessionSavedCount}` : '',
+    `日记 ${rag.diaryCount}`,
+    `经验 ${rag.memoryCount}`,
+    `成长 ${growthRecordCount}`,
+    libraryCount > 0 ? `资料库 ${libraryCount}` : '',
+    heritageTaskCount > 0 ? `任务 ${heritageTaskCount}` : '',
+    sessionSavedCount > 0 ? `近期保存 ${sessionSavedCount}` : '',
   ].filter(Boolean);
   const label = totalReferenceCount > 0
-    ? `Family context referenced · ${detailParts.join(' · ')}`
-    : 'No matching family memory';
+    ? `已引用家庭上下文 · ${detailParts.join(' · ')}`
+    : '没有匹配到家庭记忆';
   const toneClass = totalReferenceCount > 0
     ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
     : 'border-gray-100 bg-white/70 text-gray-500';
@@ -38,7 +38,7 @@ export default function RagMemoryBadge({ metadata }: RagMemoryBadgeProps) {
         <details className={`rounded-lg border px-2 py-1 ${toneClass}`}>
           <summary className="cursor-pointer list-none font-medium">
             {label}
-            <span className="ml-1 text-current/70">RAG: {modeLabel}</span>
+            <span className="ml-1 text-current/70">RAG：{modeLabel}</span>
           </summary>
           <div className="mt-1 space-y-1.5">
             {rag.sources.slice(0, 6).map((source) => (
@@ -48,7 +48,7 @@ export default function RagMemoryBadge({ metadata }: RagMemoryBadgeProps) {
         </details>
       ) : (
         <div className={`inline-flex rounded-full border px-2 py-0.5 font-medium ${toneClass}`}>
-          {label} · RAG: {modeLabel}
+          {label} · RAG：{modeLabel}
         </div>
       )}
     </div>
@@ -69,7 +69,7 @@ function SourceItem({ source }: { source: RagRecallSource }) {
           {sourceTypeLabel(source.sourceType)}
         </span>
         <span className="min-w-0 flex-1 truncate font-medium text-gray-700">
-          {source.title || 'Untitled snippet'}
+          {source.title || '未命名片段'}
         </span>
       </div>
       {source.snippet && (
@@ -89,25 +89,25 @@ function SourceItem({ source }: { source: RagRecallSource }) {
 }
 
 function sourceTypeLabel(type: string) {
-  if (type === 'LIFE_RECORD') return 'Diary';
-  if (type === 'FAMILY_EXPERIENCE') return 'Experience';
-  if (type === 'GROWTH_OBSERVATION') return 'Growth';
-  return 'Memory snippet';
+  if (type === 'LIFE_RECORD') return '日记';
+  if (type === 'FAMILY_EXPERIENCE') return '经验';
+  if (type === 'GROWTH_OBSERVATION') return '成长';
+  return '记忆片段';
 }
 
 function temporalLabel(value: string) {
-  if (value === 'RECENT') return 'Recent';
-  if (value === 'RECENT_SIGNAL') return 'Recent signal';
-  if (value === 'STABLE') return 'Stable';
-  if (value === 'FADING') return 'Fading';
+  if (value === 'RECENT') return '近期';
+  if (value === 'RECENT_SIGNAL') return '近期信号';
+  if (value === 'STABLE') return '稳定';
+  if (value === 'FADING') return '衰减中';
   return value;
 }
 
 function topicLabel(value: string) {
-  if (value === 'HEALTH') return 'Health';
-  if (value === 'EMOTION') return 'Emotion';
-  if (value === 'FAMILY_STORY') return 'Family story';
-  if (value === 'CHOICE') return 'Choice';
-  if (value === 'COMMUNICATION') return 'Communication';
+  if (value === 'HEALTH') return '健康';
+  if (value === 'EMOTION') return '情绪';
+  if (value === 'FAMILY_STORY') return '家庭故事';
+  if (value === 'CHOICE') return '选择';
+  if (value === 'COMMUNICATION') return '沟通';
   return value;
 }
