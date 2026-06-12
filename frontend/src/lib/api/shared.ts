@@ -8,6 +8,7 @@ import type {
   FamilyMember,
   ChatMessage,
   ChatSessionArchiveDetail,
+  ChatSessionArchiveMetadata,
   ChatSessionArchiveSummary,
   ChatSessionDetail,
   ChatSessionMessageItem,
@@ -221,7 +222,7 @@ export function normalizeSessionArchiveDetail(raw: ChatSessionArchiveDetail): Ch
 export function normalizeSessionDetail(raw: ChatSessionDetail): ChatSessionDetail {
   return {
     ...normalizeSessionSummary(raw),
-    archiveMetadata: parseJsonField<Record<string, unknown>>(raw.archiveMetadata, {}),
+    archiveMetadata: parseJsonField<ChatSessionArchiveMetadata>(raw.archiveMetadata, { storageVersion: 0 }),
     archives: (raw.archives || []).map(normalizeSessionArchiveSummary),
   };
 }

@@ -212,10 +212,17 @@ export interface ChatSessionArchiveSummary {
   metadata?: Record<string, unknown>;
 }
 
+export interface ChatSessionArchiveMetadata {
+  lastArchiveId?: number;
+  lastArchiveAt?: string;
+  lastArchiveRange?: string;
+  storageVersion: number;
+}
+
 export interface ChatSessionDetail extends ChatSessionSummary {
   archivedBeforeSeq?: number;
   archiveStatus?: string;
-  archiveMetadata?: Record<string, unknown>;
+  archiveMetadata?: ChatSessionArchiveMetadata;
   archives?: ChatSessionArchiveSummary[];
 }
 

@@ -34,9 +34,9 @@ interface ResultEnvelope<T> {
 }
 
 const MIN_FILES = 2;
-const MAX_FILES = 12;
+const MAX_FILES = 50;
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
-const MAX_TOTAL_SIZE_BYTES = 40 * 1024 * 1024;
+const MAX_TOTAL_SIZE_BYTES = 200 * 1024 * 1024;
 
 function getBackendMessage(data: unknown, fallback: string) {
   if (data && typeof data === 'object') {
@@ -48,6 +48,22 @@ function getBackendMessage(data: unknown, fallback: string) {
   return fallback;
 }
 
+function getUploadFailureMessage(res: Response, rawText: string, fallback: string) {
+  if (res.status === 401) {
+    return 'Your session expired. Please sign in again and retry the upload.';
+  }
+  if (res.status === 413) {
+    return 'The selected photos exceed the upload limit of 10 MB per image and 40 MB total.';
+  }
+
+  const trimmed = rawText.trim();
+  if (trimmed && !trimmed.startsWith('<')) {
+    return trimmed.length > 200 ? `${trimmed.slice(0, 200)}...` : trimmed;
+  }
+
+  return `${fallback} (HTTP ${res.status})`;
+}
+
 async function uploadPhotos(familyId: number, files: File[]): Promise<PhotoUploadResponse[]> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
   const form = new FormData();
@@ -56,27 +72,46 @@ async function uploadPhotos(familyId: number, files: File[]): Promise<PhotoUploa
     form.append('files', file);
   }
 
-  const res = await fetch('/api/photos/upload', {
-    method: 'POST',
-    headers: token ? { Authorization: token } : {},
-    body: form,
-  });
-  const data = await res.json().catch(() => null) as ResultEnvelope<PhotoUploadResponse[]> | null;
+  let res: Response;
+  try {
+    res = await fetch('/api/photos/upload', {
+      method: 'POST',
+      headers: token ? { Authorization: token } : {},
+      body: form,
+    });
+  } catch {
+    throw new Error('上传失败：无法连接到服务器，请检查网络后重试。');
+  }
+  const rawText = await res.text();
+  let data: ResultEnvelope<PhotoUploadResponse[]> | null = null;
+  if (rawText.trim()) {
+    try {
+      data = JSON.parse(rawText) as ResultEnvelope<PhotoUploadResponse[]>;
+    } catch {
+      // backend returned non-JSON (e.g. nginx 502 HTML page)
+    }
+  }
   if (!res.ok || data?.code !== 200 || !data.data) {
-    throw new Error(getBackendMessage(data, 'Upload failed. Please try again.'));
+    throw new Error(
+      data
+        ? getBackendMessage(data, 'Upload failed. Please try again.')
+        : getUploadFailureMessage(res, rawText, 'Upload failed. Please try again.'),
+    );
   }
   return data.data;
 }
 
 async function clusterByUrls(urls: string[], photoIds: number[]): Promise<ClusterResult> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const absoluteUrls = urls.map((url) => (url.startsWith('http') ? url : `${origin}${url}`));
   const res = await fetch('/ai-proxy/dip/faces/cluster-by-urls', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: token } : {}),
     },
-    body: JSON.stringify({ urls, photo_ids: photoIds }),
+    body: JSON.stringify({ urls: absoluteUrls, photo_ids: photoIds }),
   });
   const data = await res.json();
   if (!res.ok || !data.success) {
