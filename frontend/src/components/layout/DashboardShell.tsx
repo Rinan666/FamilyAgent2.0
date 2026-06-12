@@ -20,10 +20,6 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const { user, isLoading } = useAuth(true);
   const {
     viewerRole,
-    families,
-    activeFamilyId,
-    activeMembership,
-    setActiveFamilyId,
     isLoading: isRoleLoading,
   } = useViewerRole();
   const platformAdmin = isPlatformAdmin(user);
@@ -39,11 +35,6 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       <div className="relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden">
         <Header
           user={user}
-          viewerRole={viewerRole}
-          families={families}
-          activeFamilyId={activeFamilyId}
-          activeMembership={activeMembership}
-          setActiveFamilyId={setActiveFamilyId}
           mobileNav={<MobileNav viewerRole={viewerRole} isPlatformAdmin={platformAdmin} />}
         />
         <main className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 pb-28 pt-4 sm:px-5 lg:px-6 lg:pb-6">

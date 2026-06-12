@@ -3,9 +3,11 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CalendarDays, CheckCircle, Database, KeyRound, LogOut, RefreshCw, Shield, User } from 'lucide-react';
+import { CalendarDays, CheckCircle, Database, KeyRound, LogOut, RefreshCw, Shield, User, Users } from 'lucide-react';
+import { WorkbenchHero, WorkbenchPage, WorkbenchSectionTitle, WorkbenchSurface } from '@/components/layout/Workbench';
 import { userApi } from '@/lib/api';
-import { isPlatformAdmin } from '@/lib/roles';
+import { familyRoleLabel, isPlatformAdmin } from '@/lib/roles';
+import { useViewerRole } from '@/hooks/useViewerRole';
 import { useAuthStore } from '@/stores/authStore';
 import type { User as AppUser } from '@/types';
 
@@ -65,6 +67,12 @@ export default function SettingsPage() {
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
   const logout = useAuthStore((s) => s.logout);
+  const {
+    families,
+    activeFamilyId,
+    activeMembership,
+    setActiveFamilyId,
+  } = useViewerRole();
   const router = useRouter();
   const [birthDate, setBirthDate] = useState(() => birthDateFromUser(user));
   const [savingProfile, setSavingProfile] = useState(false);
@@ -152,139 +160,167 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">设置</h1>
-        <p className="text-sm text-gray-500">管理账号资料、安全设置，以及平台维护入口</p>
-      </div>
+    <WorkbenchPage className="max-w-4xl">
+      <WorkbenchHero
+        badge={<span className="inline-flex rounded-full bg-stone-100 px-3 py-1 text-xs font-medium text-stone-700">设置</span>}
+        title="账户与安全"
+        description="个人信息留在顶部，切换家庭和退出统一收在这里。"
+      />
 
-      <div className="mb-4 rounded-xl border border-gray-200 bg-white p-6">
-        <div className="mb-4 flex items-center gap-2">
-          <CalendarDays className="h-5 w-5 text-blue-600" />
-          <h2 className="text-sm font-semibold text-gray-900">个人资料</h2>
-        </div>
+      {families.length > 0 && (
+        <WorkbenchSurface className="space-y-5">
+          <WorkbenchSectionTitle title="当前家族" description="在这里切换你正在使用的家庭空间。" />
+
+          <div className="flex flex-wrap gap-2">
+            {families.map((family) => {
+              const active = activeFamilyId === family.id;
+              return (
+                <button
+                  key={family.id}
+                  type="button"
+                  onClick={() => setActiveFamilyId(family.id)}
+                  className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                    active
+                      ? 'bg-stone-950 text-white'
+                      : 'border border-stone-200 bg-white text-stone-600 hover:border-stone-300 hover:bg-stone-50'
+                  }`}
+                >
+                  {family.name}
+                </button>
+              );
+            })}
+          </div>
+
+          {activeMembership && (
+            <div className="flex items-center gap-3 rounded-2xl bg-stone-50 p-3 text-sm text-stone-600">
+              <Users className="h-4 w-4 text-stone-400" />
+              <span>当前身份：{familyRoleLabel(activeMembership.role)}</span>
+            </div>
+          )}
+        </WorkbenchSurface>
+      )}
+
+      <WorkbenchSurface className="space-y-5">
+        <WorkbenchSectionTitle title="个人资料" description="只保留当前需要维护的字段。" />
 
         <form onSubmit={handleUpdateProfile} className="space-y-4">
           {profileError && (
-            <div className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">
+            <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-600">
               {profileError}
             </div>
           )}
           {profileSuccess && (
-            <div className="flex items-center gap-2 rounded-lg bg-green-50 px-4 py-2 text-sm text-green-700">
+            <div className="flex items-center gap-2 rounded-2xl bg-green-50 px-4 py-3 text-sm text-green-700">
               <CheckCircle className="h-4 w-4" />
               {profileSuccess}
             </div>
           )}
 
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-stone-700">
             生日
             <input
               name="birthDate"
               type="date"
               value={birthDate}
               onChange={(event) => setBirthDate(event.target.value)}
-              className="mt-1 h-10 w-full rounded-lg border border-gray-200 px-3 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500"
+              className="mt-2 h-11 w-full rounded-2xl border border-stone-200 bg-stone-50/70 px-4 text-sm text-stone-900 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-100"
             />
           </label>
-          <p className="text-xs leading-5 text-gray-500">
-            当前年龄会用于 Agent 的语气和边界判断：{ageLabel(birthDate)}。生日为空时不会自动补全。
+          <p className="text-xs leading-5 text-stone-500">
+            当前年龄：{ageLabel(birthDate)}
           </p>
 
           <button
             type="submit"
             disabled={savingProfile}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-stone-950 px-5 text-sm font-medium text-white transition hover:bg-stone-800 disabled:opacity-50"
           >
             {savingProfile ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CalendarDays className="h-4 w-4" />}
             保存生日
           </button>
         </form>
-      </div>
+      </WorkbenchSurface>
 
-      <div className="mb-4 rounded-xl border border-gray-200 bg-white p-6">
+      <WorkbenchSurface>
         <div className="mb-4 flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-lg font-medium text-white">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-stone-950 text-lg font-medium text-white">
             {(user?.nickname || user?.username || 'U').charAt(0).toUpperCase()}
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">{user?.nickname || user?.username}</h3>
-            <p className="text-sm text-gray-500">@{user?.username}</p>
+            <h3 className="font-semibold text-stone-900">{user?.nickname || user?.username}</h3>
+            <p className="text-sm text-stone-500">@{user?.username}</p>
           </div>
         </div>
 
         <div className="space-y-3">
-          <div className="flex items-center gap-3 rounded-lg bg-gray-50 p-3">
-            <User className="h-4 w-4 text-gray-400" />
+          <div className="flex items-center gap-3 rounded-2xl bg-stone-50 p-3">
+            <User className="h-4 w-4 text-stone-400" />
             <div className="flex-1 text-sm">
-              <span className="text-gray-500">用户名</span>
-              <span className="ml-4 text-gray-900">{user?.username}</span>
+              <span className="text-stone-500">用户名</span>
+              <span className="ml-4 text-stone-900">{user?.username}</span>
             </div>
           </div>
-          <div className="flex items-center gap-3 rounded-lg bg-gray-50 p-3">
-            <Shield className="h-4 w-4 text-gray-400" />
+          <div className="flex items-center gap-3 rounded-2xl bg-stone-50 p-3">
+            <Shield className="h-4 w-4 text-stone-400" />
             <div className="flex-1 text-sm">
-              <span className="text-gray-500">平台角色</span>
-              <span className="ml-4 text-gray-900">{platformRoleLabel(user?.role)}</span>
+              <span className="text-stone-500">平台角色</span>
+              <span className="ml-4 text-stone-900">{platformRoleLabel(user?.role)}</span>
             </div>
           </div>
         </div>
-      </div>
+      </WorkbenchSurface>
 
-      <div className="mb-4 rounded-xl border border-gray-200 bg-white p-6">
-        <div className="mb-4 flex items-center gap-2">
-          <KeyRound className="h-5 w-5 text-blue-600" />
-          <h2 className="text-sm font-semibold text-gray-900">修改密码</h2>
-        </div>
+      <WorkbenchSurface className="space-y-5">
+        <WorkbenchSectionTitle title="修改密码" />
 
         <form onSubmit={handleChangePassword} className="space-y-4">
           {passwordError && (
-            <div className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">
+            <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-600">
               {passwordError}
             </div>
           )}
           {passwordSuccess && (
-            <div className="flex items-center gap-2 rounded-lg bg-green-50 px-4 py-2 text-sm text-green-700">
+            <div className="flex items-center gap-2 rounded-2xl bg-green-50 px-4 py-3 text-sm text-green-700">
               <CheckCircle className="h-4 w-4" />
               {passwordSuccess}
             </div>
           )}
 
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-stone-700">
             当前密码
             <input
               name="currentPassword"
               type="password"
               value={currentPassword}
               onChange={(event) => setCurrentPassword(event.target.value)}
-              className="mt-1 h-10 w-full rounded-lg border border-gray-200 px-3 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500"
+              className="mt-2 h-11 w-full rounded-2xl border border-stone-200 bg-stone-50/70 px-4 text-sm text-stone-900 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-100"
               autoComplete="current-password"
               required
             />
           </label>
 
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-stone-700">
             新密码
             <input
               name="newPassword"
               type="password"
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
-              className="mt-1 h-10 w-full rounded-lg border border-gray-200 px-3 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500"
+              className="mt-2 h-11 w-full rounded-2xl border border-stone-200 bg-stone-50/70 px-4 text-sm text-stone-900 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-100"
               autoComplete="new-password"
               minLength={6}
               required
             />
           </label>
 
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-stone-700">
             确认新密码
             <input
               name="confirmPassword"
               type="password"
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
-              className="mt-1 h-10 w-full rounded-lg border border-gray-200 px-3 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500"
+              className="mt-2 h-11 w-full rounded-2xl border border-stone-200 bg-stone-50/70 px-4 text-sm text-stone-900 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-100"
               autoComplete="new-password"
               minLength={6}
               required
@@ -294,48 +330,37 @@ export default function SettingsPage() {
           <button
             type="submit"
             disabled={savingPassword}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-stone-950 px-5 text-sm font-medium text-white transition hover:bg-stone-800 disabled:opacity-50"
           >
             {savingPassword ? <RefreshCw className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
             保存新密码
           </button>
         </form>
-      </div>
+      </WorkbenchSurface>
 
       {isPlatformAdmin(user) && (
-        <div className="mb-4 rounded-xl border border-gray-200 bg-white p-6">
-          <div className="mb-3 flex items-center gap-2">
-            <Database className="h-5 w-5 text-purple-600" />
-            <h2 className="text-sm font-semibold text-gray-900">管理员工具</h2>
-          </div>
-          <p className="mb-4 text-sm leading-6 text-gray-500">
-            查看数据库健康、记录数量和向量索引状态。此页面只展示诊断摘要，不暴露家庭私密原文。
-          </p>
+        <WorkbenchSurface className="space-y-4">
+          <WorkbenchSectionTitle title="管理员工具" description="只保留系统巡检入口。" />
           <Link
             href="/dashboard/admin/database"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 text-sm font-medium text-white transition-colors hover:bg-purple-700"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-stone-950 px-5 text-sm font-medium text-white transition hover:bg-stone-800"
           >
             <Database className="h-4 w-4" />
-            打开数据库健康页
+            打开系统巡检
           </Link>
-        </div>
+        </WorkbenchSurface>
       )}
 
-      <div className="rounded-xl border border-gray-200 bg-white p-6">
+      <WorkbenchSurface>
         <button
           type="button"
           onClick={handleLogout}
-          className="flex items-center gap-2 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600 transition-colors hover:bg-red-100"
+          className="inline-flex h-11 items-center gap-2 rounded-full bg-red-50 px-5 text-sm font-medium text-red-600 transition hover:bg-red-100"
         >
           <LogOut className="h-4 w-4" />
           退出登录
         </button>
-      </div>
-
-      <div className="mt-8 text-center text-xs text-gray-400">
-        <p>FamilyAgent v0.1.0</p>
-        <p className="mt-1">面向长期家庭记忆与家庭陪伴的最小可用版本</p>
-      </div>
-    </div>
+      </WorkbenchSurface>
+    </WorkbenchPage>
   );
 }

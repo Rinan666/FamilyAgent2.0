@@ -143,17 +143,12 @@ export default function Sidebar({ viewerRole = 'MEMBER', isPlatformAdmin = false
         </Link>
 
         <div className="mt-8 px-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-400">Workspace</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-400">Navigation</p>
         </div>
 
         <nav className="mt-3 flex-1 space-y-1.5">
           <NavigationLinks viewerRole={viewerRole} isPlatformAdmin={isPlatformAdmin} />
         </nav>
-
-        <div className="rounded-[24px] border border-white/80 bg-white/74 p-4 shadow-[0_16px_30px_rgba(24,39,32,0.06)]">
-          <p className="text-sm font-medium leading-6 text-stone-900">减少噪音，把真正重要的家庭内容留在同一个地方。</p>
-          <p className="mt-2 text-xs text-stone-400">v0.1.0 beta</p>
-        </div>
       </div>
     </aside>
   );
@@ -217,9 +212,8 @@ export function MobileNav({
             </nav>
 
             <div className="p-4 pt-2">
-              <div className="rounded-[22px] border border-white/80 bg-white/78 p-4">
-                <p className="text-sm font-medium leading-6 text-stone-900">保持简洁，让重要内容自然浮出来。</p>
-                <p className="mt-2 text-xs text-stone-400">v0.1.0 beta</p>
+              <div className="rounded-[22px] border border-white/80 bg-white/78 p-4 text-sm text-stone-500">
+                选择一个模块继续。
               </div>
             </div>
           </div>
