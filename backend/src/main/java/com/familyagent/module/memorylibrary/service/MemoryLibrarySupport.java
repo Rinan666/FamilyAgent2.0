@@ -6,6 +6,8 @@ import com.familyagent.module.family.service.FamilyService;
 import com.familyagent.common.security.CurrentUserGuard;
 
 import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -54,6 +56,27 @@ class MemoryLibrarySupport {
 
     static String normalizeText(String value) {
         return value == null ? "" : value.toLowerCase(Locale.ROOT).replaceAll("\\s+", "").trim();
+    }
+
+    static List<String> searchTerms(String keyword) {
+        String normalized = blankToNull(keyword);
+        if (normalized == null) {
+            return List.of();
+        }
+        LinkedHashSet<String> terms = new LinkedHashSet<>();
+        for (String token : normalized.toLowerCase(Locale.ROOT).split("\\s+")) {
+            String trimmed = token.trim();
+            if (trimmed.length() >= 2) {
+                terms.add(trimmed);
+            }
+            if (terms.size() >= 6) {
+                break;
+            }
+        }
+        if (terms.isEmpty()) {
+            terms.add(normalized.toLowerCase(Locale.ROOT));
+        }
+        return List.copyOf(terms);
     }
 
     static String previewText(String value, int maxLength) {

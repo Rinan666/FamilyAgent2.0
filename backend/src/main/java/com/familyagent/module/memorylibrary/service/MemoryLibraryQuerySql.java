@@ -52,7 +52,15 @@ class MemoryLibraryQuerySql {
                   )
                 )
               )
-              AND (CAST(? AS TEXT) IS NULL OR LOWER(CONCAT_WS(' ', de.raw_text, de.structured->>'title', de.structured->>'summary', de.visibility, array_to_string(de.tags, ' '), COALESCE(u.nickname, ''), COALESCE(u.username, ''))) LIKE CAST(? AS TEXT))
+              AND (
+                COALESCE(cardinality(CAST(? AS TEXT[])), 0) = 0
+                OR EXISTS (
+                  SELECT 1
+                  FROM unnest(CAST(? AS TEXT[])) AS term
+                  WHERE LOWER(CONCAT_WS(' ', de.raw_text, de.structured->>'title', de.structured->>'summary', de.visibility, array_to_string(de.tags, ' '), COALESCE(u.nickname, ''), COALESCE(u.username, '')))
+                    LIKE CONCAT('%', term, '%')
+                )
+              )
               AND (? = 'ALL' OR ? = 'LIFE_RECORD')
               AND (CAST(? AS BIGINT) IS NULL OR de.user_id = CAST(? AS BIGINT))
               AND (CAST(? AS TEXT) IS NULL OR de.visibility = CAST(? AS TEXT))
@@ -121,7 +129,15 @@ class MemoryLibraryQuerySql {
                   )
                 )
               )
-              AND (CAST(? AS TEXT) IS NULL OR LOWER(CONCAT_WS(' ', gr.content, gr.category, gr.visibility, COALESCE(gr.metadata::text, ''), COALESCE(u.nickname, ''), COALESCE(u.username, ''))) LIKE CAST(? AS TEXT))
+              AND (
+                COALESCE(cardinality(CAST(? AS TEXT[])), 0) = 0
+                OR EXISTS (
+                  SELECT 1
+                  FROM unnest(CAST(? AS TEXT[])) AS term
+                  WHERE LOWER(CONCAT_WS(' ', gr.content, gr.category, gr.visibility, COALESCE(gr.metadata::text, ''), COALESCE(u.nickname, ''), COALESCE(u.username, '')))
+                    LIKE CONCAT('%', term, '%')
+                )
+              )
               AND (? = 'ALL' OR ? = 'GROWTH_OBSERVATION')
               AND (CAST(? AS BIGINT) IS NULL OR COALESCE(gr.target_user_id, gr.created_by) = CAST(? AS BIGINT))
               AND (CAST(? AS TEXT) IS NULL OR gr.visibility = CAST(? AS TEXT))
@@ -177,7 +193,15 @@ class MemoryLibraryQuerySql {
                   )
                 )
               )
-              AND (CAST(? AS TEXT) IS NULL OR LOWER(CONCAT_WS(' ', rp.title, rp.summary, rp.visibility, COALESCE(rp.report::text, ''), COALESCE(rp.metadata::text, ''), COALESCE(u.nickname, ''), COALESCE(u.username, ''))) LIKE CAST(? AS TEXT))
+              AND (
+                COALESCE(cardinality(CAST(? AS TEXT[])), 0) = 0
+                OR EXISTS (
+                  SELECT 1
+                  FROM unnest(CAST(? AS TEXT[])) AS term
+                  WHERE LOWER(CONCAT_WS(' ', rp.title, rp.summary, rp.visibility, COALESCE(rp.report::text, ''), COALESCE(rp.metadata::text, ''), COALESCE(u.nickname, ''), COALESCE(u.username, '')))
+                    LIKE CONCAT('%', term, '%')
+                )
+              )
               AND (? = 'ALL' OR ? = 'AI_SUMMARY')
               AND (CAST(? AS BIGINT) IS NULL OR COALESCE(rp.target_user_id, rp.created_by) = CAST(? AS BIGINT))
               AND (CAST(? AS TEXT) IS NULL OR rp.visibility = CAST(? AS TEXT))
@@ -251,7 +275,15 @@ class MemoryLibraryQuerySql {
                   )
                 )
               )
-              AND (CAST(? AS TEXT) IS NULL OR LOWER(CONCAT_WS(' ', me.content, me.summary, me.type, me.scope, COALESCE(me.metadata::text, ''), COALESCE(u.nickname, ''), COALESCE(u.username, ''))) LIKE CAST(? AS TEXT))
+              AND (
+                COALESCE(cardinality(CAST(? AS TEXT[])), 0) = 0
+                OR EXISTS (
+                  SELECT 1
+                  FROM unnest(CAST(? AS TEXT[])) AS term
+                  WHERE LOWER(CONCAT_WS(' ', me.content, me.summary, me.type, me.scope, COALESCE(me.metadata::text, ''), COALESCE(u.nickname, ''), COALESCE(u.username, '')))
+                    LIKE CONCAT('%', term, '%')
+                )
+              )
               AND (? = 'ALL' OR ? = CASE
                 WHEN COALESCE(me.metadata->>'source', '') IN ('FAMILY_WEEKLY_DIGEST')
                   OR COALESCE(me.metadata->>'source', '') LIKE '%DIGEST%'

@@ -178,15 +178,15 @@ class MemoryLibraryServiceTest {
     // --- helpers ---
 
     private static void assertPermissionSectionArgs(Object[] args, boolean includesPagination) {
-        int expectedLength = includesPagination ? 52 : 50;
+        int expectedLength = includesPagination ? 48 : 46;
         assertEquals(expectedLength, args.length);
-        assertSection(args, 0, 12);
-        assertSection(args, 12, 12);
-        assertSection(args, 24, 13);
-        assertSection(args, 37, 13);
+        assertSection(args, 0, 11);
+        assertSection(args, 11, 11);
+        assertSection(args, 22, 12);
+        assertSection(args, 34, 12);
         if (includesPagination) {
-            assertEquals(3, args[50]);
-            assertEquals(3, args[51]);
+            assertEquals(3, args[46]);
+            assertEquals(3, args[47]);
         }
     }
 
@@ -195,7 +195,7 @@ class MemoryLibraryServiceTest {
         assertEquals(101L, args[offset + 1]);
         assertEquals(101L, args[offset + 2]);
         assertEquals(101L, args[offset + 3]);
-        if (length == 13) {
+        if (length == 12) {
             assertEquals(101L, args[offset + 4]);
         }
     }

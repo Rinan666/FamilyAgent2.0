@@ -63,7 +63,7 @@ public class MemoryLibraryQueryService {
         Long viewerUserId = CurrentUserGuard.currentUserId();
         String type = normalizeType(request.getType());
         String keyword = MemoryLibrarySupport.blankToNull(request.getKeyword());
-        String keywordLike = keyword == null ? null : "%" + keyword.toLowerCase(Locale.ROOT) + "%";
+        List<String> searchTerms = MemoryLibrarySupport.searchTerms(keyword);
         Long memberUserId = request.getMemberUserId();
         String visibility = MemoryLibrarySupport.blankToNull(request.getVisibility());
         int page = normalizePage(request.getPage());
@@ -71,10 +71,10 @@ public class MemoryLibraryQueryService {
         int offset = (page - 1) * pageSize;
 
         Object[] args = concat(
-                sectionArgs(request.getFamilyId(), viewerUserId, keywordLike, type, memberUserId, visibility),
-                sectionArgs(request.getFamilyId(), viewerUserId, keywordLike, type, memberUserId, visibility),
-                growthSectionArgs(request.getFamilyId(), viewerUserId, keywordLike, type, memberUserId, visibility),
-                growthSectionArgs(request.getFamilyId(), viewerUserId, keywordLike, type, memberUserId, visibility));
+                sectionArgs(request.getFamilyId(), viewerUserId, searchTerms, type, memberUserId, visibility),
+                sectionArgs(request.getFamilyId(), viewerUserId, searchTerms, type, memberUserId, visibility),
+                growthSectionArgs(request.getFamilyId(), viewerUserId, searchTerms, type, memberUserId, visibility),
+                growthSectionArgs(request.getFamilyId(), viewerUserId, searchTerms, type, memberUserId, visibility));
 
         String sql = MemoryLibraryQuerySql.fullQuery(archived);
         long total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM (" + sql + ") items", Long.class, args);
@@ -131,16 +131,16 @@ public class MemoryLibraryQueryService {
         item.setMetadata(metadata);
     }
 
-    private static Object[] sectionArgs(Long familyId, Long viewerUserId, String keywordLike,
+    private static Object[] sectionArgs(Long familyId, Long viewerUserId, List<String> searchTerms,
             String type, Long memberUserId, String visibility) {
         return new Object[] { familyId, viewerUserId, viewerUserId, viewerUserId,
-                keywordLike, keywordLike, type, type, memberUserId, memberUserId, visibility, visibility };
+                searchTerms.toArray(String[]::new), type, type, memberUserId, memberUserId, visibility, visibility };
     }
 
-    private static Object[] growthSectionArgs(Long familyId, Long viewerUserId, String keywordLike,
+    private static Object[] growthSectionArgs(Long familyId, Long viewerUserId, List<String> searchTerms,
             String type, Long memberUserId, String visibility) {
         return new Object[] { familyId, viewerUserId, viewerUserId, viewerUserId, viewerUserId,
-                keywordLike, keywordLike, type, type, memberUserId, memberUserId, visibility, visibility };
+                searchTerms.toArray(String[]::new), type, type, memberUserId, memberUserId, visibility, visibility };
     }
 
     static Object[] concat(Object[] args, Object... tail) {
