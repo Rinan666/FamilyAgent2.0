@@ -1,4 +1,4 @@
-name: familyagent-stack
+#name: familyagent-stack
 
 services:
   postgres:
