@@ -1,12 +1,8 @@
 package com.familyagent.module.growth.service;
 
 import cn.dev33.satoken.stp.StpUtil;
-import com.familyagent.module.family.repository.FamilyMemberRepository;
-import com.familyagent.module.family.service.CareAuthorizationService;
-import com.familyagent.module.family.service.FamilyService;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
-import com.familyagent.module.growth.repository.GrowthGuardReportRepository;
 import com.familyagent.module.growth.repository.GrowthGuardStalenessVoteRepository;
 import com.familyagent.module.memory.service.MemoryEmbeddingService;
 import org.junit.jupiter.api.Test;
@@ -31,22 +27,16 @@ import static org.mockito.Mockito.when;
 class GrowthGuardServiceTest {
 
     @Mock private GrowthGuardRecordRepository recordRepository;
-    @Mock private GrowthGuardReportRepository reportRepository;
     @Mock private GrowthGuardStalenessVoteRepository stalenessVoteRepository;
-    @Mock private FamilyService familyService;
-    @Mock private FamilyMemberRepository memberRepository;
-    @Mock private CareAuthorizationService careAuthorizationService;
+    @Mock private PermissionGate permissionGate;
     @Mock private MemoryEmbeddingService memoryEmbeddingService;
 
     @Test
     void searchFamilyRecords_shouldClampPageAndAttachStalenessStats() {
         GrowthGuardService service = new GrowthGuardService(
                 recordRepository,
-                reportRepository,
                 stalenessVoteRepository,
-                familyService,
-                memberRepository,
-                careAuthorizationService,
+                permissionGate,
                 memoryEmbeddingService);
 
         GrowthGuardRecord record = new GrowthGuardRecord();
@@ -75,17 +65,16 @@ class GrowthGuardServiceTest {
             assertEquals(1, result.getItems().size());
             assertTrue(((Map<?, ?>) result.getItems().get(0).getMetadata()).containsKey("stalenessStats"));
         }
+
+        verify(permissionGate).checkMembership(1L);
     }
 
     @Test
     void markRecordStale_shouldTreatDuplicateInsertAsExistingVote() {
         GrowthGuardService service = new GrowthGuardService(
                 recordRepository,
-                reportRepository,
                 stalenessVoteRepository,
-                familyService,
-                memberRepository,
-                careAuthorizationService,
+                permissionGate,
                 memoryEmbeddingService);
 
         GrowthGuardRecord record = new GrowthGuardRecord();
@@ -110,7 +99,8 @@ class GrowthGuardServiceTest {
             assertTrue(((Map<?, ?>) result.getMetadata()).containsKey("stalenessStats"));
         }
 
-        verify(familyService).checkMembership(1L);
+        verify(permissionGate).checkMembership(1L);
+        verify(permissionGate).ensureCanViewRecord(record, 10L);
         verify(stalenessVoteRepository).insert(any());
     }
 }
