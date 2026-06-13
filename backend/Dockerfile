@@ -3,10 +3,11 @@ FROM maven:3.9.9-eclipse-temurin-17 AS build
 WORKDIR /workspace
 
 COPY pom.xml ./
-RUN mvn -B dependency:go-offline
+COPY settings-docker.xml /root/.m2/settings.xml
+RUN mvn -B dependency:go-offline -s /root/.m2/settings.xml
 
 COPY src ./src
-RUN mvn -B -DskipTests package -DfinalName=app
+RUN mvn -B -DskipTests package -DfinalName=app -s /root/.m2/settings.xml
 
 FROM eclipse-temurin:17-jre-jammy AS runtime
 

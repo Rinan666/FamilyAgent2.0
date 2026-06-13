@@ -9,10 +9,10 @@ ENV BACKEND_URL=$BACKEND_URL
 ENV AI_SERVICE_URL=$AI_SERVICE_URL
 
 COPY package.json package-lock.json ./
-RUN npm ci --include=dev
+RUN npm ci --include=dev --registry=https://registry.npmmirror.com
 
 COPY . .
-RUN npm run build && npm prune --omit=dev
+RUN npm run build --registry=https://registry.npmmirror.com && npm prune --omit=dev --registry=https://registry.npmmirror.com
 
 FROM node:22-alpine AS runtime
 
