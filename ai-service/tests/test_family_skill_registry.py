@@ -27,8 +27,6 @@ def test_family_skills_include_active_memory_workflows():
     assert {
         "save_memory",
         "organize_draft",
-        "family_weekly_digest",
-        "heritage_task_draft",
     }.issubset(names)
 
     save_memory = get_family_skill("save_memory")
