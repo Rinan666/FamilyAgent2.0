@@ -8,6 +8,12 @@ import { familyApi, memoryApi, writeMemoryApi } from '@/lib/api';
 import { useViewerRole } from '@/hooks/useViewerRole';
 import { useAuthStore } from '@/stores/authStore';
 import VoiceInputButton from '@/components/voice/VoiceInputButton';
+import {
+  WorkbenchEmptyState,
+  WorkbenchHero,
+  WorkbenchPage,
+  WorkbenchSurface,
+} from '@/components/layout/Workbench';
 import type {
   DiaryEntryType,
   DiaryVisibility,
@@ -636,38 +642,44 @@ export default function DiaryPage() {
 
   if (loadingFamilies) {
     return (
-      <div className="flex h-60 items-center justify-center text-gray-400">
-        <RefreshCw className="mr-2 h-5 w-5 animate-spin" />
+      <WorkbenchSurface className="flex h-60 items-center justify-center text-stone-500">
+        <RefreshCw className="mr-2 h-5 w-5 animate-spin text-emerald-700" />
         正在加载...
-      </div>
+      </WorkbenchSurface>
     );
   }
 
   if (families.length === 0) {
     return (
-      <div className="mx-auto max-w-3xl rounded-xl border border-gray-200 bg-white p-10 text-center">
-        <Users className="mx-auto mb-3 h-10 w-10 text-gray-300" />
-        <h1 className="text-lg font-semibold text-gray-900">先创建一个家族空间</h1>
-        <p className="mt-2 text-sm text-gray-500">创建或加入家族后，就可以从这里统一写下记录、经验和观察。</p>
-        <Link
-          href="/dashboard/family"
-          className="mt-5 inline-flex h-10 items-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          前往家族空间
-        </Link>
-      </div>
+      <WorkbenchEmptyState
+        icon={<Users className="h-6 w-6" />}
+        title="先创建一个家族空间"
+        description="创建或加入家族后，就可以从这里统一记录日记、经验和观察。"
+        action={(
+          <Link
+            href="/dashboard/family"
+            className="inline-flex h-10 items-center justify-center rounded-2xl bg-stone-950 px-4 text-sm font-medium text-white shadow-[0_16px_36px_rgba(24,39,32,0.14)] transition hover:bg-stone-800"
+          >
+            前往家族空间
+          </Link>
+        )}
+      />
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">写下</h1>
-          <p className="mt-1 text-sm text-gray-500">先写下内容，再决定它是记录、经验，还是观察。</p>
-        </div>
-        <div className="flex flex-col gap-2 sm:min-w-[220px]">
-          <label className="text-xs font-medium text-gray-500">
+    <WorkbenchPage className="max-w-6xl">
+      <WorkbenchHero
+        badge={(
+          <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+            <BookHeart className="h-3.5 w-3.5" />
+            日记
+          </span>
+        )}
+        title="日记"
+        description="先写下内容，再决定它是日常记录、经验沉淀，还是照护观察。"
+        aside={(
+          <label className="block text-xs font-medium text-stone-500">
             家族空间
             <select
               value={selectedFamilyId || ''}
@@ -677,56 +689,56 @@ export default function DiaryPage() {
                 setSelectedFamilyId(nextFamilyId);
                 if (nextFamilyId) setActiveFamilyId(nextFamilyId);
               }}
-              className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+              className="mt-2 h-11 w-full rounded-2xl border border-stone-200/80 bg-white/90 px-4 text-sm font-medium text-stone-800 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
             >
               {families.map((family) => (
                 <option key={family.id} value={family.id}>{family.name}</option>
               ))}
             </select>
           </label>
-        </div>
-      </div>
+        )}
+      />
 
       {error && (
-        <div className="mb-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+        <div className="rounded-2xl border border-red-100 bg-red-50/90 px-4 py-3 text-sm text-red-700 shadow-sm">
           {error}
         </div>
       )}
 
       {success && (
-        <div className="mb-4 flex items-center gap-2 rounded-lg border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-700">
-          <CheckCircle className="h-4 w-4" />
+        <div className="flex items-center gap-2 rounded-2xl border border-emerald-100 bg-emerald-50/90 px-4 py-3 text-sm text-emerald-800 shadow-sm">
+          <CheckCircle className="h-4 w-4 text-emerald-700" />
           {success}
         </div>
       )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.45fr_0.85fr]">
-        <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
+        <WorkbenchSurface>
           <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
             {categoryOptions.map((item) => (
               <button
                 key={item.value}
                 type="button"
                 onClick={() => handleCategoryChange(item.value)}
-                className={`rounded-xl border px-4 py-3 text-left transition-colors ${
+                className={`rounded-2xl border px-4 py-3 text-left transition ${
                   category === item.value
-                    ? 'border-blue-200 bg-blue-50'
-                    : 'border-gray-200 bg-white hover:bg-gray-50'
+                    ? 'border-emerald-200 bg-emerald-50/80 shadow-sm'
+                    : 'border-stone-200/80 bg-white/78 hover:bg-stone-50'
                 }`}
               >
-                <p className="text-sm font-semibold text-gray-900">{item.label}</p>
-                <p className="mt-1 text-xs leading-5 text-gray-500">{item.description}</p>
+                <p className="text-sm font-semibold text-stone-950">{item.label}</p>
+                <p className="mt-1 text-xs leading-5 text-stone-500">{item.description}</p>
               </button>
             ))}
           </div>
 
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-stone-50/90 px-3 py-2 text-xs text-stone-500">
             <span>{draftStatus || '草稿会自动保存在本地'}</span>
             {hasDraftContent && (
               <button
                 type="button"
                 onClick={clearDraft}
-                className="font-medium text-gray-500 hover:text-red-600"
+                className="font-medium text-stone-500 transition hover:text-red-600"
               >
                 清空草稿
               </button>
@@ -737,7 +749,7 @@ export default function DiaryPage() {
             <button
               type="button"
               onClick={() => setShowTemplates((current) => !current)}
-              className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 hover:bg-gray-50"
+              className="inline-flex h-9 items-center gap-2 rounded-2xl border border-stone-200/80 bg-white/84 px-3 text-xs font-medium text-stone-600 transition hover:bg-stone-50"
             >
               不会开头
               <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showTemplates ? 'rotate-180' : ''}`} />
@@ -751,7 +763,7 @@ export default function DiaryPage() {
               type="button"
               onClick={() => void handleOrganize()}
               disabled={!content.trim() || saving || organizing}
-              className="inline-flex h-9 items-center gap-2 rounded-lg border border-purple-100 bg-purple-50 px-3 text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50"
+              className="inline-flex h-9 items-center gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 px-3 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {organizing ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
               帮我整理
@@ -759,15 +771,15 @@ export default function DiaryPage() {
           </div>
 
           {showTemplates && (
-            <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-3">
-              <p className="mb-2 text-xs font-medium text-blue-700">从一句开头开始</p>
+            <div className="mb-4 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-3">
+              <p className="mb-2 text-xs font-medium text-emerald-800">从一句开头开始</p>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {visibleTemplates.map((template) => (
                   <button
                     key={template.id}
                     type="button"
                     onClick={() => applyTemplate(template)}
-                    className="rounded-lg border border-blue-100 bg-white px-3 py-2 text-left text-xs font-medium text-blue-700 hover:bg-blue-100"
+                    className="rounded-xl border border-emerald-100 bg-white/90 px-3 py-2 text-left text-xs font-medium text-emerald-800 transition hover:bg-emerald-100/80"
                   >
                     {template.label}
                   </button>
@@ -777,13 +789,13 @@ export default function DiaryPage() {
           )}
 
           {relatedMemberLabel && (
-            <div className="mb-4 rounded-xl border border-purple-100 bg-purple-50 p-3 text-sm text-purple-700">
+            <div className="mb-4 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-3 text-sm text-emerald-800">
               当前内容会关联到 {relatedMemberLabel}。
             </div>
           )}
 
           <label className="mb-4 block">
-            <span className="mb-2 block text-sm font-medium text-gray-800">正文</span>
+            <span className="mb-2 block text-sm font-medium text-stone-800">正文</span>
             <textarea
               value={content}
               onChange={(event) => setContent(event.target.value)}
@@ -795,47 +807,47 @@ export default function DiaryPage() {
                     ? '写下你观察到的情况、想继续留意的点和下次复核方向。'
                     : '直接写下此刻发生的事、感受、判断或想留给家人的一句话。'
               }
-              className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm leading-7 text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
+              className="min-h-[22rem] w-full resize-none rounded-2xl border border-stone-200/80 bg-white/90 px-4 py-3 text-sm leading-7 text-stone-800 outline-none transition placeholder:text-stone-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
             />
           </label>
 
           {title && (
-            <div className="mb-4 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            <div className="mb-4 rounded-2xl border border-amber-100 bg-amber-50/80 px-3 py-2 text-xs text-amber-800">
               当前整理出的标题：{title}
             </div>
           )}
 
           <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className="text-xs font-medium text-gray-500">
+            <label className="text-xs font-medium text-stone-500">
               可见范围
               <select
                 value={visibility}
                 onChange={(event) => setVisibility(event.target.value as DiaryVisibility)}
-                className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+                className="mt-1 h-10 w-full rounded-2xl border border-stone-200/80 bg-white/90 px-3 text-sm text-stone-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
               >
                 {visibilityOptions.map((option) => (
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>
-              <span className="mt-1 block text-[11px] text-gray-400">
+              <span className="mt-1 block text-[11px] text-stone-400">
                 {visibilityOptions.find((option) => option.value === visibility)?.note}
               </span>
             </label>
 
-            <label className="text-xs font-medium text-gray-500">
+            <label className="text-xs font-medium text-stone-500">
               标签
               <input
                 value={tagText}
                 onChange={(event) => setTagText(event.target.value)}
                 placeholder="例如：日常 经验 观察 照护"
-                className="mt-1 h-10 w-full rounded-lg border border-gray-200 px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+                className="mt-1 h-10 w-full rounded-2xl border border-stone-200/80 bg-white/90 px-3 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
               />
             </label>
           </div>
 
           {category === 'OBSERVATION' && (
             <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="text-xs font-medium text-gray-500">
+              <label className="text-xs font-medium text-stone-500">
                 关联成员
                 <select
                   value={relatedUserId || ''}
@@ -843,7 +855,7 @@ export default function DiaryPage() {
                     const value = Number(event.target.value);
                     setRelatedUserId(Number.isFinite(value) && value > 0 ? value : undefined);
                   }}
-                  className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+                  className="mt-1 h-10 w-full rounded-2xl border border-stone-200/80 bg-white/90 px-3 text-sm text-stone-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                 >
                   <option value="">请选择一位成员</option>
                   {members.map((member) => (
@@ -851,14 +863,14 @@ export default function DiaryPage() {
                   ))}
                 </select>
               </label>
-              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-xs leading-6 text-gray-500">
+              <div className="rounded-2xl border border-stone-200/80 bg-stone-50/90 px-3 py-3 text-xs leading-6 text-stone-500">
                 观察类内容只保留最小字段，保存后再去记忆库继续筛选和整理。
               </div>
             </div>
           )}
 
-          <div className="mb-4 rounded-lg bg-gray-50 p-3 text-xs leading-6 text-gray-500">
-            <div className="mb-1 flex items-center gap-1.5 font-medium text-gray-700">
+          <div className="mb-4 rounded-2xl bg-stone-50/90 p-3 text-xs leading-6 text-stone-500">
+            <div className="mb-1 flex items-center gap-1.5 font-medium text-stone-700">
               <Lock className="h-3.5 w-3.5" />
               AI 使用边界
             </div>
@@ -869,39 +881,41 @@ export default function DiaryPage() {
             type="button"
             onClick={() => void handleSave()}
             disabled={!selectedFamilyId || !content.trim() || saving}
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-stone-950 px-4 text-sm font-medium text-white shadow-[0_16px_36px_rgba(24,39,32,0.14)] transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {saving ? '正在保存...' : primaryActionLabel(category)}
           </button>
-        </section>
+        </WorkbenchSurface>
 
-        <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
+        <WorkbenchSurface>
           <div className="mb-4 flex items-center gap-2">
-            <BookHeart className="h-5 w-5 text-blue-600" />
-            <h2 className="text-sm font-semibold text-gray-900">记忆库</h2>
+            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-800">
+              <BookHeart className="h-5 w-5" />
+            </div>
+            <h2 className="text-sm font-semibold text-stone-950">记忆库</h2>
           </div>
 
-          <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
-            <p className="text-sm font-medium text-blue-900">保存后的内容会进入记忆库</p>
-            <p className="mt-2 text-sm leading-6 text-blue-800">
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
+            <p className="text-sm font-medium text-emerald-950">保存后的内容会进入记忆库</p>
+            <p className="mt-2 text-sm leading-6 text-emerald-900/80">
               搜索、筛选、查看和后续整理，都统一在记忆库里完成。
             </p>
             <Link
               href={`/dashboard/family?tab=library${selectedFamilyId ? `&familyId=${selectedFamilyId}` : ''}`}
-              className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
+              className="mt-4 inline-flex h-10 items-center justify-center rounded-2xl bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800"
             >
               前往记忆库
             </Link>
           </div>
 
-          <div className="mt-4 rounded-xl border border-dashed border-gray-200 p-4 text-sm leading-6 text-gray-500">
+          <div className="mt-4 rounded-2xl border border-dashed border-stone-200/90 bg-white/55 p-4 text-sm leading-6 text-stone-500">
             {selectedFamily
-              ? `当前写入目标：${selectedFamily.name}。页面会在每次保存后回到空白状态，方便继续写下一条。`
-              : '每次保存后会回到空白状态，方便继续写下一条。'}
+              ? `当前写入目标：${selectedFamily.name}。页面会在每次保存后回到空白状态，方便继续记录下一条。`
+              : '每次保存后会回到空白状态，方便继续记录下一条。'}
           </div>
-        </section>
+        </WorkbenchSurface>
       </div>
-    </div>
+    </WorkbenchPage>
   );
 }

@@ -705,23 +705,23 @@ export default function FamilyMemberMemoryPage() {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <Link
                 href={`/dashboard/diary${selectedFamilyId ? `?familyId=${selectedFamilyId}` : ''}`}
-                className="rounded-xl border border-gray-100 bg-gray-50 p-4 hover:border-blue-200 hover:bg-blue-50"
+                className="rounded-xl border border-gray-100 bg-gray-50 p-4 hover:border-emerald-200 hover:bg-emerald-50"
               >
-                <p className="text-sm font-semibold text-gray-900">写下一条记录</p>
+                <p className="text-sm font-semibold text-gray-900">写日记</p>
                 <p className="mt-1 text-xs leading-5 text-gray-500">补充和 TA 相关的日常、事件或回忆。</p>
               </Link>
               <Link
                 href={`/dashboard/diary${selectedFamilyId ? `?familyId=${selectedFamilyId}&writeCategory=EXPERIENCE` : '?writeCategory=EXPERIENCE'}`}
-                className="rounded-xl border border-gray-100 bg-gray-50 p-4 hover:border-blue-200 hover:bg-blue-50"
+                className="rounded-xl border border-gray-100 bg-gray-50 p-4 hover:border-emerald-200 hover:bg-emerald-50"
               >
-                <p className="text-sm font-semibold text-gray-900">写下一条经验</p>
+                <p className="text-sm font-semibold text-gray-900">写经验日记</p>
                 <p className="mt-1 text-xs leading-5 text-gray-500">把对 TA 有帮助的经验或提醒沉淀下来。</p>
               </Link>
               <Link
                 href={`/dashboard/diary?writeCategory=OBSERVATION${selectedFamilyId ? `&familyId=${selectedFamilyId}` : ''}${targetUserId ? `&relatedUserId=${targetUserId}` : ''}`}
-                className="rounded-xl border border-gray-100 bg-gray-50 p-4 hover:border-blue-200 hover:bg-blue-50"
+                className="rounded-xl border border-gray-100 bg-gray-50 p-4 hover:border-emerald-200 hover:bg-emerald-50"
               >
-                <p className="text-sm font-semibold text-gray-900">写下一条观察</p>
+                <p className="text-sm font-semibold text-gray-900">写观察日记</p>
                 <p className="mt-1 text-xs leading-5 text-gray-500">把成长观察和后续提醒继续补完整。</p>
               </Link>
             </div>
