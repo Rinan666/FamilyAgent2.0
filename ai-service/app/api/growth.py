@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from app.api.memory_contracts import WEEKLY_REPORT_SCHEMA
 from app.api.memory_helpers import _compact_string_list
 from app.llm.client import llm_client
-from app.llm.prompts.growth import WEEKLY_REPORT_SYSTEM_PROMPT
+from app.llm.prompts.growth import WEEKLY_REPORT_SYSTEM_PROMPT, build_weekly_report_user_prompt
 from app.middleware.auth import verify_token
 from app.utils.safety_limits import enforce_ai_concurrency, enforce_ai_rate_limit
 
@@ -33,16 +33,12 @@ class WeeklyReportRequest(BaseModel):
 @router.post("/weekly-report")
 async def weekly_report(request: WeeklyReportRequest):
     try:
-        prompt = f"""家庭：{request.family_name or "未命名家庭"}
-对象：{request.target or "家庭成员"}
-
-成长观察记录：
-{json.dumps(_compact_records(request.records), ensure_ascii=False)}
-
-家族经验卡：
-{json.dumps(_compact_memories(request.memories), ensure_ascii=False)}
-
-请生成成长观察照护摘要。"""
+        prompt = build_weekly_report_user_prompt(
+            request.family_name,
+            request.target,
+            _compact_records(request.records),
+            _compact_memories(request.memories),
+        )
         raw = await llm_client.chat(
             messages=[
                 {"role": "system", "content": WEEKLY_REPORT_SYSTEM_PROMPT},

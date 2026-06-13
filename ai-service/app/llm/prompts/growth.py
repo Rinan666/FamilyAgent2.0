@@ -1,4 +1,5 @@
 """Growth-related prompt definitions for FamilyAgent."""
+import json
 
 WEEKLY_REPORT_SYSTEM_PROMPT = """你是 FamilyAgent 的成长观察摘要助手。
 你要根据家庭成员记录的成长观察、来源视角、证据类型、置信度和家族经验卡，生成一份温和、简短、可执行的照护摘要。
@@ -27,3 +28,21 @@ WEEKLY_REPORT_SYSTEM_PROMPT = """你是 FamilyAgent 的成长观察摘要助手�
 - suggested_actions 1-3 条，每条必须可执行。
 - follow_up_questions 1-3 条，用于下次家长记录。
 - safety_note 一句话，说明照护可见和非诊断边界。"""
+
+
+def build_weekly_report_user_prompt(
+    family_name: str,
+    target: str,
+    records: list[dict],
+    memories: list[dict],
+) -> str:
+    return f"""家庭：{family_name or "未命名家庭"}
+对象：{target or "家庭成员"}
+
+成长观察记录：
+{json.dumps(records, ensure_ascii=False)}
+
+家族经验卡：
+{json.dumps(memories, ensure_ascii=False)}
+
+请生成成长观察照护摘要。"""
