@@ -137,15 +137,17 @@ public class MemoryLibraryQueryService {
 
     private static Object[] sectionArgs(Long familyId, Long viewerUserId, List<String> searchTerms,
             String type, Long memberUserId, String visibility, String tag, LocalDate dateFrom, LocalDate dateTo) {
+        String[] terms = searchTerms.toArray(String[]::new);
         return new Object[] { familyId, viewerUserId, viewerUserId, viewerUserId,
-                searchTerms.toArray(String[]::new), type, type, memberUserId, memberUserId, visibility, visibility,
+                terms, terms, type, type, memberUserId, memberUserId, visibility, visibility,
                 tag, tag, dateFrom, dateFrom, dateTo, dateTo };
     }
 
     private static Object[] growthSectionArgs(Long familyId, Long viewerUserId, List<String> searchTerms,
             String type, Long memberUserId, String visibility, String tag, LocalDate dateFrom, LocalDate dateTo) {
+        String[] terms = searchTerms.toArray(String[]::new);
         return new Object[] { familyId, viewerUserId, viewerUserId, viewerUserId, viewerUserId,
-                searchTerms.toArray(String[]::new), type, type, memberUserId, memberUserId, visibility, visibility,
+                terms, terms, type, type, memberUserId, memberUserId, visibility, visibility,
                 tag, tag, dateFrom, dateFrom, dateTo, dateTo };
     }
 

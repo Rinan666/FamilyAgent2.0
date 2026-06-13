@@ -80,11 +80,15 @@ class MemoryLibraryServiceTest {
 
             ArgumentCaptor<Object[]> countArgs = ArgumentCaptor.forClass(Object[].class);
             ArgumentCaptor<Object[]> listArgs = ArgumentCaptor.forClass(Object[].class);
-            verify(jdbcTemplate).queryForObject(anyString(), eq(Long.class), countArgs.capture());
-            verify(jdbcTemplate).query(anyString(), any(org.springframework.jdbc.core.RowMapper.class), listArgs.capture());
+            ArgumentCaptor<String> countSql = ArgumentCaptor.forClass(String.class);
+            ArgumentCaptor<String> listSql = ArgumentCaptor.forClass(String.class);
+            verify(jdbcTemplate).queryForObject(countSql.capture(), eq(Long.class), countArgs.capture());
+            verify(jdbcTemplate).query(listSql.capture(), any(org.springframework.jdbc.core.RowMapper.class), listArgs.capture());
 
             assertPermissionSectionArgs(countArgs.getValue(), false);
             assertPermissionSectionArgs(listArgs.getValue(), true);
+            assertEquals(countQuestionMarks(countSql.getValue()), countArgs.getValue().length);
+            assertEquals(countQuestionMarks(listSql.getValue()), listArgs.getValue().length);
         }
     }
 
@@ -178,15 +182,15 @@ class MemoryLibraryServiceTest {
     // --- helpers ---
 
     private static void assertPermissionSectionArgs(Object[] args, boolean includesPagination) {
-        int expectedLength = includesPagination ? 72 : 70;
+        int expectedLength = includesPagination ? 76 : 74;
         assertEquals(expectedLength, args.length);
-        assertSection(args, 0, 17);
-        assertSection(args, 17, 17);
-        assertSection(args, 34, 18);
-        assertSection(args, 52, 18);
+        assertSection(args, 0, 18);
+        assertSection(args, 18, 18);
+        assertSection(args, 36, 19);
+        assertSection(args, 55, 19);
         if (includesPagination) {
-            assertEquals(3, args[70]);
-            assertEquals(3, args[71]);
+            assertEquals(3, args[74]);
+            assertEquals(3, args[75]);
         }
     }
 
@@ -195,8 +199,18 @@ class MemoryLibraryServiceTest {
         assertEquals(101L, args[offset + 1]);
         assertEquals(101L, args[offset + 2]);
         assertEquals(101L, args[offset + 3]);
-        if (length == 12) {
+        if (length == 19) {
             assertEquals(101L, args[offset + 4]);
         }
+    }
+
+    private static int countQuestionMarks(String sql) {
+        int count = 0;
+        for (int i = 0; i < sql.length(); i++) {
+            if (sql.charAt(i) == '?') {
+                count++;
+            }
+        }
+        return count;
     }
 }
