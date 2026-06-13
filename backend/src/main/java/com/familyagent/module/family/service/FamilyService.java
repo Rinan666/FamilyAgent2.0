@@ -184,6 +184,44 @@ public class FamilyService {
         }
     }
 
+    /**
+     * Look up a family member by family and user id.
+     * Throws {@link BusinessException} with {@code NOT_FAMILY_MEMBER} when the user is not in the family.
+     * This is the supported external API — other modules should call this instead of dipping into
+     * {@code FamilyMemberRepository} directly.
+     */
+    public FamilyMember getFamilyMember(Long familyId, Long userId) {
+        FamilyMember member = memberRepository.findByFamilyAndUser(familyId, userId);
+        if (member == null) {
+            throw new BusinessException(ErrorCode.NOT_FAMILY_MEMBER);
+        }
+        return member;
+    }
+
+    /**
+     * Look up a family member view (enriched DTO) by family and user id.
+     * Throws {@link BusinessException} with {@code NOT_FAMILY_MEMBER} when the user is not in the family.
+     */
+    public FamilyMemberVO getMemberView(Long familyId, Long userId) {
+        FamilyMemberVO view = memberRepository.findMemberViewByFamilyAndUser(familyId, userId);
+        if (view == null) {
+            throw new BusinessException(ErrorCode.NOT_FAMILY_MEMBER);
+        }
+        return view;
+    }
+
+    /**
+     * Admin-facing: list all member views for a family without requiring the caller to be a member.
+     * The caller must enforce platform-admin access separately. Throws
+     * {@link BusinessException} with {@code FAMILY_NOT_FOUND} if the family does not exist.
+     */
+    public List<FamilyMemberVO> listMemberViewsForAdmin(Long familyId) {
+        if (familyRepository.selectById(familyId) == null) {
+            throw new BusinessException(ErrorCode.FAMILY_NOT_FOUND);
+        }
+        return memberRepository.findMemberViewsByFamilyId(familyId);
+    }
+
     public void checkOwner(Long familyId) {
         User currentUser = userService.getCurrentUser();
         FamilyMember member = memberRepository.findByFamilyAndUser(familyId, currentUser.getId());

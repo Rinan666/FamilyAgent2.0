@@ -6,7 +6,6 @@ import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.repository.DiaryEntryRepository;
 import com.familyagent.module.family.dto.FamilyMemberVO;
-import com.familyagent.module.family.repository.FamilyMemberRepository;
 import com.familyagent.module.family.service.FamilyService;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
@@ -35,7 +34,6 @@ public class MirrorContextService {
     private static final String DISCLAIMER = "镜像 Agent 不是本人，也不代表本人真实想法；它会用目标成员的授权可见内容回答，并用目标成员的私有记录生成不含原文的风格参考。记录不足时应直接说明不确定。";
 
     private final FamilyService familyService;
-    private final FamilyMemberRepository familyMemberRepository;
     private final DiaryEntryRepository diaryRepository;
     private final MemoryEntryRepository memoryRepository;
     private final GrowthGuardRecordRepository growthRecordRepository;
@@ -48,11 +46,13 @@ public class MirrorContextService {
         Long viewerUserId = CurrentUserGuard.currentUserId();
         familyService.checkMembership(familyId);
 
-        FamilyMemberVO target = familyMemberRepository.findMemberViewByFamilyAndUser(familyId, targetUserId);
-        if (target == null) {
-            throw new BusinessException(ErrorCode.NOT_FAMILY_MEMBER, "镜像对象不属于当前家族");
+        FamilyMemberVO target = familyService.getMemberView(familyId, targetUserId);
+        FamilyMemberVO viewer;
+        try {
+            viewer = familyService.getMemberView(familyId, viewerUserId);
+        } catch (BusinessException ignored) {
+            viewer = null;
         }
-        FamilyMemberVO viewer = familyMemberRepository.findMemberViewByFamilyAndUser(familyId, viewerUserId);
         List<FamilyMemberVO> membersForLabels = new ArrayList<>();
         membersForLabels.add(target);
         if (viewer != null) {

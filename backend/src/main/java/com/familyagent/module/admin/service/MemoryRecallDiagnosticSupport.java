@@ -4,7 +4,7 @@ import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.admin.dto.MemoryRecallDiagnosticRequest;
 import com.familyagent.module.admin.dto.MemoryRecallDiagnosticResponse;
-import com.familyagent.module.family.repository.FamilyMemberRepository;
+import com.familyagent.module.family.service.FamilyService;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
 import com.familyagent.module.memory.service.AuthorizedMemoryRecallService;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +17,7 @@ import java.util.List;
 class MemoryRecallDiagnosticSupport {
 
     private final PlatformAdminAccessSupport adminAccessSupport;
-    private final FamilyMemberRepository familyMemberRepository;
+    private final FamilyService familyService;
     private final AuthorizedMemoryRecallService memoryRecallService;
 
     MemoryRecallDiagnosticResponse diagnoseMemoryRecall(MemoryRecallDiagnosticRequest request) {
@@ -25,9 +25,7 @@ class MemoryRecallDiagnosticSupport {
         if (request == null || request.getFamilyId() == null || request.getViewerUserId() == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "familyId and viewerUserId are required");
         }
-        if (familyMemberRepository.findByFamilyAndUser(request.getFamilyId(), request.getViewerUserId()) == null) {
-            throw new BusinessException(ErrorCode.NOT_FAMILY_MEMBER, "The simulated viewer is not a member of this family");
-        }
+        familyService.getFamilyMember(request.getFamilyId(), request.getViewerUserId());
 
         int diaryLimit = clampLimit(request.getDiaryLimit(), 3, 10);
         int memoryLimit = clampLimit(request.getMemoryLimit(), 3, 10);

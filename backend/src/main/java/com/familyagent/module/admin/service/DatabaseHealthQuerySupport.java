@@ -14,8 +14,7 @@ import com.familyagent.module.admin.dto.SessionArchiveRangeSummary;
 import com.familyagent.module.admin.dto.SessionStorageHealthSummary;
 import com.familyagent.module.admin.dto.SuspiciousFamilySummary;
 import com.familyagent.module.family.dto.FamilyMemberVO;
-import com.familyagent.module.family.repository.FamilyMemberRepository;
-import com.familyagent.module.family.repository.FamilyRepository;
+import com.familyagent.module.family.service.FamilyService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -41,7 +40,6 @@ class DatabaseHealthQuerySupport {
             new TableDefinition("diary_entries", "Life records", false),
             new TableDefinition("memory_entries", "Family experience", false),
             new TableDefinition("growth_guard_records", "Growth observations", false),
-            new TableDefinition("growth_guard_reports", "Growth reports", false),
             new TableDefinition("memory_embeddings", "RAG embeddings", false),
             new TableDefinition("mirror_agent_data", "Mirror profiles", false),
             new TableDefinition("heritage_tasks", "Heritage tasks", false),
@@ -53,18 +51,14 @@ class DatabaseHealthQuerySupport {
 
     private final PlatformAdminAccessSupport adminAccessSupport;
     private final JdbcTemplate jdbcTemplate;
-    private final FamilyRepository familyRepository;
-    private final FamilyMemberRepository familyMemberRepository;
+    private final FamilyService familyService;
 
     List<FamilyMemberVO> listFamilyMembers(Long familyId) {
         adminAccessSupport.requirePlatformAdmin();
         if (familyId == null || familyId <= 0) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "familyId is required");
         }
-        if (familyRepository.selectById(familyId) == null) {
-            throw new BusinessException(ErrorCode.FAMILY_NOT_FOUND);
-        }
-        return familyMemberRepository.findMemberViewsByFamilyId(familyId);
+        return familyService.listMemberViewsForAdmin(familyId);
     }
 
     DatabaseHealthResponse getHealth() {
