@@ -151,26 +151,6 @@ public class AIServiceClient {
         }
     }
 
-    @CircuitBreaker(name = "aiService", fallbackMethod = "fallbackCompressDiary")
-    @Retry(name = "aiService")
-    public Map<String, Object> compressDiary(Map<String, Object> request, String authorization) {
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            if (authorization != null && !authorization.isBlank()) {
-                headers.set("Authorization", authorization);
-            }
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
-
-            ResponseEntity<Map> response = restTemplate.postForEntity(
-                    baseUrl + "/ai/memory/compress-diary", entity, Map.class);
-            return response.getBody();
-        } catch (Exception e) {
-            log.warn("Diary compression call failed: {}", e.getMessage());
-            return Map.of("success", false, "error", e.getMessage());
-        }
-    }
-
     /**
      * Generate an embedding vector for backend-owned memory indexing.
      */
@@ -190,29 +170,6 @@ public class AIServiceClient {
             return response.getBody();
         } catch (Exception e) {
             log.warn("Embedding service call failed: {}", e.getMessage());
-            return Map.of("success", false, "error", e.getMessage());
-        }
-    }
-
-    /**
-     * Summarize a session archive chunk via the AI service using the internal service token.
-     */
-    @CircuitBreaker(name = "aiService", fallbackMethod = "fallbackSummarizeSessionArchive")
-    @Retry(name = "aiService")
-    public Map<String, Object> summarizeSessionArchive(Map<String, Object> request) {
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            if (internalToken != null && !internalToken.isBlank()) {
-                headers.set(INTERNAL_SERVICE_TOKEN_HEADER, internalToken);
-            }
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
-
-            ResponseEntity<Map> response = restTemplate.postForEntity(
-                    baseUrl + "/ai/memory/session-archive-summary", entity, Map.class);
-            return response.getBody();
-        } catch (Exception e) {
-            log.warn("Session archive summary call failed: {}", e.getMessage());
             return Map.of("success", false, "error", e.getMessage());
         }
     }
@@ -239,16 +196,6 @@ public class AIServiceClient {
 
     private Map<String, Object> fallbackExtractMemories(Map<String, Object> request, String authorization, Exception ex) {
         log.warn("AI memory extraction fallback triggered: {}", ex.getMessage());
-        return Map.of("success", false, "error", "AI service unavailable");
-    }
-
-    private Map<String, Object> fallbackCompressDiary(Map<String, Object> request, String authorization, Exception ex) {
-        log.warn("AI diary compression fallback triggered: {}", ex.getMessage());
-        return Map.of("success", false, "error", "AI service unavailable");
-    }
-
-    private Map<String, Object> fallbackSummarizeSessionArchive(Map<String, Object> request, Exception ex) {
-        log.warn("AI session archive summary fallback triggered: {}", ex.getMessage());
         return Map.of("success", false, "error", "AI service unavailable");
     }
 

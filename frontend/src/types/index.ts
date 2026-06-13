@@ -398,13 +398,6 @@ export interface FamilyMemoryCard {
   safety_note: string;
 }
 
-export interface HeritageClassicalDraft {
-  title: string;
-  classicalText: string;
-  plainSummary: string;
-  styleNote: string;
-}
-
 export type HeritageTaskStatus = 'PENDING' | 'DONE' | 'ARCHIVED' | string;
 
 export interface HeritageTask {
@@ -433,27 +426,6 @@ export interface CreateHeritageTaskRequest {
   targetLabel?: string;
   dueDate?: string;
   metadata?: Record<string, unknown>;
-}
-
-export interface HeritageTaskDraft {
-  title: string;
-  action: string;
-  target_label: string;
-  due_days: number;
-  completion_prompt: string;
-  reason: string;
-}
-
-export interface FamilyWeeklyDigest {
-  title: string;
-  summary: string;
-  memory_highlights: string[];
-  family_experience_refs: string[];
-  growth_signals: string[];
-  suggested_actions: string[];
-  questions_for_family: string[];
-  missing_records: string[];
-  safety_note: string;
 }
 
 export interface CreateFamilyMemoryRequest {

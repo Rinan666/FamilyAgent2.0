@@ -1,7 +1,6 @@
 package com.familyagent.module.diary.service;
 
 import cn.dev33.satoken.stp.StpUtil;
-import com.familyagent.infra.ai.AIServiceClient;
 import com.familyagent.module.diary.dto.CreateDiaryEntryRequest;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.repository.DiaryEntryRepository;
@@ -21,7 +20,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -33,16 +31,13 @@ class DiaryEntryServiceTest {
     @Mock private DiaryEntryRepository diaryRepository;
     @Mock private FamilyService familyService;
     @Mock private MemoryEmbeddingService memoryEmbeddingService;
-    @Mock private AIServiceClient aiServiceClient;
 
     @Test
     void create_shouldMergeOnlyManualSelfDiaryWhenThereIsExactlyOneCandidate() {
         DiaryEntry existing = existingDiary(99L, "今天早上去买菜");
         when(diaryRepository.findSameDayMergeCandidates(1L, 10L, "PRIVATE", "2026-06-08"))
                 .thenReturn(List.of(existing));
-        when(aiServiceClient.compressDiary(any(), any())).thenThrow(new RuntimeException("skip ai"));
-
-        DiaryEntryService service = new DiaryEntryService(diaryRepository, familyService, memoryEmbeddingService, aiServiceClient);
+        DiaryEntryService service = new DiaryEntryService(diaryRepository, familyService, memoryEmbeddingService);
         CreateDiaryEntryRequest request = manualRequest(Map.of("eventAt", "2026-06-08T09:30:00Z"));
         request.setContent("下午又补记了一段");
 
@@ -72,7 +67,7 @@ class DiaryEntryServiceTest {
         when(diaryRepository.findSameDayMergeCandidates(1L, 10L, "PRIVATE", "2026-06-08"))
                 .thenReturn(List.of(existingA, existingB));
 
-        DiaryEntryService service = new DiaryEntryService(diaryRepository, familyService, memoryEmbeddingService, aiServiceClient);
+        DiaryEntryService service = new DiaryEntryService(diaryRepository, familyService, memoryEmbeddingService);
         CreateDiaryEntryRequest request = manualRequest(Map.of("eventAt", "2026-06-08T09:30:00Z"));
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
@@ -87,7 +82,7 @@ class DiaryEntryServiceTest {
 
     @Test
     void create_shouldNotMergeWhenDiaryTargetsRelatedUser() {
-        DiaryEntryService service = new DiaryEntryService(diaryRepository, familyService, memoryEmbeddingService, aiServiceClient);
+        DiaryEntryService service = new DiaryEntryService(diaryRepository, familyService, memoryEmbeddingService);
         CreateDiaryEntryRequest request = manualRequest(Map.of(
                 "eventAt", "2026-06-08T09:30:00Z",
                 "relatedUserId", 22,
@@ -105,7 +100,7 @@ class DiaryEntryServiceTest {
 
     @Test
     void create_shouldNotMergeForNonManualSource() {
-        DiaryEntryService service = new DiaryEntryService(diaryRepository, familyService, memoryEmbeddingService, aiServiceClient);
+        DiaryEntryService service = new DiaryEntryService(diaryRepository, familyService, memoryEmbeddingService);
         CreateDiaryEntryRequest request = manualRequest(Map.of(
                 "eventAt", "2026-06-08T09:30:00Z",
                 "source", "HERITAGE_TASK_COMPLETION"));
@@ -123,7 +118,7 @@ class DiaryEntryServiceTest {
 
     @Test
     void create_shouldPersistManualSourceOnNewEntry() {
-        DiaryEntryService service = new DiaryEntryService(diaryRepository, familyService, memoryEmbeddingService, aiServiceClient);
+        DiaryEntryService service = new DiaryEntryService(diaryRepository, familyService, memoryEmbeddingService);
         CreateDiaryEntryRequest request = manualRequest(Map.of());
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
@@ -144,7 +139,7 @@ class DiaryEntryServiceTest {
 
     @Test
     void searchFamilyEntries_shouldClampPageAndForwardFilters() {
-        DiaryEntryService service = new DiaryEntryService(diaryRepository, familyService, memoryEmbeddingService, aiServiceClient);
+        DiaryEntryService service = new DiaryEntryService(diaryRepository, familyService, memoryEmbeddingService);
         DiaryEntry entry = existingDiary(201L, "晨练后聊了学校里的事");
         when(diaryRepository.countVisibleByFamilySearch(1L, 10L, 22L, "晨练")).thenReturn(7L);
         when(diaryRepository.searchVisibleByFamily(1L, 10L, 22L, "晨练", 6, 6L)).thenReturn(List.of(entry));

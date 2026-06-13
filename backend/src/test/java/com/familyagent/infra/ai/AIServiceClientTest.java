@@ -12,7 +12,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -95,23 +94,6 @@ class AIServiceClientTest {
         assertEquals("Bearer demo-token", authorizationHeader.get());
         assertEquals(": connected\n\ndata: {\"content\":\"hello\"}\n\ndata: {\"done\":true}\n\n",
                 downstream.toString(StandardCharsets.UTF_8));
-    }
-
-    @Test
-    void summarizeSessionArchive_shouldSendInternalServiceToken() throws Exception {
-        AtomicReference<String> receivedToken = new AtomicReference<>();
-        server = startServer("/ai/memory/session-archive-summary", exchange -> {
-            receivedToken.set(exchange.getRequestHeaders().getFirst("X-Internal-Service-Token"));
-            respond(exchange, "application/json", 200,
-                    "{\"success\":true,\"data\":{\"summary\":\"archive summary\",\"titleSuggestion\":\"family title\",\"confidence\":\"HIGH\"}}");
-        });
-
-        AIServiceClient client = createClient("secret-token");
-
-        Map<String, Object> response = client.summarizeSessionArchive(Map.of("session_id", 1, "messages", List.of()));
-
-        assertEquals("secret-token", receivedToken.get());
-        assertEquals(Boolean.TRUE, response.get("success"));
     }
 
     private HttpServer startServer(String path, ExchangeHandler handler) throws IOException {

@@ -6,13 +6,8 @@ import type {
   AuthorizedMemoryRecallResult,
   ChatMessage,
   CreateFamilyMemoryRequest,
-  DiaryEntry,
   FamilyMemoryCard,
-  FamilyWeeklyDigest,
-  GrowthGuardRecord,
-  HeritageClassicalDraft,
   HeritageSaveJudge,
-  HeritageTaskDraft,
   MemoryEntry,
   MemoryEntryType,
   MemoryVoteType,
@@ -57,18 +52,6 @@ export const memoryApi = {
       family_context: body.familyContext || '',
       target: body.target || '',
     }),
-  createHeritageClassicalDraft: (body: {
-    content: string;
-    memoryType?: MemoryEntryType;
-    scenario?: string;
-    familyContext?: string;
-  }) =>
-    aiRequest<{ success: boolean; data: HeritageClassicalDraft }>('/memory/heritage-classical', {
-      content: body.content,
-      memory_type: body.memoryType || 'ELDER_ADVICE',
-      scenario: body.scenario || '',
-      family_context: body.familyContext || '',
-    }),
   planSaveTool: (body: {
     message: string;
     familyContext?: string;
@@ -112,36 +95,6 @@ export const memoryApi = {
       scenario: body.scenario || '',
       family_context: body.familyContext || '',
       source_mode: body.sourceMode || '',
-    }),
-  familyWeeklyDigest: (body: {
-    familyName?: string;
-    diaries: DiaryEntry[];
-    memories: MemoryEntry[];
-    growthRecords: GrowthGuardRecord[];
-    target?: string;
-  }) =>
-    aiRequest<{ success: boolean; data: FamilyWeeklyDigest }>('/memory/family-weekly-digest', {
-      family_name: body.familyName || '',
-      diaries: body.diaries,
-      memories: body.memories,
-      growth_records: body.growthRecords,
-      target: body.target || '',
-    }),
-  heritageTaskDraft: (body: {
-    content: string;
-    summary?: string;
-    memoryType?: string;
-    scenario?: string;
-    familyContext?: string;
-    existingActions?: string[];
-  }) =>
-    aiRequest<{ success: boolean; data: HeritageTaskDraft }>('/memory/heritage-task-draft', {
-      content: body.content,
-      summary: body.summary || '',
-      memory_type: body.memoryType || 'ELDER_ADVICE',
-      scenario: body.scenario || '',
-      family_context: body.familyContext || '',
-      existing_actions: body.existingActions || [],
     }),
   recall: (body: { query?: string; subject?: string; limit?: number }) =>
     request<MemoryEntry[]>('/memories/recall', {

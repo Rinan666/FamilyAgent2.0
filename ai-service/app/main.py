@@ -176,7 +176,6 @@ async def timeout_handler(request: Request, exc: TimeoutError):
 
 app.include_router(agent.router, prefix="/ai/agent", tags=["FamilyAgent"])
 app.include_router(memory.router, prefix="/ai/memory", tags=["Memory"])
-app.include_router(memory.internal_router, prefix="/ai/memory", tags=["Memory"])
 app.include_router(growth.router, prefix="/ai/growth", tags=["Growth"])
 app.include_router(embedding.router, prefix="/ai/embedding", tags=["Embedding"])
 app.include_router(health.router, prefix="/ai", tags=["Health"])
