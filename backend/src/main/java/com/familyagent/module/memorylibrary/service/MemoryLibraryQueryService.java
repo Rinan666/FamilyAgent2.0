@@ -77,7 +77,6 @@ public class MemoryLibraryQueryService {
         Object[] args = concat(
                 sectionArgs(request.getFamilyId(), viewerUserId, searchTerms, type, memberUserId, visibility, tag, dateFrom, dateTo),
                 sectionArgs(request.getFamilyId(), viewerUserId, searchTerms, type, memberUserId, visibility, tag, dateFrom, dateTo),
-                growthSectionArgs(request.getFamilyId(), viewerUserId, searchTerms, type, memberUserId, visibility, tag, dateFrom, dateTo),
                 growthSectionArgs(request.getFamilyId(), viewerUserId, searchTerms, type, memberUserId, visibility, tag, dateFrom, dateTo));
 
         String sql = MemoryLibraryQuerySql.fullQuery(archived);

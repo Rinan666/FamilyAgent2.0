@@ -9,9 +9,7 @@ import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.repository.DiaryEntryRepository;
 import com.familyagent.module.family.service.FamilyService;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
-import com.familyagent.module.growth.entity.GrowthGuardReport;
 import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
-import com.familyagent.module.growth.repository.GrowthGuardReportRepository;
 import com.familyagent.module.growth.service.GrowthGuardService;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
@@ -42,7 +40,6 @@ public class MemoryLibraryMaintenanceService {
     private final DiaryEntryRepository diaryEntryRepository;
     private final MemoryEntryRepository memoryEntryRepository;
     private final GrowthGuardRecordRepository growthRecordRepository;
-    private final GrowthGuardReportRepository growthReportRepository;
     private final GrowthGuardService growthGuardService;
     private final MemoryLibraryQueryService queryService;
     private final JdbcTemplate jdbcTemplate;
@@ -87,7 +84,6 @@ public class MemoryLibraryMaintenanceService {
             case "diary"   -> archiveDiary(familyId, parsed.id());
             case "memory"  -> archiveMemory(familyId, parsed.id());
             case "growth"  -> archiveGrowthRecord(familyId, parsed.id());
-            case "report"  -> archiveGrowthReport(familyId, parsed.id());
             default        -> throw new BusinessException(ErrorCode.BAD_REQUEST, "不支持的记忆类型");
         }
     }
@@ -100,7 +96,6 @@ public class MemoryLibraryMaintenanceService {
             case "diary"   -> restoreDiary(familyId, parsed.id());
             case "memory"  -> restoreMemory(familyId, parsed.id());
             case "growth"  -> restoreGrowthRecord(familyId, parsed.id());
-            case "report"  -> restoreGrowthReport(familyId, parsed.id());
             default        -> throw new BusinessException(ErrorCode.BAD_REQUEST, "不支持的记忆类型");
         }
     }
@@ -113,7 +108,6 @@ public class MemoryLibraryMaintenanceService {
             case "diary"   -> deleteArchivedDiary(familyId, parsed.id());
             case "memory"  -> deleteArchivedMemory(familyId, parsed.id());
             case "growth"  -> deleteArchivedGrowthRecord(familyId, parsed.id());
-            case "report"  -> deleteArchivedGrowthReport(familyId, parsed.id());
             default        -> throw new BusinessException(ErrorCode.BAD_REQUEST, "不支持的记忆类型");
         }
     }
@@ -224,39 +218,6 @@ public class MemoryLibraryMaintenanceService {
         MemoryLibrarySupport.ensureCreatorOrFamilyOwner(familyService, familyId, record.getCreatedBy(), "只能删除自己归档的观察，或由家族创建者删除");
         deleteEmbeddings("GROWTH_OBSERVATION", recordId);
         growthRecordRepository.deleteById(recordId);
-    }
-
-    private void archiveGrowthReport(Long familyId, Long reportId) {
-        GrowthGuardReport report = growthReportRepository.selectById(reportId);
-        if (report == null || !EntityStatus.ACTIVE.name().equals(report.getStatus()) || !familyId.equals(report.getFamilyId())) {
-            throw new BusinessException(ErrorCode.NOT_FOUND);
-        }
-        Long viewerUserId = CurrentUserGuard.currentUserId();
-        boolean selfCreated = viewerUserId.equals(report.getCreatedBy());
-        boolean familyOwner = false;
-        try { familyService.checkOwner(familyId); familyOwner = true; } catch (BusinessException ignored) {}
-        if (!selfCreated && !familyOwner) throw new BusinessException(ErrorCode.FORBIDDEN, "只能归档自己创建的摘要，或由家族创建者归档");
-        report.setStatus(EntityStatus.ARCHIVED.name());
-        growthReportRepository.updateById(report);
-    }
-
-    private void restoreGrowthReport(Long familyId, Long reportId) {
-        GrowthGuardReport report = growthReportRepository.selectById(reportId);
-        if (report == null || !EntityStatus.ARCHIVED.name().equals(report.getStatus()) || !familyId.equals(report.getFamilyId())) {
-            throw new BusinessException(ErrorCode.NOT_FOUND);
-        }
-        MemoryLibrarySupport.ensureCreatorOrFamilyOwner(familyService, familyId, report.getCreatedBy(), "只能恢复自己创建的摘要，或由家族创建者恢复");
-        report.setStatus(EntityStatus.ACTIVE.name());
-        growthReportRepository.updateById(report);
-    }
-
-    private void deleteArchivedGrowthReport(Long familyId, Long reportId) {
-        GrowthGuardReport report = growthReportRepository.selectById(reportId);
-        if (report == null || !EntityStatus.ARCHIVED.name().equals(report.getStatus()) || !familyId.equals(report.getFamilyId())) {
-            throw new BusinessException(ErrorCode.NOT_FOUND);
-        }
-        MemoryLibrarySupport.ensureCreatorOrFamilyOwner(familyService, familyId, report.getCreatedBy(), "只能删除自己归档的摘要，或由家族创建者删除");
-        growthReportRepository.deleteById(reportId);
     }
 
     private void deleteEmbeddings(String sourceType, Long sourceId) {

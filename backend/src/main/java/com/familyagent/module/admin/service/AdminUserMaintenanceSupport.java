@@ -49,7 +49,6 @@ class AdminUserMaintenanceSupport {
         updateNullIfTableExists("care_authorizations", "created_by", userId);
         updateNullIfTableExists("care_authorizations", "updated_by", userId);
         updateNullIfTableExists("growth_guard_records", "target_user_id", userId);
-        updateNullIfTableExists("growth_guard_reports", "target_user_id", userId);
         updateNullIfTableExists("heritage_tasks", "completed_by", userId);
 
         deleteIfTableExists("family_relationships", "from_user_id", userId);
@@ -59,7 +58,6 @@ class AdminUserMaintenanceSupport {
         deleteIfTableExists("growth_guard_staleness_votes", "user_id", userId);
         deleteIfTableExists("memory_entry_votes", "user_id", userId);
         deleteIfTableExists("heritage_tasks", "created_by", userId);
-        deleteIfTableExists("growth_guard_reports", "created_by", userId);
         deleteIfTableExists("growth_guard_records", "created_by", userId);
         deleteIfTableExists("memory_embeddings", "user_id", userId);
         deleteIfTableExists("skill_runs", "triggered_by", userId);

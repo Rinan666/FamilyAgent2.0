@@ -1,10 +1,8 @@
-import { aiRequest, normalizeGrowthGuardReport, request } from './shared';
+import { aiRequest, request } from './shared';
 import type {
   CreateGrowthGuardRecordRequest,
-  CreateGrowthGuardReportRequest,
   GrowthFollowUpStatus,
   GrowthGuardRecord,
-  GrowthGuardReport,
   MemoryEntry,
   PageResult,
   WeeklyGrowthReport,
@@ -37,12 +35,6 @@ export const growthGuardApi = {
   markStale: (id: number) =>
     request<GrowthGuardRecord>(`/growth-guards/${id}/stale`, { method: 'POST' }),
   deleteRecord: (id: number) => request<void>(`/growth-guards/${id}`, { method: 'DELETE' }),
-  listFamilyReports: (familyId: number, limit = 5) =>
-    request<GrowthGuardReport[]>(`/growth-guards/reports/family/${familyId}?limit=${limit}`)
-      .then((items) => (items || []).map(normalizeGrowthGuardReport)),
-  createReport: (data: CreateGrowthGuardReportRequest) =>
-    request<GrowthGuardReport>('/growth-guards/reports', { method: 'POST', body: JSON.stringify(data) })
-      .then(normalizeGrowthGuardReport),
   weeklyReport: (body: {
     familyName?: string;
     records: GrowthGuardRecord[];

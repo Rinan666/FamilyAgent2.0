@@ -164,81 +164,12 @@ class MemoryLibraryQuerySql {
             """).replace("{ROW_STATUS}", rowStatus);
     }
 
-    static String reportSection(boolean archived) {
-        String rowStatus = archived ? "ARCHIVED" : "ACTIVE";
-        return ("""
-            SELECT
-              CONCAT('report-', rp.id) AS id,
-              'AI_SUMMARY' AS source_type,
-              'GROWTH_GUARD_REPORT' AS type,
-              COALESCE(NULLIF(rp.title, ''), '成长观察摘要') AS title,
-              COALESCE(NULLIF(rp.summary, ''), rp.report->>'summary', '') AS body,
-              rp.family_id,
-              COALESCE(rp.target_user_id, rp.created_by) AS member_user_id,
-              COALESCE(NULLIF(u.nickname, ''), NULLIF(u.username, ''), CONCAT('用户 ', COALESCE(rp.target_user_id, rp.created_by))) AS member_name,
-              rp.visibility,
-              ARRAY['成长观察摘要'] AS tags,
-              rp.metadata,
-              rp.created_at,
-              rp.updated_at,
-              COALESCE(rp.week_end::timestamp, rp.created_at) AS sort_time
-            FROM growth_guard_reports rp
-            LEFT JOIN users u ON u.id = COALESCE(rp.target_user_id, rp.created_by)
-            WHERE rp.family_id = ?
-              AND rp.status = '{ROW_STATUS}'
-              AND (
-                rp.visibility = 'FAMILY_VISIBLE'
-                OR rp.created_by = ?
-                OR rp.target_user_id = ?
-                OR (
-                  rp.visibility IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
-                  AND EXISTS (
-                    SELECT 1 FROM family_members fm
-                    WHERE fm.family_id = rp.family_id
-                      AND fm.user_id = ?
-                      AND fm.role = 'OWNER'
-                  )
-                )
-                OR (
-                  rp.visibility IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
-                  AND rp.target_user_id IS NOT NULL
-                  AND EXISTS (
-                    SELECT 1 FROM care_authorizations ca
-                    WHERE ca.family_id = rp.family_id
-                      AND ca.subject_user_id = rp.target_user_id
-                      AND ca.caregiver_user_id = ?
-                      AND ca.status = 'ACTIVE'
-                      AND ca.scope IN ('ALL', 'GROWTH_GUARD')
-                      AND (ca.expires_at IS NULL OR ca.expires_at > NOW())
-                  )
-                )
-              )
-              AND (
-                COALESCE(cardinality(CAST(? AS TEXT[])), 0) = 0
-                OR EXISTS (
-                  SELECT 1
-                  FROM unnest(CAST(? AS TEXT[])) AS term
-                  WHERE LOWER(CONCAT_WS(' ', rp.title, rp.summary, rp.visibility, COALESCE(rp.report::text, ''), COALESCE(rp.metadata::text, ''), COALESCE(u.nickname, ''), COALESCE(u.username, '')))
-                    LIKE CONCAT('%', term, '%')
-                )
-              )
-              AND (? = 'ALL' OR ? = 'AI_SUMMARY')
-              AND (CAST(? AS BIGINT) IS NULL OR COALESCE(rp.target_user_id, rp.created_by) = CAST(? AS BIGINT))
-              AND (CAST(? AS TEXT) IS NULL OR rp.visibility = CAST(? AS TEXT))
-              AND (CAST(? AS TEXT) IS NULL OR LOWER('成长观察摘要') = LOWER(CAST(? AS TEXT)))
-              AND (CAST(? AS DATE) IS NULL OR COALESCE(rp.week_end, rp.created_at::date) >= CAST(? AS DATE))
-              AND (CAST(? AS DATE) IS NULL OR COALESCE(rp.week_end, rp.created_at::date) <= CAST(? AS DATE))
-            """).replace("{ROW_STATUS}", rowStatus);
-    }
-
     static String fullQuery(boolean archived) {
         return diarySection(archived)
                 + "\nUNION ALL\n"
                 + memorySection(archived)
                 + "\nUNION ALL\n"
-                + growthSection(archived)
-                + "\nUNION ALL\n"
-                + reportSection(archived);
+                + growthSection(archived);
     }
 
     static String memorySection(boolean archived) {

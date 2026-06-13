@@ -14,7 +14,6 @@ import type {
   ChatSessionMessageItem,
   ChatSessionMessagePage,
   ChatSessionSummary,
-  GrowthGuardReport,
   WeeklyGrowthReport,
 } from '@/types';
 
@@ -327,17 +326,6 @@ export function normalizeWeeklyGrowthReport(value: unknown): WeeklyGrowthReport 
     safety_note: toText(parsed.safety_note) || '此内容只作为家庭观察提醒，不构成医学诊断或治疗建议。',
   };
 }
-export function normalizeGrowthGuardReport(raw: GrowthGuardReport): GrowthGuardReport {
-  const report = normalizeWeeklyGrowthReport(raw.report);
-  return {
-    ...raw,
-    title: raw.title || report.title,
-    summary: raw.summary || report.summary,
-    report,
-    metadata: parseJsonField<Record<string, unknown>>(raw.metadata, {}),
-  };
-}
-
 export async function aiRequest<T>(path: string, body: unknown): Promise<T> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
   const res = await fetch(`/ai-proxy${path}`, {

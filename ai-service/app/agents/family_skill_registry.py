@@ -31,7 +31,6 @@ MEMORY_LAYERS: list[dict[str, Any]] = [
             "diary_entries.structured",
             "family_memories.summary",
             "growth_guard_records.metadata",
-            "growth_guard_reports",
         ],
         "authority": "backend+ai-service",
         "description": "把原文整理成标题、主题、场景、风险点、行动建议和标签。",

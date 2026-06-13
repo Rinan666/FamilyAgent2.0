@@ -573,35 +573,6 @@ export interface WeeklyGrowthReport {
   safety_note: string;
 }
 
-export interface GrowthGuardReport {
-  id: number;
-  familyId: number;
-  targetUserId?: number;
-  createdBy: number;
-  weekStart: string;
-  weekEnd: string;
-  title: string;
-  summary?: string;
-  visibility: MemoryScope | string;
-  status: 'ACTIVE' | 'ARCHIVED' | string;
-  report: WeeklyGrowthReport | Record<string, unknown>;
-  metadata?: Record<string, unknown>;
-  createdAt: string;
-  updatedAt?: string;
-}
-
-export interface CreateGrowthGuardReportRequest {
-  familyId: number;
-  targetUserId?: number;
-  weekStart?: string;
-  weekEnd?: string;
-  title: string;
-  summary?: string;
-  visibility?: MemoryScope;
-  report: WeeklyGrowthReport;
-  metadata?: Record<string, unknown>;
-}
-
 export type SkillRunStatus = 'PLANNED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELED' | string;
 
 export interface SkillRun {
