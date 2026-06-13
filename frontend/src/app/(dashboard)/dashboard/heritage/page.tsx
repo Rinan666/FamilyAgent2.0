@@ -38,7 +38,7 @@ export default function HeritagePage({ embedded = false }: HeritagePageProps) {
             去写下经验
           </Link>
           <Link
-            href={`/dashboard/memory${familyId ? `?familyId=${familyId}` : ''}`}
+            href={`/dashboard/family?tab=library${familyId ? `&familyId=${familyId}` : ''}`}
             className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium text-gray-600 hover:bg-gray-50"
           >
             前往记忆库

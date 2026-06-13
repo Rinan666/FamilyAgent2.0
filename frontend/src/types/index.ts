@@ -86,7 +86,7 @@ export interface Family {
   createdAt: string;
 }
 
-export type FamilyTab = 'stream' | 'members';
+export type FamilyTab = 'library' | 'members';
 
 export interface FamilyMember {
   id: number;

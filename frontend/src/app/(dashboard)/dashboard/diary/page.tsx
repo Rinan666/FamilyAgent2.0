@@ -888,7 +888,7 @@ export default function DiaryPage() {
               搜索、筛选、查看和后续整理，都统一在记忆库里完成。
             </p>
             <Link
-              href={`/dashboard/memory${selectedFamilyId ? `?familyId=${selectedFamilyId}` : ''}`}
+              href={`/dashboard/family?tab=library${selectedFamilyId ? `&familyId=${selectedFamilyId}` : ''}`}
               className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
             >
               前往记忆库

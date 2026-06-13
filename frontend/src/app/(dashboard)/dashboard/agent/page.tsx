@@ -111,7 +111,7 @@ function savedMemoryHref(plan: AgentSaveToolPlan, familyId?: number | null) {
   if (plan.tool === 'GROWTH_GUARD') {
     return `/dashboard/diary${familyId ? `?familyId=${familyId}&writeCategory=OBSERVATION` : '?writeCategory=OBSERVATION'}`;
   }
-  return `/dashboard/memory${familyQuery}`;
+  return `/dashboard/family?tab=library${familyId ? `&familyId=${familyId}` : ''}`;
 }
 
 function savedMemoryFromPlan(plan: AgentSaveToolPlan, savedAt: string): SessionSavedMemory | null {

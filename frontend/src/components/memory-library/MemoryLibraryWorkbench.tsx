@@ -21,7 +21,6 @@ import {
   X,
 } from 'lucide-react';
 import { familyApi, growthGuardApi, memoryApi, memoryLibraryApi } from '@/lib/api';
-import LegacyWorkpageNotice from '@/components/family/LegacyWorkpageNotice';
 import { useViewerRole } from '@/hooks/useViewerRole';
 import type {
   FamilyMember,
@@ -242,7 +241,7 @@ function invalidateMemoryLibraryPageCache(familyId?: number | null) {
   delete cachedCountsByFamilyId[familyId];
 }
 
-export default function MemoryLibraryPage({ embedded = false }: { embedded?: boolean }) {
+export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?: boolean }) {
   const searchParams = useSearchParams();
   const {
     families,
@@ -682,8 +681,6 @@ export default function MemoryLibraryPage({ embedded = false }: { embedded?: boo
 
   return (
     <div className="mx-auto w-full max-w-7xl">
-      {!embedded && <LegacyWorkpageNotice tab="library" label="全部记忆" />}
-
       <section className="mb-4 rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
