@@ -46,6 +46,7 @@ public class ChatSessionService {
     private static final int DEFAULT_MESSAGE_PAGE_SIZE = 40;
     private static final int MAX_MESSAGE_PAGE_SIZE = 120;
     private static final int STORAGE_VERSION = 2;
+    private static final int MAX_ACTIVE_SESSIONS = 20;
 
     private final ChatSessionRepository sessionRepository;
     private final ChatSessionMessageRepository messageRepository;
@@ -56,7 +57,14 @@ public class ChatSessionService {
 
     @Transactional
     public ChatSessionDetail createSession(ChatSession session, List<ChatSessionMessagePayload> initialMessages) {
-        session.setUserId(CurrentUserGuard.currentUserId());
+        Long userId = CurrentUserGuard.currentUserId();
+        session.setUserId(userId);
+
+        if (sessionRepository.countActiveByUserId(userId) >= MAX_ACTIVE_SESSIONS) {
+            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED,
+                    "活跃会话数已达上限（" + MAX_ACTIVE_SESSIONS + "），请先结束不再需要的会话");
+        }
+
         if (session.getFamilyId() != null) {
             familyService.checkMembership(session.getFamilyId());
         }

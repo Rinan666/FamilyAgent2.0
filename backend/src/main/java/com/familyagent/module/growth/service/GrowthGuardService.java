@@ -43,6 +43,7 @@ public class GrowthGuardService {
     private static final int MAX_LIMIT = 60;
     private static final int DEFAULT_PAGE_SIZE = 6;
     private static final int MAX_PAGE_SIZE = 20;
+    private static final int MAX_RECORDS_PER_DAY = 5;
     private static final Set<String> CATEGORIES = Set.of(
             "POSTURE", "DENTAL", "VISION", "SLEEP", "EXERCISE", "SCREEN_TIME", "EMOTION", "COMMUNICATION", "OTHER");
     private static final Set<String> VISIBILITIES = MemoryScope.familyNames();
@@ -60,6 +61,11 @@ public class GrowthGuardService {
     public GrowthGuardRecord createRecord(CreateGrowthGuardRecordRequest request) {
         Long viewerUserId = CurrentUserGuard.currentUserId();
         familyService.checkMembership(request.getFamilyId());
+
+        if (recordRepository.countTodayByUser(viewerUserId) >= MAX_RECORDS_PER_DAY) {
+            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED,
+                    "每天最多记录 " + MAX_RECORDS_PER_DAY + " 条观察，请明天再记");
+        }
 
         Long targetUserId = request.getTargetUserId() == null ? viewerUserId : request.getTargetUserId();
         FamilyMember targetMember = memberRepository.findByFamilyAndUser(request.getFamilyId(), targetUserId);

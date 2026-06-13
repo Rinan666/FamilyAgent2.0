@@ -2,11 +2,14 @@ package com.familyagent.module.agent.controller;
 
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
+import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.infra.ai.AIServiceClient;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RAtomicLong;
+import org.redisson.api.RedissonClient;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -17,7 +20,10 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Primary FamilyAgent chat stream endpoint.
@@ -28,13 +34,28 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AgentChatController {
 
+    private static final int MAX_CHATS_PER_HOUR = 20;
+    private static final DateTimeFormatter HOUR_KEY_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH");
+
     private final AIServiceClient aiServiceClient;
+    private final RedissonClient redissonClient;
 
     @Operation(summary = "Proxy FamilyAgent chat stream")
     @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public void stream(@RequestBody Map<String, Object> request,
                        @RequestHeader(value = "Authorization", required = false) String authorization,
                        HttpServletResponse response) throws IOException {
+        Long userId = CurrentUserGuard.currentUserId();
+        String hourKey = "quota:chat:user:" + userId + ":" + LocalDateTime.now().format(HOUR_KEY_FMT);
+        RAtomicLong counter = redissonClient.getAtomicLong(hourKey);
+        long count = counter.incrementAndGet();
+        if (count == 1) {
+            counter.expire(1, TimeUnit.HOURS);
+        } else if (count > MAX_CHATS_PER_HOUR) {
+            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED,
+                    "每小时对话次数已达上限（" + MAX_CHATS_PER_HOUR + " 次），请稍后再试");
+        }
+
         response.setStatus(HttpServletResponse.SC_OK);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setContentType(MediaType.TEXT_EVENT_STREAM_VALUE + ";charset=UTF-8");

@@ -50,6 +50,9 @@ public interface ChatSessionRepository extends BaseMapper<ChatSession> {
             """)
     ChatSession findHeaderById(@Param("id") Long id);
 
+    @Select("SELECT COUNT(*) FROM chat_sessions WHERE user_id = #{userId} AND status = 'ACTIVE'")
+    int countActiveByUserId(@Param("userId") Long userId);
+
     @Select("""
             SELECT *
             FROM chat_sessions

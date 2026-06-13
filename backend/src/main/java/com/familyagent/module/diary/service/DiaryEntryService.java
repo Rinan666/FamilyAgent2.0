@@ -1,13 +1,11 @@
 package com.familyagent.module.diary.service;
 
-import cn.dev33.satoken.stp.StpUtil;
 import com.familyagent.common.constant.EntityStatus;
 import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.response.PageResult;
 import com.familyagent.common.security.CurrentUserGuard;
-import com.familyagent.infra.ai.AIServiceClient;
 import com.familyagent.module.diary.dto.CreateDiaryEntryRequest;
 import com.familyagent.module.diary.dto.UpdateDiaryEntryRequest;
 import com.familyagent.module.diary.entity.DiaryEntry;
@@ -40,6 +38,7 @@ public class DiaryEntryService {
     private static final int MAX_PAGE_SIZE = 20;
     private static final int SINGLE_ENTRY_MAX_CHARS = 300;
     private static final int MERGED_ENTRY_MAX_CHARS = 600;
+    private static final int MAX_ENTRIES_PER_DAY = 10;
     private static final String MANUAL_DIARY_SOURCE = "DIARY_MANUAL";
     private static final String MERGE_POLICY = "MANUAL_SELF_SINGLE_CANDIDATE";
     private static final Set<String> VISIBILITIES = MemoryScope.diaryNames();
@@ -49,23 +48,27 @@ public class DiaryEntryService {
     private final DiaryEntryRepository diaryRepository;
     private final FamilyService familyService;
     private final MemoryEmbeddingService memoryEmbeddingService;
-    private final AIServiceClient aiServiceClient;
 
     @Transactional
     public DiaryEntry create(CreateDiaryEntryRequest request) {
         Long userId = CurrentUserGuard.currentUserId();
         familyService.checkMembership(request.getFamilyId());
+
+        if (diaryRepository.countTodayByUser(userId) >= MAX_ENTRIES_PER_DAY) {
+            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED,
+                    "每天最多记录 " + MAX_ENTRIES_PER_DAY + " 条，请明天再记");
+        }
+
         String visibility = normalizeVisibility(request.getVisibility());
         String diaryDate = resolveDiaryDate(request);
-        String incomingContent = compressDiaryContent("", request.getContent().trim(), SINGLE_ENTRY_MAX_CHARS, diaryDate);
+        String incomingContent = localCompress("", request.getContent().trim(), SINGLE_ENTRY_MAX_CHARS);
         Map<String, Object> requestMetadata = buildMetadata(request, diaryDate);
         DiaryEntry existing = findEligibleMergeCandidate(request, userId, visibility, diaryDate, requestMetadata);
         if (existing != null) {
-            String mergedContent = compressDiaryContent(
+            String mergedContent = localCompress(
                     existing.getRawText(),
                     incomingContent,
-                    MERGED_ENTRY_MAX_CHARS,
-                    diaryDate);
+                    MERGED_ENTRY_MAX_CHARS);
             Map<String, Object> metadata = mergeMetadata(existing.getMetadata(), requestMetadata);
             metadata.put("autoMerged", true);
             metadata.put("mergedCount", asInt(metadata.get("mergedCount"), 1) + 1);
@@ -278,40 +281,6 @@ public class DiaryEntryService {
         }
         long totalPages = (total + pageSize - 1L) / pageSize;
         return Math.min(normalizedPage, totalPages);
-    }
-
-    private String compressDiaryContent(String currentContent, String incomingContent, int maxChars, String diaryDate) {
-        String local = localCompress(currentContent, incomingContent, maxChars);
-        if (local.length() <= maxChars && (currentContent == null || currentContent.isBlank())) {
-            return local;
-        }
-        try {
-            Map<String, Object> response = aiServiceClient.compressDiary(Map.of(
-                    "current_content", currentContent == null ? "" : currentContent,
-                    "incoming_content", incomingContent == null ? "" : incomingContent,
-                    "max_chars", maxChars,
-                    "diary_date", diaryDate
-            ), currentAuthorization());
-            Object data = response == null ? null : response.get("data");
-            if (data instanceof Map<?, ?> map) {
-                Object content = map.get("content");
-                if (content instanceof String text && !text.isBlank()) {
-                    return truncate(text.trim(), maxChars);
-                }
-            }
-        } catch (Exception ignored) {
-            // Best effort; local compression keeps the save path reliable.
-        }
-        return local;
-    }
-
-    private static String currentAuthorization() {
-        try {
-            String token = StpUtil.getTokenValue();
-            return token == null ? "" : token;
-        } catch (Exception ignored) {
-            return "";
-        }
     }
 
     private static String resolveDiaryDate(CreateDiaryEntryRequest request) {

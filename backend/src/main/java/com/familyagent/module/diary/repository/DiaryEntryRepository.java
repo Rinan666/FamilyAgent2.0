@@ -269,4 +269,7 @@ public interface DiaryEntryRepository extends BaseMapper<DiaryEntry> {
             @Param("familyId") Long familyId,
             @Param("userId") Long userId,
             @Param("limit") int limit);
+
+    @Select("SELECT COUNT(*) FROM diary_entries WHERE user_id = #{userId} AND created_at::date = CURRENT_DATE")
+    int countTodayByUser(@Param("userId") Long userId);
 }

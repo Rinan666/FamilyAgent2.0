@@ -33,6 +33,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class FamilyService {
 
+    private static final int MAX_FAMILIES_PER_USER = 3;
+
     private final FamilyRepository familyRepository;
     private final FamilyMemberRepository memberRepository;
     private final FamilyRelationshipRepository relationshipRepository;
@@ -43,6 +45,11 @@ public class FamilyService {
     @Transactional
     public Family createFamily(CreateFamilyRequest request) {
         User currentUser = userService.getCurrentUser();
+
+        if (familyRepository.countByCreatedBy(currentUser.getId()) >= MAX_FAMILIES_PER_USER) {
+            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED,
+                    "每个用户最多创建 " + MAX_FAMILIES_PER_USER + " 个家族空间");
+        }
 
         Family family = new Family();
         family.setName(request.getName());

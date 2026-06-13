@@ -42,4 +42,7 @@ public interface FamilyRepository extends BaseMapper<Family> {
         WHERE id = #{familyId}
         """)
     int updateCreatedBy(@Param("familyId") Long familyId, @Param("createdBy") Long createdBy);
+
+    @Select("SELECT COUNT(*) FROM families WHERE created_by = #{userId}")
+    int countByCreatedBy(@Param("userId") Long userId);
 }

@@ -172,4 +172,7 @@ public interface GrowthGuardRecordRepository extends BaseMapper<GrowthGuardRecor
             @Param("familyId") Long familyId,
             @Param("targetUserId") Long targetUserId,
             @Param("limit") int limit);
+
+    @Select("SELECT COUNT(*) FROM growth_guard_records WHERE created_by = #{userId} AND created_at::date = CURRENT_DATE")
+    int countTodayByUser(@Param("userId") Long userId);
 }
