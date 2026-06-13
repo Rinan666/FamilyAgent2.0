@@ -8,7 +8,6 @@ import com.familyagent.common.response.PageResult;
 import com.familyagent.module.diary.repository.DiaryEntryRepository;
 import com.familyagent.module.family.service.FamilyService;
 import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
-import com.familyagent.module.growth.repository.GrowthGuardReportRepository;
 import com.familyagent.module.growth.repository.GrowthGuardStalenessVoteRepository;
 import com.familyagent.module.growth.service.GrowthGuardService;
 import com.familyagent.module.memory.entity.MemoryEntry;
@@ -46,7 +45,6 @@ class MemoryLibraryServiceTest {
     @Mock private MemoryEntryRepository memoryEntryRepository;
     @Mock private GrowthGuardService growthGuardService;
     @Mock private GrowthGuardRecordRepository growthRecordRepository;
-    @Mock private GrowthGuardReportRepository growthReportRepository;
     @Mock private MemoryEntryVoteRepository memoryEntryVoteRepository;
     @Mock private GrowthGuardStalenessVoteRepository growthGuardStalenessVoteRepository;
     @Spy  private ObjectMapper objectMapper = new ObjectMapper();
@@ -132,7 +130,7 @@ class MemoryLibraryServiceTest {
                 memoryEntryVoteRepository, growthGuardStalenessVoteRepository);
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
                 familyService, diaryEntryRepository, memoryEntryRepository,
-                growthRecordRepository, growthReportRepository, growthGuardService,
+                growthRecordRepository, growthGuardService,
                 queryService, jdbcTemplate);
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
@@ -161,7 +159,7 @@ class MemoryLibraryServiceTest {
                 memoryEntryVoteRepository, growthGuardStalenessVoteRepository);
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
                 familyService, diaryEntryRepository, memoryEntryRepository,
-                growthRecordRepository, growthReportRepository, growthGuardService,
+                growthRecordRepository, growthGuardService,
                 queryService, jdbcTemplate);
 
         MemoryEntry entry = new MemoryEntry();
@@ -182,15 +180,14 @@ class MemoryLibraryServiceTest {
     // --- helpers ---
 
     private static void assertPermissionSectionArgs(Object[] args, boolean includesPagination) {
-        int expectedLength = includesPagination ? 76 : 74;
+        int expectedLength = includesPagination ? 57 : 55;
         assertEquals(expectedLength, args.length);
         assertSection(args, 0, 18);
         assertSection(args, 18, 18);
         assertSection(args, 36, 19);
-        assertSection(args, 55, 19);
         if (includesPagination) {
-            assertEquals(3, args[74]);
-            assertEquals(3, args[75]);
+            assertEquals(3, args[55]);
+            assertEquals(3, args[56]);
         }
     }
 

@@ -7,11 +7,9 @@ import com.familyagent.module.admin.dto.AdminUserSummary;
 import com.familyagent.module.admin.dto.MemoryRecallDiagnosticRequest;
 import com.familyagent.module.admin.dto.MemoryRecallDiagnosticResponse;
 import com.familyagent.module.family.dto.FamilyMemberVO;
-import com.familyagent.module.family.entity.Family;
 import com.familyagent.module.family.entity.FamilyMember;
-import com.familyagent.module.family.repository.FamilyMemberRepository;
-import com.familyagent.module.family.repository.FamilyRepository;
 import com.familyagent.module.family.service.FamilyLifecycleService;
+import com.familyagent.module.family.service.FamilyService;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
 import com.familyagent.module.memory.dto.RecallSourceSummary;
 import com.familyagent.module.memory.service.AuthorizedMemoryRecallService;
@@ -49,8 +47,7 @@ class DatabaseHealthServiceTest {
 
     @Mock private JdbcTemplate jdbcTemplate;
     @Mock private UserRepository userRepository;
-    @Mock private FamilyRepository familyRepository;
-    @Mock private FamilyMemberRepository familyMemberRepository;
+    @Mock private FamilyService familyService;
     @Mock private FamilyLifecycleService familyLifecycleService;
     @Mock private AuthorizedMemoryRecallService memoryRecallService;
 
@@ -60,11 +57,11 @@ class DatabaseHealthServiceTest {
     void setUp() {
         PlatformAdminAccessSupport adminAccessSupport = new PlatformAdminAccessSupport(userRepository);
         DatabaseHealthQuerySupport querySupport = new DatabaseHealthQuerySupport(
-                adminAccessSupport, jdbcTemplate, familyRepository, familyMemberRepository);
+                adminAccessSupport, jdbcTemplate, familyService);
         AdminUserMaintenanceSupport userMaintenanceSupport = new AdminUserMaintenanceSupport(
                 adminAccessSupport, jdbcTemplate, userRepository, familyLifecycleService);
         MemoryRecallDiagnosticSupport diagnosticSupport = new MemoryRecallDiagnosticSupport(
-                adminAccessSupport, familyMemberRepository, memoryRecallService);
+                adminAccessSupport, familyService, memoryRecallService);
         databaseHealthService = new DatabaseHealthService(querySupport, userMaintenanceSupport, diagnosticSupport);
     }
 
@@ -174,7 +171,8 @@ class DatabaseHealthServiceTest {
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(1L);
             when(userRepository.findBasicById(1L)).thenReturn(adminUser());
-            when(familyMemberRepository.findByFamilyAndUser(10L, 999L)).thenReturn(null);
+            when(familyService.getFamilyMember(10L, 999L))
+                    .thenThrow(new BusinessException(ErrorCode.NOT_FAMILY_MEMBER));
 
             MemoryRecallDiagnosticRequest request = new MemoryRecallDiagnosticRequest();
             request.setFamilyId(10L);
@@ -200,7 +198,7 @@ class DatabaseHealthServiceTest {
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(1L);
             when(userRepository.findBasicById(1L)).thenReturn(adminUser());
-            when(familyMemberRepository.findByFamilyAndUser(10L, 101L)).thenReturn(member(10L, 101L));
+            when(familyService.getFamilyMember(10L, 101L)).thenReturn(member(10L, 101L));
             when(memoryRecallService.recallForFamilyAfterViewerValidated(eq(10L), eq(101L), eq("brush teeth"), eq(2), eq(4)))
                     .thenReturn(AuthorizedMemoryRecallResult.builder()
                             .diaryCount(1)
@@ -256,7 +254,7 @@ class DatabaseHealthServiceTest {
                     () -> databaseHealthService.diagnoseMemoryRecall(request));
 
             assertEquals(ErrorCode.FORBIDDEN.getCode(), exception.getCode());
-            verify(familyMemberRepository, never()).findByFamilyAndUser(10L, 101L);
+            verify(familyService, never()).getFamilyMember(10L, 101L);
         }
     }
 
@@ -397,7 +395,7 @@ class DatabaseHealthServiceTest {
                     () -> databaseHealthService.listFamilyMembers(10L));
 
             assertEquals(ErrorCode.FORBIDDEN.getCode(), exception.getCode());
-            verify(familyMemberRepository, never()).findMemberViewsByFamilyId(anyLong());
+            verify(familyService, never()).listMemberViewsForAdmin(anyLong());
         }
     }
 
@@ -406,11 +404,7 @@ class DatabaseHealthServiceTest {
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(1L);
             when(userRepository.findBasicById(1L)).thenReturn(adminUser());
-            Family family = new Family();
-            family.setId(10L);
-            family.setName("Smith Family");
-            when(familyRepository.selectById(10L)).thenReturn(family);
-            when(familyMemberRepository.findMemberViewsByFamilyId(10L)).thenReturn(List.of(
+            when(familyService.listMemberViewsForAdmin(10L)).thenReturn(List.of(
                     FamilyMemberVO.builder().userId(8L).username("owner").role("OWNER").build(),
                     FamilyMemberVO.builder().userId(9L).username("member").role("MEMBER").build()
             ));
