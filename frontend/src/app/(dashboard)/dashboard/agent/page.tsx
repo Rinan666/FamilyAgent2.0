@@ -42,9 +42,9 @@ import { familyApi, memoryApi, mirrorApi, sessionApi, skillRunApi, writeMemoryAp
 import { loadSessionMessagesChronologically } from '@/lib/sessionHistory';
 import {
   buildWriteMemorySaveRequest,
-  normalizeSaveToolPlan,
   saveMemorySkillMetadata,
   savePlanDetail,
+  savePlanPersistenceDecision,
   savedRecordType,
   todayString,
   toolLabel,
@@ -76,27 +76,6 @@ function buildSessionMetadata(
     targetUserId: mode === 'mirror' ? targetMember?.userId ?? null : null,
     targetMemberName: mode === 'mirror' ? targetLabel : null,
     hasTargetSwitches,
-  };
-}
-
-function fallbackSavePlan(content: string): AgentSaveToolPlan {
-  const cleaned = content.trim();
-  return {
-    should_save: true,
-    tool: 'DIARY',
-    content: cleaned,
-    title: cleaned.slice(0, 24) || '聊天记录',
-    summary: cleaned.slice(0, 80),
-    visibility: 'PRIVATE',
-    entry_type: 'DAILY',
-    memory_type: 'ELDER_ADVICE',
-    scope: 'PRIVATE',
-    category: 'OTHER',
-    severity: 2,
-    importance: 3,
-    tags: ['family-agent-save'],
-    reason: '用户明确选择保存这条消息。',
-    confirmation_message: '已保存为日记。',
   };
 }
 
@@ -828,10 +807,31 @@ export default function AgentPage() {
         viewerRole,
       });
 
-      const normalized = normalizeSaveToolPlan(planResult.data);
-      const plan = normalized.should_save && normalized.tool !== 'NONE'
-        ? normalized
-        : normalizeSaveToolPlan(fallbackSavePlan(originalContent));
+      const decision = savePlanPersistenceDecision(planResult.data);
+      const plan = decision.plan;
+      if (!decision.shouldPersist) {
+        if (skillRunId) {
+          await skillRunApi.update(skillRunId, {
+            status: 'SUCCEEDED',
+            saved: false,
+            outputSummary: decision.skippedDetail,
+            metadata: {
+              savedRecordType: 'NONE',
+              plannedTool: plan.tool,
+              plannedReason: plan.reason,
+            },
+          });
+        }
+
+        setSaveFeedback((current) => ({
+          ...current,
+          [message.id]: {
+            status: 'skipped',
+            detail: decision.skippedDetail,
+          },
+        }));
+        return;
+      }
 
       const savedAt = new Date().toISOString();
       const commonMetadata = currentMode === 'mirror'

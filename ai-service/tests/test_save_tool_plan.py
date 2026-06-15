@@ -298,6 +298,56 @@ def test_contextual_save_command_is_not_saved_as_content():
     assert plan["content"] == ""
 
 
+@pytest.mark.asyncio
+async def test_bare_save_command_with_valuable_context_extracts_context(monkeypatch):
+    async def fake_chat(*args, **kwargs):
+        return json.dumps({
+            "should_save": True,
+            "tool": "FAMILY_MEMORY",
+            "content": "孩子最近做应用题时总是先抓数字，不愿意读完整题意。我试着让他先复述题意再画简单线段图，他能更稳定地说出等量关系，后面遇到应用题可以先拆题意再计算。",
+            "title": "应用题先拆题意",
+            "summary": "先复述题意再画图，孩子列式更稳定。",
+            "visibility": "CARE_VISIBLE",
+            "entry_type": "DAILY",
+            "memory_type": "ELDER_ADVICE",
+            "scope": "CARE_VISIBLE",
+            "category": "OTHER",
+            "severity": 2,
+            "importance": 4,
+            "tags": ["学习", "应用题"],
+            "reason": "保存命令本身无价值，但最近上下文包含可复用学习策略。",
+            "confirmation_message": "已保存为家庭记忆。",
+        }, ensure_ascii=False)
+
+    monkeypatch.setattr(memory.llm_client, "chat", fake_chat)
+
+    response = await plan_agent_save_tool(
+        SaveToolPlanRequest(
+            message="保存一下",
+            conversation_context=[
+                {
+                    "role": "user",
+                    "content": "孩子最近做应用题总是先抓数字不读完整题意，容易列错式。",
+                },
+                {
+                    "role": "assistant",
+                    "content": "可以先让他复述题意，再画一张简单线段图。",
+                },
+                {
+                    "role": "user",
+                    "content": "我试了一下，他确实能更稳定地说出等量关系。",
+                },
+            ],
+        )
+    )
+
+    assert response["success"] is True
+    assert response["data"]["should_save"] is True
+    assert response["data"]["tool"] == "FAMILY_MEMORY"
+    assert "保存一下" not in response["data"]["content"]
+    assert "应用题" in response["data"]["content"]
+
+
 def test_durable_emotion_auto_saves_even_when_model_is_conservative():
     plan = _sanitize_save_tool_plan({
         "should_save": False,

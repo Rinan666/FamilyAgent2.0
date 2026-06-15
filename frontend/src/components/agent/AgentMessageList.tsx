@@ -130,11 +130,17 @@ export default function AgentMessageList({
                     {feedback?.status === 'saving'
                       ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       : <Save className="h-3.5 w-3.5" />}
-                    保存这条消息
+                    智能保存
                   </button>
 
                   {feedback && (
-                    <div className={`text-xs ${feedback.status === 'error' ? 'text-rose-600' : 'text-emerald-700'}`}>
+                    <div className={`text-xs ${
+                      feedback.status === 'error'
+                        ? 'text-rose-600'
+                        : feedback.status === 'skipped'
+                          ? 'text-stone-500'
+                          : 'text-emerald-700'
+                    }`}>
                       {feedback.status === 'saved' && <CheckCircle className="mr-1 inline h-3.5 w-3.5" />}
                       {feedback.detail}
                       {feedback.href && (
