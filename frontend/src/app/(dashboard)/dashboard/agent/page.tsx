@@ -436,7 +436,7 @@ export default function AgentPage() {
     history: Pick<ChatMessage, 'role' | 'content'>[];
     defaultRecall: () => Promise<{ context: string; metadata?: NonNullable<ChatMessage['metadata']> }>;
   }) => {
-    if (responseMode === 'quick') {
+    if (mode === 'mirror' && responseMode === 'quick') {
       const quickMetadata: NonNullable<ChatMessage['metadata']> = {
         agentMode: 'mirror',
         responseMode: 'quick',
@@ -444,7 +444,7 @@ export default function AgentPage() {
         targetMemberName: targetLabel,
       };
       return {
-        context: '',
+        context: `镜像参考对象：${targetLabel}。当前为快速模式，未加载完整镜像资料；回答必须说明资料有限，不代表本人真实想法。`,
         metadata: quickMetadata,
       };
     }
@@ -467,7 +467,7 @@ export default function AgentPage() {
     }
   }, [activeFamilyId, mirrorContext, mirrorTargetUserId, mode, refreshMirrorContext, responseMode, targetLabel, targetMember]);
 
-  const prepareRequest = useCallback(async ({ message, defaultRequest }: {
+  const prepareRequest = useCallback(async ({ defaultRequest }: {
     message: string;
     history: Pick<ChatMessage, 'role' | 'content'>[];
     memoryContext: { context: string; metadata?: NonNullable<ChatMessage['metadata']> };
@@ -478,7 +478,6 @@ export default function AgentPage() {
     }
     return {
       ...defaultRequest,
-      message: `请以 "${memberName(targetMember)}" 的镜像参考模式回答：${message}`,
       subject: 'MirrorAgent',
       contextLabel: 'mirror_agent',
       targetRole: 'MEMBER' as const,

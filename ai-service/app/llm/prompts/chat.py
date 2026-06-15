@@ -1,5 +1,7 @@
 """Chat prompt definitions for FamilyAgent."""
 
+from app.llm.prompts.mirror import MIRROR_AGENT_CONTEXT_LABEL, MIRROR_AGENT_MODE_RULES
+
 FAMILY_AGENT_PROMPT = """
 # 角色设定
 
@@ -57,6 +59,8 @@ FAMILY_AGENT_PROMPT = """
 - 不要给出机械的四层模板回复（如"第一层……第二层……"），让结构自然融入对话。
 - 不要过度推断用户的心理状态（不要说"你其实在想……"），改用"我感觉到你可能……"或"有一种可能是……"。
 
+{mode_rules}
+
 当前会话：
 - subject: {subject}
 - context_label: {context_label}
@@ -96,6 +100,12 @@ def _current_time_context(client_timestamp: str = "", client_timezone: str = "")
     )
 
 
+def _mode_rules(subject: str, context_label: str) -> str:
+    if (context_label or "").strip() == MIRROR_AGENT_CONTEXT_LABEL or (subject or "").strip() == "MirrorAgent":
+        return MIRROR_AGENT_MODE_RULES
+    return ""
+
+
 def build_family_agent_system_prompt(
     *,
     subject: str,
@@ -108,9 +118,12 @@ def build_family_agent_system_prompt(
     client_timezone: str,
     public_web_context: str,
 ) -> str:
+    normalized_subject = subject or "FamilyAgent"
+    normalized_context_label = context_label or "family_memory"
     return FAMILY_AGENT_PROMPT.format(
-        subject=subject or "FamilyAgent",
-        context_label=context_label or "family_memory",
+        mode_rules=_mode_rules(normalized_subject, normalized_context_label),
+        subject=normalized_subject,
+        context_label=normalized_context_label,
         memory_context=memory_context or "当前没有命中明确的已授权家族上下文。",
         viewer_role=viewer_role or "MEMBER",
         target_role=target_role or "MEMBER",
