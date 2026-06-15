@@ -3,6 +3,16 @@ package com.familyagent.module.memorylibrary.service;
 /** SQL fragments for the unified memory-library query. Package-private. */
 class MemoryLibraryQuerySql {
 
+    private static final String MEMORY_SOURCE_TYPE_CASE = """
+              CASE
+                WHEN COALESCE(me.metadata->>'source', '') IN ('FAMILY_WEEKLY_DIGEST')
+                  OR COALESCE(me.metadata->>'source', '') LIKE '%DIGEST%'
+                  OR COALESCE(me.metadata->>'source', '') LIKE '%SUMMARY%'
+                THEN 'AI_SUMMARY'
+                ELSE 'FAMILY_EXPERIENCE'
+              END
+            """;
+
     static String diarySection(boolean archived) {
         String diaryStatus = archived
                 ? "AND de.metadata->>'status' = 'ARCHIVED'"
@@ -177,13 +187,7 @@ class MemoryLibraryQuerySql {
         return ("""
             SELECT
               CONCAT('memory-', me.id) AS id,
-              CASE
-                WHEN COALESCE(me.metadata->>'source', '') IN ('FAMILY_WEEKLY_DIGEST')
-                  OR COALESCE(me.metadata->>'source', '') LIKE '%DIGEST%'
-                  OR COALESCE(me.metadata->>'source', '') LIKE '%SUMMARY%'
-                THEN 'AI_SUMMARY'
-                ELSE 'FAMILY_EXPERIENCE'
-              END AS source_type,
+              {MEMORY_SOURCE_TYPE_CASE} AS source_type,
               me.type,
               COALESCE(NULLIF(me.summary, ''), LEFT(me.content, 32), '未命名经验') AS title,
               me.content AS body,
@@ -238,13 +242,7 @@ class MemoryLibraryQuerySql {
                     LIKE CONCAT('%', term, '%')
                 )
               )
-              AND (? = 'ALL' OR ? = CASE
-                WHEN COALESCE(me.metadata->>'source', '') IN ('FAMILY_WEEKLY_DIGEST')
-                  OR COALESCE(me.metadata->>'source', '') LIKE '%DIGEST%'
-                  OR COALESCE(me.metadata->>'source', '') LIKE '%SUMMARY%'
-                THEN 'AI_SUMMARY'
-                ELSE 'FAMILY_EXPERIENCE'
-              END)
+              AND (? = 'ALL' OR ? = {MEMORY_SOURCE_TYPE_CASE})
               AND (CAST(? AS BIGINT) IS NULL OR me.user_id = CAST(? AS BIGINT))
               AND (CAST(? AS TEXT) IS NULL OR me.scope = CAST(? AS TEXT))
               AND (CAST(? AS TEXT) IS NULL OR EXISTS (
@@ -261,6 +259,8 @@ class MemoryLibraryQuerySql {
               ))
               AND (CAST(? AS DATE) IS NULL OR COALESCE(me.updated_at::date, me.created_at::date) >= CAST(? AS DATE))
               AND (CAST(? AS DATE) IS NULL OR COALESCE(me.updated_at::date, me.created_at::date) <= CAST(? AS DATE))
-            """).replace("{ROW_STATUS}", rowStatus);
+            """)
+                .replace("{MEMORY_SOURCE_TYPE_CASE}", MEMORY_SOURCE_TYPE_CASE)
+                .replace("{ROW_STATUS}", rowStatus);
     }
 }

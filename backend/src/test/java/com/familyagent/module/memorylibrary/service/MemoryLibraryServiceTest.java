@@ -110,6 +110,29 @@ class MemoryLibraryServiceTest {
     }
 
     @Test
+    void search_acceptsLegacyAiSummaryType() {
+        MemoryLibraryQueryService queryService = new MemoryLibraryQueryService(
+                jdbcTemplate, familyService, objectMapper,
+                memoryEntryVoteRepository, growthGuardStalenessVoteRepository);
+
+        try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
+            stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(101L);
+            when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), any(Object[].class))).thenReturn(0L);
+            when(jdbcTemplate.query(anyString(), any(org.springframework.jdbc.core.RowMapper.class), any(Object[].class)))
+                    .thenReturn(List.of());
+
+            MemoryLibrarySearchRequest request = new MemoryLibrarySearchRequest();
+            request.setFamilyId(10L);
+            request.setType("AI_SUMMARY");
+
+            PageResult<MemoryLibraryItem> result = queryService.search(request);
+
+            assertEquals(0L, result.getTotal());
+            verify(familyService).checkMembership(10L);
+        }
+    }
+
+    @Test
     void search_requiresFamilyId() {
         MemoryLibraryQueryService queryService = new MemoryLibraryQueryService(
                 jdbcTemplate, familyService, objectMapper,
@@ -125,13 +148,9 @@ class MemoryLibraryServiceTest {
 
     @Test
     void deleteArchivedLibraryItem_deletesArchivedMemoryAndEmbeddings() {
-        MemoryLibraryQueryService queryService = new MemoryLibraryQueryService(
-                jdbcTemplate, familyService, objectMapper,
-                memoryEntryVoteRepository, growthGuardStalenessVoteRepository);
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
                 familyService, diaryEntryRepository, memoryEntryRepository,
-                growthRecordRepository, growthGuardService,
-                queryService, jdbcTemplate);
+                growthRecordRepository, growthGuardService, jdbcTemplate);
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(101L);
@@ -154,13 +173,9 @@ class MemoryLibraryServiceTest {
 
     @Test
     void deleteArchivedLibraryItem_rejectsActiveMemory() {
-        MemoryLibraryQueryService queryService = new MemoryLibraryQueryService(
-                jdbcTemplate, familyService, objectMapper,
-                memoryEntryVoteRepository, growthGuardStalenessVoteRepository);
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
                 familyService, diaryEntryRepository, memoryEntryRepository,
-                growthRecordRepository, growthGuardService,
-                queryService, jdbcTemplate);
+                growthRecordRepository, growthGuardService, jdbcTemplate);
 
         MemoryEntry entry = new MemoryEntry();
         entry.setId(88L);
@@ -175,6 +190,33 @@ class MemoryLibraryServiceTest {
         assertEquals(ErrorCode.NOT_FOUND.getCode(), exception.getCode());
         verify(familyService).checkMembership(10L);
         verify(memoryEntryRepository, never()).deleteById(88L);
+    }
+
+    @Test
+    void deleteArchivedLibraryItem_deletesActiveLegacyAiSummary() {
+        MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
+                familyService, diaryEntryRepository, memoryEntryRepository,
+                growthRecordRepository, growthGuardService, jdbcTemplate);
+
+        MemoryEntry entry = new MemoryEntry();
+        entry.setId(89L);
+        entry.setFamilyId(10L);
+        entry.setUserId(101L);
+        entry.setStatus("ACTIVE");
+        entry.setMetadata(java.util.Map.of("source", MemoryLibrarySupport.LEGACY_AI_SUMMARY_SOURCE));
+        when(memoryEntryRepository.selectById(89L)).thenReturn(entry);
+
+        try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
+            stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(101L);
+
+            maintenanceService.deleteArchivedItem(10L, "memory-89");
+
+            verify(familyService).checkMembership(10L);
+            verify(jdbcTemplate).update(
+                    "DELETE FROM memory_embeddings WHERE source_type = ? AND source_id = ?",
+                    "MEMORY", 89L);
+            verify(memoryEntryRepository).deleteById(89L);
+        }
     }
 
     // --- helpers ---

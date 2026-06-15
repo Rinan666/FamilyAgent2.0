@@ -14,6 +14,8 @@ import java.util.Map;
 /** Package-private static utilities shared across MemoryLibrary* services. */
 class MemoryLibrarySupport {
 
+    static final String LEGACY_AI_SUMMARY_SOURCE = "FAMILY_WEEKLY_DIGEST";
+
     private MemoryLibrarySupport() {}
 
     static ParsedItemId parseItemId(String itemId) {
@@ -56,6 +58,11 @@ class MemoryLibrarySupport {
 
     static String normalizeText(String value) {
         return value == null ? "" : value.toLowerCase(Locale.ROOT).replaceAll("\\s+", "").trim();
+    }
+
+    static boolean isLegacyAiSummary(Object metadata) {
+        String source = asText(mutableMap(metadata).get("source")).toUpperCase(Locale.ROOT);
+        return LEGACY_AI_SUMMARY_SOURCE.equals(source) || source.contains("DIGEST") || source.contains("SUMMARY");
     }
 
     static List<String> searchTerms(String keyword) {

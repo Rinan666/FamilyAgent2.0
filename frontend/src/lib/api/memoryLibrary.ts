@@ -1,5 +1,5 @@
 import { request } from './shared';
-import type { MemoryLibraryItem, MemoryLibraryItemType, MemoryMaintenanceSuggestion, PageResult } from '@/types';
+import type { MemoryLibraryItem, MemoryLibraryItemType, PageResult } from '@/types';
 
 export const memoryLibraryApi = {
   search: (params: {
@@ -27,8 +27,6 @@ export const memoryLibraryApi = {
     if (params.dateTo?.trim()) sp.set('dateTo', params.dateTo.trim());
     return request<PageResult<MemoryLibraryItem>>(`/memory-library/search?${sp}`);
   },
-  maintenanceSuggestions: (familyId: number) =>
-    request<MemoryMaintenanceSuggestion[]>(`/memory-library/maintenance-suggestions?familyId=${familyId}`),
   classicalizeItem: (
     familyId: number,
     itemId: string,
@@ -39,11 +37,6 @@ export const memoryLibraryApi = {
     request<void>('/memory-library/classicalize', {
       method: 'POST',
       body: JSON.stringify({ familyId, itemId, classicalText, plainSummary, styleNote }),
-    }),
-  mergeItems: (familyId: number, primaryItemId: string, secondaryItemId: string) =>
-    request<void>('/memory-library/merge', {
-      method: 'POST',
-      body: JSON.stringify({ familyId, primaryItemId, secondaryItemId }),
     }),
   archived: (params: {
     familyId: number;

@@ -1,4 +1,4 @@
-﻿// ============================================
+// ============================================
 // FamilyAgent - frontend type definitions
 // ============================================
 
@@ -197,7 +197,6 @@ export interface ChatMessage {
       memoryCount: number;
       growthRecordCount?: number;
       libraryCount?: number;
-      heritageTaskCount?: number;
       sessionSavedCount?: number;
       totalReferenceCount?: number;
       sources: RagRecallSource[];
@@ -375,59 +374,6 @@ export interface MemoryLibraryItem {
   updatedAt?: string;
 }
 
-export type MemoryMaintenanceAction = 'MERGE_REVIEW' | 'ARCHIVE_REVIEW' | 'DELETE_REVIEW' | string;
-
-export interface MemoryMaintenanceSuggestion {
-  action: MemoryMaintenanceAction;
-  score: number;
-  title: string;
-  reason: string;
-  reasons: string[];
-  items: MemoryLibraryItem[];
-}
-
-export interface FamilyMemoryCard {
-  title: string;
-  theme: string;
-  summary: string;
-  motto?: string;
-  risk_points: string[];
-  action_suggestions: string[];
-  suitable_for: string[];
-  sensitivity: 'LOW' | 'MEDIUM' | 'HIGH' | string;
-  safety_note: string;
-}
-
-export type HeritageTaskStatus = 'PENDING' | 'DONE' | 'ARCHIVED' | string;
-
-export interface HeritageTask {
-  id: number;
-  familyId: number;
-  memoryId?: number;
-  createdBy: number;
-  title: string;
-  action: string;
-  targetLabel?: string;
-  dueDate?: string;
-  status: HeritageTaskStatus;
-  completionNote?: string;
-  completedBy?: number;
-  completedAt?: string;
-  metadata?: Record<string, unknown>;
-  createdAt: string;
-  updatedAt?: string;
-}
-
-export interface CreateHeritageTaskRequest {
-  familyId: number;
-  memoryId?: number;
-  title: string;
-  action: string;
-  targetLabel?: string;
-  dueDate?: string;
-  metadata?: Record<string, unknown>;
-}
-
 export interface CreateFamilyMemoryRequest {
   familyId: number;
   content: string;
@@ -435,7 +381,6 @@ export interface CreateFamilyMemoryRequest {
   scope?: MemoryScope;
   summary?: string;
   importance?: number;
-  memoryCard?: FamilyMemoryCard;
   metadata?: Record<string, unknown>;
 }
 
@@ -496,16 +441,6 @@ export interface AgentOrganizedDraft {
   growth_severity: number;
   scenario: string;
   reason: string;
-}
-
-export interface HeritageSaveJudge {
-  should_save: boolean;
-  learning_value_score: number;
-  descendant_value: string;
-  reason: string;
-  suggested_revision: string;
-  missing_elements: string[];
-  sensitivity: 'LOW' | 'MEDIUM' | 'HIGH' | string;
 }
 
 export type GrowthGuardCategory =
@@ -617,6 +552,7 @@ export interface MirrorContextResponse {
   targetMember: FamilyMember;
   diaries: DiaryEntry[];
   memories: MemoryEntry[];
+  growthRecords?: GrowthGuardRecord[];
   libraryItems?: MemoryLibraryItem[];
   mirrorProfile?: Record<string, unknown>;
   memoryContext: string;

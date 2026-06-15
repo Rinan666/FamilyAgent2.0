@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
-  AlertTriangle,
   Archive,
   BookHeart,
   CheckCircle,
@@ -26,7 +25,6 @@ import type {
   FamilyMember,
   MemoryLibraryItem,
   MemoryLibraryItemType,
-  MemoryMaintenanceSuggestion,
   PageResult,
 } from '@/types';
 
@@ -71,9 +69,16 @@ const typeMeta: Record<LibraryItemType, {
   AI_SUMMARY: {
     label: 'AI 摘要',
     icon: ScrollText,
-    badge: 'bg-violet-50 text-violet-700',
-    tone: 'text-violet-700 bg-violet-50',
+    badge: 'bg-slate-100 text-slate-700',
+    tone: 'text-slate-700 bg-slate-100',
   },
+};
+
+const fallbackTypeMeta = {
+  label: '记忆',
+  icon: BookHeart,
+  badge: 'bg-gray-100 text-gray-700',
+  tone: 'text-gray-700 bg-gray-100',
 };
 
 function emptyPage(pageSize: number): PageResult<MemoryLibraryItem> {
@@ -87,6 +92,10 @@ function emptyCounts(): Record<LibraryItemType, number | null> {
     GROWTH_OBSERVATION: null,
     AI_SUMMARY: null,
   };
+}
+
+function resolveTypeMeta(sourceType?: string) {
+  return typeMeta[sourceType as LibraryItemType] || fallbackTypeMeta;
 }
 
 function parseNumericId(itemId: string | undefined, prefix: string) {
@@ -147,13 +156,16 @@ function canVoteFamilyExperience(item: MemoryLibraryItem) {
   return item.sourceType === 'FAMILY_EXPERIENCE' && item.id.startsWith('memory-');
 }
 
+function isLegacyAiSummary(item: MemoryLibraryItem) {
+  return item.sourceType === 'AI_SUMMARY';
+}
+
 function originLabel(item: MemoryLibraryItem) {
   const source = metadataText(item, 'source');
   if (source === 'FAMILY_COMPANION_TOOL') return '家族助手对话保存';
   if (source === 'MIRROR_AGENT_TOOL') return '镜像助手对话保存';
   if (source === 'FAMILY_WEEKLY_DIGEST') return 'AI 家庭周报生成';
-  if (source.includes('DIGEST') || source.includes('SUMMARY')) return 'AI 摘要生成';
-  if (item.sourceType === 'AI_SUMMARY') return 'AI 摘要生成';
+  if (source.includes('DIGEST') || source.includes('SUMMARY') || item.sourceType === 'AI_SUMMARY') return '历史 AI 摘要';
   return '来源页面保存';
 }
 
@@ -161,7 +173,8 @@ function evidenceDescription(item: MemoryLibraryItem) {
   if (item.sourceType === 'LIFE_RECORD') return '来自记录页，保留事件经过、当时语境和个人感受。';
   if (item.sourceType === 'FAMILY_EXPERIENCE') return '来自经验沉淀，适合长期复用和传承。';
   if (item.sourceType === 'GROWTH_OBSERVATION') return '来自观察记录，适合照护跟进和后续复核。';
-  return '来自 AI 生成摘要，适合快速定位上下文。';
+  if (item.sourceType === 'AI_SUMMARY') return '来自历史 AI 摘要，仅供回看与清理，不再参与经验沉淀。';
+  return '来自记忆库记录。';
 }
 
 function itemSignals(item: MemoryLibraryItem) {
@@ -222,16 +235,6 @@ function memberDisplayName(member?: FamilyMember) {
     || `用户 ${member.userId}`;
 }
 
-function maintenanceMeta(action?: string) {
-  if (action === 'MERGE_REVIEW') {
-    return { label: '建议合并', tone: 'border-blue-100 bg-blue-50 text-blue-700' };
-  }
-  if (action === 'DELETE_REVIEW') {
-    return { label: '待清理', tone: 'border-red-100 bg-red-50 text-red-700' };
-  }
-  return { label: '建议归档', tone: 'border-amber-100 bg-amber-50 text-amber-700' };
-}
-
 let cachedMembersByFamilyId: Record<number, FamilyMember[]> = {};
 let cachedCountsByFamilyId: Record<number, Record<LibraryItemType, number | null>> = {};
 
@@ -256,10 +259,7 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [pageData, setPageData] = useState<PageResult<MemoryLibraryItem>>(() => emptyPage(pageSizeOptions[0]));
   const [counts, setCounts] = useState<Record<LibraryItemType, number | null>>(() => emptyCounts());
-  const [maintenanceSuggestions, setMaintenanceSuggestions] = useState<MemoryMaintenanceSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingMaintenance, setLoadingMaintenance] = useState(false);
-  const [maintenanceLoaded, setMaintenanceLoaded] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [query, setQuery] = useState('');
@@ -277,7 +277,6 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
   const [pageSize, setPageSize] = useState(pageSizeOptions[0]);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedItemId, setSelectedItemId] = useState('');
-  const [mergingSuggestionKey, setMergingSuggestionKey] = useState('');
   const [archivingItemId, setArchivingItemId] = useState('');
   const [restoringItemId, setRestoringItemId] = useState('');
   const [deletingItemId, setDeletingItemId] = useState('');
@@ -320,9 +319,8 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
 
   const selectedItem = useMemo(() => (
     pageData.items.find((item) => item.id === selectedItemId)
-    || maintenanceSuggestions.flatMap((item) => item.items || []).find((item) => item.id === selectedItemId)
     || null
-  ), [maintenanceSuggestions, pageData.items, selectedItemId]);
+  ), [pageData.items, selectedItemId]);
 
   const pageStart = pageData.total === 0 ? 0 : (pageData.page - 1) * pageData.pageSize + 1;
   const pageEnd = Math.min(pageData.page * pageData.pageSize, pageData.total);
@@ -374,8 +372,6 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
     if (!activeFamilyId) {
       setPageData(emptyPage(pageSize));
       setCounts(emptyCounts());
-      setMaintenanceSuggestions([]);
-      setMaintenanceLoaded(false);
       return;
     }
 
@@ -421,25 +417,6 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
     viewMode,
     visibilityFilter,
   ]);
-
-  const loadMaintenanceSuggestions = useCallback(async () => {
-    if (!activeFamilyId || viewMode !== 'ACTIVE') {
-      setMaintenanceSuggestions([]);
-      setMaintenanceLoaded(false);
-      return;
-    }
-    setLoadingMaintenance(true);
-    try {
-      const suggestions = await memoryLibraryApi.maintenanceSuggestions(activeFamilyId);
-      setMaintenanceSuggestions(Array.isArray(suggestions) ? suggestions : []);
-      setMaintenanceLoaded(true);
-    } catch {
-      setMaintenanceSuggestions([]);
-      setMaintenanceLoaded(true);
-    } finally {
-      setLoadingMaintenance(false);
-    }
-  }, [activeFamilyId, viewMode]);
 
   const resetFilters = useCallback(() => {
     setQuery('');
@@ -518,13 +495,6 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
   }, [loadData]);
 
   useEffect(() => {
-    if (viewMode !== 'ACTIVE' || !canManageLibrary) {
-      setMaintenanceSuggestions([]);
-      setMaintenanceLoaded(false);
-    }
-  }, [canManageLibrary, viewMode]);
-
-  useEffect(() => {
     if (!requestedItemId) return;
     if (pageData.items.some((item) => item.id === requestedItemId)) {
       setSelectedItemId(requestedItemId);
@@ -549,29 +519,8 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
       loadMembers(activeFamilyId, true),
       loadData(),
       canLoadSummaryCounts ? loadCounts(activeFamilyId, true) : Promise.resolve(),
-      maintenanceLoaded ? loadMaintenanceSuggestions() : Promise.resolve(),
     ]);
-  }, [activeFamilyId, canLoadSummaryCounts, loadCounts, loadData, loadMaintenanceSuggestions, loadMembers, maintenanceLoaded]);
-
-  const handleMergeSuggestion = useCallback(async (suggestion: MemoryMaintenanceSuggestion) => {
-    if (!activeFamilyId) return;
-    const [primary, secondary] = (suggestion.items || []).slice(0, 2);
-    if (!primary || !secondary) return;
-    if (!window.confirm('确认将这两条内容合并为一条更清晰的记忆吗？')) return;
-    const key = `${primary.id}-${secondary.id}`;
-    setMergingSuggestionKey(key);
-    setError('');
-    try {
-      await memoryLibraryApi.mergeItems(activeFamilyId, primary.id, secondary.id);
-      setSelectedItemId(primary.id);
-      setSuccess('已完成合并');
-      await refreshAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '合并失败');
-    } finally {
-      setMergingSuggestionKey('');
-    }
-  }, [activeFamilyId, refreshAll]);
+  }, [activeFamilyId, canLoadSummaryCounts, loadCounts, loadData, loadMembers]);
 
   const handleArchiveItem = useCallback(async (item: MemoryLibraryItem) => {
     if (!activeFamilyId) return;
@@ -606,9 +555,13 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
     }
   }, [activeFamilyId, refreshAll]);
 
-  const handleDeleteArchivedItem = useCallback(async (item: MemoryLibraryItem) => {
+  const handleDeleteItem = useCallback(async (item: MemoryLibraryItem) => {
     if (!activeFamilyId) return;
-    if (!window.confirm('确认永久删除这条已归档记忆吗？删除后无法恢复。')) return;
+    const deletingLegacyAiSummary = viewMode === 'ACTIVE' && isLegacyAiSummary(item);
+    const confirmMessage = deletingLegacyAiSummary
+      ? '确认永久删除这条历史 AI 摘要吗？删除后无法恢复。'
+      : '确认永久删除这条已归档记忆吗？删除后无法恢复。';
+    if (!window.confirm(confirmMessage)) return;
     setDeletingItemId(item.id);
     setError('');
     try {
@@ -621,7 +574,7 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
     } finally {
       setDeletingItemId('');
     }
-  }, [activeFamilyId, refreshAll]);
+  }, [activeFamilyId, refreshAll, viewMode]);
 
   const handleVoteExperience = useCallback(async (item: MemoryLibraryItem, voteType: 'UP' | 'DOWN') => {
     const memoryId = parseNumericId(item.id, 'memory');
@@ -668,7 +621,7 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
       <div className="mx-auto max-w-3xl rounded-xl border border-gray-200 bg-white p-10 text-center">
         <BookHeart className="mx-auto mb-3 h-10 w-10 text-gray-300" />
         <h1 className="text-lg font-semibold text-gray-900">先创建一个家族空间</h1>
-        <p className="mt-2 text-sm text-gray-500">记忆库会统一收纳记录、经验、观察和 AI 摘要。</p>
+        <p className="mt-2 text-sm text-gray-500">记忆库会统一收纳记录、经验和观察。</p>
         <Link
           href="/dashboard/family"
           className="mt-5 inline-flex h-10 items-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
@@ -686,7 +639,7 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
           <div>
             <h1 className="text-xl font-bold text-gray-900">{embedded ? '记忆库' : '记忆库'}</h1>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-gray-500">
-              统一查看和整理 {activeFamily?.name || '当前家族'} 的记录、经验、观察和 AI 摘要。
+              统一查看和整理 {activeFamily?.name || '当前家族'} 的记录、经验和观察。
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -764,88 +717,6 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
 
       {error && <div className="mb-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
       {success && <div className="mb-4 rounded-lg border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-700">{success}</div>}
-
-      {viewMode === 'ACTIVE' && canManageLibrary && (
-        <section className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
-          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-sm font-semibold text-gray-900">轻提醒式整理建议</h2>
-              <p className="mt-1 text-sm leading-6 text-gray-500">系统只给建议，不会自动合并或自动删除。</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => void loadMaintenanceSuggestions()}
-              disabled={loadingMaintenance || !activeFamilyId}
-              className="inline-flex h-8 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-60"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${loadingMaintenance ? 'animate-spin' : ''}`} />
-              重新评估
-            </button>
-          </div>
-
-          {loadingMaintenance ? (
-            <div className="flex h-20 items-center justify-center text-sm text-gray-400">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              正在评估...
-            </div>
-          ) : !maintenanceLoaded ? (
-            <div className="rounded-lg border border-dashed border-gray-200 px-3 py-2 text-sm text-gray-500">
-              点击“重新评估”后再加载整理建议，默认不在进入页面时自动请求。
-            </div>
-          ) : maintenanceSuggestions.length === 0 ? (
-            <div className="rounded-lg border border-green-100 bg-green-50 px-3 py-2 text-sm text-green-700">
-              暂无明显需要处理的建议。
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-              {maintenanceSuggestions.slice(0, 6).map((suggestion, index) => {
-                const meta = maintenanceMeta(suggestion.action);
-                const [primary, secondary] = (suggestion.items || []).slice(0, 2);
-                const suggestionKey = primary && secondary ? `${primary.id}-${secondary.id}` : '';
-                return (
-                  <article key={`${suggestion.action}-${index}-${primary?.id || 'item'}`} className={`rounded-lg border p-3 ${meta.tone}`}>
-                    <div className="mb-2 flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4" />
-                        <span className="text-xs font-semibold">{meta.label}</span>
-                      </div>
-                      <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-medium">
-                        {suggestion.score} 分
-                      </span>
-                    </div>
-                    <p className="text-sm font-semibold text-gray-900">{suggestion.title}</p>
-                    <p className="mt-1 text-xs leading-5 text-gray-600">{suggestion.reason}</p>
-                    <div className="mt-2 space-y-2">
-                      {(suggestion.items || []).slice(0, 2).map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => setSelectedItemId(item.id)}
-                          className="block w-full rounded-lg bg-white/80 px-3 py-2 text-left text-xs text-gray-700 hover:bg-white"
-                        >
-                          <span className="font-medium">{typeMeta[item.sourceType].label}</span>
-                          <span className="ml-2">{item.title}</span>
-                        </button>
-                      ))}
-                    </div>
-                    {suggestion.action === 'MERGE_REVIEW' && (
-                      <button
-                        type="button"
-                        onClick={() => void handleMergeSuggestion(suggestion)}
-                        disabled={!suggestionKey || mergingSuggestionKey === suggestionKey}
-                        className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-60"
-                      >
-                        {mergingSuggestionKey === suggestionKey && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                        确认合并
-                      </button>
-                    )}
-                  </article>
-                );
-              })}
-            </div>
-          )}
-        </section>
-      )}
 
       <section className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
         <div className="mb-3">
@@ -948,7 +819,7 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
         ) : (
           <div className="divide-y divide-gray-100">
             {pageData.items.map((item) => {
-              const meta = typeMeta[item.sourceType];
+              const meta = resolveTypeMeta(item.sourceType);
               const Icon = meta.icon;
               const status = assetStatus(item);
               const signals = itemSignals(item);
@@ -1102,8 +973,8 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
             <div className="flex items-start justify-between gap-3 border-b border-gray-200 p-4">
               <div className="min-w-0">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${typeMeta[selectedItem.sourceType].badge}`}>
-                    {typeMeta[selectedItem.sourceType].label}
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${resolveTypeMeta(selectedItem.sourceType).badge}`}>
+                    {resolveTypeMeta(selectedItem.sourceType).label}
                   </span>
                   <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600">
                     <Shield className="h-3 w-3" />
@@ -1126,7 +997,7 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              {viewMode === 'ACTIVE' && canManageLibrary && (
+              {viewMode === 'ACTIVE' && canManageLibrary && !isLegacyAiSummary(selectedItem) && (
                 <div className="mb-4 rounded-lg border border-amber-100 bg-amber-50 p-3">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-sm leading-6 text-amber-800">这条记忆可以在记忆库里归档，保持主列表更清晰。</p>
@@ -1138,6 +1009,23 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
                     >
                       {archivingItemId === selectedItem.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
                       归档
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {viewMode === 'ACTIVE' && canManageLibrary && isLegacyAiSummary(selectedItem) && (
+                <div className="mb-4 rounded-lg border border-red-100 bg-red-50 p-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm leading-6 text-red-700">这条历史 AI 摘要只保留兼容展示，不再参与经验沉淀，可以直接删除。</p>
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteItem(selectedItem)}
+                      disabled={deletingItemId === selectedItem.id}
+                      className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-white px-3 text-xs font-medium text-red-600 ring-1 ring-red-100 hover:bg-red-50 disabled:opacity-60"
+                    >
+                      {deletingItemId === selectedItem.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                      直接删除
                     </button>
                   </div>
                 </div>
@@ -1159,7 +1047,7 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
                       </button>
                       <button
                         type="button"
-                        onClick={() => void handleDeleteArchivedItem(selectedItem)}
+                        onClick={() => void handleDeleteItem(selectedItem)}
                         disabled={deletingItemId === selectedItem.id || restoringItemId === selectedItem.id}
                         className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-white px-3 text-xs font-medium text-red-600 ring-1 ring-red-100 hover:bg-red-50 disabled:opacity-60"
                       >
@@ -1232,7 +1120,7 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
                     }}
                     className="rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-blue-700 ring-1 ring-blue-100 hover:bg-blue-100"
                   >
-                    同类型：{typeMeta[selectedItem.sourceType].label}
+                    同类型：{resolveTypeMeta(selectedItem.sourceType).label}
                   </button>
                   {selectedItem.memberUserId && (
                     <button

@@ -78,7 +78,7 @@ public class MemoryLibraryClassicalizeService {
 
     private MemoryEntry requireActiveFamilyExperienceMemory(Long familyId, Long memoryId) {
         MemoryEntry entry = requireActiveFamilyMemory(familyId, memoryId);
-        if (isAiSummaryMemory(entry)) {
+        if (MemoryLibrarySupport.isLegacyAiSummary(entry.getMetadata())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "AI 摘要不能作为家族经验进行改写");
         }
         return entry;
@@ -91,11 +91,5 @@ public class MemoryLibraryClassicalizeService {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         return entry;
-    }
-
-    private static boolean isAiSummaryMemory(MemoryEntry entry) {
-        String source = MemoryLibrarySupport.asText(
-                MemoryLibrarySupport.mutableMap(entry.getMetadata()).get("source")).toUpperCase();
-        return source.equals("FAMILY_WEEKLY_DIGEST") || source.contains("DIGEST") || source.contains("SUMMARY");
     }
 }
