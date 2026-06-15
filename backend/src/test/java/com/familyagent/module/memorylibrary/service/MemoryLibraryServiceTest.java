@@ -13,8 +13,10 @@ import com.familyagent.module.growth.service.GrowthGuardService;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
 import com.familyagent.module.memory.repository.MemoryEntryVoteRepository;
+import com.familyagent.module.memory.service.MemoryEmbeddingService;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryItem;
 import com.familyagent.module.memorylibrary.dto.MemoryLibrarySearchRequest;
+import com.familyagent.module.memorylibrary.dto.MemoryLibraryUpdateRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -47,6 +49,7 @@ class MemoryLibraryServiceTest {
     @Mock private GrowthGuardRecordRepository growthRecordRepository;
     @Mock private MemoryEntryVoteRepository memoryEntryVoteRepository;
     @Mock private GrowthGuardStalenessVoteRepository growthGuardStalenessVoteRepository;
+    @Mock private MemoryEmbeddingService memoryEmbeddingService;
     @Spy  private ObjectMapper objectMapper = new ObjectMapper();
 
     // --- MemoryLibraryQueryService ---
@@ -150,7 +153,7 @@ class MemoryLibraryServiceTest {
     void deleteArchivedLibraryItem_deletesArchivedMemoryAndEmbeddings() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
                 familyService, diaryEntryRepository, memoryEntryRepository,
-                growthRecordRepository, growthGuardService, jdbcTemplate);
+                growthRecordRepository, growthGuardService, memoryEmbeddingService, jdbcTemplate);
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(101L);
@@ -175,7 +178,7 @@ class MemoryLibraryServiceTest {
     void deleteArchivedLibraryItem_rejectsActiveMemory() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
                 familyService, diaryEntryRepository, memoryEntryRepository,
-                growthRecordRepository, growthGuardService, jdbcTemplate);
+                growthRecordRepository, growthGuardService, memoryEmbeddingService, jdbcTemplate);
 
         MemoryEntry entry = new MemoryEntry();
         entry.setId(88L);
@@ -196,7 +199,7 @@ class MemoryLibraryServiceTest {
     void deleteArchivedLibraryItem_deletesActiveLegacyAiSummary() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
                 familyService, diaryEntryRepository, memoryEntryRepository,
-                growthRecordRepository, growthGuardService, jdbcTemplate);
+                growthRecordRepository, growthGuardService, memoryEmbeddingService, jdbcTemplate);
 
         MemoryEntry entry = new MemoryEntry();
         entry.setId(89L);
@@ -217,6 +220,72 @@ class MemoryLibraryServiceTest {
                     "MEMORY", 89L);
             verify(memoryEntryRepository).deleteById(89L);
         }
+    }
+
+    @Test
+    void updateLibraryItem_updatesActiveMemoryAndSchedulesReindex() {
+        MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
+                familyService, diaryEntryRepository, memoryEntryRepository,
+                growthRecordRepository, growthGuardService, memoryEmbeddingService, jdbcTemplate);
+
+        MemoryEntry entry = new MemoryEntry();
+        entry.setId(88L);
+        entry.setFamilyId(10L);
+        entry.setUserId(101L);
+        entry.setStatus("ACTIVE");
+        entry.setType("ELDER_ADVICE");
+        entry.setScope("FAMILY_VISIBLE");
+        entry.setImportance(3);
+        entry.setContent("old content");
+        when(memoryEntryRepository.selectById(88L)).thenReturn(entry);
+
+        MemoryLibraryUpdateRequest request = new MemoryLibraryUpdateRequest();
+        request.setFamilyId(10L);
+        request.setItemId("memory-88");
+        request.setTitle("Updated title");
+        request.setBody("Updated content");
+        request.setType("VALUE");
+        request.setVisibility("CARE_VISIBLE");
+        request.setTags(List.of("family", "shared"));
+
+        try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
+            stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(101L);
+
+            maintenanceService.updateItem(request);
+
+            assertEquals("Updated content", entry.getContent());
+            assertEquals("Updated title", entry.getSummary());
+            assertEquals("VALUE", entry.getType());
+            assertEquals("CARE_VISIBLE", entry.getScope());
+            verify(memoryEntryRepository).updateById(entry);
+            verify(memoryEmbeddingService).indexMemoryAfterCommit(entry);
+        }
+    }
+
+    @Test
+    void updateLibraryItem_rejectsArchivedMemory() {
+        MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
+                familyService, diaryEntryRepository, memoryEntryRepository,
+                growthRecordRepository, growthGuardService, memoryEmbeddingService, jdbcTemplate);
+
+        MemoryEntry entry = new MemoryEntry();
+        entry.setId(88L);
+        entry.setFamilyId(10L);
+        entry.setUserId(101L);
+        entry.setStatus("ARCHIVED");
+        when(memoryEntryRepository.selectById(88L)).thenReturn(entry);
+
+        MemoryLibraryUpdateRequest request = new MemoryLibraryUpdateRequest();
+        request.setFamilyId(10L);
+        request.setItemId("memory-88");
+        request.setBody("Updated content");
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> maintenanceService.updateItem(request));
+
+        assertEquals(ErrorCode.NOT_FOUND.getCode(), exception.getCode());
+        verify(memoryEntryRepository, never()).updateById(entry);
+        verify(memoryEmbeddingService, never()).indexMemoryAfterCommit(any());
     }
 
     // --- helpers ---

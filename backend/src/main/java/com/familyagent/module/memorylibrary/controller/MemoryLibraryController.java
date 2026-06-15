@@ -5,6 +5,7 @@ import com.familyagent.common.response.Result;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryClassicalizeRequest;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryItem;
 import com.familyagent.module.memorylibrary.dto.MemoryLibrarySearchRequest;
+import com.familyagent.module.memorylibrary.dto.MemoryLibraryUpdateRequest;
 import com.familyagent.module.memorylibrary.service.MemoryLibraryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -48,6 +50,13 @@ public class MemoryLibraryController {
                 request.getClassicalText(),
                 request.getPlainSummary(),
                 request.getStyleNote());
+        return Result.success();
+    }
+
+    @Operation(summary = "Edit a memory library item after manual review")
+    @PutMapping("/item")
+    public Result<Void> update(@Valid @RequestBody MemoryLibraryUpdateRequest request) {
+        memoryLibraryService.updateLibraryItem(request);
         return Result.success();
     }
 

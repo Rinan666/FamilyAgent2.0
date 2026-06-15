@@ -1,5 +1,5 @@
 import { request } from './shared';
-import type { MemoryLibraryItem, MemoryLibraryItemType, PageResult } from '@/types';
+import type { MemoryLibraryItem, MemoryLibraryItemType, PageResult, UpdateMemoryLibraryItemRequest } from '@/types';
 
 export const memoryLibraryApi = {
   search: (params: {
@@ -37,6 +37,11 @@ export const memoryLibraryApi = {
     request<void>('/memory-library/classicalize', {
       method: 'POST',
       body: JSON.stringify({ familyId, itemId, classicalText, plainSummary, styleNote }),
+    }),
+  updateItem: (payload: UpdateMemoryLibraryItemRequest) =>
+    request<void>('/memory-library/item', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
     }),
   archived: (params: {
     familyId: number;

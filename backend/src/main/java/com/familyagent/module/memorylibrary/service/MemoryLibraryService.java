@@ -3,6 +3,7 @@ package com.familyagent.module.memorylibrary.service;
 import com.familyagent.common.response.PageResult;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryItem;
 import com.familyagent.module.memorylibrary.dto.MemoryLibrarySearchRequest;
+import com.familyagent.module.memorylibrary.dto.MemoryLibraryUpdateRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -25,6 +26,10 @@ public class MemoryLibraryService {
     public void classicalizeLibraryItem(
             Long familyId, String itemId, String classicalText, String plainSummary, String styleNote) {
         classicalizeService.classicalize(familyId, itemId, classicalText, plainSummary, styleNote);
+    }
+
+    public void updateLibraryItem(MemoryLibraryUpdateRequest request) {
+        maintenanceService.updateItem(request);
     }
 
     public void archiveLibraryItem(Long familyId, String itemId) {

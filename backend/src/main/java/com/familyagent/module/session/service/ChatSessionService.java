@@ -238,6 +238,8 @@ public class ChatSessionService {
                 .map(ChatSessionArchive::getObjectKey)
                 .filter(objectKey -> objectKey != null && !objectKey.isBlank())
                 .forEach(archiveStorageService::deleteTranscript);
+        archiveRepository.deleteBySessionId(session.getId());
+        messageRepository.deleteBySessionId(session.getId());
         sessionRepository.deleteById(session.getId());
     }
 

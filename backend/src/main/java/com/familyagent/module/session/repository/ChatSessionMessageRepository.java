@@ -74,4 +74,10 @@ public interface ChatSessionMessageRepository extends BaseMapper<ChatSessionMess
     int deleteSeqRange(@Param("sessionId") Long sessionId,
                        @Param("startSeq") int startSeq,
                        @Param("endSeq") int endSeq);
+
+    @Delete("""
+            DELETE FROM chat_session_messages
+            WHERE session_id = #{sessionId}
+            """)
+    int deleteBySessionId(@Param("sessionId") Long sessionId);
 }

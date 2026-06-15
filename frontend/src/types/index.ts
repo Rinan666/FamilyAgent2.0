@@ -374,6 +374,16 @@ export interface MemoryLibraryItem {
   updatedAt?: string;
 }
 
+export interface UpdateMemoryLibraryItemRequest {
+  familyId: number;
+  itemId: string;
+  title?: string;
+  body: string;
+  type?: string;
+  visibility?: string;
+  tags?: string[];
+}
+
 export interface CreateFamilyMemoryRequest {
   familyId: number;
   content: string;

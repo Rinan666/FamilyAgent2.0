@@ -2,6 +2,7 @@ package com.familyagent.module.session.repository;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.familyagent.module.session.entity.ChatSessionArchive;
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -30,4 +31,10 @@ public interface ChatSessionArchiveRepository extends BaseMapper<ChatSessionArch
     List<ChatSessionArchive> findRangesBeforeSeqDesc(@Param("sessionId") Long sessionId,
                                                      @Param("beforeSeq") long beforeSeq,
                                                      @Param("limit") int limit);
+
+    @Delete("""
+            DELETE FROM chat_session_archives
+            WHERE session_id = #{sessionId}
+            """)
+    int deleteBySessionId(@Param("sessionId") Long sessionId);
 }

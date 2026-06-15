@@ -6,7 +6,8 @@ import { useSearchParams } from 'next/navigation';
 import {
   Archive,
   BookHeart,
-  CheckCircle,
+  Check,
+  Edit3,
   HeartPulse,
   Loader2,
   RefreshCw,
@@ -30,9 +31,20 @@ import type {
 
 type LibraryItemType = MemoryLibraryItemType;
 type LibraryViewMode = 'ACTIVE' | 'ARCHIVED';
+type EditDraft = {
+  title: string;
+  body: string;
+  type: string;
+  visibility: string;
+  tagsText: string;
+};
 
 const pageSizeOptions = [6, 12, 24];
-const visibilityOptions = ['PRIVATE', 'FAMILY_VISIBLE', 'CARE_VISIBLE', 'LEGACY_VISIBLE'];
+const familyVisibilityOptions = ['PRIVATE', 'PARENT_VISIBLE', 'CARE_VISIBLE', 'FAMILY_VISIBLE'];
+const diaryVisibilityOptions = [...familyVisibilityOptions, 'LEGACY_VISIBLE'];
+const diaryTypeOptions = ['DAILY', 'IMPORTANT_EVENT', 'LESSON', 'EMOTION', 'MESSAGE_TO_FAMILY', 'SELF_REFLECTION'];
+const memoryTypeOptions = ['FAMILY_STORY', 'ELDER_ADVICE', 'HEALTH_REMINDER', 'GROWTH_RISK', 'VALUE', 'PLAN'];
+const growthTypeOptions = ['POSTURE', 'DENTAL', 'VISION', 'SLEEP', 'EXERCISE', 'SCREEN_TIME', 'EMOTION', 'COMMUNICATION', 'OTHER'];
 
 const typeOptions: { value: LibraryItemType | 'ALL'; label: string }[] = [
   { value: 'ALL', label: '全部类型' },
@@ -135,23 +147,6 @@ function formatDate(value?: string) {
   return date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'numeric', day: 'numeric' });
 }
 
-function sourceHref(item: MemoryLibraryItem, familyId?: number | null) {
-  const params = new URLSearchParams();
-  if (familyId) params.set('familyId', String(familyId));
-  if (item.memberUserId) params.set('relatedUserId', String(item.memberUserId));
-  if (item.sourceType === 'GROWTH_OBSERVATION') {
-    params.set('writeCategory', 'OBSERVATION');
-    if (item.type) params.set('growthCategory', item.type);
-    return `/dashboard/diary?${params.toString()}`;
-  }
-  if (item.sourceType === 'FAMILY_EXPERIENCE') {
-    params.set('writeCategory', 'EXPERIENCE');
-    params.set('memoryType', item.type || 'ELDER_ADVICE');
-    return `/dashboard/diary?${params.toString()}`;
-  }
-  return `/dashboard/diary${params.toString() ? `?${params.toString()}` : ''}`;
-}
-
 function canVoteFamilyExperience(item: MemoryLibraryItem) {
   return item.sourceType === 'FAMILY_EXPERIENCE' && item.id.startsWith('memory-');
 }
@@ -235,6 +230,34 @@ function memberDisplayName(member?: FamilyMember) {
     || `用户 ${member.userId}`;
 }
 
+function draftFromItem(item: MemoryLibraryItem): EditDraft {
+  return {
+    title: item.title || '',
+    body: item.body || '',
+    type: item.type || '',
+    visibility: item.visibility || '',
+    tagsText: (item.tags || []).join('，'),
+  };
+}
+
+function tagsFromText(value: string) {
+  return value
+    .split(/[,，\n]/)
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+    .slice(0, 10);
+}
+
+function editVisibilityOptions(item: MemoryLibraryItem) {
+  return item.sourceType === 'LIFE_RECORD' ? diaryVisibilityOptions : familyVisibilityOptions;
+}
+
+function editTypeOptions(item: MemoryLibraryItem) {
+  if (item.sourceType === 'LIFE_RECORD') return diaryTypeOptions;
+  if (item.sourceType === 'GROWTH_OBSERVATION') return growthTypeOptions;
+  return memoryTypeOptions;
+}
+
 let cachedMembersByFamilyId: Record<number, FamilyMember[]> = {};
 let cachedCountsByFamilyId: Record<number, Record<LibraryItemType, number | null>> = {};
 
@@ -280,6 +303,15 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
   const [archivingItemId, setArchivingItemId] = useState('');
   const [restoringItemId, setRestoringItemId] = useState('');
   const [deletingItemId, setDeletingItemId] = useState('');
+  const [editingItemId, setEditingItemId] = useState('');
+  const [savingItemId, setSavingItemId] = useState('');
+  const [editDraft, setEditDraft] = useState<EditDraft>(() => ({
+    title: '',
+    body: '',
+    type: '',
+    visibility: '',
+    tagsText: '',
+  }));
   const [votingActionKey, setVotingActionKey] = useState('');
   const [staleActionItemId, setStaleActionItemId] = useState('');
 
@@ -321,6 +353,7 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
     pageData.items.find((item) => item.id === selectedItemId)
     || null
   ), [pageData.items, selectedItemId]);
+  const isEditingSelectedItem = !!selectedItem && editingItemId === selectedItem.id;
 
   const pageStart = pageData.total === 0 ? 0 : (pageData.page - 1) * pageData.pageSize + 1;
   const pageEnd = Math.min(pageData.page * pageData.pageSize, pageData.total);
@@ -507,6 +540,10 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
     }
   }, [currentPage, pageData.totalPages]);
 
+  useEffect(() => {
+    setEditingItemId('');
+  }, [selectedItemId]);
+
   const refreshAll = useCallback(async () => {
     if (!activeFamilyId) {
       await loadData();
@@ -575,6 +612,49 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
       setDeletingItemId('');
     }
   }, [activeFamilyId, refreshAll, viewMode]);
+
+  const startEditingItem = useCallback((item: MemoryLibraryItem) => {
+    setEditDraft(draftFromItem(item));
+    setEditingItemId(item.id);
+    setError('');
+    setSuccess('');
+  }, []);
+
+  const cancelEditingItem = useCallback(() => {
+    setEditingItemId('');
+    if (selectedItem) {
+      setEditDraft(draftFromItem(selectedItem));
+    }
+  }, [selectedItem]);
+
+  const handleSaveItem = useCallback(async (item: MemoryLibraryItem) => {
+    if (!activeFamilyId) return;
+    const body = editDraft.body.trim();
+    if (!body) {
+      setError('正文不能为空');
+      return;
+    }
+    setSavingItemId(item.id);
+    setError('');
+    try {
+      await memoryLibraryApi.updateItem({
+        familyId: activeFamilyId,
+        itemId: item.id,
+        title: editDraft.title.trim() || undefined,
+        body,
+        type: editDraft.type.trim() || undefined,
+        visibility: editDraft.visibility.trim() || undefined,
+        tags: tagsFromText(editDraft.tagsText),
+      });
+      setSuccess('已保存');
+      setEditingItemId('');
+      await refreshAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '保存失败');
+    } finally {
+      setSavingItemId('');
+    }
+  }, [activeFamilyId, editDraft, refreshAll]);
 
   const handleVoteExperience = useCallback(async (item: MemoryLibraryItem, voteType: 'UP' | 'DOWN') => {
     const memoryId = parseNumericId(item.id, 'memory');
@@ -759,7 +839,7 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
             className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="ALL">全部可见范围</option>
-            {visibilityOptions.map((option) => (
+            {diaryVisibilityOptions.map((option) => (
               <option key={option} value={option}>{visibilityLabel(option)}</option>
             ))}
           </select>
@@ -997,68 +1077,6 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              {viewMode === 'ACTIVE' && canManageLibrary && !isLegacyAiSummary(selectedItem) && (
-                <div className="mb-4 rounded-lg border border-amber-100 bg-amber-50 p-3">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-sm leading-6 text-amber-800">这条记忆可以在记忆库里归档，保持主列表更清晰。</p>
-                    <button
-                      type="button"
-                      onClick={() => void handleArchiveItem(selectedItem)}
-                      disabled={archivingItemId === selectedItem.id}
-                      className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-white px-3 text-xs font-medium text-amber-700 ring-1 ring-amber-100 hover:bg-amber-100 disabled:opacity-60"
-                    >
-                      {archivingItemId === selectedItem.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
-                      归档
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {viewMode === 'ACTIVE' && canManageLibrary && isLegacyAiSummary(selectedItem) && (
-                <div className="mb-4 rounded-lg border border-red-100 bg-red-50 p-3">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-sm leading-6 text-red-700">这条历史 AI 摘要只保留兼容展示，不再参与经验沉淀，可以直接删除。</p>
-                    <button
-                      type="button"
-                      onClick={() => void handleDeleteItem(selectedItem)}
-                      disabled={deletingItemId === selectedItem.id}
-                      className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-white px-3 text-xs font-medium text-red-600 ring-1 ring-red-100 hover:bg-red-50 disabled:opacity-60"
-                    >
-                      {deletingItemId === selectedItem.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                      直接删除
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {viewMode === 'ARCHIVED' && canManageLibrary && (
-                <div className="mb-4 rounded-lg border border-amber-100 bg-amber-50 p-3">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-sm leading-6 text-amber-800">这条记忆已从默认展示里移出，你可以恢复或永久删除。</p>
-                    <div className="flex shrink-0 flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => void handleRestoreItem(selectedItem)}
-                        disabled={restoringItemId === selectedItem.id || deletingItemId === selectedItem.id}
-                        className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-white px-3 text-xs font-medium text-amber-700 ring-1 ring-amber-100 hover:bg-amber-100 disabled:opacity-60"
-                      >
-                        {restoringItemId === selectedItem.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-                        恢复
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleDeleteItem(selectedItem)}
-                        disabled={deletingItemId === selectedItem.id || restoringItemId === selectedItem.id}
-                        className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-white px-3 text-xs font-medium text-red-600 ring-1 ring-red-100 hover:bg-red-50 disabled:opacity-60"
-                      >
-                        {deletingItemId === selectedItem.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                        永久删除
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               <div className="mb-4 rounded-lg border border-gray-100 bg-white p-3">
                 <p className="mb-2 text-xs font-medium text-gray-400">来源依据</p>
                 <p className="text-sm leading-6 text-gray-700">{evidenceDescription(selectedItem)}</p>
@@ -1082,7 +1100,7 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
                 </div>
               </div>
 
-              {(selectedItem.tags || []).length > 0 && (
+              {!isEditingSelectedItem && (selectedItem.tags || []).length > 0 && (
                 <div className="mb-4 rounded-lg border border-gray-100 bg-white p-3">
                   <p className="mb-2 text-xs font-medium text-gray-400">标签</p>
                   <div className="flex flex-wrap gap-2">
@@ -1103,11 +1121,70 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
                 </div>
               )}
 
-              <div className="rounded-lg bg-gray-50 p-4">
-                <p className="whitespace-pre-wrap text-sm leading-7 text-gray-700">
-                  {selectedItem.body || '暂无正文内容。'}
-                </p>
-              </div>
+              {isEditingSelectedItem ? (
+                <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <label className="sm:col-span-2">
+                      <span className="mb-1 block text-xs font-medium text-blue-700">标题</span>
+                      <input
+                        value={editDraft.title}
+                        onChange={(event) => setEditDraft((draft) => ({ ...draft, title: event.target.value }))}
+                        maxLength={120}
+                        className="h-10 w-full rounded-lg border border-blue-100 bg-white px-3 text-sm text-gray-800 outline-none focus:border-blue-300"
+                      />
+                    </label>
+                    <label>
+                      <span className="mb-1 block text-xs font-medium text-blue-700">类型</span>
+                      <select
+                        value={editDraft.type}
+                        onChange={(event) => setEditDraft((draft) => ({ ...draft, type: event.target.value }))}
+                        className="h-10 w-full rounded-lg border border-blue-100 bg-white px-3 text-sm text-gray-800 outline-none focus:border-blue-300"
+                      >
+                        {editTypeOptions(selectedItem).map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span className="mb-1 block text-xs font-medium text-blue-700">可见范围</span>
+                      <select
+                        value={editDraft.visibility}
+                        onChange={(event) => setEditDraft((draft) => ({ ...draft, visibility: event.target.value }))}
+                        className="h-10 w-full rounded-lg border border-blue-100 bg-white px-3 text-sm text-gray-800 outline-none focus:border-blue-300"
+                      >
+                        {editVisibilityOptions(selectedItem).map((option) => (
+                          <option key={option} value={option}>{visibilityLabel(option)}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="sm:col-span-2">
+                      <span className="mb-1 block text-xs font-medium text-blue-700">标签</span>
+                      <input
+                        value={editDraft.tagsText}
+                        onChange={(event) => setEditDraft((draft) => ({ ...draft, tagsText: event.target.value }))}
+                        placeholder="用逗号分隔"
+                        className="h-10 w-full rounded-lg border border-blue-100 bg-white px-3 text-sm text-gray-800 outline-none focus:border-blue-300"
+                      />
+                    </label>
+                    <label className="sm:col-span-2">
+                      <span className="mb-1 block text-xs font-medium text-blue-700">正文</span>
+                      <textarea
+                        value={editDraft.body}
+                        onChange={(event) => setEditDraft((draft) => ({ ...draft, body: event.target.value }))}
+                        rows={9}
+                        maxLength={2000}
+                        className="w-full resize-y rounded-lg border border-blue-100 bg-white px-3 py-2 text-sm leading-6 text-gray-800 outline-none focus:border-blue-300"
+                      />
+                    </label>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg bg-gray-50 p-4">
+                  <p className="whitespace-pre-wrap text-sm leading-7 text-gray-700">
+                    {selectedItem.body || '暂无正文内容。'}
+                  </p>
+                </div>
+              )}
 
               <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-3">
                 <p className="mb-2 text-xs font-medium text-blue-700">继续筛选</p>
@@ -1149,13 +1226,88 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
             </div>
 
             <div className="border-t border-gray-200 p-4">
-              <Link
-                href={sourceHref(selectedItem, activeFamilyId)}
-                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium text-gray-600 hover:bg-gray-50"
-              >
-                <CheckCircle className="h-4 w-4" />
-                前往来源页面补充
-              </Link>
+              {viewMode === 'ACTIVE' && canManageLibrary && !isLegacyAiSummary(selectedItem) && (
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  {isEditingSelectedItem ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={cancelEditingItem}
+                        disabled={savingItemId === selectedItem.id}
+                        className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+                      >
+                        取消
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleSaveItem(selectedItem)}
+                        disabled={savingItemId === selectedItem.id}
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+                      >
+                        {savingItemId === selectedItem.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                        保存
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void handleArchiveItem(selectedItem)}
+                        disabled={archivingItemId === selectedItem.id}
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-amber-200 bg-white px-4 text-sm font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-60"
+                      >
+                        {archivingItemId === selectedItem.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
+                        归档
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => startEditingItem(selectedItem)}
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
+                      >
+                        <Edit3 className="h-4 w-4" />
+                        编辑
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {viewMode === 'ACTIVE' && canManageLibrary && isLegacyAiSummary(selectedItem) && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteItem(selectedItem)}
+                    disabled={deletingItemId === selectedItem.id}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-4 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
+                  >
+                    {deletingItemId === selectedItem.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    直接删除
+                  </button>
+                </div>
+              )}
+
+              {viewMode === 'ARCHIVED' && canManageLibrary && (
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteItem(selectedItem)}
+                    disabled={deletingItemId === selectedItem.id || restoringItemId === selectedItem.id}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-4 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
+                  >
+                    {deletingItemId === selectedItem.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    永久删除
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleRestoreItem(selectedItem)}
+                    disabled={restoringItemId === selectedItem.id || deletingItemId === selectedItem.id}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-60"
+                  >
+                    {restoringItemId === selectedItem.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                    恢复
+                  </button>
+                </div>
+              )}
             </div>
           </aside>
         </div>

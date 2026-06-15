@@ -281,11 +281,13 @@ class ChatSessionServiceTest {
             return null;
         });
 
-        InOrder inOrder = inOrder(sessionRepository, archiveRepository, archiveStorageService);
+        InOrder inOrder = inOrder(sessionRepository, archiveRepository, messageRepository, archiveStorageService);
         inOrder.verify(sessionRepository).findHeaderById(100L);
         inOrder.verify(archiveRepository).findBySessionId(100L);
         inOrder.verify(archiveStorageService).deleteTranscript("archive-1");
         inOrder.verify(archiveStorageService).deleteTranscript("archive-2");
+        inOrder.verify(archiveRepository).deleteBySessionId(100L);
+        inOrder.verify(messageRepository).deleteBySessionId(100L);
         inOrder.verify(sessionRepository).deleteById(100L);
     }
 
@@ -304,6 +306,8 @@ class ChatSessionServiceTest {
         });
 
         verify(archiveStorageService, never()).deleteTranscript(any());
+        verify(archiveRepository).deleteBySessionId(100L);
+        verify(messageRepository).deleteBySessionId(100L);
         verify(sessionRepository).deleteById(100L);
     }
 
@@ -323,6 +327,8 @@ class ChatSessionServiceTest {
         }
 
         verify(sessionRepository, never()).deleteById(100L);
+        verify(archiveRepository, never()).deleteBySessionId(anyLong());
+        verify(messageRepository, never()).deleteBySessionId(anyLong());
     }
 
     private static <T> T withUser(Long userId, java.util.concurrent.Callable<T> action) {
