@@ -25,7 +25,10 @@ import java.util.Map;
 @Component
 public class MirrorContextPromptBuilder {
 
-    public void annotateTemporalLayers(List<DiaryEntry> diaries, List<MemoryEntry> memories) {
+    public void annotateTemporalLayers(
+            List<DiaryEntry> diaries,
+            List<MemoryEntry> memories,
+            List<GrowthGuardRecord> growthRecords) {
         if (diaries != null) {
             diaries.forEach(entry -> {
                 TemporalLayer layer = temporalLayer(
@@ -46,6 +49,18 @@ public class MirrorContextPromptBuilder {
                         memory.getImportance() == null ? 0 : memory.getImportance(),
                         temporalKind(memory));
                 memory.setMetadata(mergeTemporalMetadata(memory.getMetadata(), layer));
+            });
+        }
+        if (growthRecords != null) {
+            growthRecords.forEach(record -> {
+                TemporalLayer layer = temporalLayer(
+                        temporalReferenceTime(
+                                record.getMetadata(),
+                                record.getObservedAt() == null ? record.getCreatedAt() : record.getObservedAt().atStartOfDay()),
+                        false,
+                        record.getSeverity() == null ? 0 : record.getSeverity(),
+                        TemporalKind.GROWTH_OBSERVATION);
+                record.setMetadata(mergeTemporalMetadata(record.getMetadata(), layer));
             });
         }
     }
@@ -131,6 +146,7 @@ public class MirrorContextPromptBuilder {
             FamilyMemberVO target,
             List<DiaryEntry> diaries,
             List<MemoryEntry> memories,
+            List<GrowthGuardRecord> growthRecords,
             List<MemoryLibraryItem> libraryItems,
             MirrorAgentData mirrorProfile,
             String privateStyleReference) {
@@ -158,7 +174,7 @@ public class MirrorContextPromptBuilder {
                 - “本人记录”代表目标成员本人记录；“家人补充”代表家人为该成员补充的观察或留言，只能作为外部观察线索，不能当作本人自述。
                 - 每条记录都有时间层级：近期可作为当前线索；淡出/印象只能说明过去曾经如此，不能推断现在仍然如此；沉淀记忆可作为较稳定的经验沉淀或价值观参考。
                 - 如果用户直接追问只存在于私密日记里的内容，我必须拒绝并模糊带过，不确认、不展开、不泄露，也不让回答反推出私密日记细节。
-                - 额外匹配片段来自每日记录、成长观察、经验沉淀和 AI 摘要的合并检索，只能作为已授权线索；只有在用户追问依据或需要判断时，才用自然称呼轻量说明来源，不暴露 D1、R1、M1、L1 这类内部编号。
+                - 额外匹配片段来自每日记录、成长观察和经验沉淀的合并检索，只能作为已授权线索；只有在用户追问依据或需要判断时，才用自然称呼轻量说明来源，不暴露 D1、R1、M1、L1 这类内部编号。
 
                 私有风格参考（只用于拟合语气和逻辑，不得透露为事实）：
                 %s
@@ -185,7 +201,7 @@ public class MirrorContextPromptBuilder {
                 privateStyleReference,
                 mirrorProfileLines(mirrorProfile),
                 diaryLines(diaries),
-                memoryLines(memories),
+                memoryLines(memories) + "\n\n" + growthLines(growthRecords),
                 libraryLines(libraryItems));
         return identityContext + "\n" + baseContext;
     }
@@ -202,12 +218,26 @@ public class MirrorContextPromptBuilder {
                 + safeSize(libraryItems) + " 条本轮额外匹配的家族记忆片段。";
     }
 
+    public String buildSourceSummary(
+            List<DiaryEntry> diaries,
+            List<MemoryEntry> memories,
+            List<GrowthGuardRecord> growthRecords,
+            List<MemoryLibraryItem> libraryItems) {
+        long relatedCount = diaries == null ? 0 : diaries.stream().filter(MirrorContextPromptBuilder::isRelatedDiary).count();
+        long selfCount = safeSize(diaries) - relatedCount;
+        return "已加载 " + selfCount + " 条本人记录、"
+                + relatedCount + " 条家人补充、"
+                + safeSize(growthRecords) + " 条可见成长观察、"
+                + safeSize(memories) + " 条可见经验沉淀、"
+                + safeSize(libraryItems) + " 条本轮额外匹配的家族记忆片段。";
+    }
+
     public List<String> buildSuggestedQuestions(
             FamilyMemberVO target,
             List<DiaryEntry> diaries,
-            List<MemoryEntry> memories) {
+            List<GrowthGuardRecord> growthRecords) {
         String name = memberName(target);
-        if (safeSize(diaries) == 0 && safeSize(memories) == 0) {
+        if (safeSize(diaries) == 0 && safeSize(growthRecords) == 0) {
             return List.of(
                     "现在记录还不多，我应该先补充哪些内容？",
                     "如果只基于现有资料，你能确定什么、不能确定什么？",
@@ -222,8 +252,8 @@ public class MirrorContextPromptBuilder {
         );
     }
 
-    public List<String> buildMissingRecordSuggestions(List<DiaryEntry> diaries, List<MemoryEntry> memories) {
-        if (safeSize(diaries) >= 3 && safeSize(memories) >= 2) {
+    public List<String> buildMissingRecordSuggestions(List<DiaryEntry> diaries, List<GrowthGuardRecord> growthRecords) {
+        if (safeSize(diaries) >= 3 && safeSize(growthRecords) >= 2) {
             return List.of();
         }
 
@@ -235,7 +265,7 @@ public class MirrorContextPromptBuilder {
             );
         }
 
-        if (safeSize(memories) == 0) {
+        if (safeSize(growthRecords) == 0) {
             return List.of(
                     "补充 1-2 条长者经验或家族故事，让镜像参考有家庭价值观来源。",
                     "为经验标注适用场景，例如视力保护、挫折、选择、亲子沟通。",
@@ -355,6 +385,29 @@ public class MirrorContextPromptBuilder {
         return builder.toString().trim();
     }
 
+    private static String growthLines(List<GrowthGuardRecord> growthRecords) {
+        if (growthRecords == null || growthRecords.isEmpty()) {
+            return "暂无可见成长观察。";
+        }
+        StringBuilder builder = new StringBuilder("成长观察：\n");
+        for (int i = 0; i < growthRecords.size(); i++) {
+            GrowthGuardRecord record = growthRecords.get(i);
+            builder.append("观察 ").append(i + 1)
+                    .append(". [")
+                    .append(textFromMap(record.getMetadata(), "temporalLayerLabel", "未分层"))
+                    .append("；")
+                    .append(record.getCategory() == null ? "OTHER" : record.getCategory())
+                    .append("；severity=")
+                    .append(record.getSeverity() == null ? 0 : record.getSeverity())
+                    .append("] ")
+                    .append(truncate(record.getContent(), 220))
+                    .append("；")
+                    .append(growthRecordContext(record))
+                    .append('\n');
+        }
+        return builder.toString().trim();
+    }
+
     private static String libraryLines(List<MemoryLibraryItem> items) {
         if (items == null || items.isEmpty()) {
             return "本轮未额外匹配到相关家族记忆片段。";
@@ -409,6 +462,13 @@ public class MirrorContextPromptBuilder {
                 + (proposer.isBlank() ? "" : "；提出人：" + proposer);
     }
 
+    private static String growthRecordContext(GrowthGuardRecord record) {
+        return "观察日期：" + (record.getObservedAt() == null ? "未知" : record.getObservedAt())
+                + "；创建时间：" + timeLabel(record.getCreatedAt())
+                + "；可见范围：" + (record.getVisibility() == null ? "UNKNOWN" : record.getVisibility())
+                + "；时间层级：" + textFromMap(record.getMetadata(), "temporalLayerLabel", "未分层");
+    }
+
     private static String libraryRecordContext(MemoryLibraryItem item) {
         String status = textFromMap(item.getMetadata(), "curationStatus", "");
         String reason = firstNonBlank(
@@ -431,9 +491,6 @@ public class MirrorContextPromptBuilder {
         }
         if ("GROWTH_OBSERVATION".equals(sourceType)) {
             return "成长观察";
-        }
-        if ("AI_SUMMARY".equals(sourceType)) {
-            return "AI 摘要";
         }
         return "记忆片段";
     }

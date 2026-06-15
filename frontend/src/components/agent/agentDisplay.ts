@@ -3,6 +3,7 @@ import type {
   ChatSessionSummary,
   DiaryEntry,
   FamilyMember,
+  GrowthGuardRecord,
   MemoryEntry,
   MirrorContextResponse,
 } from '@/types';
@@ -98,20 +99,21 @@ export function readinessLevel(context?: MirrorContextResponse | null): ModeRead
   if (!context) return { label: '等待资料', tone: 'gray' };
   const diaryCount = context.diaries?.length || 0;
   const memoryCount = context.memories?.length || 0;
+  const growthCount = context.growthRecords?.length || 0;
   const libraryCount = context.libraryItems?.length || 0;
   const profileBonus = hasMirrorProfile(context) ? 1 : 0;
-  const score = Math.min(5, diaryCount + memoryCount + libraryCount + profileBonus);
+  const score = Math.min(5, diaryCount + memoryCount + growthCount + libraryCount + profileBonus);
   if (score >= 5) return { label: '资料较充足', tone: 'green' };
   if (score >= 3) return { label: '可谨慎参考', tone: 'blue' };
   return { label: '资料偏少', tone: 'yellow' };
 }
 
-export function temporalLayerLabel(item: DiaryEntry | MemoryEntry) {
+export function temporalLayerLabel(item: DiaryEntry | MemoryEntry | GrowthGuardRecord) {
   const label = item.metadata?.temporalLayerLabel;
   return typeof label === 'string' && label.trim() ? label.trim() : '未分层';
 }
 
-export function temporalLayerClass(item: DiaryEntry | MemoryEntry) {
+export function temporalLayerClass(item: DiaryEntry | MemoryEntry | GrowthGuardRecord) {
   switch (item.metadata?.temporalLayer) {
     case 'FRESH':
       return 'bg-green-50 text-green-700';

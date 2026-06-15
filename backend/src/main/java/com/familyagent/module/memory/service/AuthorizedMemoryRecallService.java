@@ -107,22 +107,13 @@ public class AuthorizedMemoryRecallService {
     }
 
     private RecallCandidates loadFamilyCandidates(Long familyId, Long viewerUserId, int diaryLimit, int memoryLimit) {
-        int diaryCandidateLimit = Math.max(diaryLimit * CANDIDATE_MULTIPLIER, diaryLimit);
         int memoryCandidateLimit = Math.max(memoryLimit * CANDIDATE_MULTIPLIER, memoryLimit);
-        List<DiaryEntry> diaryCandidates = diaryRepository.findVisibleByFamily(
-                familyId,
-                viewerUserId,
-                diaryCandidateLimit);
         List<MemoryEntry> memoryCandidates = memoryRepository.findActiveFamilyMemories(
                 familyId,
                 viewerUserId,
                 memoryCandidateLimit);
-        List<GrowthGuardRecord> growthCandidates = growthRecordRepository.findVisibleByFamily(
-                familyId,
-                viewerUserId,
-                memoryCandidateLimit);
-        socialSupport.attachSocialWeights(memoryCandidates, growthCandidates, viewerUserId);
-        return new RecallCandidates(diaryCandidates, memoryCandidates, growthCandidates);
+        socialSupport.attachSocialWeights(memoryCandidates, List.of(), viewerUserId);
+        return new RecallCandidates(List.of(), memoryCandidates, List.of());
     }
 
     private RecallCandidates loadMirrorCandidates(
@@ -144,16 +135,12 @@ public class AuthorizedMemoryRecallService {
                 viewerUserId,
                 diaryCandidateLimit);
         diaryCandidates = mergeDiaryCandidates(diaryCandidates, relatedDiaryCandidates);
-        List<MemoryEntry> memoryCandidates = memoryRepository.findActiveFamilyMemories(
-                familyId,
-                viewerUserId,
-                memoryCandidateLimit);
         List<GrowthGuardRecord> growthCandidates = growthRecordRepository.findVisibleByFamily(
                 familyId,
                 viewerUserId,
                 memoryCandidateLimit);
-        socialSupport.attachSocialWeights(memoryCandidates, growthCandidates, viewerUserId);
-        return new RecallCandidates(diaryCandidates, memoryCandidates, growthCandidates);
+        socialSupport.attachSocialWeights(List.of(), growthCandidates, viewerUserId);
+        return new RecallCandidates(diaryCandidates, List.of(), growthCandidates);
     }
 
     private AuthorizedMemoryRecallResult buildRecallResult(

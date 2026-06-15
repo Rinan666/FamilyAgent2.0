@@ -1,6 +1,6 @@
 'use client';
 
-import type { ChatMessage, DiaryEntry, GrowthGuardRecord, HeritageTask, MemoryEntry, MemoryLibraryItem } from '@/types';
+import type { ChatMessage, DiaryEntry, GrowthGuardRecord, MemoryEntry, MemoryLibraryItem } from '@/types';
 
 export type SessionSavedMemory = {
   id: string;
@@ -57,7 +57,6 @@ export function formatMemoryContext({
   familyMemories,
   diaryEntries,
   growthRecords,
-  heritageTasks,
   sessionSavedMemories,
   retrievalMode,
   embeddingReadyCount,
@@ -68,7 +67,6 @@ export function formatMemoryContext({
   familyMemories: MemoryEntry[];
   diaryEntries: DiaryEntry[];
   growthRecords: GrowthGuardRecord[];
-  heritageTasks: HeritageTask[];
   sessionSavedMemories: SessionSavedMemory[];
   retrievalMode?: string;
   embeddingReadyCount?: number;
@@ -99,17 +97,12 @@ export function formatMemoryContext({
     .slice(0, 6)
     .map((item, index) => `${index + 1}. [${item.category || 'OTHER'} severity=${item.severity}] ${item.content.trim().slice(0, 220)}`);
 
-  const taskHits = heritageTasks
-    .filter((item) => item.status === 'PENDING' || item.status === 'DONE')
-    .slice(0, 5)
-    .map((item, index) => `${index + 1}. [${item.status}] ${item.title}: ${item.action}`);
-
   if (viewerIdentityContext?.trim()) {
     sections.push(`viewer_context:\n${viewerIdentityContext.trim()}`);
   }
 
   sections.push(
-    `retrieval_summary: mode=${retrievalMode || 'TEXT_FALLBACK'} embedding_ready=${embeddingReadyCount ?? 0} library=${libraryHits.length} memories=${memoryHits.length} diaries=${diaryHits.length} growth=${growthHits.length} tasks=${taskHits.length} saved_this_session=${sessionSavedMemories.filter((item) => item.content.trim()).length}`,
+    `retrieval_summary: mode=${retrievalMode || 'TEXT_FALLBACK'} embedding_ready=${embeddingReadyCount ?? 0} library=${libraryHits.length} memories=${memoryHits.length} diaries=${diaryHits.length} growth=${growthHits.length} saved_this_session=${sessionSavedMemories.filter((item) => item.content.trim()).length}`,
   );
 
   if (activationScene) {
@@ -128,10 +121,6 @@ export function formatMemoryContext({
   if (growthHits.length > 0) {
     sections.push(`growth_hits:\n${growthHits.join('\n')}`);
   }
-  if (taskHits.length > 0) {
-    sections.push(`task_hits:\n${taskHits.join('\n')}`);
-  }
-
   const recentSavedMemories = sessionSavedMemories
     .filter((item) => item.content.trim())
     .slice(-5)

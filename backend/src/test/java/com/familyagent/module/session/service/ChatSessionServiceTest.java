@@ -16,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -33,6 +34,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -59,7 +62,7 @@ class ChatSessionServiceTest {
                 new ChatSessionArchiveSupport(sessionRepository, messageRepository, archiveRepository,
                         archiveStorageService, archiveSummaryService);
         service = new ChatSessionService(sessionRepository, messageRepository, archiveRepository,
-                familyService, messagePersistenceSupport, archiveSupport);
+                familyService, messagePersistenceSupport, archiveSupport, archiveStorageService);
     }
 
     @Test
@@ -262,6 +265,64 @@ class ChatSessionServiceTest {
         verify(sessionRepository).updateById(captor.capture());
         Map<String, Object> persistedMetadata = ChatSessionSupportUtils.castMap(captor.getValue().getMetadata());
         assertEquals("mirror", persistedMetadata.get("agentMode"));
+    }
+
+    @Test
+    void deleteSession_deletesArchiveObjectsBeforeSessionRow() {
+        ChatSession session = sessionHeader(100L, 10L, "ACTIVE");
+        ChatSessionArchive firstArchive = archive(1000L, 1, 4, "archive-1");
+        ChatSessionArchive secondArchive = archive(1001L, 5, 8, "archive-2");
+
+        when(sessionRepository.findHeaderById(100L)).thenReturn(session);
+        when(archiveRepository.findBySessionId(100L)).thenReturn(List.of(firstArchive, secondArchive));
+
+        withUser(10L, () -> {
+            service.deleteSession(100L);
+            return null;
+        });
+
+        InOrder inOrder = inOrder(sessionRepository, archiveRepository, archiveStorageService);
+        inOrder.verify(sessionRepository).findHeaderById(100L);
+        inOrder.verify(archiveRepository).findBySessionId(100L);
+        inOrder.verify(archiveStorageService).deleteTranscript("archive-1");
+        inOrder.verify(archiveStorageService).deleteTranscript("archive-2");
+        inOrder.verify(sessionRepository).deleteById(100L);
+    }
+
+    @Test
+    void deleteSession_skipsBlankArchiveObjectKeysAndDeletesSessionRow() {
+        ChatSession session = sessionHeader(100L, 10L, "ACTIVE");
+        ChatSessionArchive nullKeyArchive = archive(1000L, 1, 4, null);
+        ChatSessionArchive blankKeyArchive = archive(1001L, 5, 8, " ");
+
+        when(sessionRepository.findHeaderById(100L)).thenReturn(session);
+        when(archiveRepository.findBySessionId(100L)).thenReturn(List.of(nullKeyArchive, blankKeyArchive));
+
+        withUser(10L, () -> {
+            service.deleteSession(100L);
+            return null;
+        });
+
+        verify(archiveStorageService, never()).deleteTranscript(any());
+        verify(sessionRepository).deleteById(100L);
+    }
+
+    @Test
+    void deleteSession_doesNotDeleteSessionRowWhenArchiveDeleteFails() {
+        ChatSession session = sessionHeader(100L, 10L, "ACTIVE");
+        ChatSessionArchive archive = archive(1000L, 1, 4, "archive-1");
+
+        when(sessionRepository.findHeaderById(100L)).thenReturn(session);
+        when(archiveRepository.findBySessionId(100L)).thenReturn(List.of(archive));
+        doThrow(new RuntimeException("storage down")).when(archiveStorageService).deleteTranscript("archive-1");
+
+        try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
+            stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
+
+            org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> service.deleteSession(100L));
+        }
+
+        verify(sessionRepository, never()).deleteById(100L);
     }
 
     private static <T> T withUser(Long userId, java.util.concurrent.Callable<T> action) {

@@ -14,7 +14,6 @@ import type {
   ChatSessionMessageItem,
   ChatSessionMessagePage,
   ChatSessionSummary,
-  WeeklyGrowthReport,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
@@ -308,22 +307,6 @@ export function sessionMessageItemToChatMessage(item: ChatSessionMessageItem): C
     content: item.content,
     timestamp: item.createdAt,
     metadata: item.metadata as ChatMessage['metadata'],
-  };
-}
-
-export function normalizeWeeklyGrowthReport(value: unknown): WeeklyGrowthReport {
-  const parsed = parseJsonField<Record<string, unknown>>(value, {});
-  return {
-    title: toText(parsed.title) || '本周成长提醒',
-    summary: toText(parsed.summary),
-    affirmations: normalizeStringArray(parsed.affirmations),
-    concerns: normalizeStringArray(parsed.concerns),
-    signals: normalizeStringArray(parsed.signals),
-    uncertainty_notes: normalizeStringArray(parsed.uncertainty_notes),
-    family_experience_refs: normalizeStringArray(parsed.family_experience_refs),
-    suggested_actions: normalizeStringArray(parsed.suggested_actions),
-    follow_up_questions: normalizeStringArray(parsed.follow_up_questions),
-    safety_note: toText(parsed.safety_note) || '此内容只作为家庭观察提醒，不构成医学诊断或治疗建议。',
   };
 }
 export async function aiRequest<T>(path: string, body: unknown): Promise<T> {

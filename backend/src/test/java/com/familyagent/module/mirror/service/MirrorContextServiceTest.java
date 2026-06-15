@@ -2,7 +2,6 @@ package com.familyagent.module.mirror.service;
 
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
-import com.familyagent.common.response.PageResult;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.repository.DiaryEntryRepository;
@@ -14,9 +13,6 @@ import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
 import com.familyagent.module.memory.service.AuthorizedMemoryRecallService;
-import com.familyagent.module.memorylibrary.dto.MemoryLibraryItem;
-import com.familyagent.module.memorylibrary.dto.MemoryLibrarySearchRequest;
-import com.familyagent.module.memorylibrary.service.MemoryLibraryService;
 import com.familyagent.module.mirror.dto.MirrorContextResponse;
 import com.familyagent.module.mirror.repository.MirrorAgentDataRepository;
 import org.junit.jupiter.api.Test;
@@ -39,7 +35,6 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -51,7 +46,6 @@ class MirrorContextServiceTest {
     @Mock private MemoryEntryRepository memoryRepository;
     @Mock private GrowthGuardRecordRepository growthRecordRepository;
     @Mock private AuthorizedMemoryRecallService memoryRecallService;
-    @Mock private MemoryLibraryService memoryLibraryService;
     @Mock private MirrorAgentDataRepository mirrorAgentDataRepository;
 
     @Test
@@ -78,8 +72,6 @@ class MirrorContextServiceTest {
                             .query("选择")
                             .embeddingReadyCount(0)
                             .build());
-            when(memoryLibraryService.search(any(MemoryLibrarySearchRequest.class)))
-                    .thenReturn(PageResult.of(List.<MemoryLibraryItem>of(), 1, 5, 0));
             when(diaryRepository.findActiveByFamilyAndUserForStyle(eq(familyId), eq(targetUserId), anyInt()))
                     .thenReturn(List.of(
                             diary(11L, familyId, targetUserId, privatePhrase + "。我当时很担心，也反复问自己为什么。", "PRIVATE"),
@@ -128,12 +120,11 @@ class MirrorContextServiceTest {
 
             assertTrue(response.getLibraryItems().isEmpty());
             assertTrue(response.getMemoryContext().contains("本轮未额外匹配到相关家族记忆片段"));
-            verify(memoryLibraryService, never()).search(any(MemoryLibrarySearchRequest.class));
         }
     }
 
     @Test
-    void getContext_deduplicatesAndLimitsLibraryItems() {
+    void getContext_nonBlankQueryReturnsEmptyLibraryItems() {
         try (MockedStatic<CurrentUserGuard> currentUserMock = mockStatic(CurrentUserGuard.class)) {
             currentUserMock.when(CurrentUserGuard::currentUserId).thenReturn(101L);
             MirrorContextService service = service();
@@ -149,30 +140,9 @@ class MirrorContextServiceTest {
             when(diaryRepository.findActiveByFamilyAndUserForStyle(eq(familyId), eq(targetUserId), anyInt())).thenReturn(List.of());
             when(memoryRepository.findActiveByFamilyAndUserForStyle(eq(familyId), eq(targetUserId), anyInt())).thenReturn(List.of());
             when(growthRecordRepository.findActiveByFamilyAndTargetForStyle(eq(familyId), eq(targetUserId), anyInt())).thenReturn(List.of());
-            when(memoryLibraryService.search(any(MemoryLibrarySearchRequest.class)))
-                    .thenReturn(PageResult.of(List.of(
-                            libraryItem("A", "LIFE_RECORD", "标题A"),
-                            libraryItem("B", "LIFE_RECORD", "标题B"),
-                            libraryItem("C", "LIFE_RECORD", "标题C"),
-                            libraryItem("D", "LIFE_RECORD", "标题D"),
-                            libraryItem("E", "LIFE_RECORD", "标题E")
-                    ), 1, 5, 5))
-                    .thenReturn(PageResult.of(List.of(
-                            libraryItem("B", "FAMILY_EXPERIENCE", "重复B"),
-                            libraryItem("F", "FAMILY_EXPERIENCE", "标题F"),
-                            libraryItem("G", "FAMILY_EXPERIENCE", "标题G")
-                    ), 1, 3, 3))
-                    .thenReturn(PageResult.of(List.of(
-                            libraryItem("H", "AI_SUMMARY", "标题H"),
-                            libraryItem("I", "AI_SUMMARY", "标题I")
-                    ), 1, 2, 2));
-
             MirrorContextResponse response = service.getContext(familyId, targetUserId, "成长");
 
-            assertEquals(8, response.getLibraryItems().size());
-            assertEquals(List.of("A", "B", "C", "D", "E", "F", "G", "H"),
-                    response.getLibraryItems().stream().map(MemoryLibraryItem::getId).toList());
-            verify(memoryLibraryService, times(3)).search(any(MemoryLibrarySearchRequest.class));
+            assertTrue(response.getLibraryItems().isEmpty());
         }
     }
 
@@ -194,24 +164,24 @@ class MirrorContextServiceTest {
 
             when(memoryRecallService.recallForMirror(eq(familyId), eq(targetUserId), eq(101L), eq("case11"), anyInt(), anyInt()))
                     .thenReturn(recall(List.of(diary(1L, familyId, targetUserId, "d1", "FAMILY_VISIBLE")),
-                            List.of(memory(1L, familyId, targetUserId, "m1", "c1")), "case11"));
+                            List.of(), "case11"));
             when(memoryRecallService.recallForMirror(eq(familyId), eq(targetUserId), eq(101L), eq("case20"), anyInt(), anyInt()))
                     .thenReturn(recall(List.of(
                                     diary(2L, familyId, targetUserId, "d2", "FAMILY_VISIBLE"),
                                     diary(3L, familyId, targetUserId, "d3", "FAMILY_VISIBLE")),
                             List.of(), "case20"));
             when(memoryRecallService.recallForMirror(eq(familyId), eq(targetUserId), eq(101L), eq("case02"), anyInt(), anyInt()))
-                    .thenReturn(recall(List.of(),
+                    .thenReturn(recallWithGrowth(List.of(),
                             List.of(
-                                    memory(2L, familyId, targetUserId, "m2", "c2"),
-                                    memory(3L, familyId, targetUserId, "m3", "c3")), "case02"));
+                                    growth(2L, familyId, targetUserId, "EMOTION", "g2"),
+                                    growth(3L, familyId, targetUserId, "EMOTION", "g3")), "case02"));
             when(memoryRecallService.recallForMirror(eq(familyId), eq(targetUserId), eq(101L), eq("case22"), anyInt(), anyInt()))
-                    .thenReturn(recall(List.of(
+                    .thenReturn(recallWithGrowth(List.of(
                                     diary(4L, familyId, targetUserId, "d4", "FAMILY_VISIBLE"),
                                     diary(5L, familyId, targetUserId, "d5", "FAMILY_VISIBLE")),
                             List.of(
-                                    memory(4L, familyId, targetUserId, "m4", "c4"),
-                                    memory(5L, familyId, targetUserId, "m5", "c5")), "case22"));
+                                    growth(4L, familyId, targetUserId, "EMOTION", "g4"),
+                                    growth(5L, familyId, targetUserId, "EMOTION", "g5")), "case22"));
 
             assertTrue(service.getContext(familyId, targetUserId, "case11").isInsufficientRecords());
             assertFalse(service.getContext(familyId, targetUserId, "case20").isInsufficientRecords());
@@ -294,7 +264,6 @@ class MirrorContextServiceTest {
     }
 
     private MirrorContextService service() {
-        MirrorContextLibraryService libraryService = new MirrorContextLibraryService(memoryLibraryService);
         MirrorContextPromptBuilder promptBuilder = new MirrorContextPromptBuilder();
         return new MirrorContextService(
                 familyService,
@@ -303,7 +272,6 @@ class MirrorContextServiceTest {
                 growthRecordRepository,
                 memoryRecallService,
                 mirrorAgentDataRepository,
-                libraryService,
                 promptBuilder);
     }
 
@@ -312,6 +280,20 @@ class MirrorContextServiceTest {
                 .diaries(diaries)
                 .memories(memories)
                 .growthRecords(List.of())
+                .retrievalMode("TEXT_FALLBACK")
+                .query(query)
+                .embeddingReadyCount(0)
+                .build();
+    }
+
+    private static AuthorizedMemoryRecallResult recallWithGrowth(
+            List<DiaryEntry> diaries,
+            List<GrowthGuardRecord> growthRecords,
+            String query) {
+        return AuthorizedMemoryRecallResult.builder()
+                .diaries(diaries)
+                .memories(List.of())
+                .growthRecords(growthRecords)
                 .retrievalMode("TEXT_FALLBACK")
                 .query(query)
                 .embeddingReadyCount(0)
@@ -374,17 +356,4 @@ class MirrorContextServiceTest {
         return record;
     }
 
-    private static MemoryLibraryItem libraryItem(String id, String sourceType, String title) {
-        return MemoryLibraryItem.builder()
-                .id(id)
-                .sourceType(sourceType)
-                .title(title)
-                .body(title + " 的内容")
-                .memberName("目标成员")
-                .visibility("FAMILY_VISIBLE")
-                .metadata(Map.of())
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
-                .build();
-    }
 }

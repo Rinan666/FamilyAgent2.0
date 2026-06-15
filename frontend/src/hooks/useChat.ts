@@ -3,13 +3,10 @@
 import { useCallback, useRef } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import { agentApi } from '@/lib/api/agent';
-import { growthGuardApi } from '@/lib/api/growth';
-import { heritageTaskApi } from '@/lib/api/heritage';
 import { memoryApi } from '@/lib/api/memory';
-import { memoryLibraryApi } from '@/lib/api/memoryLibrary';
 import type { AIStreamHandle } from '@/lib/api/shared';
 import { enqueuePersistMessages } from '@/lib/sessionPersistence';
-import type { AgentResponseMode, ChatMessage, GrowthGuardRecord, HeritageTask } from '@/types';
+import type { AgentResponseMode, ChatMessage } from '@/types';
 import type { ViewerRole } from '@/lib/roles';
 import {
   buildFamilyRecallQuery,
@@ -174,46 +171,22 @@ export function useChat(options: UseChatOptions = {}) {
           : null,
       );
 
-      const libraryKeyword = buildLibrarySearchKeyword(recallQuery, activationScene);
+      const recallKeyword = buildLibrarySearchKeyword(recallQuery, activationScene);
 
-      const [familyRecall, libraryResult, growthRecords, heritageTasks] = await Promise.all([
-        activeFamilyId
-          ? withTimeout(memoryApi.recallFamily(activeFamilyId, {
-              query: libraryKeyword || query,
-              scene: 'FAMILY_AGENT',
-              diaryLimit: 8,
-              memoryLimit: 8,
-            }), null, FAMILY_CONTEXT_TIMEOUT_MS).catch(() => null)
-          : Promise.resolve(null),
-        activeFamilyId
-          ? withTimeout(memoryLibraryApi.search({
-              familyId: activeFamilyId,
-              keyword: libraryKeyword,
-              pageSize: 12,
-            }), null, FAMILY_CONTEXT_TIMEOUT_MS).catch(() => null)
-          : Promise.resolve(null),
-        activeFamilyId
-          ? withTimeout(
-              growthGuardApi.listFamilyRecords(activeFamilyId, 8),
-              [] as GrowthGuardRecord[],
-              FAMILY_CONTEXT_TIMEOUT_MS,
-            ).catch(() => [] as GrowthGuardRecord[])
-          : Promise.resolve([] as GrowthGuardRecord[]),
-        activeFamilyId
-          ? withTimeout(
-              heritageTaskApi.listFamilyTasks(activeFamilyId, 8),
-              [] as HeritageTask[],
-              FAMILY_CONTEXT_TIMEOUT_MS,
-            ).catch(() => [] as HeritageTask[])
-          : Promise.resolve([] as HeritageTask[]),
-      ]);
+      const familyRecall = activeFamilyId
+        ? await withTimeout(memoryApi.recallFamily(activeFamilyId, {
+            query: recallKeyword || query,
+            scene: 'FAMILY_AGENT',
+            diaryLimit: 8,
+            memoryLimit: 8,
+          }), null, FAMILY_CONTEXT_TIMEOUT_MS).catch(() => null)
+        : null;
 
       const context = formatMemoryContext({
-        libraryItems: libraryResult?.items || [],
+        libraryItems: [],
         familyMemories: familyRecall?.memories || [],
-        diaryEntries: familyRecall?.diaries || [],
-        growthRecords: familyRecall?.growthRecords?.length ? familyRecall.growthRecords : growthRecords,
-        heritageTasks,
+        diaryEntries: [],
+        growthRecords: [],
         sessionSavedMemories: getSessionSavedMemories?.() || [],
         retrievalMode: familyRecall?.retrievalMode,
         embeddingReadyCount: familyRecall?.embeddingReadyCount,
@@ -222,11 +195,10 @@ export function useChat(options: UseChatOptions = {}) {
       });
       const diaryCount = familyRecall?.diaryCount ?? familyRecall?.diaries?.length ?? 0;
       const memoryCount = familyRecall?.memoryCount ?? familyRecall?.memories?.length ?? 0;
-      const growthRecordCount = familyRecall?.growthRecordCount ?? familyRecall?.growthRecords?.length ?? growthRecords.length;
-      const libraryCount = libraryResult?.items?.length ?? 0;
-      const heritageTaskCount = heritageTasks.length;
+      const growthRecordCount = familyRecall?.growthRecordCount ?? familyRecall?.growthRecords?.length ?? 0;
+      const libraryCount = 0;
       const sessionSavedCount = (getSessionSavedMemories?.() || []).filter((item) => item.content.trim()).length;
-      const totalReferenceCount = diaryCount + memoryCount + growthRecordCount + libraryCount + heritageTaskCount + sessionSavedCount;
+      const totalReferenceCount = diaryCount + memoryCount + growthRecordCount + libraryCount + sessionSavedCount;
 
       return {
         context,
@@ -239,7 +211,6 @@ export function useChat(options: UseChatOptions = {}) {
                 memoryCount,
                 growthRecordCount,
                 libraryCount,
-                heritageTaskCount,
                 sessionSavedCount,
                 totalReferenceCount,
                 sources: familyRecall?.sources || [],

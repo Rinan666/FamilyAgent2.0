@@ -13,22 +13,17 @@ export default function RagMemoryBadge({ metadata }: RagMemoryBadgeProps) {
 
   const growthRecordCount = rag.growthRecordCount || 0;
   const libraryCount = rag.libraryCount || 0;
-  const heritageTaskCount = rag.heritageTaskCount || 0;
   const sessionSavedCount = rag.sessionSavedCount || 0;
   const totalReferenceCount = rag.totalReferenceCount
-    ?? (rag.diaryCount + rag.memoryCount + growthRecordCount + libraryCount + heritageTaskCount + sessionSavedCount);
+    ?? (rag.diaryCount + rag.memoryCount + growthRecordCount + libraryCount + sessionSavedCount);
   const modeLabel = rag.retrievalMode === 'VECTOR_WITH_TEXT_FALLBACK' ? '向量 + 文本兜底' : '文本兜底';
   const detailParts = [
-    `日记 ${rag.diaryCount}`,
     `经验 ${rag.memoryCount}`,
-    `成长 ${growthRecordCount}`,
-    libraryCount > 0 ? `资料库 ${libraryCount}` : '',
-    heritageTaskCount > 0 ? `任务 ${heritageTaskCount}` : '',
     sessionSavedCount > 0 ? `近期保存 ${sessionSavedCount}` : '',
   ].filter(Boolean);
   const label = totalReferenceCount > 0
-    ? `已引用家庭上下文 · ${detailParts.join(' · ')}`
-    : '没有匹配到家庭记忆';
+    ? `已引用上下文 + 家族经验沉淀 · ${detailParts.join(' · ')}`
+    : '没有匹配到家族经验沉淀';
   const toneClass = totalReferenceCount > 0
     ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
     : 'border-gray-100 bg-white/70 text-gray-500';

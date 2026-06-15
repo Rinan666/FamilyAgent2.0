@@ -10,6 +10,8 @@ import io.minio.GetObjectArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
+import io.minio.errors.ErrorResponseException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -60,6 +62,28 @@ public class ChatSessionArchiveStorageService {
         } catch (Exception error) {
             log.warn("Failed to read archived chat transcript: key={}, error={}", objectKey, error.getMessage());
             return List.of();
+        }
+    }
+
+    public void deleteTranscript(String objectKey) {
+        if (objectKey == null || objectKey.isBlank()) {
+            return;
+        }
+        try {
+            minioClient.removeObject(RemoveObjectArgs.builder()
+                    .bucket(bucketName)
+                    .object(objectKey)
+                    .build());
+        } catch (ErrorResponseException error) {
+            if ("NoSuchKey".equals(error.errorResponse().code())) {
+                log.debug("Archived chat transcript already missing: key={}", objectKey);
+                return;
+            }
+            throw new BusinessException(ErrorCode.OSS_UPLOAD_FAILED,
+                    "Failed to delete archived chat transcript: " + error.getMessage());
+        } catch (Exception error) {
+            throw new BusinessException(ErrorCode.OSS_UPLOAD_FAILED,
+                    "Failed to delete archived chat transcript: " + error.getMessage());
         }
     }
 

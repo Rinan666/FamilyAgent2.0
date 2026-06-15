@@ -33,7 +33,6 @@ public class MemoryService {
 
     private static final Set<String> FAMILY_MEMORY_TYPES = MemoryType.names();
     private static final Set<String> FAMILY_MEMORY_SCOPES = MemoryScope.familyNames();
-    private static final Set<String> MANUAL_HERITAGE_SOURCES = HeritageSource.names();
 
     private final MemoryEntryRepository memoryRepository;
     private final FamilyService familyService;
@@ -58,7 +57,6 @@ public class MemoryService {
         familyService.checkMembership(request.getFamilyId());
 
         Map<String, Object> metadata = buildFamilyMemoryMetadata(request);
-        validateManualHeritageSaveJudge(request.getMetadata());
         Object sourceDiaryId = metadata.get("sourceDiaryId");
         if ("DIARY_PROMOTION".equals(metadata.get("source")) && sourceDiaryId != null) {
             MemoryEntry existing = memoryRepository.findActiveBySourceDiaryId(
@@ -165,27 +163,10 @@ public class MemoryService {
         return normalized;
     }
 
-    private static void validateManualHeritageSaveJudge(Map<String, Object> metadata) {
-        if (metadata == null) return;
-        Object source = metadata.get("source");
-        if (!MANUAL_HERITAGE_SOURCES.contains(String.valueOf(source))) return;
-        Object saveJudgeValue = metadata.get("saveJudge");
-        if (!(saveJudgeValue instanceof Map<?, ?> saveJudge)) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "请先完成家族经验保存价值判断");
-        }
-        Object shouldSave = saveJudge.get("shouldSave");
-        if (!(shouldSave instanceof Boolean allowed) || !allowed) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "请先完成家族经验保存价值判断");
-        }
-    }
-
     private static Map<String, Object> buildFamilyMemoryMetadata(CreateFamilyMemoryRequest request) {
         Map<String, Object> metadata = new HashMap<>();
         if (request.getMetadata() != null) {
             metadata.putAll(request.getMetadata());
-        }
-        if (request.getMemoryCard() != null) {
-            metadata.put("memoryCard", request.getMemoryCard());
         }
         metadata.putIfAbsent("source", HeritageSource.HERITAGE_ENTRY.name());
         return metadata;

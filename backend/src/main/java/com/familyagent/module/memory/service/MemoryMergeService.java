@@ -52,18 +52,13 @@ public class MemoryMergeService {
             Map<String, Object> incomingMetadata,
             Long viewerUserId) {
         Map<String, Object> metadata = toMutableMap(existing.getMetadata());
-        Map<String, Object> incomingCard = request.getMemoryCard() == null ? Map.of() : request.getMemoryCard();
-        Map<String, Object> existingCard = mapValue(metadata.get("memoryCard"));
 
         String mergedContent = mergeText(existing.getContent(), request.getContent(), 1200);
         String mergedSummary = firstNonBlank(
-                asText(incomingCard.get("summary")),
                 request.getSummary(),
                 existing.getSummary(),
                 mergedContent);
-        Map<String, Object> mergedCard = mergeMemoryCard(existingCard, incomingCard, mergedSummary, mergedContent);
 
-        metadata.put("memoryCard", mergedCard);
         metadata.put("source", "MERGED_HERITAGE");
         metadata.put("mergedAt", java.time.LocalDateTime.now().toString());
         metadata.put("mergedReason", "主题相近或解决同一类问题，自动合并为更凝练的家族智慧。");
@@ -95,50 +90,25 @@ public class MemoryMergeService {
             CreateFamilyMemoryRequest request,
             Map<String, Object> incomingMetadata) {
         Map<String, Object> candidateMetadata = toMutableMap(candidate.getMetadata());
-        Map<String, Object> candidateCard = mapValue(candidateMetadata.get("memoryCard"));
-        Map<String, Object> incomingCard = request.getMemoryCard() == null ? Map.of() : request.getMemoryCard();
         int score = 0;
 
         if (sameNonBlank(asText(candidateMetadata.get("scenario")), asText(incomingMetadata.get("scenario")))) score += 4;
         if (sameNonBlank(asText(candidateMetadata.get("target")), asText(incomingMetadata.get("target")))) score += 3;
-        if (sameNonBlank(asText(candidateCard.get("theme")), asText(incomingCard.get("theme")))) score += 3;
-        if (sameNonBlank(asText(candidateCard.get("title")), asText(incomingCard.get("title")))) score += 2;
 
-        Set<String> leftSignals = memorySignals(candidate.getType(), candidate.getContent(), candidate.getSummary(), candidateMetadata, candidateCard);
-        Set<String> rightSignals = memorySignals(request.getType(), request.getContent(), request.getSummary(), incomingMetadata, incomingCard);
+        Set<String> leftSignals = memorySignals(candidate.getType(), candidate.getContent(), candidate.getSummary(), candidateMetadata);
+        Set<String> rightSignals = memorySignals(request.getType(), request.getContent(), request.getSummary(), incomingMetadata);
         leftSignals.retainAll(rightSignals);
         score += Math.min(6, leftSignals.size());
         score += textOverlapScore(candidate.getContent() + " " + candidate.getSummary(), request.getContent());
         return score;
     }
 
-    private static Map<String, Object> mergeMemoryCard(
-            Map<String, Object> existingCard,
-            Map<String, Object> incomingCard,
-            String mergedSummary,
-            String mergedContent) {
-        Map<String, Object> card = new HashMap<>(existingCard);
-        card.put("title", firstNonBlank(asText(incomingCard.get("title")), asText(existingCard.get("title")), "经验沉淀"));
-        card.put("theme", firstNonBlank(asText(incomingCard.get("theme")), asText(existingCard.get("theme")), "家族智慧"));
-        card.put("summary", mergedSummary);
-        card.put("motto", firstNonBlank(asText(incomingCard.get("motto")), asText(existingCard.get("motto")), localMotto(mergedContent)));
-        card.put("risk_points", mergeList(existingCard.get("risk_points"), incomingCard.get("risk_points"), 4));
-        card.put("action_suggestions", mergeList(existingCard.get("action_suggestions"), incomingCard.get("action_suggestions"), 5));
-        card.put("suitable_for", mergeList(existingCard.get("suitable_for"), incomingCard.get("suitable_for"), 4));
-        card.put("sensitivity", strongestSensitivity(asText(existingCard.get("sensitivity")), asText(incomingCard.get("sensitivity"))));
-        card.put("safety_note", firstNonBlank(asText(incomingCard.get("safety_note")), asText(existingCard.get("safety_note")), "这是一条家族经验整理，不构成专业诊断。"));
-        card.put("merged", true);
-        return card;
-    }
-
-    private static Set<String> memorySignals(String type, String content, String summary, Map<String, Object> metadata, Map<String, Object> card) {
+    private static Set<String> memorySignals(String type, String content, String summary, Map<String, Object> metadata) {
         Set<String> signals = new LinkedHashSet<>();
         addSignal(signals, type);
         addSignal(signals, asText(metadata.get("scenario")));
         addSignal(signals, asText(metadata.get("target")));
-        addSignal(signals, asText(card.get("theme")));
-        addSignal(signals, asText(card.get("title")));
-        String text = normalizeText(content + " " + summary + " " + asText(card.get("summary")) + " " + asText(card.get("motto")));
+        String text = normalizeText(content + " " + summary);
         for (String keyword : List.of("牙", "视力", "体态", "睡眠", "运动", "屏幕", "健康", "情绪", "沟通", "选择", "志愿", "专业", "工作", "考研", "规矩", "家风", "风险", "教训")) {
             if (text.contains(keyword)) signals.add(keyword);
         }
@@ -181,42 +151,6 @@ public class MemoryMergeService {
         return merged.substring(0, Math.max(0, maxLength - 1)).strip() + "…";
     }
 
-    static List<String> mergeList(Object left, Object right, int limit) {
-        LinkedHashSet<String> values = new LinkedHashSet<>();
-        collectList(values, left);
-        collectList(values, right);
-        return values.stream().limit(limit).toList();
-    }
-
-    private static void collectList(Set<String> values, Object value) {
-        if (!(value instanceof List<?> list)) return;
-        for (Object item : list) {
-            String text = asText(item);
-            if (!text.isBlank()) values.add(text.length() > 100 ? text.substring(0, 100) : text);
-        }
-    }
-
-    private static String strongestSensitivity(String left, String right) {
-        List<String> order = List.of("LOW", "MEDIUM", "HIGH");
-        int ai = order.indexOf(left == null ? "LOW" : left.trim().toUpperCase(Locale.ROOT));
-        int bi = order.indexOf(right == null ? "LOW" : right.trim().toUpperCase(Locale.ROOT));
-        return order.get(Math.max(Math.max(ai, 0), Math.max(bi, 0)));
-    }
-
-    private static boolean sameNonBlank(String left, String right) {
-        String a = normalizeText(left);
-        String b = normalizeText(right);
-        return !a.isBlank() && a.equals(b);
-    }
-
-    private static String localMotto(String content) {
-        String text = content == null ? "" : content;
-        if (text.matches(".*(牙|视力|体态|睡眠|运动|健康).*")) return "小患早察，久安可期";
-        if (text.matches(".*(选择|决定|志愿|专业|工作|考研).*")) return "大事慢决，远路慎行";
-        if (text.matches(".*(沟通|争吵|理解|亲子|家人).*")) return "言有余地，心有回声";
-        return "事经一回，智留一寸";
-    }
-
     static String firstNonBlank(String... values) {
         for (String value : values) {
             if (value != null && !value.isBlank()) return value.trim();
@@ -239,10 +173,10 @@ public class MemoryMergeService {
         return new HashMap<>();
     }
 
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> mapValue(Object value) {
-        if (value instanceof Map<?, ?> map) return new HashMap<>((Map<String, Object>) map);
-        return new HashMap<>();
+    private static boolean sameNonBlank(String left, String right) {
+        String a = normalizeText(left);
+        String b = normalizeText(right);
+        return !a.isBlank() && a.equals(b);
     }
 
     private static String normalizeText(String value) {

@@ -28,7 +28,6 @@ public class MirrorContextLibraryService {
 
         appendLibraryItems(items, ids, searchLibrary(familyId, targetUserId, query, "ALL", 5));
         appendLibraryItems(items, ids, searchLibrary(familyId, null, query, "FAMILY_EXPERIENCE", 3));
-        appendLibraryItems(items, ids, searchLibrary(familyId, null, query, "AI_SUMMARY", 2));
 
         return items.size() <= LIBRARY_CONTEXT_LIMIT
                 ? items

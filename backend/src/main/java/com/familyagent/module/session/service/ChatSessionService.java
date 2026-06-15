@@ -54,6 +54,7 @@ public class ChatSessionService {
     private final FamilyService familyService;
     private final ChatSessionMessagePersistenceSupport messagePersistenceSupport;
     private final ChatSessionArchiveSupport archiveSupport;
+    private final ChatSessionArchiveStorageService archiveStorageService;
 
     @Transactional
     public ChatSessionDetail createSession(ChatSession session, List<ChatSessionMessagePayload> initialMessages) {
@@ -233,6 +234,10 @@ public class ChatSessionService {
     @Transactional
     public void deleteSession(Long sessionId) {
         ChatSession session = getOwnedSessionHeader(sessionId);
+        archiveRepository.findBySessionId(session.getId()).stream()
+                .map(ChatSessionArchive::getObjectKey)
+                .filter(objectKey -> objectKey != null && !objectKey.isBlank())
+                .forEach(archiveStorageService::deleteTranscript);
         sessionRepository.deleteById(session.getId());
     }
 

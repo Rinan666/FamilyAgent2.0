@@ -13,7 +13,6 @@ import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
 import com.familyagent.module.memory.service.AuthorizedMemoryRecallService;
-import com.familyagent.module.memorylibrary.dto.MemoryLibraryItem;
 import com.familyagent.module.mirror.dto.MirrorContextResponse;
 import com.familyagent.module.mirror.entity.MirrorAgentData;
 import com.familyagent.module.mirror.repository.MirrorAgentDataRepository;
@@ -39,7 +38,6 @@ public class MirrorContextService {
     private final GrowthGuardRecordRepository growthRecordRepository;
     private final AuthorizedMemoryRecallService memoryRecallService;
     private final MirrorAgentDataRepository mirrorAgentDataRepository;
-    private final MirrorContextLibraryService libraryService;
     private final MirrorContextPromptBuilder promptBuilder;
 
     public MirrorContextResponse getContext(Long familyId, Long targetUserId, String query) {
@@ -67,45 +65,47 @@ public class MirrorContextService {
                 query,
                 DIARY_LIMIT,
                 MEMORY_LIMIT);
-        List<DiaryEntry> diaries = recall.getDiaries();
-        List<MemoryEntry> memories = recall.getMemories();
-        promptBuilder.annotateTemporalLayers(diaries, memories);
+        List<DiaryEntry> diaries = recall.getDiaries() == null ? List.of() : recall.getDiaries();
+        List<MemoryEntry> memories = recall.getMemories() == null ? List.of() : recall.getMemories();
+        List<GrowthGuardRecord> growthRecords = recall.getGrowthRecords() == null ? List.of() : recall.getGrowthRecords();
+        promptBuilder.annotateTemporalLayers(diaries, memories, growthRecords);
 
         MirrorAgentData mirrorProfile = mirrorAgentDataRepository.findVisibleByFamilyAndTarget(
                 familyId,
                 targetUserId,
                 viewerUserId);
-        List<MemoryLibraryItem> libraryItems = libraryService.recallLibraryItems(familyId, targetUserId, query);
         String privateStyleReference = promptBuilder.buildPrivateStyleReference(
                 diaryRepository.findActiveByFamilyAndUserForStyle(familyId, targetUserId, STYLE_LIMIT),
                 memoryRepository.findActiveByFamilyAndUserForStyle(familyId, targetUserId, STYLE_LIMIT),
                 growthRecordRepository.findActiveByFamilyAndTargetForStyle(familyId, targetUserId, STYLE_LIMIT));
 
-        boolean insufficientRecords = diaries.size() < 2 && memories.size() < 2;
+        boolean insufficientRecords = diaries.size() < 2 && growthRecords.size() < 2;
         return MirrorContextResponse.builder()
                 .familyId(familyId)
                 .viewerUserId(viewerUserId)
                 .targetMember(target)
                 .diaries(diaries)
                 .memories(memories)
-                .libraryItems(libraryItems)
+                .growthRecords(growthRecords)
+                .libraryItems(List.of())
                 .mirrorProfile(mirrorProfile == null ? Map.of() : mirrorProfile.getTraits())
                 .memoryContext(promptBuilder.buildMemoryContext(
                         viewer,
                         target,
                         diaries,
                         memories,
-                        libraryItems,
+                        growthRecords,
+                        List.of(),
                         mirrorProfile,
                         privateStyleReference))
                 .disclaimer(DISCLAIMER)
                 .insufficientRecords(insufficientRecords)
-                .sourceSummary(promptBuilder.buildSourceSummary(diaries, memories, libraryItems))
+                .sourceSummary(promptBuilder.buildSourceSummary(diaries, memories, growthRecords, List.of()))
                 .retrievalMode(recall.getRetrievalMode())
                 .retrievalQuery(recall.getQuery())
                 .embeddingReadyCount(recall.getEmbeddingReadyCount())
-                .suggestedQuestions(promptBuilder.buildSuggestedQuestions(target, diaries, memories))
-                .missingRecordSuggestions(promptBuilder.buildMissingRecordSuggestions(diaries, memories))
+                .suggestedQuestions(promptBuilder.buildSuggestedQuestions(target, diaries, growthRecords))
+                .missingRecordSuggestions(promptBuilder.buildMissingRecordSuggestions(diaries, growthRecords))
                 .build();
     }
 }

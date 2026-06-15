@@ -88,8 +88,8 @@ export default function AgentContextPanel({
             <p className="text-sm font-medium text-stone-900">{targetLabel}</p>
             <p className="mt-1 text-xs leading-5 text-stone-500">
               {mode === 'mirror'
-                ? '镜像模式只参考授权可见资料，并明确保留不确定性边界。'
-                : '普通模式聚焦当前家庭共享记忆、成长记录、归档会话和长期上下文。'}
+                ? '镜像模式只参考上下文、授权日常记录和成长观察，并明确保留不确定性边界。'
+                : '普通模式只参考当前上下文和家族经验沉淀，不召回日常记录或成长观察。'}
             </p>
           </div>
 
@@ -146,7 +146,7 @@ export default function AgentContextPanel({
                   FamilyAgent 如何工作
                 </div>
                 <p className="mt-2 text-xs leading-6 text-emerald-800">
-                  系统会优先综合家庭记忆、归档会话、记忆库、成长守护与传承任务，尽量让建议落在当前家庭语境中。
+                  思考模式会把当前对话与家族经验沉淀结合起来回答；日常记录和成长观察不会进入普通 FamilyAgent 的召回范围。
                 </p>
               </div>
             </>
@@ -169,7 +169,7 @@ export default function AgentContextPanel({
                   {isLoadingMirrorContext
                     ? '正在刷新镜像资料...'
                     : !contextLoaded
-                      ? '首次切换对象时会自动准备镜像资料，后续优先复用已加载内容。'
+                      ? '首次切换对象时会自动准备镜像资料：上下文、日常记录和成长观察。'
                       : mirrorContext?.sourceSummary || '当前还没有可展示的镜像来源摘要。'}
                 </p>
               </div>

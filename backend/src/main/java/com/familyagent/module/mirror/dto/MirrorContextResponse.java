@@ -2,6 +2,7 @@ package com.familyagent.module.mirror.dto;
 
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.family.dto.FamilyMemberVO;
+import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryItem;
 import lombok.AllArgsConstructor;
@@ -23,6 +24,7 @@ public class MirrorContextResponse {
     private FamilyMemberVO targetMember;
     private List<DiaryEntry> diaries;
     private List<MemoryEntry> memories;
+    private List<GrowthGuardRecord> growthRecords;
     private List<MemoryLibraryItem> libraryItems;
     private Map<String, Object> mirrorProfile;
     private String memoryContext;

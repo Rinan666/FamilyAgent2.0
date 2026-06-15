@@ -37,6 +37,14 @@ export default function AgentSessionDrawer({
 }: AgentSessionDrawerProps) {
   if (!open) return null;
 
+  const confirmPermanentDelete = (session: ChatSessionSummary) => {
+    const title = getSessionTitle(session);
+    const confirmed = window.confirm(`永久删除“${title}”？\n\n删除后会话、消息和归档内容都无法恢复。`);
+    if (confirmed) {
+      onDeleteSession(session.id);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50">
       <button
@@ -140,11 +148,12 @@ export default function AgentSessionDrawer({
                     <div className="mt-2 flex justify-end">
                       <button
                         type="button"
-                        onClick={() => onDeleteSession(session.id)}
+                        onClick={() => confirmPermanentDelete(session)}
                         className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs text-stone-500 transition hover:bg-rose-50 hover:text-rose-600"
+                        aria-label={`永久删除 ${getSessionTitle(session)}`}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
-                        删除
+                        永久删除
                       </button>
                     </div>
                   </div>

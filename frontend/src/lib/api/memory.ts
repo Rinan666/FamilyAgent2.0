@@ -6,10 +6,7 @@ import type {
   AuthorizedMemoryRecallResult,
   ChatMessage,
   CreateFamilyMemoryRequest,
-  FamilyMemoryCard,
-  HeritageSaveJudge,
   MemoryEntry,
-  MemoryEntryType,
   MemoryVoteType,
   PageResult,
   RebuildMemoryIndexResult,
@@ -40,18 +37,6 @@ export const memoryApi = {
       method: 'POST',
       body: JSON.stringify({ voteType }),
     }),
-  createFamilyMemoryCard: (body: {
-    content: string;
-    memoryType?: MemoryEntryType;
-    familyContext?: string;
-    target?: string;
-  }) =>
-    aiRequest<{ success: boolean; data: FamilyMemoryCard }>('/memory/family-card', {
-      content: body.content,
-      memory_type: body.memoryType || 'ELDER_ADVICE',
-      family_context: body.familyContext || '',
-      target: body.target || '',
-    }),
   planSaveTool: (body: {
     message: string;
     familyContext?: string;
@@ -81,20 +66,6 @@ export const memoryApi = {
       current_type: body.currentType || '',
       current_visibility: body.currentVisibility || '',
       target: body.target || '',
-    }),
-  judgeHeritageSave: (body: {
-    content: string;
-    memoryType?: string;
-    scenario?: string;
-    familyContext?: string;
-    sourceMode?: string;
-  }) =>
-    aiRequest<{ success: boolean; data: HeritageSaveJudge }>('/memory/heritage-save-judge', {
-      content: body.content,
-      memory_type: body.memoryType || 'ELDER_ADVICE',
-      scenario: body.scenario || '',
-      family_context: body.familyContext || '',
-      source_mode: body.sourceMode || '',
     }),
   recall: (body: { query?: string; subject?: string; limit?: number }) =>
     request<MemoryEntry[]>('/memories/recall', {

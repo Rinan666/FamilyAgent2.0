@@ -22,8 +22,6 @@ import {
   diaryTitle,
   getSessionTitle,
   memberName,
-  memorySourceLabel,
-  memoryTitle,
   normalizeAgentSessionMetadata,
   parsePositiveNumber,
   readinessLevel,
@@ -102,15 +100,7 @@ function fallbackSavePlan(content: string): AgentSaveToolPlan {
   };
 }
 
-function savedMemoryHref(plan: AgentSaveToolPlan, familyId?: number | null) {
-  const familyQuery = familyId ? `?familyId=${familyId}` : '';
-  if (plan.tool === 'DIARY') return `/dashboard/diary${familyQuery}`;
-  if (plan.tool === 'FAMILY_MEMORY') {
-    return `/dashboard/diary${familyId ? `?familyId=${familyId}&writeCategory=EXPERIENCE` : '?writeCategory=EXPERIENCE'}`;
-  }
-  if (plan.tool === 'GROWTH_GUARD') {
-    return `/dashboard/diary${familyId ? `?familyId=${familyId}&writeCategory=OBSERVATION` : '?writeCategory=OBSERVATION'}`;
-  }
+function savedMemoryHref(familyId?: number | null) {
   return `/dashboard/family?tab=library${familyId ? `&familyId=${familyId}` : ''}`;
 }
 
@@ -133,13 +123,15 @@ function hasMirrorProfile(context?: MirrorContextResponse | null) {
 }
 
 function sourceLead(context?: MirrorContextResponse | null) {
+  if (context?.sourceSummary?.trim()) {
+    return context.sourceSummary.trim();
+  }
   const diaries = context?.diaries || [];
   const relatedDiaryCount = diaries.filter(isRelatedDiary).length;
   const selfDiaryCount = diaries.length - relatedDiaryCount;
-  const memoryCount = context?.memories?.length || 0;
-  const libraryCount = context?.libraryItems?.length || 0;
+  const growthCount = context?.growthRecords?.length || 0;
   const profileText = hasMirrorProfile(context) ? '，并参考了授权画像摘要' : '';
-  return `本轮可参考 ${selfDiaryCount} 条本人记录、${relatedDiaryCount} 条家人补充、${memoryCount} 条可见经验沉淀、${libraryCount} 条额外匹配片段${profileText}。`;
+  return `本轮可参考 ${selfDiaryCount} 条本人记录、${relatedDiaryCount} 条家人补充、${growthCount} 条成长观察${profileText}。`;
 }
 
 function buildSourceRefs(context?: MirrorContextResponse | null): MirrorSourceRef[] {
@@ -153,23 +145,15 @@ function buildSourceRefs(context?: MirrorContextResponse | null): MirrorSourceRe
     toneClass: temporalLayerClass(entry),
   }));
 
-  const memoryRefs = (context.memories || []).map((memory, index) => ({
-    code: `M${index + 1}`,
-    title: memoryTitle(memory),
-    sourceLabel: memorySourceLabel(memory),
-    temporalLabel: temporalLayerLabel(memory),
-    toneClass: temporalLayerClass(memory),
+  const growthRefs = (context.growthRecords || []).map((record, index) => ({
+    code: `G${index + 1}`,
+    title: record.content?.slice(0, 28) || record.category || '成长观察',
+    sourceLabel: '成长观察',
+    temporalLabel: temporalLayerLabel(record),
+    toneClass: temporalLayerClass(record),
   }));
 
-  const libraryRefs = (context.libraryItems || []).map((item, index) => ({
-    code: `L${index + 1}`,
-    title: item.title || '记忆库片段',
-    sourceLabel: '家族记忆库',
-    temporalLabel: '已授权',
-    toneClass: 'bg-indigo-50 text-indigo-700',
-  }));
-
-  return [...diaryRefs, ...memoryRefs, ...libraryRefs].slice(0, 8);
+  return [...diaryRefs, ...growthRefs].slice(0, 8);
 }
 
 function buildMirrorAnswerMetadata(
@@ -916,7 +900,7 @@ export default function AgentPage() {
         [message.id]: {
           status: 'saved',
           detail: savePlanDetail(plan, savedRecordId),
-          href: savedMemoryHref(plan, activeFamilyId),
+          href: savedMemoryHref(activeFamilyId),
         },
       }));
     } catch (error) {
@@ -978,125 +962,97 @@ export default function AgentPage() {
     );
   }
 
+  const visibleMessageCount = activeSessionDetail?.messageCount || messages.filter((message) => message.role !== 'system').length;
+  const archiveCount = activeSessionDetail?.archives?.length || 0;
+  const currentSessionTitle = activeSessionDetail
+    ? getSessionTitle(activeSessionDetail)
+    : (mode === 'mirror' ? `与 ${targetLabel} 的镜像对话` : '新的家庭对话');
+
   return (
-    <div className="min-h-[calc(100vh-4rem)] px-4 py-4 md:px-5 lg:px-6">
-      <div className="mx-auto flex max-w-[1440px] flex-col gap-4">
-        <div className="rounded-[28px] border border-white/80 bg-white/82 px-5 py-4 shadow-[0_18px_48px_rgba(24,39,32,0.08)] backdrop-blur-xl">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-400">
-                {activeFamily?.name || 'FamilyAgent'}
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-semibold tracking-tight text-stone-950">FamilyAgent</h1>
-                <span className={cn(
-                  'rounded-full px-2.5 py-1 text-xs font-medium',
-                  mode === 'mirror' ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-200 text-stone-700',
-                )}>
-                  {mode === 'mirror' ? '镜像参考' : '家庭对话'}
-                </span>
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-stone-500">
-                <span className="inline-flex items-center gap-1">
-                  <UserRound className="h-4 w-4" />
-                  当前对象：{targetLabel}
-                </span>
-                <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs text-stone-600">
-                  {responseMode === 'quick' ? '快速模式' : '思考模式'}
-                </span>
-                {activeSessionDetail && (
-                  <span className="truncate rounded-full bg-stone-100 px-2.5 py-1 text-xs text-stone-600">
-                    会话：{getSessionTitle(activeSessionDetail)}
-                  </span>
-                )}
-                {!!(activeSessionDetail?.messageCount || messages.filter((message) => message.role !== 'system').length) && (
-                  <span className="text-xs text-stone-400">
-                    {activeSessionDetail?.messageCount || messages.filter((message) => message.role !== 'system').length} 条消息
-                    {activeSessionDetail?.archives?.length ? ` · ${activeSessionDetail.archives.length} 段归档` : ''}
-                  </span>
-                )}
-                {activeSessionMetadata.hasTargetSwitches && (
-                  <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs text-amber-800">
-                    该会话已切换过对象
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setIsSessionsOpen((current) => !current)}
-                className={cn(
-                  'inline-flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-medium transition',
-                  isSessionsOpen
-                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                    : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50',
-                )}
-              >
-                <History className="h-4 w-4" />
-                会话历史
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsContextOpen((current) => !current)}
-                className={cn(
-                  'inline-flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-medium transition',
-                  isContextOpen
-                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                    : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50',
-                )}
-              >
-                <Bot className="h-4 w-4" />
-                上下文
-              </button>
-              <button
-                type="button"
-                onClick={handleNewChat}
-                className="inline-flex h-11 items-center gap-2 rounded-full bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800"
-              >
-                <Plus className="h-4 w-4" />
-                新会话
-              </button>
-            </div>
-          </div>
-        </div>
-
+    <div className="h-[calc(100vh-4rem)] overflow-hidden px-3 py-3 md:px-5 lg:px-6">
+      <div className="mx-auto flex h-full max-w-[1440px] min-h-0 flex-col gap-3">
         {sessionError && (
-          <div className="rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <div className="shrink-0 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             {sessionError}
           </div>
         )}
 
-        <section className="flex min-h-[70vh] flex-col overflow-hidden rounded-[32px] border border-white/80 bg-white/84 shadow-[0_22px_60px_rgba(24,39,32,0.08)] backdrop-blur-xl">
-          <div className="border-b border-stone-200/70 px-5 py-4 md:px-6">
-            <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-white/80 bg-white/84 shadow-[0_18px_48px_rgba(24,39,32,0.08)] backdrop-blur-xl">
+          <div className="sticky top-0 z-10 shrink-0 border-b border-stone-200/70 bg-white/92 px-4 py-3 backdrop-blur-xl md:px-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="min-w-0">
-                <h2 className="truncate text-lg font-semibold text-stone-950">
-                  {activeSessionDetail
-                    ? getSessionTitle(activeSessionDetail)
-                    : (mode === 'mirror' ? `与 ${targetLabel} 的镜像对话` : '新的家庭对话')}
-                </h2>
-                <p className="mt-1 text-sm text-stone-500">
-                  {mode === 'mirror'
-                    ? '基于授权可见资料提供镜像参考，并明确保留不确定性边界。'
-                    : '围绕当前家庭的共享记忆、会话归档和长期上下文继续对话。'}
-                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="truncate text-base font-semibold text-stone-950">FamilyAgent</h1>
+                  <span className={cn(
+                    'rounded-full px-2.5 py-1 text-xs font-medium',
+                    mode === 'mirror' ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-200 text-stone-700',
+                  )}>
+                    {mode === 'mirror' ? '镜像参考' : '家庭对话'}
+                  </span>
+                  <span className="text-xs text-stone-400">{activeFamily?.name}</span>
+                </div>
+                <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2 text-xs text-stone-500">
+                  <span className="max-w-[18rem] truncate rounded-full bg-stone-100 px-2.5 py-1 text-stone-700">
+                    {currentSessionTitle}
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2.5 py-1">
+                    <UserRound className="h-3.5 w-3.5" />
+                    {targetLabel}
+                  </span>
+                  <span className="rounded-full bg-stone-100 px-2.5 py-1">
+                    {responseMode === 'quick' ? '快速' : '思考'}
+                  </span>
+                  <span className="rounded-full bg-stone-100 px-2.5 py-1">{visibleMessageCount} 条消息</span>
+                  {!!archiveCount && (
+                    <span className="rounded-full bg-stone-100 px-2.5 py-1">{archiveCount} 段归档</span>
+                  )}
+                  {activeSessionMetadata.hasTargetSwitches && (
+                    <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800">含对象切换</span>
+                  )}
+                </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
-                <span className="rounded-full bg-stone-100 px-2.5 py-1">对象：{targetLabel}</span>
-                <span className="rounded-full bg-stone-100 px-2.5 py-1">
-                  {activeSessionDetail?.messageCount || messages.filter((message) => message.role !== 'system').length} 条消息
-                </span>
-                {!!activeSessionDetail?.archives?.length && (
-                  <span className="rounded-full bg-stone-100 px-2.5 py-1">
-                    {activeSessionDetail.archives.length} 段归档
-                  </span>
-                )}
-                {activeSessionMetadata.hasTargetSwitches && (
-                  <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800">含对象切换</span>
-                )}
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsSessionsOpen((current) => !current)}
+                  title="会话历史"
+                  aria-label="会话历史"
+                  className={cn(
+                    'inline-flex h-9 items-center gap-2 rounded-full border px-3 text-xs font-medium transition',
+                    isSessionsOpen
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                      : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50',
+                  )}
+                >
+                  <History className="h-4 w-4" />
+                  会话历史
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsContextOpen((current) => !current)}
+                  title="上下文"
+                  aria-label="上下文"
+                  className={cn(
+                    'inline-flex h-9 items-center gap-2 rounded-full border px-3 text-xs font-medium transition',
+                    isContextOpen
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                      : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50',
+                  )}
+                >
+                  <Bot className="h-4 w-4" />
+                  上下文
+                </button>
+                <button
+                  type="button"
+                  onClick={handleNewChat}
+                  title="新会话"
+                  aria-label="新会话"
+                  className="inline-flex h-9 items-center gap-2 rounded-full bg-stone-950 px-3 text-xs font-medium text-white transition hover:bg-stone-800"
+                >
+                  <Plus className="h-4 w-4" />
+                  新会话
+                </button>
               </div>
             </div>
           </div>
@@ -1120,21 +1076,45 @@ export default function AgentPage() {
               }
               void handleSubmit();
             }}
-            className="border-t border-stone-200/70 bg-white/88 px-4 py-4 md:px-6"
+            className="shrink-0 border-t border-stone-200/70 bg-[#f6f5f0]/90 px-3 py-3 md:px-5"
           >
-            <div className="mx-auto max-w-3xl">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
+            <div className="mx-auto max-w-3xl rounded-[22px] border border-white/80 bg-white/95 p-2 shadow-[0_14px_38px_rgba(24,39,32,0.10)] backdrop-blur-xl">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-2 pt-1">
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-stone-500">
+                  <span className="rounded-full bg-stone-100 px-2.5 py-1 font-medium text-stone-700">
+                    {mode === 'mirror' ? '镜像 AI' : 'FamilyAgent'}
+                  </span>
+                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
+                    {mode === 'mirror' ? '上下文 + 日常 + 观察' : '上下文 + 家族经验沉淀'}
+                  </span>
+                </div>
+                <span className="text-[11px] text-stone-400">
+                  {responseMode === 'quick' ? '不召回资料' : '思考模式'}
+                </span>
+              </div>
+              <textarea
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                placeholder={mode === 'mirror'
+                  ? `问问 ${targetLabel} 的日常记录和成长观察里有什么线索...`
+                  : '可以聊需要家族经验沉淀来参考的问题...'}
+                disabled={isStreaming}
+                rows={3}
+                className="min-h-[92px] max-h-48 w-full resize-none rounded-[18px] border border-stone-100 bg-stone-50/70 px-4 py-3 text-sm leading-7 text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100 disabled:bg-stone-100"
+              />
+
+              <div className="mt-2 flex flex-col gap-2 px-1 pb-1 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 space-y-2">
+                  <div className="inline-flex rounded-2xl bg-stone-100/90 p-1">
                     <button
                       type="button"
                       onClick={() => setResponseMode('quick')}
                       disabled={isStreaming}
                       className={cn(
-                        'inline-flex h-9 items-center rounded-full px-3 text-xs font-medium transition',
+                        'inline-flex h-8 items-center rounded-xl px-3 text-xs font-medium transition',
                         responseMode === 'quick'
-                          ? 'bg-stone-950 text-white'
-                          : 'bg-stone-100 text-stone-600 hover:bg-stone-200',
+                          ? 'bg-stone-950 text-white shadow-sm'
+                          : 'text-stone-600 hover:bg-white/80',
                       )}
                     >
                       快速
@@ -1144,49 +1124,44 @@ export default function AgentPage() {
                       onClick={() => setResponseMode('think')}
                       disabled={isStreaming}
                       className={cn(
-                        'inline-flex h-9 items-center rounded-full px-3 text-xs font-medium transition',
+                        'inline-flex h-8 items-center rounded-xl px-3 text-xs font-medium transition',
                         responseMode === 'think'
-                          ? 'bg-emerald-700 text-white'
-                          : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100',
+                          ? 'bg-emerald-700 text-white shadow-sm'
+                          : 'text-emerald-700 hover:bg-white/80',
                       )}
                     >
                       思考
                     </button>
                   </div>
-                  <p className="text-xs text-stone-500">
+                  <p className="max-w-2xl text-xs leading-5 text-stone-500">
                     {responseMode === 'quick'
-                      ? '快速模式不会联网，也不会触发家族记忆、记忆库、成长记录或历史会话召回。'
+                      ? '快速模式不联网，也不召回家庭资料。'
                       : mode === 'mirror'
-                        ? `思考模式会结合 ${targetLabel} 的授权资料，并在必要时联网核验。`
-                        : '思考模式会优先参考家庭共享记忆、记忆库、归档会话与长期上下文。'}
+                        ? `思考模式只结合 ${targetLabel} 的授权日常记录、家人补充和成长观察。`
+                        : '思考模式只结合当前上下文和家族经验沉淀。'}
                   </p>
                 </div>
-                <VoiceInputButton
-                  compact
-                  onTranscript={(text) => setInput((current) => (current ? `${current}\n${text}` : text))}
-                  disabled={isStreaming}
-                />
-              </div>
 
-              <div className="flex items-end gap-3">
-                <textarea
-                  value={input}
-                  onChange={(event) => setInput(event.target.value)}
-                  placeholder={mode === 'mirror'
-                    ? `可以问：“如果站在 ${targetLabel} 的经历里，会怎么建议我？”`
-                    : '可以聊家庭记忆、成长观察、照护安排，或任何值得长期保留的内容...'}
-                  disabled={isStreaming}
-                  rows={4}
-                  className="min-h-[116px] flex-1 resize-none rounded-[26px] border border-stone-200 bg-stone-50/80 px-4 py-3 text-sm text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-100 disabled:bg-stone-100"
-                />
-                <button
-                  type="submit"
-                  disabled={isStreaming ? false : !input.trim()}
-                  className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-950 text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-50"
-                  aria-label={isStreaming ? '停止输出' : '发送消息'}
-                >
-                  {isStreaming ? <Square className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-                </button>
+                <div className="flex shrink-0 items-center justify-end gap-2">
+                  <VoiceInputButton
+                    compact
+                    className="[&>button]:h-10 [&>button]:w-10 [&>button]:rounded-2xl [&>button]:border-stone-200 [&>button]:bg-stone-50 [&>button]:text-stone-600 [&>button:hover]:bg-stone-100"
+                    onTranscript={(text) => setInput((current) => (current ? `${current}\n${text}` : text))}
+                    disabled={isStreaming}
+                  />
+                  <button
+                    type="submit"
+                    disabled={isStreaming ? false : !input.trim()}
+                    className={cn(
+                      'inline-flex h-10 min-w-10 items-center justify-center gap-2 rounded-2xl px-3 text-sm font-medium text-white shadow-[0_10px_24px_rgba(24,39,32,0.16)] transition disabled:cursor-not-allowed disabled:opacity-50',
+                      isStreaming ? 'bg-rose-600 hover:bg-rose-700' : 'bg-stone-950 hover:bg-stone-800',
+                    )}
+                    aria-label={isStreaming ? '停止输出' : '发送消息'}
+                  >
+                    {isStreaming ? <Square className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+                    <span className="hidden sm:inline">{isStreaming ? '停止' : '发送'}</span>
+                  </button>
+                </div>
               </div>
             </div>
           </form>

@@ -1,7 +1,6 @@
 package com.familyagent.module.memory.service;
 
 import cn.dev33.satoken.stp.StpUtil;
-import com.familyagent.common.exception.BusinessException;
 import com.familyagent.module.family.service.FamilyService;
 import com.familyagent.module.memory.dto.CreateFamilyMemoryRequest;
 import com.familyagent.module.memory.entity.MemoryEntry;
@@ -21,13 +20,11 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -47,26 +44,10 @@ class MemoryServiceTest {
     // --- createFamilyMemory ---
 
     @Test
-    void createFamilyMemory_shouldRejectManualHeritageWithoutPositiveJudge() {
-        MemoryService service = newService();
-        CreateFamilyMemoryRequest request = requestWithMetadata(Map.<String, Object>of("source", "HERITAGE_ENTRY"));
-
-        try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
-            stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
-            BusinessException error = assertThrows(BusinessException.class, () -> service.createFamilyMemory(request));
-            assertEquals("请先完成家族经验保存价值判断", error.getMessage());
-        }
-
-        verify(familyService).checkMembership(1L);
-        verify(memoryRepository, never()).insert(any(MemoryEntry.class));
-    }
-
-    @Test
-    void createFamilyMemory_shouldAllowManualHeritageWithPositiveJudge() throws InterruptedException {
+    void createFamilyMemory_shouldAllowManualHeritageWithoutSaveJudge() throws InterruptedException {
         MemoryService service = serviceWithAcquiredLock();
         CreateFamilyMemoryRequest request = requestWithMetadata(Map.<String, Object>of(
-                "source", "HERITAGE_INTERVIEW",
-                "saveJudge", Map.of("shouldSave", true, "learningValueScore", 4)));
+                "source", "HERITAGE_INTERVIEW"));
         when(memoryMergeService.findSimilar(any(), any(), eq(10L), any(), any())).thenReturn(null);
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
@@ -78,7 +59,7 @@ class MemoryServiceTest {
         ArgumentCaptor<MemoryEntry> captor = ArgumentCaptor.forClass(MemoryEntry.class);
         verify(memoryRepository).insert(captor.capture());
         Map<?, ?> savedMetadata = (Map<?, ?>) captor.getValue().getMetadata();
-        assertTrue(((Map<?, ?>) savedMetadata.get("saveJudge")).containsKey("shouldSave"));
+        assertEquals("HERITAGE_INTERVIEW", savedMetadata.get("source"));
     }
 
     @Test
