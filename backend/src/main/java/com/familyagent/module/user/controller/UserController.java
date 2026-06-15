@@ -27,9 +27,14 @@ public class UserController {
 
     @Operation(summary = "用户注册")
     @PostMapping("/register")
-    public Result<User> register(@Valid @RequestBody RegisterRequest request) {
-        User user = userService.register(request);
-        return Result.success(user);
+    public Result<LoginResponse> register(@Valid @RequestBody RegisterRequest request) {
+        userService.register(request);
+
+        LoginRequest loginRequest = new LoginRequest();
+        loginRequest.setUsername(request.getUsername());
+        loginRequest.setPassword(request.getPassword());
+
+        return Result.success(userService.login(loginRequest));
     }
 
     @Operation(summary = "用户登录")

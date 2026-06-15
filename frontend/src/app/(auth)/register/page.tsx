@@ -9,7 +9,9 @@ import AuthShell, {
   authLabelClassName,
   authPrimaryButtonClassName,
 } from '@/components/auth/AuthShell';
+import { toAuthUser } from '@/lib/auth';
 import { userApi } from '@/lib/api';
+import { useAuthStore } from '@/stores/authStore';
 
 const highlights = [
   {
@@ -31,6 +33,7 @@ const highlights = [
 
 export default function RegisterPage() {
   const router = useRouter();
+  const login = useAuthStore((state) => state.login);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [inviteCode, setInviteCode] = useState('');
@@ -44,13 +47,14 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      await userApi.register({
+      const result = await userApi.register({
         username: username.trim(),
         password,
         inviteCode: inviteCode.trim().toUpperCase(),
         nickname: nickname.trim() || undefined,
       });
-      router.push('/login?registered=true');
+      login(toAuthUser(result), result.token);
+      router.push('/dashboard');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '注册失败，请稍后重试。');
     } finally {

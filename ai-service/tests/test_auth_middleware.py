@@ -86,6 +86,18 @@ async def test_backend_401_is_always_rejected(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_backend_result_code_401_is_rejected(monkeypatch):
+    FakeAsyncClient.response = FakeResponse(200, {"code": 401, "message": "Not signed in"})
+    FakeAsyncClient.error = None
+    monkeypatch.setattr(auth.httpx, "AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr(auth.settings, "auth_fail_open", True)
+
+    user = await auth._call_backend_verify("Bearer invalid")
+
+    assert user is None
+
+
+@pytest.mark.asyncio
 async def test_backend_500_fail_open_returns_dev_user(monkeypatch):
     FakeAsyncClient.response = FakeResponse(500)
     FakeAsyncClient.error = None

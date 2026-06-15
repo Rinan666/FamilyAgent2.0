@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     ai_service_port: int = 8090
 
     # Backend
-    backend_url: str = "http://localhost:8180"
+    backend_url: str = "http://localhost:8080"
     auth_fail_open: Optional[bool] = None
     cors_allow_origins: Optional[str] = None
 

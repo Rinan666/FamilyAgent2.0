@@ -9,6 +9,7 @@ import AuthShell, {
   authLabelClassName,
   authPrimaryButtonClassName,
 } from '@/components/auth/AuthShell';
+import { toAuthUser } from '@/lib/auth';
 import { userApi } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -53,20 +54,7 @@ export default function LoginPage() {
 
     try {
       const result = await userApi.login({ username, password });
-      login(
-        {
-          id: result.userId,
-          username: result.username,
-          nickname: result.nickname,
-          avatarUrl: result.avatarUrl,
-          role: result.role || 'USER',
-          status: result.status || 'ACTIVE',
-          birthDate: result.birthDate,
-          birthYear: result.birthYear,
-          metadata: result.metadata,
-        },
-        result.token,
-      );
+      login(toAuthUser(result), result.token);
       router.push('/dashboard');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '登录失败，请稍后重试。');

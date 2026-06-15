@@ -2,7 +2,8 @@ import { normalizeLoginResponse, normalizeUser, request } from './shared';
 import type { ChangePasswordRequest, LoginRequest, LoginResponse, RegisterRequest, UpdateProfileRequest, User } from '@/types';
 
 export const userApi = {
-  register: (data: RegisterRequest) => request<User>('/users/register', { method: 'POST', body: JSON.stringify(data) }).then(normalizeUser),
+  register: (data: RegisterRequest) =>
+    request<LoginResponse>('/users/register', { method: 'POST', body: JSON.stringify(data) }).then(normalizeLoginResponse),
   login: (data: LoginRequest) => request<LoginResponse>('/users/login', { method: 'POST', body: JSON.stringify(data) }).then(normalizeLoginResponse),
   getMe: () => request<User>('/users/me', { cache: 'no-store' }).then(normalizeUser),
   updateProfile: (data: UpdateProfileRequest) =>

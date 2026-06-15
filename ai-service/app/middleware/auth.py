@@ -14,6 +14,10 @@ from app.config import settings
 
 logger = logging.getLogger("familyagent.ai.middleware.auth")
 
+# Bypass Windows system proxy when calling the local backend.
+# trust_env=False prevents httpx from reading HTTP_PROXY / system proxy settings.
+_NO_PROXY_CLIENT_ARGS = {"trust_env": False, "timeout": 5.0}
+
 
 def _backend_unavailable_error() -> HTTPException:
     return HTTPException(status_code=503, detail="认证服务暂时不可用，请稍后再试")
@@ -70,15 +74,19 @@ async def _call_backend_verify(token: str) -> Optional[dict]:
     """Call the Java backend /api/users/me endpoint to verify the token."""
     backend_url = settings.backend_url.rstrip("/")
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(**_NO_PROXY_CLIENT_ARGS) as client:
             resp = await client.get(
                 f"{backend_url}/api/users/me",
                 headers={"Authorization": token},
             )
             if resp.status_code == 200:
                 data = resp.json()
-                if data.get("code") == 200:
-                    return data["data"]
+                result_code = data.get("code")
+                if result_code == 200:
+                    return data.get("data")
+                if result_code == 401:
+                    logger.warning("Token verification failed: result_code=401")
+                    return None
             if resp.status_code == 401:
                 # The backend confirmed the token is invalid.
                 logger.warning("Token verification failed: status=401")
