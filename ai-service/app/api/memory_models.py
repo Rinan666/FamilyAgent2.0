@@ -9,14 +9,6 @@ class ExtractMemoryRequest(BaseModel):
     summary: str = ""
 
 
-class FamilyMemoryCardRequest(BaseModel):
-    content: str = Field(..., min_length=8)
-    memory_type: str = "ELDER_ADVICE"
-    family_context: str = ""
-    # Keep the legacy field name for backward compatibility; the product UI still uses a Chinese scenario label.
-    target: str = ""
-
-
 class SaveToolPlanRequest(BaseModel):
     message: str = Field(..., min_length=2)
     family_context: str = ""
@@ -32,13 +24,3 @@ class OrganizeDraftRequest(BaseModel):
     current_type: str = ""
     current_visibility: str = ""
     target: str = ""
-
-
-class HeritageSaveJudgeRequest(BaseModel):
-    content: str = Field(..., min_length=4)
-    memory_type: str = "ELDER_ADVICE"
-    scenario: str = ""
-    family_context: str = ""
-    source_mode: str = ""
-
-

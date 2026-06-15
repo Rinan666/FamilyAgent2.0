@@ -1,47 +1,5 @@
 """LLM response schemas for the family memory API."""
 
-FAMILY_CARD_SCHEMA = {
-    "type": "json_schema",
-    "json_schema": {
-        "name": "family_memory_card",
-        "schema": {
-            "type": "object",
-            "properties": {
-                "title": {"type": "string"},
-                "theme": {"type": "string"},
-                "summary": {"type": "string"},
-                "motto": {"type": "string"},
-                "risk_points": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                },
-                "action_suggestions": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                },
-                "suitable_for": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                },
-                "sensitivity": {"type": "string"},
-                "safety_note": {"type": "string"},
-            },
-            "required": [
-                "title",
-                "theme",
-                "summary",
-                "motto",
-                "risk_points",
-                "action_suggestions",
-                "suitable_for",
-                "sensitivity",
-                "safety_note",
-            ],
-        },
-    },
-}
-
-
 SAVE_TOOL_PLAN_SCHEMA = {
     "type": "json_schema",
     "json_schema": {
@@ -118,35 +76,6 @@ ORGANIZED_DRAFT_SCHEMA = {
                 "growth_severity",
                 "scenario",
                 "reason",
-            ],
-        },
-    },
-}
-
-
-HERITAGE_SAVE_JUDGE_SCHEMA = {
-    "type": "json_schema",
-    "json_schema": {
-        "name": "heritage_save_judge",
-        "schema": {
-            "type": "object",
-            "properties": {
-                "should_save": {"type": "boolean"},
-                "learning_value_score": {"type": "integer"},
-                "descendant_value": {"type": "string"},
-                "reason": {"type": "string"},
-                "suggested_revision": {"type": "string"},
-                "missing_elements": {"type": "array", "items": {"type": "string"}},
-                "sensitivity": {"type": "string"},
-            },
-            "required": [
-                "should_save",
-                "learning_value_score",
-                "descendant_value",
-                "reason",
-                "suggested_revision",
-                "missing_elements",
-                "sensitivity",
             ],
         },
     },

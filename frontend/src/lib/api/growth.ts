@@ -1,11 +1,9 @@
-import { aiRequest, request } from './shared';
+import { request } from './shared';
 import type {
   CreateGrowthGuardRecordRequest,
   GrowthFollowUpStatus,
   GrowthGuardRecord,
-  MemoryEntry,
   PageResult,
-  WeeklyGrowthReport,
 } from '@/types';
 
 export const growthGuardApi = {
@@ -35,16 +33,4 @@ export const growthGuardApi = {
   markStale: (id: number) =>
     request<GrowthGuardRecord>(`/growth-guards/${id}/stale`, { method: 'POST' }),
   deleteRecord: (id: number) => request<void>(`/growth-guards/${id}`, { method: 'DELETE' }),
-  weeklyReport: (body: {
-    familyName?: string;
-    records: GrowthGuardRecord[];
-    memories: MemoryEntry[];
-    target?: string;
-  }) =>
-    aiRequest<{ success: boolean; data: WeeklyGrowthReport }>('/growth/weekly-report', {
-      family_name: body.familyName || '',
-      records: body.records,
-      memories: body.memories,
-      target: body.target || '',
-    }),
 };

@@ -19,6 +19,5 @@ public class CreateFamilyMemoryRequest {
     private String scope;
     private String summary;
     private Integer importance;
-    private Map<String, Object> memoryCard;
     private Map<String, Object> metadata;
 }

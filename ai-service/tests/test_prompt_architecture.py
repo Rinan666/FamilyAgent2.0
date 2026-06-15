@@ -3,8 +3,6 @@ import json
 import pytest
 
 from app.agents.family_agent import family_agent
-from app.api import growth
-from app.llm.prompts.growth import WEEKLY_REPORT_SYSTEM_PROMPT
 
 
 class _WebSearchContext:
@@ -73,49 +71,3 @@ async def test_family_agent_chat_stream_builds_messages_without_behavior_drift(m
     assert "授权上下文" in captured["messages"][0]["content"]
     assert captured["messages"][1] == {"role": "assistant", "content": "之前的上下文"}
     assert captured["messages"][2] == {"role": "user", "content": "请帮我分析这段家庭冲突"}
-
-
-@pytest.mark.asyncio
-async def test_weekly_report_uses_prompt_module_and_returns_existing_shape(monkeypatch):
-    captured: dict = {}
-
-    async def fake_chat(*, messages, temperature, max_tokens, response_format):
-        captured["messages"] = messages
-        captured["temperature"] = temperature
-        captured["max_tokens"] = max_tokens
-        captured["response_format"] = response_format
-        return json.dumps(
-            {
-                "title": "成长守护摘要",
-                "summary": "最近孩子在作息上有波动，但家人已经开始留意。",
-                "affirmations": ["家人开始持续观察作息变化。"],
-                "concerns": ["最近入睡时间偏晚。"],
-                "signals": ["近两周睡前刷屏时间增加。"],
-                "uncertainty_notes": ["目前主要来自家长观察，缺少本人反馈。"],
-                "family_experience_refs": ["家里已有提醒晚间减少屏幕时间的经验。"],
-                "suggested_actions": ["本周先连续记录 3 天睡前状态。"],
-                "follow_up_questions": ["晚睡通常发生在什么情境下？"],
-                "safety_note": "这是一份照护者可见的成长观察摘要，不构成医疗或心理诊断。",
-            },
-            ensure_ascii=False,
-        )
-
-    monkeypatch.setattr(growth.llm_client, "chat", fake_chat)
-
-    response = await growth.weekly_report(
-        growth.WeeklyReportRequest(
-            family_name="测试家庭",
-            target="孩子",
-            records=[{"category": "SLEEP", "content": "最近入睡偏晚"}],
-            memories=[{"type": "HEALTH_REMINDER", "content": "晚上少看屏幕"}],
-        )
-    )
-
-    assert response["success"] is True
-    assert response["data"]["title"] == "成长守护摘要"
-    assert captured["messages"][0] == {"role": "system", "content": WEEKLY_REPORT_SYSTEM_PROMPT}
-    assert captured["messages"][1]["role"] == "user"
-    assert "测试家庭" in captured["messages"][1]["content"]
-    assert captured["temperature"] == 0.2
-    assert captured["max_tokens"] == 1000
-    assert captured["response_format"] == growth.WEEKLY_REPORT_SCHEMA

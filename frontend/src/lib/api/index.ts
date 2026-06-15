@@ -7,7 +7,6 @@ export * from './memory';
 export * from './writeMemory';
 export * from './memoryLibrary';
 export * from './admin';
-export * from './heritage';
 export * from './growth';
 export * from './skillRun';
 export * from './mirror';

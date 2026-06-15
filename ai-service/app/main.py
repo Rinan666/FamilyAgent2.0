@@ -9,7 +9,7 @@ from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import agent, embedding, growth, health, memory
+from app.api import agent, embedding, health, memory
 from app.config import settings
 from app.utils.logger import setup_logging
 from app.utils.safety_limits import (
@@ -176,7 +176,6 @@ async def timeout_handler(request: Request, exc: TimeoutError):
 
 app.include_router(agent.router, prefix="/ai/agent", tags=["FamilyAgent"])
 app.include_router(memory.router, prefix="/ai/memory", tags=["Memory"])
-app.include_router(growth.router, prefix="/ai/growth", tags=["Growth"])
 app.include_router(embedding.router, prefix="/ai/embedding", tags=["Embedding"])
 app.include_router(health.router, prefix="/ai", tags=["Health"])
 app.include_router(dip_router, prefix="/ai/dip", tags=["DIP"])
