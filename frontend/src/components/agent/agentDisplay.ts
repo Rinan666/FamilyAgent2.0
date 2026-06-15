@@ -9,7 +9,7 @@ import type {
 } from '@/types';
 
 export type SaveFeedback = {
-  status: 'saving' | 'saved' | 'error';
+  status: 'saving' | 'saved' | 'skipped' | 'error';
   detail: string;
   href?: string;
 };

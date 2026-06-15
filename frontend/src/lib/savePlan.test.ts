@@ -3,6 +3,7 @@ import type { AgentSaveToolPlan } from '../types';
 import {
   buildWriteMemorySaveRequest,
   normalizeSaveToolPlan,
+  savePlanPersistenceDecision,
   savePlanDetail,
   savedRecordType,
   writeCategoryFromTool,
@@ -59,6 +60,38 @@ describe('savePlan helpers', () => {
     expect(normalized.tool).toBe('NONE');
   });
 
+  it('treats none plans as skipped instead of persistable', () => {
+    const decision = savePlanPersistenceDecision(plan({
+      should_save: false,
+      tool: 'NONE',
+      content: '',
+      reason: '内容缺少具体事实。',
+    }));
+
+    expect(decision.shouldPersist).toBe(false);
+    expect(decision.plan.tool).toBe('NONE');
+    expect(decision.skippedDetail).toContain('内容缺少具体事实');
+  });
+
+  it('keeps valid save plans persistable', () => {
+    const decision = savePlanPersistenceDecision(plan());
+
+    expect(decision.shouldPersist).toBe(true);
+    expect(decision.skippedDetail).toBe('');
+  });
+
+  it('does not treat unavailable planning as a raw-save fallback', () => {
+    const decision = savePlanPersistenceDecision(plan({
+      should_save: false,
+      tool: 'NONE',
+      content: '',
+      reason: '保存规划暂时不可用，已跳过自动保存。',
+    }));
+
+    expect(decision.shouldPersist).toBe(false);
+    expect(decision.skippedDetail).toBe('暂未保存，可稍后重试。');
+  });
+
   it('builds unified write request for record plan', () => {
     const normalized = normalizeSaveToolPlan(plan());
     const request = buildWriteMemorySaveRequest(10, normalized, { source: 'TEST' });
@@ -84,7 +117,7 @@ describe('savePlan helpers', () => {
       familyId: 10,
       writeCategory: 'EXPERIENCE',
       memoryType: 'GROWTH_RISK',
-      visibility: 'FAMILY_VISIBLE',
+      visibility: 'CARE_VISIBLE',
       metadata: { source: 'TEST' },
     });
     expect(savedRecordType(normalized.tool)).toBe('FAMILY_MEMORY');

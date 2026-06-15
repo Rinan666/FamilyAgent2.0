@@ -53,6 +53,12 @@ const GROWTH_CATEGORIES = new Set<GrowthGuardCategory>([
 
 export type SavedRecordType = 'DIARY_ENTRY' | 'FAMILY_MEMORY' | 'GROWTH_GUARD' | 'NONE';
 
+export type SavePlanPersistenceDecision = {
+  plan: AgentSaveToolPlan;
+  shouldPersist: boolean;
+  skippedDetail: string;
+};
+
 function choice<T extends string>(value: unknown, allowed: Set<T>, fallback: T): T {
   const normalized = String(value || '').trim().toUpperCase();
   return allowed.has(normalized as T) ? normalized as T : fallback;
@@ -91,6 +97,22 @@ export function normalizeSaveToolPlan(plan: AgentSaveToolPlan): AgentSaveToolPla
     reason: String(plan.reason || '').trim().slice(0, 120),
     confirmation_message: String(plan.confirmation_message || defaultSaveConfirmation(tool)).trim().slice(0, 120),
   };
+}
+
+export function savePlanPersistenceDecision(plan: AgentSaveToolPlan): SavePlanPersistenceDecision {
+  const normalized = normalizeSaveToolPlan(plan);
+  const shouldPersist = normalized.should_save && normalized.tool !== 'NONE' && normalized.content.trim().length > 0;
+  return {
+    plan: normalized,
+    shouldPersist,
+    skippedDetail: shouldPersist ? '' : skippedSavePlanDetail(normalized),
+  };
+}
+
+export function skippedSavePlanDetail(plan: AgentSaveToolPlan) {
+  const reason = String(plan.reason || '').trim();
+  if (reason.includes('保存规划暂时不可用')) return '暂未保存，可稍后重试。';
+  return reason ? `这段对话暂时没有可沉淀的内容：${reason}` : '这段对话暂时没有可沉淀的内容。';
 }
 
 export function scopeFromPlan(plan: Pick<AgentSaveToolPlan, 'scope' | 'visibility' | 'tool'>): MemoryScope {
