@@ -393,7 +393,7 @@ export function sseStreamRequest(
   const completed = (async () => {
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      const res = await fetch(`/ai-proxy${path}`, {
+      const res = await fetch(`${API_BASE}${path}`, {
         method: 'POST',
         headers: {
           Accept: 'text/event-stream',
