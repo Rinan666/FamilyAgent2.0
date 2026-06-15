@@ -712,7 +712,7 @@ export default function DiaryPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.45fr_0.85fr]">
+      <div>
         <WorkbenchSurface>
           <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
             {categoryOptions.map((item) => (
@@ -886,34 +886,6 @@ export default function DiaryPage() {
             {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {saving ? '正在保存...' : primaryActionLabel(category)}
           </button>
-        </WorkbenchSurface>
-
-        <WorkbenchSurface>
-          <div className="mb-4 flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-800">
-              <BookHeart className="h-5 w-5" />
-            </div>
-            <h2 className="text-sm font-semibold text-stone-950">记忆库</h2>
-          </div>
-
-          <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
-            <p className="text-sm font-medium text-emerald-950">保存后的内容会进入记忆库</p>
-            <p className="mt-2 text-sm leading-6 text-emerald-900/80">
-              搜索、筛选、查看和后续整理，都统一在记忆库里完成。
-            </p>
-            <Link
-              href={`/dashboard/family?tab=library${selectedFamilyId ? `&familyId=${selectedFamilyId}` : ''}`}
-              className="mt-4 inline-flex h-10 items-center justify-center rounded-2xl bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800"
-            >
-              前往记忆库
-            </Link>
-          </div>
-
-          <div className="mt-4 rounded-2xl border border-dashed border-stone-200/90 bg-white/55 p-4 text-sm leading-6 text-stone-500">
-            {selectedFamily
-              ? `当前写入目标：${selectedFamily.name}。页面会在每次保存后回到空白状态，方便继续记录下一条。`
-              : '每次保存后会回到空白状态，方便继续记录下一条。'}
-          </div>
         </WorkbenchSurface>
       </div>
     </WorkbenchPage>
