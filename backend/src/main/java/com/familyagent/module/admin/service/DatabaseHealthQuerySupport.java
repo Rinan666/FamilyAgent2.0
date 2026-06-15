@@ -42,7 +42,6 @@ class DatabaseHealthQuerySupport {
             new TableDefinition("growth_guard_records", "Growth observations", false),
             new TableDefinition("memory_embeddings", "RAG embeddings", false),
             new TableDefinition("mirror_agent_data", "Mirror profiles", false),
-            new TableDefinition("heritage_tasks", "Heritage tasks", false),
             new TableDefinition("chat_sessions", "Chat sessions", false),
             new TableDefinition("chat_session_messages", "Chat session messages", false),
             new TableDefinition("chat_session_archives", "Chat session archives", false),

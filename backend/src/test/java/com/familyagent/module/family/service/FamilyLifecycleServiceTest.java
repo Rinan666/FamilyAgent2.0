@@ -123,7 +123,7 @@ class FamilyLifecycleServiceTest {
     }
 
     @Test
-    void dissolveFamily_deletesAllThirteenTablesInOrder() {
+    void dissolveFamily_deletesAllTwelveTablesInOrder() {
         when(familyRepository.selectById(10L)).thenReturn(family(10L, "Test Family"));
         when(jdbcTemplate.queryForObject(eq("SELECT to_regclass(?) IS NOT NULL"), eq(Boolean.class), anyString()))
                 .thenReturn(true);
@@ -135,7 +135,6 @@ class FamilyLifecycleServiceTest {
         verify(jdbcTemplate).update("DELETE FROM care_authorizations WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM growth_guard_staleness_votes WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM memory_entry_votes WHERE family_id = ?", 10L);
-        verify(jdbcTemplate).update("DELETE FROM heritage_tasks WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM growth_guard_records WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM memory_embeddings WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM skill_runs WHERE family_id = ?", 10L);

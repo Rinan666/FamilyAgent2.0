@@ -28,7 +28,6 @@ public class FamilyLifecycleService {
             new TableColumn("care_authorizations", "family_id"),
             new TableColumn("growth_guard_staleness_votes", "family_id"),
             new TableColumn("memory_entry_votes", "family_id"),
-            new TableColumn("heritage_tasks", "family_id"),
             new TableColumn("growth_guard_records", "family_id"),
             new TableColumn("memory_embeddings", "family_id"),
             new TableColumn("skill_runs", "family_id"),
