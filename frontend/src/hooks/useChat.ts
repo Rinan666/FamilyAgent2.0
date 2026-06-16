@@ -45,7 +45,6 @@ interface UseChatOptions {
   activeFamilyId?: number | null;
   appendSessionMessages?: (messages: ChatMessage[]) => Promise<void>;
   onChatDone?: (message: string) => void;
-  onActivationSceneChange?: (scene: { label: string; instruction: string } | null) => void;
   viewerIdentityContext?: string;
   getSessionSavedMemories?: () => SessionSavedMemory[];
   subject?: string;
@@ -83,7 +82,6 @@ export function useChat(options: UseChatOptions = {}) {
     activeFamilyId,
     appendSessionMessages,
     onChatDone,
-    onActivationSceneChange,
     viewerIdentityContext,
     getSessionSavedMemories,
     subject = 'FamilyAgent',
@@ -159,17 +157,11 @@ export function useChat(options: UseChatOptions = {}) {
   ) => {
     try {
       if (responseMode === 'quick') {
-        onActivationSceneChange?.(null);
         return { context: '' } satisfies MemoryContextResult;
       }
 
       const recallQuery = buildFamilyRecallQuery(query, history);
       const activationScene = detectFamilyActivationScene(recallQuery);
-      onActivationSceneChange?.(
-        activationScene
-          ? { label: activationScene.label, instruction: activationScene.instruction }
-          : null,
-      );
 
       const recallKeyword = buildLibrarySearchKeyword(recallQuery, activationScene);
 
@@ -222,7 +214,7 @@ export function useChat(options: UseChatOptions = {}) {
       console.log('Family context memories not loaded:', error);
       return { context: '' } satisfies MemoryContextResult;
     }
-  }, [activeFamilyId, getSessionSavedMemories, onActivationSceneChange, responseMode, viewerIdentityContext]);
+  }, [activeFamilyId, getSessionSavedMemories, responseMode, viewerIdentityContext]);
 
   const sendMessage = useCallback(async (message: string) => {
     if (isStreaming) return;

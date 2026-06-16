@@ -164,12 +164,11 @@ export default function SettingsPage() {
       <WorkbenchHero
         badge={<span className="inline-flex rounded-full bg-stone-100 px-3 py-1 text-xs font-medium text-stone-700">设置</span>}
         title="账户与安全"
-        description="个人信息留在顶部，切换家庭和退出统一收在这里。"
       />
 
       {families.length > 0 && (
         <WorkbenchSurface className="space-y-5">
-          <WorkbenchSectionTitle title="当前家族" description="在这里切换你正在使用的家庭空间。" />
+          <WorkbenchSectionTitle title="当前家族" />
 
           <div className="flex flex-wrap gap-2">
             {families.map((family) => {
@@ -201,7 +200,7 @@ export default function SettingsPage() {
       )}
 
       <WorkbenchSurface className="space-y-5">
-        <WorkbenchSectionTitle title="个人资料" description="只保留当前需要维护的字段。" />
+        <WorkbenchSectionTitle title="个人资料" />
 
         <form onSubmit={handleUpdateProfile} className="space-y-4">
           {profileError && (
@@ -340,7 +339,7 @@ export default function SettingsPage() {
 
       {isPlatformAdmin(user) && (
         <WorkbenchSurface className="space-y-4">
-          <WorkbenchSectionTitle title="管理员工具" description="只保留系统巡检入口。" />
+          <WorkbenchSectionTitle title="管理员工具" />
           <Link
             href="/dashboard/admin/database"
             className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-stone-950 px-5 text-sm font-medium text-white transition hover:bg-stone-800"

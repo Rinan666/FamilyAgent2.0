@@ -226,7 +226,6 @@ export default function VoiceInputButton({
         type="button"
         onClick={toggleListening}
         disabled={disabled}
-        title={listening ? '停止语音输入' : '语音输入'}
         className={`inline-flex h-9 items-center justify-center gap-2 rounded-lg border text-xs font-medium transition-colors disabled:opacity-50 ${
           compact ? 'w-9 px-0' : 'px-3'
         } ${

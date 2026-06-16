@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { BookHeart, UserRound, X } from 'lucide-react';
+import { UserRound, X } from 'lucide-react';
 import type { AgentTargetSelection } from '@/components/agent/agentTarget';
-import type { ActivationSceneState, ModeReadiness } from '@/components/agent/agentDisplay';
+import type { ModeReadiness } from '@/components/agent/agentDisplay';
 import type { AgentMode, FamilyMember, MirrorContextResponse } from '@/types';
 
 interface AgentContextPanelProps {
@@ -13,16 +13,12 @@ interface AgentContextPanelProps {
   targetSelection: AgentTargetSelection;
   selectorOptions: FamilyMember[];
   isLoadingMembers: boolean;
-  activationScene: ActivationSceneState | null;
   modeReadiness: ModeReadiness;
   mirrorContext: MirrorContextResponse | null;
-  isLoadingMirrorContext: boolean;
-  contextLoaded: boolean;
   contextError: string;
   activeFamilyId: number | null | undefined;
   onClose: () => void;
   onTargetChange: (nextTargetSelection: AgentTargetSelection) => void;
-  onSuggestedQuestion: (question: string) => void;
 }
 
 function readinessToneClass(tone: ModeReadiness['tone']) {
@@ -39,16 +35,12 @@ export default function AgentContextPanel({
   targetSelection,
   selectorOptions,
   isLoadingMembers,
-  activationScene,
   modeReadiness,
   mirrorContext,
-  isLoadingMirrorContext,
-  contextLoaded,
   contextError,
   activeFamilyId,
   onClose,
   onTargetChange,
-  onSuggestedQuestion,
 }: AgentContextPanelProps) {
   if (!open) return null;
 
@@ -65,9 +57,6 @@ export default function AgentContextPanel({
         <div className="flex items-start justify-between gap-3 border-b border-stone-200/80 px-5 py-5">
           <div>
             <div className="text-sm font-semibold text-stone-900">上下文面板</div>
-            <p className="mt-1 text-sm text-stone-500">
-              {mode === 'mirror' ? '切换对象、查看镜像资料和快捷问题。' : '查看当前对象与家庭上下文摘要。'}
-            </p>
           </div>
           <button
             type="button"
@@ -86,20 +75,12 @@ export default function AgentContextPanel({
               当前对象
             </div>
             <p className="text-sm font-medium text-stone-900">{targetLabel}</p>
-            <p className="mt-1 text-xs leading-5 text-stone-500">
-              {mode === 'mirror'
-                ? '镜像模式只参考上下文、授权日常记录和成长观察，并明确保留不确定性边界。'
-                : '普通模式只参考当前上下文和家族经验沉淀，不召回日常记录或成长观察。'}
-            </p>
           </div>
 
           <div className="rounded-[24px] border border-stone-200 bg-white p-4">
             <label htmlFor="agent-target-selector" className="text-sm font-semibold text-stone-900">
               对话对象
             </label>
-            <p className="mt-1 text-xs leading-5 text-stone-500">
-              切换到其他家庭成员后，将自动进入镜像参考模式。
-            </p>
             <div className="mt-3 space-y-2">
               <select
                 id="agent-target-selector"
@@ -133,23 +114,7 @@ export default function AgentContextPanel({
           </div>
 
           {mode === 'family' ? (
-            <>
-              {activationScene && (
-                <div className="rounded-[24px] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                  <div className="font-semibold">已激活上下文：{activationScene.label}</div>
-                  <div className="mt-2 text-xs leading-6 text-amber-800">{activationScene.instruction}</div>
-                </div>
-              )}
-              <div className="rounded-[24px] border border-emerald-100 bg-emerald-50/80 p-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-emerald-900">
-                  <BookHeart className="h-4 w-4" />
-                  FamilyAgent 如何工作
-                </div>
-                <p className="mt-2 text-xs leading-6 text-emerald-800">
-                  思考模式会把当前对话与家族经验沉淀结合起来回答；日常记录和成长观察不会进入普通 FamilyAgent 的召回范围。
-                </p>
-              </div>
-            </>
+            null
           ) : (
             <>
               {contextError && (
@@ -165,53 +130,7 @@ export default function AgentContextPanel({
                     {modeReadiness.label}
                   </span>
                 </div>
-                <p className="mt-2 text-xs leading-6 text-emerald-800">
-                  {isLoadingMirrorContext
-                    ? '正在刷新镜像资料...'
-                    : !contextLoaded
-                      ? '首次切换对象时会自动准备镜像资料：上下文、日常记录和成长观察。'
-                      : mirrorContext?.sourceSummary || '当前还没有可展示的镜像来源摘要。'}
-                </p>
               </div>
-
-              {mirrorContext?.disclaimer && (
-                <div className="rounded-[24px] border border-amber-200 bg-amber-50 p-4 text-xs leading-6 text-amber-800">
-                  {mirrorContext.disclaimer}
-                </div>
-              )}
-
-              {!!mirrorContext?.suggestedQuestions?.length && (
-                <div className="rounded-[24px] border border-stone-200 bg-white p-4">
-                  <div className="text-sm font-semibold text-stone-900">快捷提问</div>
-                  <div className="mt-3 space-y-2">
-                    {mirrorContext.suggestedQuestions.slice(0, 4).map((question) => (
-                      <button
-                        key={question}
-                        type="button"
-                        onClick={() => onSuggestedQuestion(question)}
-                        className="w-full rounded-2xl border border-stone-200 bg-stone-50/70 px-3 py-2.5 text-left text-xs leading-5 text-stone-600 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800"
-                      >
-                        {question}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {!!mirrorContext?.missingRecordSuggestions?.length && (
-                <details className="rounded-[24px] border border-dashed border-stone-300 bg-white p-4">
-                  <summary className="cursor-pointer list-none text-sm font-semibold text-stone-900">
-                    让镜像更准确
-                  </summary>
-                  <div className="mt-3 space-y-2">
-                    {mirrorContext.missingRecordSuggestions.slice(0, 3).map((suggestion) => (
-                      <p key={suggestion} className="text-xs leading-6 text-stone-600">
-                        {suggestion}
-                      </p>
-                    ))}
-                  </div>
-                </details>
-              )}
 
               <div className="rounded-[24px] border border-stone-200 bg-stone-50/80 p-4 text-xs text-stone-600">
                 <div className="font-semibold text-stone-900">快速入口</div>

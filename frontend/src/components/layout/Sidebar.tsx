@@ -65,7 +65,6 @@ function NavigationLinks({
               key={item.href}
               href={item.href}
               onClick={onNavigate}
-              title={item.label}
               className={cn(
                 'group flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition-all',
                 isActive
@@ -136,7 +135,6 @@ export default function Sidebar({ viewerRole = 'MEMBER', isPlatformAdmin = false
             </div>
             <div>
               <p className="text-base font-semibold text-stone-950">FamilyAgent</p>
-              <p className="text-sm text-stone-500">家庭记忆工作台</p>
             </div>
           </div>
         </Link>
@@ -189,7 +187,6 @@ export function MobileNav({
                 </div>
                 <div>
                   <p className="text-base font-semibold text-stone-950">FamilyAgent</p>
-                  <p className="text-xs text-stone-500">家庭记忆工作台</p>
                 </div>
               </Link>
               <button
@@ -209,12 +206,6 @@ export function MobileNav({
                 onNavigate={() => setOpen(false)}
               />
             </nav>
-
-            <div className="p-4 pt-2">
-              <div className="rounded-[22px] border border-white/80 bg-white/78 p-4 text-sm text-stone-500">
-                选择一个模块继续。
-              </div>
-            </div>
           </div>
         </div>
       )}

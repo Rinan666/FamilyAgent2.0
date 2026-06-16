@@ -14,11 +14,6 @@ export type SaveFeedback = {
   href?: string;
 };
 
-export type ActivationSceneState = {
-  label: string;
-  instruction: string;
-};
-
 export type ModeReadinessTone = 'gray' | 'green' | 'blue' | 'yellow';
 
 export type ModeReadiness = {

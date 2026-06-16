@@ -493,7 +493,6 @@ export default function FamilyMemberMemoryPage() {
       <div className="mx-auto max-w-3xl rounded-lg border border-gray-200 bg-white p-10 text-center">
         <Users className="mx-auto mb-3 h-10 w-10 text-gray-300" />
         <h1 className="text-lg font-semibold text-gray-900">还没有家族空间</h1>
-        <p className="mt-2 text-sm text-gray-500">先创建或加入家族，再查看成员记忆资产。</p>
         <Link
           href="/dashboard/family"
           className="mt-5 inline-flex h-10 items-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
@@ -530,18 +529,11 @@ export default function FamilyMemberMemoryPage() {
               成员记忆
             </div>
             <h1 className="text-2xl font-bold text-gray-900">{memberDisplayName(targetMember)}</h1>
-            <p className="mt-2 text-sm leading-6 text-gray-500">
-              查看该成员在当前授权范围下可见的记录、经验与成长观察。
-              镜像 Agent 只能基于授权资料做参考，不能代表本人真实表达。
-            </p>
           </div>
 
           <div className="w-full max-w-xs rounded-xl border border-gray-100 bg-gray-50 p-4">
             <p className="text-xs font-medium text-gray-500">当前家族</p>
             <p className="mt-1 text-sm font-semibold text-gray-900">{selectedFamily?.name || '未选择'}</p>
-            <p className="mt-2 text-xs text-gray-500">
-              {selectedFamily?.description || '这里展示当前成员所属的家族空间。'}
-            </p>
           </div>
         </div>
       </section>
@@ -555,7 +547,6 @@ export default function FamilyMemberMemoryPage() {
         <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center">
           <UserRound className="mx-auto mb-3 h-10 w-10 text-gray-300" />
           <h2 className="text-lg font-semibold text-gray-900">没有找到对应成员</h2>
-          <p className="mt-2 text-sm text-gray-500">请返回成员列表重新选择，或确认当前成员仍在该家族中。</p>
         </div>
       ) : (
         <>
@@ -602,9 +593,6 @@ export default function FamilyMemberMemoryPage() {
                   </p>
                   <p className="mt-1 text-xs text-purple-600">镜像上下文</p>
                 </div>
-              </div>
-              <div className="mt-4 rounded-xl border border-yellow-100 bg-yellow-50 p-3 text-xs leading-5 text-yellow-800">
-                成员记忆只展示后端按权限过滤后的内容。若内容较少，通常意味着当前授权范围有限，或相关记录本身还不够完整。
               </div>
             </article>
           </section>
@@ -708,21 +696,18 @@ export default function FamilyMemberMemoryPage() {
                 className="rounded-xl border border-gray-100 bg-gray-50 p-4 hover:border-emerald-200 hover:bg-emerald-50"
               >
                 <p className="text-sm font-semibold text-gray-900">写日记</p>
-                <p className="mt-1 text-xs leading-5 text-gray-500">补充和 TA 相关的日常、事件或回忆。</p>
               </Link>
               <Link
                 href={`/dashboard/diary${selectedFamilyId ? `?familyId=${selectedFamilyId}&writeCategory=EXPERIENCE` : '?writeCategory=EXPERIENCE'}`}
                 className="rounded-xl border border-gray-100 bg-gray-50 p-4 hover:border-emerald-200 hover:bg-emerald-50"
               >
                 <p className="text-sm font-semibold text-gray-900">写经验日记</p>
-                <p className="mt-1 text-xs leading-5 text-gray-500">把对 TA 有帮助的经验或提醒沉淀下来。</p>
               </Link>
               <Link
                 href={`/dashboard/diary?writeCategory=OBSERVATION${selectedFamilyId ? `&familyId=${selectedFamilyId}` : ''}${targetUserId ? `&relatedUserId=${targetUserId}` : ''}`}
                 className="rounded-xl border border-gray-100 bg-gray-50 p-4 hover:border-emerald-200 hover:bg-emerald-50"
               >
                 <p className="text-sm font-semibold text-gray-900">写观察日记</p>
-                <p className="mt-1 text-xs leading-5 text-gray-500">把成长观察和后续提醒继续补完整。</p>
               </Link>
             </div>
           </section>

@@ -560,13 +560,7 @@ export default function AdminDatabaseHealthPage() {
             <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <h2 className="text-sm font-semibold text-gray-900">RAG 召回诊断</h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  以指定家庭成员的权限视角模拟召回，帮助排查 Agent 为什么参考了某类记忆。
-                </p>
               </div>
-              <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
-                只返回安全摘要
-              </span>
             </div>
 
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-[160px_180px_1fr_auto]">
@@ -774,7 +768,6 @@ export default function AdminDatabaseHealthPage() {
                           <span
                             key={`${item.familyId}-${item.sourceType}-${item.status}`}
                             className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusTone(item.status)}`}
-                            title={`最近更新：${formatDate(item.lastUpdatedAt)}`}
                           >
                             {sourceLabel(item.sourceType)} / {item.status}: {item.count}
                           </span>

@@ -33,7 +33,6 @@ export function WorkbenchSurface({
 export function WorkbenchHero({
   badge,
   title,
-  description,
   actions,
   aside,
   className,
@@ -50,9 +49,6 @@ export function WorkbenchHero({
       <div className="min-w-0">
         {badge ? <div className="mb-3">{badge}</div> : null}
         <h1 className="text-[clamp(1.6rem,2vw,2.1rem)] font-semibold tracking-tight text-stone-950">{title}</h1>
-        {description ? (
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-500">{description}</p>
-        ) : null}
         {actions ? <div className="mt-4 flex flex-wrap gap-2">{actions}</div> : null}
       </div>
       {aside ? <div className="w-full max-w-lg">{aside}</div> : null}
@@ -62,7 +58,6 @@ export function WorkbenchHero({
 
 export function WorkbenchSectionTitle({
   title,
-  description,
   action,
   className,
 }: {
@@ -75,7 +70,6 @@ export function WorkbenchSectionTitle({
     <div className={cn('flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between', className)}>
       <div className="min-w-0">
         <h2 className="text-lg font-semibold text-stone-950">{title}</h2>
-        {description ? <p className="mt-1 text-sm leading-6 text-stone-500">{description}</p> : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
     </div>
@@ -85,7 +79,6 @@ export function WorkbenchSectionTitle({
 export function WorkbenchEmptyState({
   icon,
   title,
-  description,
   action,
   className,
 }: {
@@ -103,7 +96,6 @@ export function WorkbenchEmptyState({
         </div>
       ) : null}
       <h1 className="mt-5 text-xl font-semibold text-stone-950">{title}</h1>
-      {description ? <p className="mt-2 text-sm leading-7 text-stone-500">{description}</p> : null}
       {action ? <div className="mt-6 flex justify-center">{action}</div> : null}
     </WorkbenchSurface>
   );

@@ -27,7 +27,6 @@ import {
   readinessLevel,
   temporalLayerClass,
   temporalLayerLabel,
-  type ActivationSceneState,
   type SaveFeedback,
   isRelatedDiary,
 } from '@/components/agent/agentDisplay';
@@ -230,20 +229,17 @@ export default function AgentPage() {
   const [targetSelection, setTargetSelection] = useState<AgentTargetSelection>('NONE');
   const [mirrorContext, setMirrorContext] = useState<MirrorContextResponse | null>(null);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
-  const [isLoadingMirrorContext, setIsLoadingMirrorContext] = useState(false);
   const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
   const [activeSessionDetail, setActiveSessionDetail] = useState<ChatSessionDetail | null>(null);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [sessionError, setSessionError] = useState('');
   const [contextError, setContextError] = useState('');
-  const [activationScene, setActivationScene] = useState<ActivationSceneState | null>(null);
   const [saveFeedback, setSaveFeedback] = useState<Record<string, SaveFeedback>>({});
   const [isSessionsOpen, setIsSessionsOpen] = useState(false);
   const [isContextOpen, setIsContextOpen] = useState(false);
   const [responseMode, setResponseMode] = useState<AgentResponseMode>('think');
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
-  const [contextLoaded, setContextLoaded] = useState(false);
 
   const {
     viewerRole,
@@ -364,7 +360,6 @@ export default function AgentPage() {
     if (!query && cachedMirrorContextByFamilyTarget[cacheKey]) {
       const cached = cachedMirrorContextByFamilyTarget[cacheKey];
       setMirrorContext(cached);
-      setContextLoaded(true);
       return cached;
     }
     const context = await mirrorApi.getContext(familyId, userId, query);
@@ -372,22 +367,18 @@ export default function AgentPage() {
       cachedMirrorContextByFamilyTarget[cacheKey] = context;
     }
     setMirrorContext(context);
-    setContextLoaded(true);
     return context;
   }, []);
 
   useEffect(() => {
     if (mode !== 'mirror' || !activeFamilyId || !mirrorTargetUserId || responseMode === 'quick') {
       setMirrorContext(null);
-      setIsLoadingMirrorContext(false);
-      setContextLoaded(false);
       if (mode === 'family') {
         setContextError('');
       }
       return;
     }
     let active = true;
-    setIsLoadingMirrorContext(true);
     setContextError('');
     refreshMirrorContext(activeFamilyId, mirrorTargetUserId)
       .then((context) => {
@@ -400,7 +391,7 @@ export default function AgentPage() {
         }
       })
       .finally(() => {
-        if (active) setIsLoadingMirrorContext(false);
+        if (!active) return;
       });
     return () => {
       active = false;
@@ -556,7 +547,6 @@ export default function AgentPage() {
     targetRole: 'MEMBER',
     activeFamilyId,
     appendSessionMessages,
-    onActivationSceneChange: setActivationScene,
     getSessionSavedMemories: () => sessionSavedMemoriesRef.current,
     subject: 'FamilyAgent',
     contextLabel: 'family_memory',
@@ -614,7 +604,6 @@ export default function AgentPage() {
     setMessages([]);
     setSessionError('');
     setSaveFeedback({});
-    setActivationScene(null);
     sessionSavedMemoriesRef.current = [];
     setIsSessionsOpen(false);
     setIsContextOpen(false);
@@ -656,7 +645,6 @@ export default function AgentPage() {
     setInput('');
     setSessionError('');
     setSaveFeedback({});
-    setActivationScene(null);
     sessionSavedMemoriesRef.current = [];
   }, [discardStreaming, reset, setSessionId]);
 
@@ -694,7 +682,6 @@ export default function AgentPage() {
       setMessages(restoredMessages);
       setActiveSessionDetail(detail);
       setSaveFeedback({});
-      setActivationScene(null);
       sessionSavedMemoriesRef.current = [];
       upsertSession(detail);
     } catch (error) {
@@ -1015,7 +1002,6 @@ export default function AgentPage() {
                 <button
                   type="button"
                   onClick={() => setIsSessionsOpen((current) => !current)}
-                  title="会话历史"
                   aria-label="会话历史"
                   className={cn(
                     'inline-flex h-9 items-center gap-2 rounded-full border px-3 text-xs font-medium transition',
@@ -1030,7 +1016,6 @@ export default function AgentPage() {
                 <button
                   type="button"
                   onClick={() => setIsContextOpen((current) => !current)}
-                  title="上下文"
                   aria-label="上下文"
                   className={cn(
                     'inline-flex h-9 items-center gap-2 rounded-full border px-3 text-xs font-medium transition',
@@ -1045,7 +1030,6 @@ export default function AgentPage() {
                 <button
                   type="button"
                   onClick={handleNewChat}
-                  title="新会话"
                   aria-label="新会话"
                   className="inline-flex h-9 items-center gap-2 rounded-full bg-stone-950 px-3 text-xs font-medium text-white transition hover:bg-stone-800"
                 >
@@ -1083,13 +1067,7 @@ export default function AgentPage() {
                   <span className="rounded-full bg-stone-100 px-2.5 py-1 font-medium text-stone-700">
                     {mode === 'mirror' ? '镜像 AI' : 'FamilyAgent'}
                   </span>
-                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
-                    {mode === 'mirror' ? '上下文 + 日常 + 观察' : '上下文 + 家族经验沉淀'}
-                  </span>
                 </div>
-                <span className="text-[11px] text-stone-400">
-                  {responseMode === 'quick' ? '不召回资料' : '思考模式'}
-                </span>
               </div>
               <textarea
                 value={input}
@@ -1132,13 +1110,6 @@ export default function AgentPage() {
                       思考
                     </button>
                   </div>
-                  <p className="max-w-2xl text-xs leading-5 text-stone-500">
-                    {responseMode === 'quick'
-                      ? '快速模式不联网，也不召回家庭资料。'
-                      : mode === 'mirror'
-                        ? `思考模式只结合 ${targetLabel} 的授权日常记录、家人补充和成长观察。`
-                        : '思考模式只结合当前上下文和家族经验沉淀。'}
-                  </p>
                 </div>
 
                 <div className="flex shrink-0 items-center justify-end gap-2">
@@ -1192,19 +1163,12 @@ export default function AgentPage() {
         targetSelection={targetSelection}
         selectorOptions={selectorOptions}
         isLoadingMembers={isLoadingMembers}
-        activationScene={activationScene}
         modeReadiness={modeReadiness}
         mirrorContext={mirrorContext}
-        isLoadingMirrorContext={isLoadingMirrorContext}
-        contextLoaded={contextLoaded}
         contextError={contextError}
         activeFamilyId={activeFamilyId}
         onClose={() => setIsContextOpen(false)}
         onTargetChange={(nextTargetSelection) => { void handleTargetChange(nextTargetSelection); }}
-        onSuggestedQuestion={(question) => {
-          setInput(question);
-          setIsContextOpen(false);
-        }}
       />
     </div>
   );

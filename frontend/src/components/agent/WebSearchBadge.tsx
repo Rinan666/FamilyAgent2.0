@@ -39,7 +39,6 @@ export default function WebSearchBadge({ metadata }: WebSearchBadgeProps) {
                 target="_blank"
                 rel="noreferrer"
                 className="block truncate text-blue-700 underline-offset-2 hover:underline"
-                title={source.title}
               >
                 {source.title || source.url}
               </a>

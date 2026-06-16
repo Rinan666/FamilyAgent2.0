@@ -409,11 +409,6 @@ export default function FamilyMembersPanel({
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">成员与权限</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            {canManageSpace
-              ? '在这里管理家庭成员、关系称呼和照护访问权限。'
-              : '在这里查看当前家庭成员，并打开成员记忆视图。'}
-          </p>
         </div>
 
         {canManageSpace && (
@@ -524,11 +519,6 @@ export default function FamilyMembersPanel({
         <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
           <Users className="mx-auto mb-3 h-12 w-12 text-gray-200" />
           <h3 className="mb-1 text-lg font-medium text-gray-700">还没有家庭</h3>
-          <p className="mb-5 text-sm text-gray-400">
-            {canManageSpace
-              ? '先创建一个家庭，再邀请家人一起保存记忆和经验。'
-              : '你还没有加入任何家庭空间，可以请家庭拥有者邀请你。'}
-          </p>
           {canManageSpace && (
             <button
               type="button"
@@ -759,11 +749,6 @@ export default function FamilyMembersPanel({
         </div>
       )}
 
-      {focusedFamilyId && currentVisibleFamily && currentVisibleMembers.length > 0 && (
-        <p className="mt-4 text-xs text-gray-400">
-          当前页面已聚焦到“{currentVisibleFamily.name}”，因此这里不再提供额外的家庭切换器。
-        </p>
-      )}
     </div>
   );
 }

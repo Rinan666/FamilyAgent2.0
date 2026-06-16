@@ -31,9 +31,7 @@ export default function SearchPaginationControls({
   total,
   className = '',
 }: SearchPaginationControlsProps) {
-  const hasFilter = searchValue.trim().length > 0;
   const rangeText = filteredTotal === 0 ? `0 ${itemLabel}` : `${startIndex}-${endIndex} / ${filteredTotal} ${itemLabel}`;
-  const totalText = hasFilter ? `, total ${total} ${itemLabel}` : '';
 
   return (
     <div className={`flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between ${className}`.trim()}>
@@ -50,7 +48,6 @@ export default function SearchPaginationControls({
       <div className="flex flex-col gap-2 sm:items-end">
         <span className="text-xs text-gray-500">
           {rangeText}
-          {totalText}
         </span>
         <div className="flex items-center gap-2">
           <button
@@ -58,7 +55,6 @@ export default function SearchPaginationControls({
             onClick={() => onPageChange(currentPage - 1)}
             disabled={currentPage <= 1}
             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-            aria-label="Previous page"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
@@ -70,7 +66,6 @@ export default function SearchPaginationControls({
             onClick={() => onPageChange(currentPage + 1)}
             disabled={currentPage >= pageCount}
             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-            aria-label="Next page"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
