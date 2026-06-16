@@ -56,6 +56,22 @@ export interface RegisterRequest {
 export type AgentMode = 'family' | 'mirror';
 export type AgentResponseMode = 'quick' | 'think';
 export type WriteCategory = 'RECORD' | 'EXPERIENCE' | 'OBSERVATION';
+export type PhotoScope = 'PERSONAL' | 'FAMILY';
+
+export interface PhotoItem {
+  id: number;
+  familyId: number;
+  uploaderId: number;
+  scope: PhotoScope | string;
+  assetUrl: string;
+  mimeType?: string;
+  fileSize?: number;
+  originalName?: string;
+  description?: string;
+  metadata?: unknown;
+  takenAt?: string;
+  createdAt?: string;
+}
 
 export interface MirrorSourceRef {
   code: string;
@@ -86,7 +102,33 @@ export interface Family {
   createdAt: string;
 }
 
-export type FamilyTab = 'library' | 'members';
+export type FamilyTab = 'library' | 'members' | 'personas';
+
+export interface PersonaMember {
+  id: number;
+  familyId: number;
+  name: string;
+  description?: string;
+  eraIdentity?: string;
+  values?: string;
+  speakingStyle?: string;
+  personality?: string;
+  createdBy: number;
+  hasMaterial: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface CreatePersonaMemberRequest {
+  name: string;
+  description?: string;
+  eraIdentity?: string;
+  values?: string;
+  speakingStyle?: string;
+  personality?: string;
+}
+
+export type UpdatePersonaMemberRequest = Partial<CreatePersonaMemberRequest>;
 
 export interface FamilyMember {
   id: number;

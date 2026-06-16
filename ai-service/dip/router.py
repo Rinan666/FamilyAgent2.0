@@ -119,11 +119,11 @@ async def cluster_faces_by_urls(req: ClusterByUrlsRequest, request: Request) -> 
             resp = await client.get(resolved_url, headers=request_headers)
             resp.raise_for_status()
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Failed to fetch {resolved_url}: {e}")
+            raise HTTPException(status_code=400, detail=f"Failed to fetch photo {photo_id}: {type(e).__name__}")
         try:
             img = _decode_bgr(resp.content)
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"Cannot decode image at {resolved_url}")
+            raise HTTPException(status_code=400, detail=f"Cannot decode photo {photo_id}")
         return [
             (emb, {"photo_id": photo_id, "file_index": file_idx, "face_index": fi,
                    "bbox": {"x": box[0], "y": box[1], "w": box[2], "h": box[3]}})

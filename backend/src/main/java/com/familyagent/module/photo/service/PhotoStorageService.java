@@ -1,5 +1,6 @@
 package com.familyagent.module.photo.service;
 
+import com.familyagent.common.constant.PhotoScope;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.photo.dto.PhotoContentResource;
@@ -28,9 +29,9 @@ public class PhotoStorageService {
         ensureBucket();
     }
 
-    public String upload(Long familyId, MultipartFile file) {
+    public String upload(Long familyId, Long uploaderId, PhotoScope scope, MultipartFile file) {
         String ext = getExtension(file.getOriginalFilename());
-        String objectKey = "family-photos/" + familyId + "/" + UUID.randomUUID() + ext;
+        String objectKey = buildObjectKey(familyId, uploaderId, scope, ext);
         try {
             minioClient.putObject(
                 PutObjectArgs.builder()
@@ -46,6 +47,20 @@ public class PhotoStorageService {
             throw new BusinessException(ErrorCode.OSS_UPLOAD_FAILED, "Photo upload failed: " + e.getMessage());
         }
         return objectKey;
+    }
+
+    public void delete(String objectKey) {
+        try {
+            minioClient.removeObject(
+                    RemoveObjectArgs.builder()
+                            .bucket(bucketName)
+                            .object(objectKey)
+                            .build()
+            );
+        } catch (Exception e) {
+            log.error("MinIO delete failed: objectKey={}, error={}", objectKey, e.getMessage(), e);
+            throw new BusinessException(ErrorCode.OSS_UPLOAD_FAILED, "Failed to delete photo content: " + e.getMessage());
+        }
     }
 
     public PhotoContentResource read(String objectKey) {
@@ -82,5 +97,12 @@ public class PhotoStorageService {
     private static String getExtension(String filename) {
         if (filename == null || !filename.contains(".")) return "";
         return "." + filename.substring(filename.lastIndexOf('.') + 1).toLowerCase();
+    }
+
+    private static String buildObjectKey(Long familyId, Long uploaderId, PhotoScope scope, String ext) {
+        if (scope == PhotoScope.PERSONAL) {
+            return "personal/" + uploaderId + "/" + UUID.randomUUID() + ext;
+        }
+        return "family/" + familyId + "/" + UUID.randomUUID() + ext;
     }
 }

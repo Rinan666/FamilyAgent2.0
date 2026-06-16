@@ -11,7 +11,12 @@ public class PhotoUploadResponse {
     private Long id;
     private Long familyId;
     private Long uploaderId;
+    private String scope;
     private String assetUrl;
+    private String mimeType;
+    private Long fileSize;
+    private String originalName;
+    private String description;
     private Object metadata;
     private LocalDateTime takenAt;
     private LocalDateTime createdAt;

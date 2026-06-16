@@ -1,5 +1,5 @@
 import { normalizeFamilyMembers, request } from './shared';
-import type { CareAuthorization, Family, FamilyMember, FamilyRelationship } from '@/types';
+import type { CareAuthorization, CreatePersonaMemberRequest, Family, FamilyMember, FamilyRelationship, PersonaMember, UpdatePersonaMemberRequest } from '@/types';
 
 export const familyApi = {
   create: (data: { name: string; description?: string }) =>
@@ -40,5 +40,24 @@ export const familyApi = {
   transferOwner: (familyId: number, targetUserId: number) =>
     request<void>(`/families/${familyId}/owner/${targetUserId}`, {
       method: 'PUT',
+    }),
+  listPersonaMembers: (familyId: number) =>
+    request<PersonaMember[]>(`/families/${familyId}/persona-members`),
+  getPersonaMember: (familyId: number, personaId: number) =>
+    request<PersonaMember>(`/families/${familyId}/persona-members/${personaId}`),
+  createPersonaMember: (familyId: number, data: CreatePersonaMemberRequest) =>
+    request<PersonaMember>(`/families/${familyId}/persona-members`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updatePersonaMember: (familyId: number, personaId: number, data: UpdatePersonaMemberRequest) =>
+    request<PersonaMember>(`/families/${familyId}/persona-members/${personaId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  deletePersonaMember: (familyId: number, personaId: number, confirmationWord: string) =>
+    request<void>(`/families/${familyId}/persona-members/${personaId}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ confirmationWord }),
     }),
 };

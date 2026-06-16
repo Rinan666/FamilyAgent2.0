@@ -11,3 +11,4 @@ export * from './growth';
 export * from './skillRun';
 export * from './mirror';
 export * from './agent';
+export * from './photos';

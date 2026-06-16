@@ -39,6 +39,8 @@ public enum ErrorCode {
     FAMILY_FULL(2004, "Family is full"),
     INVALID_INVITE_CODE(2005, "Invalid invite code"),
     ALREADY_MEMBER(2006, "Already a family member"),
+    PERSONA_MEMBER_LIMIT_EXCEEDED(2007, "Persona member limit reached"),
+    PERSONA_MEMBER_NOT_FOUND(2008, "Persona member not found"),
 
     // Question bank codes: 3000-3999
     QUESTION_NOT_FOUND(3001, "Question not found"),

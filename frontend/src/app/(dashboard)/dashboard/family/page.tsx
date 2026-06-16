@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, Sparkles, Users } from 'lucide-react';
 import FamilyMembersPanel from '@/components/family/FamilyMembersPanel';
+import PersonaMembersPanel from '@/components/family/PersonaMembersPanel';
 import {
   WorkbenchEmptyState,
   WorkbenchHero,
@@ -18,6 +19,7 @@ import type { FamilyTab } from '@/types';
 const tabs: { value: FamilyTab; label: string }[] = [
   { value: 'library', label: '记忆库' },
   { value: 'members', label: '成员列表' },
+  { value: 'personas', label: '精神成员' },
 ];
 
 const legacyTabRedirects: Record<string, FamilyTab> = {
@@ -43,6 +45,7 @@ export default function FamilyPage() {
     activeFamilyId,
     setActiveFamilyId,
     viewerRole,
+    activeMembership,
     isLoading: loadingFamilies,
   } = useViewerRole();
 
@@ -141,7 +144,7 @@ export default function FamilyPage() {
         )}
       />
 
-      <WorkbenchSurface className="grid grid-cols-2 gap-2">
+      <WorkbenchSurface className="grid grid-cols-3 gap-2">
         {tabs.map((tab) => (
           <button
             key={tab.value}
@@ -177,12 +180,25 @@ export default function FamilyPage() {
             <WorkbenchSurface className="space-y-4">
               <WorkbenchSectionTitle
                 title="成员列表"
-                description="在成员列表中查看当前家族成员，并通过“成员记忆”入口进入对应成员的记忆视图。"
+                description='在成员列表中查看当前家族成员，并通过"成员记忆"入口进入对应成员的记忆视图。'
               />
               <FamilyMembersPanel
                 viewerRole={viewerRole}
                 families={families}
                 focusedFamilyId={selectedFamilyId}
+              />
+            </WorkbenchSurface>
+          )}
+
+          {currentTab === 'personas' && (
+            <WorkbenchSurface className="space-y-4">
+              <WorkbenchSectionTitle
+                title="精神成员"
+                description="精神成员不是真实注册用户，由家族创建者手动创建，可在聊天中作为镜像请教对象。每个家族最多 3 个。"
+              />
+              <PersonaMembersPanel
+                familyId={selectedFamilyId}
+                isOwner={activeMembership?.role === 'OWNER'}
               />
             </WorkbenchSurface>
           )}

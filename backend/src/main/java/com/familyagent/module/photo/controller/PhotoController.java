@@ -26,8 +26,10 @@ public class PhotoController {
     @PostMapping("/upload")
     public Result<List<PhotoUploadResponse>> upload(
             @RequestParam("familyId") Long familyId,
+            @RequestParam(value = "scope", required = false) String scope,
+            @RequestParam(value = "description", required = false) String description,
             @RequestParam("files") List<MultipartFile> files) {
-        return Result.success(photoService.upload(familyId, files));
+        return Result.success(photoService.upload(familyId, scope, description, files));
     }
 
     @PatchMapping("/{id}/cluster-result")
@@ -45,6 +47,18 @@ public class PhotoController {
         return Result.success(photoService.listByFamily(familyId, limit));
     }
 
+    @GetMapping("/my")
+    public Result<List<PhotoUploadResponse>> listMyPhotos(
+            @RequestParam(defaultValue = "50") int limit) {
+        return Result.success(photoService.listMyPhotos(limit));
+    }
+
+    @DeleteMapping("/{id}")
+    public Result<Void> delete(@PathVariable Long id) {
+        photoService.delete(id);
+        return Result.success();
+    }
+
     @GetMapping("/{id}/content")
     public ResponseEntity<InputStreamResource> getContent(@PathVariable Long id) {
         PhotoContentResource content = photoService.getPhotoContent(id);
@@ -54,9 +68,16 @@ public class PhotoController {
         } catch (InvalidMediaTypeException ignored) {
             mediaType = MediaType.APPLICATION_OCTET_STREAM;
         }
+        // Only ever serve images inline. Anything else (e.g. a smuggled text/html
+        // or svg payload) is forced to a non-renderable type to prevent stored XSS.
+        if (!"image".equalsIgnoreCase(mediaType.getType()) || "svg+xml".equalsIgnoreCase(mediaType.getSubtype())) {
+            mediaType = MediaType.APPLICATION_OCTET_STREAM;
+        }
 
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
+                .header("X-Content-Type-Options", "nosniff")
+                .header("Content-Disposition", "inline")
                 .contentType(mediaType)
                 .body(new InputStreamResource(content.stream()));
     }

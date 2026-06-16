@@ -16,6 +16,11 @@ public class Photo {
     private Long familyId;
     private Long uploaderId;
     private String objectKey;
+    private String scope;
+    private String mimeType;
+    private Long fileSize;
+    private String originalName;
+    private String description;
     private LocalDateTime takenAt;
 
     @TableField(typeHandler = PgJsonbTypeHandler.class)
