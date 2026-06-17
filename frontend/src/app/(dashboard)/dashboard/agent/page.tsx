@@ -964,9 +964,9 @@ export default function AgentPage() {
         )}
 
         <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-stone-200 bg-white">
-          <div className="sticky top-0 z-10 shrink-0 border-b border-stone-200 bg-white px-3 py-2 md:px-4">
+          <div className="sticky top-0 z-10 shrink-0 border-b border-stone-200 bg-white px-3 py-2 pr-16 md:px-4 md:pr-20">
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <h1 className="truncate text-base font-semibold text-stone-950">FamilyAgent</h1>
                   <span className={cn(
@@ -998,13 +998,13 @@ export default function AgentPage() {
                 </div>
               </div>
 
-              <div className="flex shrink-0 items-center justify-end gap-1">
+              <div className="absolute right-2 top-2 flex shrink-0 items-center gap-1 rounded-l-xl border border-r-0 border-stone-200 bg-white/95 p-1 shadow-sm">
                 <button
                   type="button"
                   onClick={() => setIsSessionsOpen((current) => !current)}
                   aria-label="会话历史"
                   className={cn(
-                    'inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-md border text-xs font-medium transition',
+                    'inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg border text-xs font-medium transition',
                     isSessionsOpen
                       ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                       : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50',
@@ -1018,7 +1018,7 @@ export default function AgentPage() {
                   onClick={() => setIsContextOpen((current) => !current)}
                   aria-label="上下文"
                   className={cn(
-                    'inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-md border text-xs font-medium transition',
+                    'inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg border text-xs font-medium transition',
                     isContextOpen
                       ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                       : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50',
@@ -1031,7 +1031,7 @@ export default function AgentPage() {
                   type="button"
                   onClick={handleNewChat}
                   aria-label="新会话"
-                  className="inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-md bg-stone-950 text-xs font-medium text-white transition hover:bg-stone-800"
+                  className="inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-stone-950 text-xs font-medium text-white transition hover:bg-stone-800"
                 >
                   <Plus className="h-4 w-4" />
                   新会话

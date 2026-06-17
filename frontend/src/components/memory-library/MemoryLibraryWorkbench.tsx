@@ -713,8 +713,8 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl">
-      <section className="mb-4 rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
+    <div className="mx-auto w-full max-w-[1500px]">
+      <section className="mb-3 rounded-md border border-gray-200 bg-white p-3 sm:p-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-900">{embedded ? '记忆库' : '记忆库'}</h1>
@@ -766,7 +766,7 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {typeOptions.filter((item) => item.value !== 'ALL').map((option) => {
             const meta = typeMeta[option.value as LibraryItemType];
             const Icon = meta.icon;
@@ -775,12 +775,12 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
                 key={option.value}
                 type="button"
                 onClick={() => setTypeFilter(option.value as LibraryItemType)}
-                className={`rounded-lg border p-3 text-left transition-colors ${
+                className={`rounded-md border px-3 py-2 text-left transition-colors ${
                   typeFilter === option.value ? 'border-blue-200 bg-blue-50' : 'border-gray-100 bg-gray-50 hover:bg-gray-100'
                 }`}
               >
-                <Icon className={`mb-2 h-5 w-5 rounded ${meta.tone}`} />
-                <p className="text-lg font-bold text-gray-900">
+                <Icon className={`mb-1 h-4 w-4 rounded ${meta.tone}`} />
+                <p className="text-base font-bold text-gray-900">
                   {canLoadSummaryCounts ? (counts[option.value as LibraryItemType] ?? '-') : '-'}
                 </p>
                 <p className="text-xs text-gray-500">{option.label}</p>
@@ -798,26 +798,26 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
       {error && <div className="mb-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
       {success && <div className="mb-4 rounded-lg border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-700">{success}</div>}
 
-      <section className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
+      <div className="grid gap-4 xl:grid-cols-[17rem_minmax(0,1fr)]">
+      <section className="rounded-md border border-gray-200 bg-white p-3 xl:sticky xl:top-4 xl:self-start">
         <div className="mb-3">
           <h2 className="text-sm font-semibold text-gray-900">搜索与筛选</h2>
-          <p className="mt-1 text-sm leading-6 text-gray-500">先缩小范围，再看列表。</p>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.3fr_0.75fr_0.75fr_0.75fr]">
+        <div className="grid grid-cols-1 gap-2">
           <label className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="搜索标题、正文、成员、标签..."
-              className="h-10 w-full rounded-lg border border-gray-200 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              className="h-9 w-full rounded-md border border-gray-200 pl-9 pr-3 text-xs outline-none focus:ring-2 focus:ring-blue-500"
             />
           </label>
           <select
             value={typeFilter}
             onChange={(event) => setTypeFilter(event.target.value as LibraryItemType | 'ALL')}
-            className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+            className="h-9 rounded-md border border-gray-200 bg-white px-3 text-xs text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
           >
             {typeOptions.map((option) => (
               <option key={option.value} value={option.value}>{option.label}</option>
@@ -826,7 +826,7 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
           <select
             value={memberFilter}
             onChange={(event) => setMemberFilter(event.target.value)}
-            className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+            className="h-9 rounded-md border border-gray-200 bg-white px-3 text-xs text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="ALL">全部成员</option>
             {memberOptions.map((member) => (
@@ -836,7 +836,7 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
           <select
             value={visibilityFilter}
             onChange={(event) => setVisibilityFilter(event.target.value)}
-            className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+            className="h-9 rounded-md border border-gray-200 bg-white px-3 text-xs text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="ALL">全部可见范围</option>
             {diaryVisibilityOptions.map((option) => (
@@ -845,12 +845,12 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
           </select>
         </div>
 
-        <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <div className="mt-2 grid grid-cols-1 gap-2">
           <input
             value={tagFilter}
             onChange={(event) => setTagFilter(event.target.value)}
             placeholder="按标签筛选，例如：照护"
-            className="h-10 rounded-lg border border-gray-200 px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+            className="h-9 rounded-md border border-gray-200 px-3 text-xs text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
           />
           <label className="text-xs font-medium text-gray-500">
             开始时间
@@ -858,7 +858,7 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
               type="date"
               value={dateFrom}
               onChange={(event) => setDateFrom(event.target.value)}
-              className="mt-1 h-10 w-full rounded-lg border border-gray-200 px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+              className="mt-1 h-9 w-full rounded-md border border-gray-200 px-3 text-xs text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
             />
           </label>
           <label className="text-xs font-medium text-gray-500">
@@ -867,12 +867,12 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
               type="date"
               value={dateTo}
               onChange={(event) => setDateTo(event.target.value)}
-              className="mt-1 h-10 w-full rounded-lg border border-gray-200 px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+              className="mt-1 h-9 w-full rounded-md border border-gray-200 px-3 text-xs text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
             />
           </label>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3 text-xs text-gray-500">
           <span>共 {pageData.total} 条{viewMode === 'ARCHIVED' ? '归档结果' : '结果'}</span>
           {pageData.total > 0 && <span>当前显示第 {pageStart}-{pageEnd} 条</span>}
           {(query || typeFilter !== 'ALL' || memberFilter !== 'ALL' || visibilityFilter !== 'ALL' || tagFilter || dateFrom || dateTo) && (
@@ -883,7 +883,7 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
         </div>
       </section>
 
-      <section className="rounded-xl border border-gray-200 bg-white">
+      <section className="rounded-md border border-gray-200 bg-white">
         {isLoading ? (
           <div className="flex h-64 items-center justify-center text-gray-400">
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -906,9 +906,9 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
               const voteStats = familyExperienceVoteStats(item);
               const staleStats = growthObservationStalenessStats(item);
               return (
-                <article key={item.id} className="p-4 transition-colors hover:bg-gray-50 sm:p-5">
-                  <div className="flex items-start gap-3">
-                    <span className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${meta.tone}`}>
+                <article key={item.id} className="p-5 transition-colors hover:bg-gray-50 sm:p-6">
+                  <div className="flex items-start gap-4">
+                    <span className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md ${meta.tone}`}>
                       <Icon className="h-5 w-5" />
                     </span>
                     <div className="min-w-0 flex-1">
@@ -916,22 +916,22 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
                         <button
                           type="button"
                           onClick={() => setSelectedItemId(item.id)}
-                          className="min-w-0 truncate text-left text-sm font-semibold text-gray-900 hover:text-blue-700"
+                          className="min-w-0 truncate text-left text-base font-semibold text-gray-900 hover:text-blue-700"
                         >
                           {item.title}
                         </button>
-                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${meta.badge}`}>
+                        <span className={`rounded px-2 py-0.5 text-[11px] font-medium ${meta.badge}`}>
                           {meta.label}
                         </span>
-                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${status.tone}`}>
+                        <span className={`rounded px-2 py-0.5 text-[11px] font-medium ${status.tone}`}>
                           {status.label}
                         </span>
-                        <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600">
+                        <span className="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600">
                           <Shield className="h-3 w-3" />
                           {visibilityLabel(item.visibility)}
                         </span>
                       </div>
-                      <p className="line-clamp-2 text-sm leading-6 text-gray-600">{item.body || '暂无正文内容。'}</p>
+                      <p className="line-clamp-3 text-base leading-7 text-gray-700">{item.body || '暂无正文内容。'}</p>
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-400">
                         <span>{item.memberName}</span>
                         <span>{formatDate(item.createdAt)}</span>
@@ -947,7 +947,7 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
                                 setTagFilter(signal);
                                 setSelectedItemId('');
                               }}
-                              className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700 hover:bg-blue-100"
+                              className="rounded bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700 hover:bg-blue-100"
                             >
                               #{signal}
                             </button>
@@ -1040,6 +1040,7 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
           </div>
         )}
       </section>
+      </div>
 
       {selectedItem && (
         <div className="fixed inset-0 z-50">
@@ -1049,7 +1050,7 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
             aria-label="关闭详情"
             onClick={() => setSelectedItemId('')}
           />
-          <aside className="absolute inset-y-0 right-0 flex w-full max-w-xl flex-col bg-white shadow-xl">
+          <aside className="absolute inset-y-0 right-0 flex w-full max-w-3xl flex-col bg-white shadow-xl">
             <div className="flex items-start justify-between gap-3 border-b border-gray-200 p-4">
               <div className="min-w-0">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -1061,7 +1062,7 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
                     {visibilityLabel(selectedItem.visibility)}
                   </span>
                 </div>
-                <h2 className="text-lg font-semibold leading-7 text-gray-900">{selectedItem.title}</h2>
+                <h2 className="text-xl font-semibold leading-8 text-gray-900">{selectedItem.title}</h2>
                 <p className="mt-1 text-xs text-gray-400">
                   {selectedItem.memberName} · {formatDate(selectedItem.createdAt)}
                 </p>
@@ -1179,8 +1180,8 @@ export default function MemoryLibraryWorkbench({ embedded = false }: { embedded?
                   </div>
                 </div>
               ) : (
-                <div className="rounded-lg bg-gray-50 p-4">
-                  <p className="whitespace-pre-wrap text-sm leading-7 text-gray-700">
+                <div className="rounded-md bg-gray-50 p-5">
+                  <p className="whitespace-pre-wrap text-base leading-8 text-gray-800">
                     {selectedItem.body || '暂无正文内容。'}
                   </p>
                 </div>

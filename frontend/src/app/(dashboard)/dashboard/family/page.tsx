@@ -115,27 +115,21 @@ export default function FamilyPage() {
   }
 
   return (
-    <WorkbenchPage>
+    <WorkbenchPage className="max-w-[1500px]">
       <WorkbenchHero
         badge={(
-          <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+          <span className="inline-flex items-center gap-2 rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
             <Sparkles className="h-3.5 w-3.5" />
             家族空间
           </span>
         )}
         title="成员与家族记忆"
-        description="家族空间保留记忆库和成员协作两个核心入口。"
         aside={(
           <div>
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-stone-400">当前家族</p>
+            <p className="text-xs font-medium text-stone-400">当前家族</p>
             <div className="mt-3 space-y-2">
               {selectedFamily ? (
-                <>
-                  <p className="text-base font-semibold text-stone-950">{selectedFamily.name}</p>
-                  <p className="text-sm leading-6 text-stone-500">
-                    从记忆库统一查看、整理和维护全家可用的重要记忆资产，也可以从成员列表进入个人记忆视图。
-                  </p>
-                </>
+                <p className="text-base font-semibold text-stone-950">{selectedFamily.name}</p>
               ) : (
                 <p className="text-sm text-stone-500">先创建或加入一个家族空间。</p>
               )}
@@ -144,15 +138,15 @@ export default function FamilyPage() {
         )}
       />
 
-      <WorkbenchSurface className="grid grid-cols-3 gap-2">
+      <WorkbenchSurface className="grid grid-cols-3 gap-1.5 p-2">
         {tabs.map((tab) => (
           <button
             key={tab.value}
             type="button"
             onClick={() => updateUrl(tab.value, selectedFamilyId)}
-            className={`rounded-2xl px-4 py-3 text-left text-sm font-medium transition ${
+            className={`rounded-md px-3 py-2 text-left text-sm font-medium transition ${
               currentTab === tab.value
-                ? 'bg-stone-950 text-white shadow-[0_16px_36px_rgba(24,39,32,0.14)]'
+                ? 'bg-stone-950 text-white'
                 : 'bg-stone-50 text-stone-600 hover:bg-stone-100 hover:text-stone-900'
             }`}
           >
