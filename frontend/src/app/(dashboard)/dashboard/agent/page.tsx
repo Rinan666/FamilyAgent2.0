@@ -955,17 +955,17 @@ export default function AgentPage() {
     : (mode === 'mirror' ? `与 ${targetLabel} 的镜像对话` : '新的家庭对话');
 
   return (
-    <div className="h-[calc(100vh-4rem)] overflow-hidden px-3 py-3 md:px-5 lg:px-6">
-      <div className="mx-auto flex h-full max-w-[1440px] min-h-0 flex-col gap-3">
+    <div className="h-[calc(100dvh-6rem)] overflow-hidden px-0 py-0 lg:h-[calc(100dvh-2rem)]">
+      <div className="mx-auto flex h-full max-w-[1600px] min-h-0 flex-col gap-2">
         {sessionError && (
-          <div className="shrink-0 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <div className="shrink-0 rounded-md border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">
             {sessionError}
           </div>
         )}
 
-        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-white/80 bg-white/84 shadow-[0_18px_48px_rgba(24,39,32,0.08)] backdrop-blur-xl">
-          <div className="sticky top-0 z-10 shrink-0 border-b border-stone-200/70 bg-white/92 px-4 py-3 backdrop-blur-xl md:px-5">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-stone-200 bg-white">
+          <div className="sticky top-0 z-10 shrink-0 border-b border-stone-200 bg-white px-3 py-2 md:px-4">
+            <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <h1 className="truncate text-base font-semibold text-stone-950">FamilyAgent</h1>
@@ -977,34 +977,34 @@ export default function AgentPage() {
                   </span>
                   <span className="text-xs text-stone-400">{activeFamily?.name}</span>
                 </div>
-                <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2 text-xs text-stone-500">
-                  <span className="max-w-[18rem] truncate rounded-full bg-stone-100 px-2.5 py-1 text-stone-700">
+                <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-stone-500">
+                  <span className="max-w-[18rem] truncate rounded bg-stone-100 px-2 py-0.5 text-stone-700">
                     {currentSessionTitle}
                   </span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2.5 py-1">
+                  <span className="inline-flex items-center gap-1 rounded bg-stone-100 px-2 py-0.5">
                     <UserRound className="h-3.5 w-3.5" />
                     {targetLabel}
                   </span>
-                  <span className="rounded-full bg-stone-100 px-2.5 py-1">
+                  <span className="rounded bg-stone-100 px-2 py-0.5">
                     {responseMode === 'quick' ? '快速' : '思考'}
                   </span>
-                  <span className="rounded-full bg-stone-100 px-2.5 py-1">{visibleMessageCount} 条消息</span>
+                  <span className="rounded bg-stone-100 px-2 py-0.5">{visibleMessageCount} 条消息</span>
                   {!!archiveCount && (
-                    <span className="rounded-full bg-stone-100 px-2.5 py-1">{archiveCount} 段归档</span>
+                    <span className="rounded bg-stone-100 px-2 py-0.5">{archiveCount} 段归档</span>
                   )}
                   {activeSessionMetadata.hasTargetSwitches && (
-                    <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800">含对象切换</span>
+                    <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-800">含对象切换</span>
                   )}
                 </div>
               </div>
 
-              <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <div className="flex shrink-0 items-center justify-end gap-1">
                 <button
                   type="button"
                   onClick={() => setIsSessionsOpen((current) => !current)}
                   aria-label="会话历史"
                   className={cn(
-                    'inline-flex h-9 items-center gap-2 rounded-full border px-3 text-xs font-medium transition',
+                    'inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-md border text-xs font-medium transition',
                     isSessionsOpen
                       ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                       : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50',
@@ -1018,7 +1018,7 @@ export default function AgentPage() {
                   onClick={() => setIsContextOpen((current) => !current)}
                   aria-label="上下文"
                   className={cn(
-                    'inline-flex h-9 items-center gap-2 rounded-full border px-3 text-xs font-medium transition',
+                    'inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-md border text-xs font-medium transition',
                     isContextOpen
                       ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                       : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50',
@@ -1031,7 +1031,7 @@ export default function AgentPage() {
                   type="button"
                   onClick={handleNewChat}
                   aria-label="新会话"
-                  className="inline-flex h-9 items-center gap-2 rounded-full bg-stone-950 px-3 text-xs font-medium text-white transition hover:bg-stone-800"
+                  className="inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-md bg-stone-950 text-xs font-medium text-white transition hover:bg-stone-800"
                 >
                   <Plus className="h-4 w-4" />
                   新会话
@@ -1059,10 +1059,10 @@ export default function AgentPage() {
               }
               void handleSubmit();
             }}
-            className="shrink-0 border-t border-stone-200/70 bg-[#f6f5f0]/90 px-3 py-3 md:px-5"
+            className="shrink-0 border-t border-stone-200 bg-stone-50 px-2 py-2 md:px-3"
           >
-            <div className="mx-auto max-w-3xl rounded-[22px] border border-white/80 bg-white/95 p-2 shadow-[0_14px_38px_rgba(24,39,32,0.10)] backdrop-blur-xl">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-2 pt-1">
+            <div className="mx-auto max-w-5xl rounded-md border border-stone-200 bg-white p-2">
+              <div className="hidden">
                 <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-stone-500">
                   <span className="rounded-full bg-stone-100 px-2.5 py-1 font-medium text-stone-700">
                     {mode === 'mirror' ? '镜像 AI' : 'FamilyAgent'}
@@ -1076,19 +1076,19 @@ export default function AgentPage() {
                   ? `问问 ${targetLabel} 的日常记录和成长观察里有什么线索...`
                   : '可以聊需要家族经验沉淀来参考的问题...'}
                 disabled={isStreaming}
-                rows={3}
-                className="min-h-[92px] max-h-48 w-full resize-none rounded-[18px] border border-stone-100 bg-stone-50/70 px-4 py-3 text-sm leading-7 text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100 disabled:bg-stone-100"
+                rows={2}
+                className="min-h-[72px] max-h-40 w-full resize-none rounded-md border border-stone-100 bg-stone-50/70 px-3 py-2 text-sm leading-6 text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-100 disabled:bg-stone-100"
               />
 
               <div className="mt-2 flex flex-col gap-2 px-1 pb-1 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 space-y-2">
-                  <div className="inline-flex rounded-2xl bg-stone-100/90 p-1">
+                  <div className="inline-flex rounded-md bg-stone-100/90 p-1">
                     <button
                       type="button"
                       onClick={() => setResponseMode('quick')}
                       disabled={isStreaming}
                       className={cn(
-                        'inline-flex h-8 items-center rounded-xl px-3 text-xs font-medium transition',
+                        'inline-flex h-8 items-center rounded px-3 text-xs font-medium transition',
                         responseMode === 'quick'
                           ? 'bg-stone-950 text-white shadow-sm'
                           : 'text-stone-600 hover:bg-white/80',
@@ -1101,7 +1101,7 @@ export default function AgentPage() {
                       onClick={() => setResponseMode('think')}
                       disabled={isStreaming}
                       className={cn(
-                        'inline-flex h-8 items-center rounded-xl px-3 text-xs font-medium transition',
+                        'inline-flex h-8 items-center rounded px-3 text-xs font-medium transition',
                         responseMode === 'think'
                           ? 'bg-emerald-700 text-white shadow-sm'
                           : 'text-emerald-700 hover:bg-white/80',
@@ -1115,7 +1115,7 @@ export default function AgentPage() {
                 <div className="flex shrink-0 items-center justify-end gap-2">
                   <VoiceInputButton
                     compact
-                    className="[&>button]:h-10 [&>button]:w-10 [&>button]:rounded-2xl [&>button]:border-stone-200 [&>button]:bg-stone-50 [&>button]:text-stone-600 [&>button:hover]:bg-stone-100"
+                    className="[&>button]:h-9 [&>button]:w-9 [&>button]:rounded-md [&>button]:border-stone-200 [&>button]:bg-stone-50 [&>button]:text-stone-600 [&>button:hover]:bg-stone-100"
                     onTranscript={(text) => setInput((current) => (current ? `${current}\n${text}` : text))}
                     disabled={isStreaming}
                   />
@@ -1123,7 +1123,7 @@ export default function AgentPage() {
                     type="submit"
                     disabled={isStreaming ? false : !input.trim()}
                     className={cn(
-                      'inline-flex h-10 min-w-10 items-center justify-center gap-2 rounded-2xl px-3 text-sm font-medium text-white shadow-[0_10px_24px_rgba(24,39,32,0.16)] transition disabled:cursor-not-allowed disabled:opacity-50',
+                      'inline-flex h-9 min-w-9 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50',
                       isStreaming ? 'bg-rose-600 hover:bg-rose-700' : 'bg-stone-950 hover:bg-stone-800',
                     )}
                     aria-label={isStreaming ? '停止输出' : '发送消息'}

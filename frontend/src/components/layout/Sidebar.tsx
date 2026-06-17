@@ -65,11 +65,12 @@ function NavigationLinks({
               key={item.href}
               href={item.href}
               onClick={onNavigate}
+              title={item.label}
               className={cn(
-                'group flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition-all',
+                'group flex items-center justify-center rounded-md p-3 text-sm font-medium transition-colors 2xl:justify-start 2xl:gap-3',
                 isActive
-                  ? 'bg-stone-950 text-white shadow-[0_16px_36px_rgba(24,39,32,0.14)]'
-                  : 'text-stone-600 hover:bg-white/82 hover:text-stone-950',
+                  ? 'bg-stone-950 text-white'
+                  : 'text-stone-600 hover:bg-white hover:text-stone-950',
               )}
             >
               <Icon
@@ -78,7 +79,7 @@ function NavigationLinks({
                   isActive ? 'text-emerald-300' : 'text-stone-400 group-hover:text-emerald-700',
                 )}
               />
-              <span className="flex-1">{item.label}</span>
+              <span className="hidden flex-1 2xl:block">{item.label}</span>
             </Link>
           );
         })}
@@ -95,8 +96,8 @@ export function MobileBottomNav({
   const items = mobilePrimaryNav.filter((item) => item.roles.includes(viewerRole)).slice(0, 5);
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 px-4 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-2 lg:hidden">
-      <div className="mx-auto grid max-w-lg grid-cols-5 gap-1 rounded-[24px] border border-white/70 bg-white/92 p-2 shadow-[0_20px_48px_rgba(24,39,32,0.12)] backdrop-blur-xl">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-stone-200 bg-white px-2 pb-[max(env(safe-area-inset-bottom),0.35rem)] pt-1 lg:hidden">
+      <div className="mx-auto grid max-w-lg grid-cols-5 gap-1">
         {items.map((item) => {
           const Icon = item.icon;
           const isActive = isActivePath(pathname, item.href);
@@ -107,7 +108,7 @@ export function MobileBottomNav({
               href={item.href}
               aria-label={item.label}
               className={cn(
-                'flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-[11px] font-medium transition-colors',
+                'flex min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-[11px] font-medium transition-colors',
                 isActive ? 'bg-stone-950 text-white' : 'text-stone-500 hover:bg-stone-100 hover:text-stone-800',
               )}
             >
@@ -123,27 +124,20 @@ export function MobileBottomNav({
 
 export default function Sidebar({ viewerRole = 'MEMBER', isPlatformAdmin = false, className }: SidebarProps) {
   return (
-    <aside className={cn('hidden w-72 shrink-0 border-r border-white/70 bg-[#f5f4ee]/86 backdrop-blur xl:flex', className)}>
-      <div className="flex h-full flex-col px-5 pb-5 pt-6">
+    <aside className={cn('hidden w-16 shrink-0 border-r border-stone-200 bg-white xl:flex 2xl:w-56', className)}>
+      <div className="flex h-full w-full flex-col px-2 pb-4 pt-4 2xl:px-3">
         <Link
           href="/dashboard/agent"
-          className="rounded-[28px] border border-white/80 bg-white/78 px-4 py-4 shadow-[0_16px_36px_rgba(24,39,32,0.08)]"
+          title="FamilyAgent"
+          className="flex h-11 items-center justify-center rounded-md text-stone-950 transition hover:bg-stone-100 2xl:justify-start 2xl:gap-3 2xl:px-3"
         >
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-stone-950 text-white">
-              <BookHeart className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-base font-semibold text-stone-950">FamilyAgent</p>
-            </div>
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-stone-950 text-white">
+            <BookHeart className="h-5 w-5" />
           </div>
+          <p className="hidden text-sm font-semibold 2xl:block">FamilyAgent</p>
         </Link>
 
-        <div className="mt-8 px-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-400">Navigation</p>
-        </div>
-
-        <nav className="mt-3 flex-1 space-y-1.5">
+        <nav className="mt-4 flex-1 space-y-1">
           <NavigationLinks viewerRole={viewerRole} isPlatformAdmin={isPlatformAdmin} />
         </nav>
       </div>
@@ -165,7 +159,7 @@ export function MobileNav({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-stone-200/80 bg-white text-stone-600 shadow-sm lg:hidden"
+        className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-stone-200 bg-white text-stone-600 shadow-sm lg:hidden"
         aria-label="打开导航"
       >
         <Menu className="h-5 w-5" />
@@ -179,10 +173,10 @@ export function MobileNav({
             aria-label="关闭导航"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute inset-y-0 left-0 flex w-[min(22rem,88vw)] flex-col border-r border-white/70 bg-[#f5f4ee]/95 shadow-[0_20px_60px_rgba(24,39,32,0.18)] backdrop-blur-xl">
-            <div className="flex h-20 items-center justify-between px-4">
+          <div className="absolute inset-y-0 left-0 flex w-[min(20rem,86vw)] flex-col border-r border-stone-200 bg-white shadow-xl">
+            <div className="flex h-16 items-center justify-between px-4">
               <Link href="/dashboard/agent" onClick={() => setOpen(false)} className="flex items-center gap-2">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-stone-950 text-white">
+                <div className="flex h-10 w-10 items-center justify-center rounded-md bg-stone-950 text-white">
                   <BookHeart className="h-5 w-5" />
                 </div>
                 <div>
@@ -192,7 +186,7 @@ export function MobileNav({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl text-stone-500 transition hover:bg-white/70"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-md text-stone-500 transition hover:bg-stone-100"
                 aria-label="关闭导航"
               >
                 <X className="h-5 w-5" />
