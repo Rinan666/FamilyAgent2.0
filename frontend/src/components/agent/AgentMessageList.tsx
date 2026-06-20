@@ -38,6 +38,9 @@ function metadataLabel(value: unknown) {
 
 function assistantDisplayName(message: ChatMessage) {
   const metadata = message.metadata;
+  if (!metadata) {
+    return 'FamilyAgent';
+  }
   if (metadata?.agentMode === 'persona') {
     return metadataLabel(metadata.targetPersonaName)
       || metadataLabel(metadata.targetMemberName)
