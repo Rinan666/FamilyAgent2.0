@@ -6,11 +6,13 @@ import { Loader2, Sparkles, Users } from 'lucide-react';
 import FamilyMembersPanel from '@/components/family/FamilyMembersPanel';
 import PersonaMembersPanel from '@/components/family/PersonaMembersPanel';
 import {
+  WorkbenchBadge,
   WorkbenchEmptyState,
   WorkbenchHero,
   WorkbenchPage,
   WorkbenchSectionTitle,
   WorkbenchSurface,
+  WorkbenchTabs,
 } from '@/components/layout/Workbench';
 import MemoryLibraryWorkbench from '@/components/memory-library/MemoryLibraryWorkbench';
 import { useViewerRole } from '@/hooks/useViewerRole';
@@ -107,7 +109,7 @@ export default function FamilyPage() {
 
   if (loadingFamilies) {
     return (
-      <div className="flex h-60 items-center justify-center text-gray-400">
+      <div className="flex h-60 items-center justify-center text-stone-400">
         <Loader2 className="mr-2 h-5 w-5 animate-spin" />
         正在加载家族空间...
       </div>
@@ -118,10 +120,9 @@ export default function FamilyPage() {
     <WorkbenchPage className="max-w-[1500px]">
       <WorkbenchHero
         badge={(
-          <span className="inline-flex items-center gap-2 rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
-            <Sparkles className="h-3.5 w-3.5" />
+          <WorkbenchBadge icon={<Sparkles className="h-3.5 w-3.5" />}>
             家族空间
-          </span>
+          </WorkbenchBadge>
         )}
         title="成员与家族记忆"
         aside={(
@@ -138,22 +139,12 @@ export default function FamilyPage() {
         )}
       />
 
-      <WorkbenchSurface className="grid grid-cols-3 gap-1.5 p-2">
-        {tabs.map((tab) => (
-          <button
-            key={tab.value}
-            type="button"
-            onClick={() => updateUrl(tab.value, selectedFamilyId)}
-            className={`rounded-md px-3 py-2 text-left text-sm font-medium transition ${
-              currentTab === tab.value
-                ? 'bg-stone-950 text-white'
-                : 'bg-stone-50 text-stone-600 hover:bg-stone-100 hover:text-stone-900'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </WorkbenchSurface>
+      <WorkbenchTabs
+        items={tabs}
+        value={currentTab}
+        onChange={(nextTab) => updateUrl(nextTab, selectedFamilyId)}
+        className="grid-cols-3"
+      />
 
       {families.length === 0 ? (
         <WorkbenchEmptyState

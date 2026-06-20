@@ -6,6 +6,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image as ImageIcon, Images, RefreshCw, Trash2, Upload, UserRound, UsersRound, X } from 'lucide-react';
 import { photoApi } from '@/lib/api/photos';
 import { useViewerRole } from '@/hooks/useViewerRole';
+import {
+  WorkbenchAlert,
+  WorkbenchBadge,
+  WorkbenchButton,
+  WorkbenchHero,
+  WorkbenchPage,
+  WorkbenchSurface,
+  WorkbenchTabs,
+} from '@/components/layout/Workbench';
 import type { PhotoClusterResult, PhotoFaceMeta, PhotoItem, PhotoScope } from '@/types';
 
 type Stage = 'idle' | 'uploading' | 'clustering' | 'done';
@@ -618,78 +627,63 @@ export default function AlbumPage() {
   const isClusterLoading = stage === 'uploading' || stage === 'clustering';
 
   const tabs = [
-    { key: 'personal' as const, label: '我的相册', icon: UserRound },
-    { key: 'family' as const, label: activeFamily?.name || '家庭相册', icon: UsersRound },
-    { key: 'faces' as const, label: '人脸分类', icon: Images },
+    { value: 'personal' as TabKey, label: '我的相册', icon: <UserRound className="h-4 w-4" /> },
+    { value: 'family' as TabKey, label: activeFamily?.name || '家庭相册', icon: <UsersRound className="h-4 w-4" /> },
+    { value: 'faces' as TabKey, label: '人脸分类', icon: <Images className="h-4 w-4" /> },
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Images className="h-6 w-6 text-blue-600" />
-          <div>
-            <h1 className="text-xl font-semibold text-gray-900">相册</h1>
-            <p className="text-sm text-gray-500">{activeFamily?.name || '个人与家庭照片空间'}</p>
-          </div>
-        </div>
-        {isLoadingPhotos && (
-          <span className="inline-flex items-center gap-2 text-sm text-gray-500">
+    <WorkbenchPage>
+      <WorkbenchHero
+        badge={<WorkbenchBadge icon={<Images className="h-3.5 w-3.5" />}>相册</WorkbenchBadge>}
+        title="照片空间"
+        description={activeFamily?.name || '个人与家庭照片空间'}
+        aside={isLoadingPhotos ? (
+          <span className="inline-flex items-center gap-2 rounded-md bg-stone-100 px-3 py-2 text-sm text-stone-500">
             <RefreshCw className="h-4 w-4 animate-spin" />
             加载中
           </span>
-        )}
-      </div>
+        ) : null}
+      />
 
-      <div className="flex border-b border-gray-200">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.key;
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex h-11 items-center gap-2 border-b-2 px-4 text-sm font-medium transition ${isActive ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
-            >
-              <Icon className="h-4 w-4" />
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+      <WorkbenchTabs
+        items={tabs}
+        value={activeTab}
+        onChange={setActiveTab}
+        className="grid-cols-3"
+      />
 
-      {listError && <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-600">{listError}</p>}
+      {listError && <WorkbenchAlert tone="danger">{listError}</WorkbenchAlert>}
 
       {activeTab === 'personal' && (
-        <div className="space-y-4">
+        <WorkbenchSurface className="space-y-4">
           <UploadStrip
             label="上传到我的相册"
             disabled={!activeFamilyId}
             onUpload={(files) => uploadToScope('PERSONAL', files)}
           />
           <PhotoGrid photos={personalPhotos} emptyText="还没有个人照片" onDelete={deletePhoto} onSelect={setPreviewPhoto} />
-        </div>
+        </WorkbenchSurface>
       )}
 
       {activeTab === 'family' && (
-        <div className="space-y-4">
+        <WorkbenchSurface className="space-y-4">
           <UploadStrip
             label="上传到家庭相册"
             disabled={!activeFamilyId}
             onUpload={(files) => uploadToScope('FAMILY', files)}
           />
           <PhotoGrid photos={familyPhotos} emptyText="还没有家庭照片" onDelete={deletePhoto} onSelect={setPreviewPhoto} />
-        </div>
+        </WorkbenchSurface>
       )}
 
       {activeTab === 'faces' && (
-        <div className="space-y-5">
+        <WorkbenchSurface className="space-y-5">
           {!clusterResult && (
             <>
-              <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-md border-2 border-dashed border-gray-300 bg-gray-50 py-12 transition hover:border-blue-400 hover:bg-blue-50">
-                <Upload className="h-8 w-8 text-gray-400" />
-                <span className="text-sm text-gray-500">至少 {MIN_CLUSTER_FILES} 张，单张 10 MB，总计 200 MB</span>
+              <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-md border-2 border-dashed border-stone-300 bg-stone-50 py-12 transition hover:border-emerald-300 hover:bg-emerald-50">
+                <Upload className="h-8 w-8 text-stone-400" />
+                <span className="text-sm text-stone-500">至少 {MIN_CLUSTER_FILES} 张，单张 10 MB，总计 200 MB</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -705,7 +699,7 @@ export default function AlbumPage() {
               {clusterPreviews.length > 0 && (
                 <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
                   {clusterPreviews.map((src, index) => (
-                    <div key={`${src}-${index}`} className="group relative aspect-square overflow-hidden rounded-md border border-gray-200 bg-gray-100">
+                    <div key={`${src}-${index}`} className="group relative aspect-square overflow-hidden rounded-md border border-stone-200 bg-stone-100">
                       <img src={src} alt="" className="h-full w-full object-cover" />
                       <button
                         type="button"
@@ -720,18 +714,17 @@ export default function AlbumPage() {
                 </div>
               )}
 
-              {clusterError && <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-600">{clusterError}</p>}
-              {clusterWarning && <p className="rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-700">{clusterWarning}</p>}
+              {clusterError && <WorkbenchAlert tone="danger">{clusterError}</WorkbenchAlert>}
+              {clusterWarning && <WorkbenchAlert tone="warning">{clusterWarning}</WorkbenchAlert>}
 
-              <button
+              <WorkbenchButton
                 type="button"
                 onClick={runCluster}
                 disabled={isClusterLoading || clusterFiles.length < MIN_CLUSTER_FILES}
-                className="inline-flex h-10 items-center gap-2 rounded-md bg-blue-600 px-5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
               >
                 {isClusterLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Images className="h-4 w-4" />}
                 {stage === 'uploading' ? '上传中' : stage === 'clustering' ? '聚类中' : `按人物分类（${clusterFiles.length}）`}
-              </button>
+              </WorkbenchButton>
 
               {savedClusterResult && (
                 <ClusterResultSummary
@@ -746,20 +739,20 @@ export default function AlbumPage() {
           {clusterResult && (
             <div className="space-y-5">
               <div className="flex justify-end">
-                <button type="button" onClick={resetCluster} className="inline-flex h-8 items-center gap-2 rounded-md border border-gray-200 px-3 text-sm text-gray-600 hover:bg-gray-50">
+                <WorkbenchButton type="button" onClick={resetCluster} variant="secondary" size="sm">
                   <X className="h-4 w-4" />
                   重置
-                </button>
+                </WorkbenchButton>
               </div>
 
-              {clusterWarning && <p className="rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-700">{clusterWarning}</p>}
-              {clusterError && <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-600">{clusterError}</p>}
+              {clusterWarning && <WorkbenchAlert tone="warning">{clusterWarning}</WorkbenchAlert>}
+              {clusterError && <WorkbenchAlert tone="danger">{clusterError}</WorkbenchAlert>}
               <ClusterResultSummary clusterResult={clusterResult} previewUrls={clusterPreviews} title="本次分类结果" />
             </div>
           )}
-        </div>
+        </WorkbenchSurface>
       )}
       <PhotoPreviewDialog photo={previewPhoto} onClose={() => setPreviewPhoto(null)} onDelete={deletePhoto} />
-    </div>
+    </WorkbenchPage>
   );
 }

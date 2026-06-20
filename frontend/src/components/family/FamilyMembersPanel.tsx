@@ -23,7 +23,7 @@ import { type ViewerRole, familyRoleLabel } from '@/lib/roles';
 import { notifyViewerRoleChanged } from '@/hooks/useViewerRole';
 import { useAuthStore } from '@/stores/authStore';
 import { useFamilyContextStore } from '@/stores/familyContextStore';
-import type { CareAuthorization, Family, FamilyMember } from '@/types';
+import type { CareAuthorization, Family, FamilyCreationQuota, FamilyMember } from '@/types';
 
 interface FamilyMembersPanelProps {
   viewerRole?: ViewerRole;
@@ -88,6 +88,7 @@ export default function FamilyMembersPanel({
   const setActiveFamilyId = useFamilyContextStore((state) => state.setActiveFamilyId);
 
   const [families, setFamilies] = useState<Family[]>([]);
+  const [creationQuota, setCreationQuota] = useState<FamilyCreationQuota | null>(null);
   const [loadingFamilies, setLoadingFamilies] = useState(true);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -113,6 +114,11 @@ export default function FamilyMembersPanel({
 
   const usingExternalFamilies = Array.isArray(externalFamilies);
   const availableFamilies = usingExternalFamilies ? externalFamilies : families;
+  const derivedCreationQuota = creationQuota ?? {
+    maxFamilies: 3,
+    createdFamilies: availableFamilies.filter((family) => family.createdBy === currentUserId).length,
+    remainingFamilies: Math.max(0, 3 - availableFamilies.filter((family) => family.createdBy === currentUserId).length),
+  };
   const visibleFamilies = focusedFamilyId
     ? availableFamilies.filter((family) => family.id === focusedFamilyId)
     : availableFamilies;
@@ -127,14 +133,23 @@ export default function FamilyMembersPanel({
   const loadFamilies = useCallback(async () => {
     if (usingExternalFamilies) {
       setLoadingFamilies(false);
+      try {
+        setCreationQuota(await familyApi.getCreationQuota());
+      } catch {
+        setCreationQuota(null);
+      }
       return;
     }
 
     setLoadingFamilies(true);
     try {
       setError('');
-      const data = await familyApi.getMyFamilies();
+      const [data, quota] = await Promise.all([
+        familyApi.getMyFamilies(),
+        familyApi.getCreationQuota(),
+      ]);
       setFamilies(Array.isArray(data) ? data : []);
+      setCreationQuota(quota);
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载家庭列表失败');
     } finally {
@@ -386,7 +401,7 @@ export default function FamilyMembersPanel({
     return {
       icon: User,
       label: familyRoleLabel(role),
-      className: 'bg-gray-100 text-gray-600',
+      className: 'bg-stone-100 text-stone-600',
     };
   };
 
@@ -397,7 +412,7 @@ export default function FamilyMembersPanel({
 
   if (!usingExternalFamilies && loadingFamilies) {
     return (
-      <div className="flex h-40 items-center justify-center text-gray-400">
+      <div className="flex h-40 items-center justify-center text-stone-400">
         <RefreshCw className="mr-2 h-5 w-5 animate-spin" />
         正在加载家庭列表...
       </div>
@@ -408,7 +423,13 @@ export default function FamilyMembersPanel({
     <div className="mx-auto max-w-4xl">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">成员与权限</h2>
+          <h2 className="text-xl font-semibold text-stone-950">成员与权限</h2>
+          {canManageSpace && (
+            <p className="mt-1 text-sm text-stone-500">
+              已创建 {derivedCreationQuota.createdFamilies}/{derivedCreationQuota.maxFamilies} 个家族，
+              还可创建 {derivedCreationQuota.remainingFamilies} 个
+            </p>
+          )}
         </div>
 
         {canManageSpace && (
@@ -420,7 +441,7 @@ export default function FamilyMembersPanel({
                 setShowCreate(false);
                 setError('');
               }}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              className="inline-flex items-center justify-center gap-1.5 rounded-md border border-stone-200 bg-white px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-50"
             >
               <UserPlus className="h-4 w-4" />
               加入家庭
@@ -428,11 +449,13 @@ export default function FamilyMembersPanel({
             <button
               type="button"
               onClick={() => {
+                if (derivedCreationQuota.remainingFamilies <= 0) return;
                 setShowCreate(true);
                 setShowJoin(false);
                 setError('');
               }}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+              disabled={derivedCreationQuota.remainingFamilies <= 0}
+              className="inline-flex items-center justify-center gap-1.5 rounded-md bg-stone-950 px-4 py-2 text-sm text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
             >
               <Plus className="h-4 w-4" />
               创建家庭
@@ -441,19 +464,22 @@ export default function FamilyMembersPanel({
         )}
       </div>
 
-      {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
-      {successMsg && <div className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-600">{successMsg}</div>}
+      {error && <div className="mb-4 rounded-md border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+      {successMsg && <div className="mb-4 rounded-md border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{successMsg}</div>}
 
       {canManageSpace && showCreate && (
-        <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
-          <h3 className="mb-3 text-base font-semibold text-gray-900">创建新家庭</h3>
+        <div className="mb-6 rounded-md border border-stone-200 bg-white p-5">
+          <h3 className="mb-1 text-base font-semibold text-stone-950">创建新家庭</h3>
+          <p className="mb-3 text-sm text-stone-500">
+            还可创建 {derivedCreationQuota.remainingFamilies} 个家族空间
+          </p>
           <input
             name="newFamilyName"
             type="text"
             value={newFamilyName}
             onChange={(event) => setNewFamilyName(event.target.value)}
             placeholder="例如：王家成长小组"
-            className="mb-3 w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            className="mb-3 w-full rounded-md border border-stone-200 bg-stone-50 px-4 py-2.5 text-sm text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100"
           />
           <textarea
             name="newFamilyDescription"
@@ -461,21 +487,21 @@ export default function FamilyMembersPanel({
             value={newFamilyDesc}
             onChange={(event) => setNewFamilyDesc(event.target.value)}
             placeholder="可选的家庭描述"
-            className="mb-3 w-full resize-none rounded-lg border border-gray-200 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            className="mb-3 w-full resize-none rounded-md border border-stone-200 bg-stone-50 px-4 py-2.5 text-sm text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100"
           />
           <div className="flex justify-end gap-2">
             <button
               type="button"
               onClick={() => setShowCreate(false)}
-              className="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+              className="rounded-md px-4 py-2 text-sm text-stone-600 transition hover:bg-stone-50"
             >
               取消
             </button>
             <button
               type="button"
               onClick={handleCreate}
-              disabled={!newFamilyName.trim()}
-              className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              disabled={!newFamilyName.trim() || derivedCreationQuota.remainingFamilies <= 0}
+              className="rounded-md bg-stone-950 px-5 py-2 text-sm font-medium text-white transition hover:bg-stone-800 disabled:opacity-50"
             >
               创建
             </button>
@@ -484,8 +510,8 @@ export default function FamilyMembersPanel({
       )}
 
       {canManageSpace && showJoin && (
-        <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
-          <h3 className="mb-3 text-base font-semibold text-gray-900">使用邀请码加入</h3>
+        <div className="mb-6 rounded-md border border-stone-200 bg-white p-5">
+          <h3 className="mb-3 text-base font-semibold text-stone-950">使用邀请码加入</h3>
           <div className="flex flex-col gap-2 sm:flex-row">
             <input
               name="inviteCode"
@@ -494,13 +520,13 @@ export default function FamilyMembersPanel({
               maxLength={8}
               onChange={(event) => setInviteCode(event.target.value.toUpperCase())}
               placeholder="请输入 8 位邀请码"
-              className="min-w-0 flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm uppercase tracking-widest outline-none focus:ring-2 focus:ring-blue-500"
+              className="min-w-0 flex-1 rounded-md border border-stone-200 bg-stone-50 px-4 py-2.5 text-sm uppercase tracking-widest text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100"
             />
             <button
               type="button"
               onClick={handleJoin}
               disabled={inviteCode.trim().length < 8}
-              className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              className="rounded-md bg-stone-950 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-stone-800 disabled:opacity-50"
             >
               加入
             </button>
@@ -508,7 +534,7 @@ export default function FamilyMembersPanel({
           <button
             type="button"
             onClick={() => setShowJoin(false)}
-            className="mt-2 text-sm text-gray-500 hover:text-gray-700"
+            className="mt-2 text-sm text-stone-500 hover:text-stone-700"
           >
             取消
           </button>
@@ -516,14 +542,18 @@ export default function FamilyMembersPanel({
       )}
 
       {visibleFamilies.length === 0 ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
-          <Users className="mx-auto mb-3 h-12 w-12 text-gray-200" />
-          <h3 className="mb-1 text-lg font-medium text-gray-700">还没有家庭</h3>
+        <div className="rounded-md border border-stone-200 bg-white p-12 text-center">
+          <Users className="mx-auto mb-3 h-12 w-12 text-stone-200" />
+          <h3 className="mb-1 text-lg font-medium text-stone-700">还没有家庭</h3>
           {canManageSpace && (
             <button
               type="button"
-              onClick={() => setShowCreate(true)}
-              className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+              onClick={() => {
+                if (derivedCreationQuota.remainingFamilies <= 0) return;
+                setShowCreate(true);
+              }}
+              disabled={derivedCreationQuota.remainingFamilies <= 0}
+              className="rounded-md bg-stone-950 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
             >
               创建第一个家庭
             </button>
@@ -541,36 +571,36 @@ export default function FamilyMembersPanel({
             return (
               <div
                 key={family.id}
-                className={`overflow-hidden rounded-xl border bg-white ${
-                  currentFamilyId === family.id ? 'border-blue-200 ring-1 ring-blue-100' : 'border-gray-200'
+                className={`overflow-hidden rounded-md border bg-white ${
+                  currentFamilyId === family.id ? 'border-emerald-200 ring-1 ring-emerald-100' : 'border-stone-200'
                 }`}
               >
                 <div className="p-5">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-100 text-lg font-bold text-purple-700">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-md bg-emerald-100 text-lg font-bold text-emerald-800">
                         {family.name.charAt(0)}
                       </div>
                       <div className="min-w-0">
-                        <h3 className="truncate text-lg font-semibold text-gray-900">{family.name}</h3>
-                        {family.description && <p className="mt-0.5 text-sm text-gray-500">{family.description}</p>}
+                        <h3 className="truncate text-lg font-semibold text-stone-950">{family.name}</h3>
+                        {family.description && <p className="mt-0.5 text-sm text-stone-500">{family.description}</p>}
                       </div>
                     </div>
-                    <div className="text-xs text-gray-400 sm:text-right">
+                    <div className="text-xs text-stone-400 sm:text-right">
                       最多 {family.maxMembers} 位成员
                     </div>
                   </div>
 
-                  <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
+                  <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-stone-100 pt-3">
                     {canManageSpace && family.inviteCode && (
                       <button
                         type="button"
                         onClick={() => { void copyInviteCode(family.inviteCode!); }}
-                        className="inline-flex items-center gap-1 rounded-lg bg-gray-50 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100"
+                        className="inline-flex items-center gap-1 rounded-md bg-stone-50 px-3 py-1.5 text-xs text-stone-600 transition hover:bg-stone-100"
                       >
                         {copiedCode === family.inviteCode ? (
                           <>
-                            <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+                            <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
                             已复制
                           </>
                         ) : (
@@ -585,33 +615,33 @@ export default function FamilyMembersPanel({
                     <button
                       type="button"
                       onClick={() => { void handleExpand(family.id); }}
-                      className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                      className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs text-stone-500 transition hover:bg-stone-50 hover:text-stone-700"
                     >
                       {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                       {isExpanded ? '收起成员' : '查看成员'}
                     </button>
 
                     {currentFamilyId === family.id && (
-                      <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
                         当前家庭
                       </span>
                     )}
 
-                    <span className="w-full text-xs text-gray-400 sm:ml-auto sm:w-auto">
+                    <span className="w-full text-xs text-stone-400 sm:ml-auto sm:w-auto">
                       创建于 {new Date(family.createdAt).toLocaleDateString('zh-CN')}
                     </span>
                   </div>
                 </div>
 
                 {isExpanded && (
-                  <div className="border-t border-gray-100 bg-gray-50 px-5 py-4">
+                  <div className="border-t border-stone-100 bg-stone-50 px-5 py-4">
                     {isLoadingFamilyDetails ? (
-                      <div className="flex items-center text-sm text-gray-400">
+                      <div className="flex items-center text-sm text-stone-400">
                         <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                         正在加载成员...
                       </div>
                     ) : memberList.length === 0 ? (
-                      <p className="text-sm text-gray-400">这个家庭暂时还没有可展示的成员信息。</p>
+                      <p className="text-sm text-stone-400">这个家庭暂时还没有可展示的成员信息。</p>
                     ) : (
                       <div className="space-y-2">
                         {memberList.map((member) => {
@@ -627,10 +657,10 @@ export default function FamilyMembersPanel({
                           return (
                             <div
                               key={member.id}
-                              className="flex flex-col gap-3 rounded-lg border border-white bg-white px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+                              className="flex flex-col gap-3 rounded-md border border-white bg-white px-3 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"
                             >
                               <div className="flex min-w-0 items-start gap-3">
-                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-sm font-medium text-gray-500">
+                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 bg-stone-50 text-sm font-medium text-stone-500">
                                   {memberDisplayName(member).charAt(0).toUpperCase()}
                                 </div>
 
@@ -649,19 +679,19 @@ export default function FamilyMembersPanel({
                                       autoFocus
                                       onChange={(event) => setRelationshipDraft(event.target.value)}
                                       placeholder="例如：妈妈、叔叔、小楠"
-                                      className="h-9 min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+                                      className="h-9 min-w-0 flex-1 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                                     />
                                     <button
                                       type="submit"
                                       disabled={updatingRelationshipKey === updateKey || !relationshipDraft.trim()}
-                                      className="rounded-md px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-50"
+                                      className="rounded-md px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
                                     >
                                       保存
                                     </button>
                                     <button
                                       type="button"
                                       onClick={cancelEditRelationship}
-                                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-stone-400 hover:bg-stone-100 hover:text-stone-600"
                                       aria-label="取消编辑关系称呼"
                                     >
                                       <X className="h-4 w-4" />
@@ -672,7 +702,7 @@ export default function FamilyMembersPanel({
                                     <div className="flex min-w-0 items-center gap-1.5">
                                       <Link
                                         href={`/dashboard/family/member?familyId=${family.id}&userId=${member.userId}`}
-                                        className="truncate text-sm font-medium text-gray-900 hover:text-purple-700 hover:underline"
+                                        className="truncate text-sm font-medium text-stone-900 hover:text-emerald-700 hover:underline"
                                       >
                                         {memberDisplayName(member)}
                                       </Link>
@@ -680,14 +710,14 @@ export default function FamilyMembersPanel({
                                         <button
                                           type="button"
                                           onClick={() => startEditRelationship(family.id, member)}
-                                          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-blue-600"
+                                          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-stone-400 hover:bg-stone-100 hover:text-emerald-700"
                                           aria-label="编辑关系称呼"
                                         >
                                           <Pencil className="h-3.5 w-3.5" />
                                         </button>
                                       )}
                                     </div>
-                                    <p className="mt-1 text-xs text-gray-400">
+                                    <p className="mt-1 text-xs text-stone-400">
                                       {member.relationshipLabel?.trim() ? `${memberAccountName(member)} · ` : ''}
                                       {memberProfileLine(member)}
                                     </p>
@@ -698,7 +728,7 @@ export default function FamilyMembersPanel({
                               <div className="flex shrink-0 flex-wrap items-center gap-2">
                                 <Link
                                   href={`/dashboard/family/member?familyId=${family.id}&userId=${member.userId}`}
-                                  className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-purple-600 px-3 text-xs font-semibold text-white hover:bg-purple-700"
+                                  className="inline-flex h-8 items-center gap-1.5 rounded-md bg-stone-950 px-3 text-xs font-semibold text-white transition hover:bg-stone-800"
                                 >
                                   <BookHeart className="h-3.5 w-3.5" />
                                   成员记忆
@@ -717,7 +747,7 @@ export default function FamilyMembersPanel({
                                     className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium disabled:opacity-50 ${
                                       careAuthorized
                                         ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                                        : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
                                     }`}
                                   >
                                     <Eye className="h-3 w-3" />
@@ -730,7 +760,7 @@ export default function FamilyMembersPanel({
                                     type="button"
                                     disabled={updatingRoleKey === updateKey}
                                     onClick={() => { void handleUpdateRole(family.id, member, 'MEMBER'); }}
-                                    className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 hover:border-blue-200 hover:text-blue-700 disabled:opacity-50"
+                                    className="rounded-md border border-stone-200 bg-white px-2 py-1 text-xs text-stone-600 hover:border-emerald-200 hover:text-emerald-700 disabled:opacity-50"
                                   >
                                   规范为成员
                                   </button>

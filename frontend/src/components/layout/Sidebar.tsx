@@ -69,8 +69,8 @@ function NavigationLinks({
               className={cn(
                 'group flex items-center justify-center rounded-md p-3 text-sm font-medium transition-colors 2xl:justify-start 2xl:gap-3',
                 isActive
-                  ? 'bg-stone-950 text-white'
-                  : 'text-stone-600 hover:bg-white hover:text-stone-950',
+                  ? 'bg-stone-950 text-white shadow-sm'
+                  : 'text-stone-600 hover:bg-stone-100 hover:text-stone-950',
               )}
             >
               <Icon
@@ -96,7 +96,7 @@ export function MobileBottomNav({
   const items = mobilePrimaryNav.filter((item) => item.roles.includes(viewerRole)).slice(0, 5);
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-stone-200 bg-white px-2 pb-[max(env(safe-area-inset-bottom),0.35rem)] pt-1 lg:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-stone-200 bg-white/96 px-2 pb-[max(env(safe-area-inset-bottom),0.35rem)] pt-1 shadow-[0_-12px_30px_rgba(24,39,32,0.08)] backdrop-blur lg:hidden">
       <div className="mx-auto grid max-w-lg grid-cols-5 gap-1">
         {items.map((item) => {
           const Icon = item.icon;
@@ -124,14 +124,14 @@ export function MobileBottomNav({
 
 export default function Sidebar({ viewerRole = 'MEMBER', isPlatformAdmin = false, className }: SidebarProps) {
   return (
-    <aside className={cn('hidden w-16 shrink-0 border-r border-stone-200 bg-white xl:flex 2xl:w-56', className)}>
+    <aside className={cn('hidden w-16 shrink-0 border-r border-stone-200 bg-white lg:flex 2xl:w-56', className)}>
       <div className="flex h-full w-full flex-col px-2 pb-4 pt-4 2xl:px-3">
         <Link
           href="/dashboard/agent"
           title="FamilyAgent"
           className="flex h-11 items-center justify-center rounded-md text-stone-950 transition hover:bg-stone-100 2xl:justify-start 2xl:gap-3 2xl:px-3"
         >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-stone-950 text-white">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-stone-950 text-white shadow-sm">
             <BookHeart className="h-5 w-5" />
           </div>
           <p className="hidden text-sm font-semibold 2xl:block">FamilyAgent</p>
@@ -176,7 +176,7 @@ export function MobileNav({
           <div className="absolute inset-y-0 left-0 flex w-[min(20rem,86vw)] flex-col border-r border-stone-200 bg-white shadow-xl">
             <div className="flex h-16 items-center justify-between px-4">
               <Link href="/dashboard/agent" onClick={() => setOpen(false)} className="flex items-center gap-2">
-                <div className="flex h-10 w-10 items-center justify-center rounded-md bg-stone-950 text-white">
+                <div className="flex h-10 w-10 items-center justify-center rounded-md bg-stone-950 text-white shadow-sm">
                   <BookHeart className="h-5 w-5" />
                 </div>
                 <div>

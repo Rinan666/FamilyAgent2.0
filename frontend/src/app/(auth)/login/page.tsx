@@ -104,6 +104,7 @@ export default function LoginPage() {
             onChange={(event) => setUsername(event.target.value)}
             className={authInputClassName}
             placeholder="请输入用户名"
+            autoComplete="username"
             required
           />
         </div>
@@ -120,6 +121,7 @@ export default function LoginPage() {
             onChange={(event) => setPassword(event.target.value)}
             className={authInputClassName}
             placeholder="请输入密码"
+            autoComplete="current-password"
             required
           />
         </div>
