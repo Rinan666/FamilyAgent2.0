@@ -1,4 +1,9 @@
 from app.llm.prompts.chat import build_family_agent_system_prompt
+from app.llm.prompts.memory import (
+    ORGANIZE_DRAFT_SYSTEM_PROMPT,
+    PERSONA_MATERIAL_DRAFT_SYSTEM_PROMPT,
+    SAVE_TOOL_PLAN_SYSTEM_PROMPT,
+)
 from app.llm.prompts.mirror import MIRROR_AGENT_MODE_RULES
 from app.llm.prompts.persona import PERSONA_MEMBER_MODE_RULES
 
@@ -23,6 +28,9 @@ def test_build_family_agent_system_prompt_uses_defaults():
     assert "- 用户提问时间：未提供。" in prompt
     assert "未触发联网搜索。" in prompt
     assert "当前没有命中明确的已授权家族上下文。" in prompt
+    assert "不要只处理用户字面的问题" in prompt
+    assert "不要把“承接、分析、建议”写成固定段落" in prompt
+    assert "不把真话说成刀子" in prompt
 
 
 def test_build_family_agent_system_prompt_includes_full_context():
@@ -63,8 +71,9 @@ def test_build_family_agent_system_prompt_adds_mirror_rules_for_mirror_context()
     )
 
     assert MIRROR_AGENT_MODE_RULES in prompt
-    assert "进入深度镜像模式" in prompt
-    assert "高精度认知棱镜" in prompt
+    assert "高沉浸" in prompt
+    assert "基于授权资料的视角模拟" in prompt
+    assert "可以使用第一人称风格化表达" in prompt
     assert "镜像参考对象：妈妈。" in prompt
 
 
@@ -82,5 +91,17 @@ def test_build_family_agent_system_prompt_adds_persona_rules_for_persona_context
     )
 
     assert PERSONA_MEMBER_MODE_RULES in prompt
-    assert "你是基于家族创建档案运行的精神成员 Agent" in prompt
+    assert "角色型成员" in prompt
+    assert "忠于设定" in prompt
+    assert "允许高沉浸角色表达" in prompt
     assert "精神成员：外公" in prompt
+
+
+def test_memory_prompts_keep_human_quality_rules():
+    assert "以后再看是否还能理解当时发生了什么、为什么重要" in SAVE_TOOL_PLAN_SYSTEM_PROMPT
+    assert "保留原意和情绪质感" in SAVE_TOOL_PLAN_SYSTEM_PROMPT
+    assert "像当事人愿意保存下来的记录" in ORGANIZE_DRAFT_SYSTEM_PROMPT
+    assert "不要替换成泛泛的正确话" in ORGANIZE_DRAFT_SYSTEM_PROMPT
+    assert "精神成员可以是虚构角色、家族象征、理想化人格" in PERSONA_MATERIAL_DRAFT_SYSTEM_PROMPT
+    assert "不要把创作补全写成用户已经提供的既定设定" in PERSONA_MATERIAL_DRAFT_SYSTEM_PROMPT
+    assert "稳定的价值取向、表达习惯、关系态度" in PERSONA_MATERIAL_DRAFT_SYSTEM_PROMPT

@@ -48,7 +48,7 @@ export default function AgentMessageList({
             {mode === 'mirror'
               ? '镜像 AI 会参考上下文、授权日常记录和成长观察，不使用家族经验沉淀。'
               : mode === 'persona'
-                ? '精神成员会基于家族创建的档案和当前可见家庭经验提供建议，不代表真实成员本人。'
+                ? '精神成员会基于家族创建的档案和当前可见家庭经验，以稳定角色声音提供建议。'
                 : 'FamilyAgent 会参考当前上下文和家族经验沉淀，不召回日常记录或成长观察。'}
           </p>
           {onOpenContext && (

@@ -7,6 +7,7 @@ import { Bot, ChevronDown, History, Loader2, MoreHorizontal, Plus, Send, Sparkle
 import AgentContextPanel from '@/components/agent/AgentContextPanel';
 import AgentMessageList from '@/components/agent/AgentMessageList';
 import AgentSessionDrawer from '@/components/agent/AgentSessionDrawer';
+import { buildPersonaProfileContext, personaSwitchMessage } from '@/components/agent/personaContext';
 import {
   normalizeTargetSelection,
   selectionFromRequestedTargetUserId,
@@ -84,26 +85,6 @@ function buildSessionMetadata(
     targetPersonaName: mode === 'persona' ? targetLabel : null,
     hasTargetSwitches,
   };
-}
-
-function personaProfileContext(persona: PersonaMember, materials: PersonaMaterial[] = []) {
-  const lines = [
-    `精神成员：${persona.name}`,
-    persona.eraIdentity ? `时代/身份：${persona.eraIdentity}` : '',
-    persona.description ? `简介：${persona.description}` : '',
-    persona.values ? `价值观：${persona.values}` : '',
-    persona.speakingStyle ? `说话风格：${persona.speakingStyle}` : '',
-    persona.personality ? `性格气质：${persona.personality}` : '',
-  ].filter(Boolean);
-
-  return [
-    '你正在以家族创建的精神成员档案回应，而不是真实注册用户或逝者本人。',
-    '你可以参考档案中的价值观、表达风格和性格给出建议，但必须避免声称自己拥有真实记忆、真实经历或本人意图。',
-    lines.join('\n'),
-    materials.length
-      ? `材料卡：\n${materials.map((item, index) => `${index + 1}. ${item.title}\n${item.content}`).join('\n\n')}`
-      : '当前没有材料卡，只能基于基础人设克制回答。',
-  ].join('\n\n');
 }
 
 function savedMemoryHref(familyId?: number | null) {
@@ -227,7 +208,7 @@ function buildTargetSwitchMessage(
   const targetLabel = nextMode === 'mirror'
     ? `已切换到 “${nextTargetLabel}” 的镜像参考模式。后续回答只基于授权可见记录，不代表本人真实意图。`
     : nextMode === 'persona'
-      ? `已切换到精神成员 “${nextTargetLabel}”。后续回答将基于该档案给出建议，不代表真实成员本人。`
+      ? personaSwitchMessage(nextTargetLabel)
       : '已切回家庭 Agent 自身上下文。后续回答将基于当前家庭共享记忆与记录。';
   const sessionContextPatch = buildSessionMetadata(nextMode, nextTargetLabel, nextTarget, nextPersona, true);
   return {
@@ -498,7 +479,7 @@ export default function AgentPage() {
             PERSONA_MATERIALS_TIMEOUT_MS,
           ).catch(() => [] as PersonaMaterial[])
         : [];
-      const personaContext = personaProfileContext(targetPersona, personaMaterials);
+      const personaContext = buildPersonaProfileContext(targetPersona, personaMaterials);
       const recalled: { context: string; metadata?: NonNullable<ChatMessage['metadata']> } = responseMode === 'quick'
         ? { context: '' }
         : await defaultRecall();

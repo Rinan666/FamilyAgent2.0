@@ -179,7 +179,7 @@ export default function FamilyPage() {
             <WorkbenchSurface className="space-y-4">
               <WorkbenchSectionTitle
                 title="精神成员"
-                description="精神成员不是真实注册用户，由家族创建者手动创建，可在聊天中作为镜像请教对象。每个家族最多 3 个。"
+                description="精神成员是家族创建的档案角色，可在聊天中以稳定声音提供建议。每个家族最多 3 个。"
               />
               <PersonaMembersPanel
                 familyId={selectedFamilyId}

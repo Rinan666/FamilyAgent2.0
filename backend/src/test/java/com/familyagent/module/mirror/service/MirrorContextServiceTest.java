@@ -91,7 +91,9 @@ class MirrorContextServiceTest {
             assertFalse(response.getMemoryContext().contains(privateGrowthPhrase));
             assertFalse(response.getMemoryContext().contains("深夜哭过"));
             assertTrue(response.getMemoryContext().contains("私有风格参考"));
-            assertTrue(response.getMemoryContext().contains("安全边界"));
+            assertTrue(response.getMemoryContext().contains("镜像边界"));
+            assertTrue(response.getMemoryContext().contains("不得冒充现实本人"));
+            assertTrue(response.getMemoryContext().contains("基于授权资料的可能看法"));
             assertTrue(response.getMemoryContext().contains("不得引用原文"));
             assertTrue(response.getMemoryContext().contains("授权日记"));
             assertTrue(response.getMemoryContext().contains("授权可见的选择记录"));
