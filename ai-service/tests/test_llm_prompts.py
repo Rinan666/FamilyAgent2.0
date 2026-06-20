@@ -63,7 +63,8 @@ def test_build_family_agent_system_prompt_adds_mirror_rules_for_mirror_context()
     )
 
     assert MIRROR_AGENT_MODE_RULES in prompt
-    assert "你是镜像参考 Agent，不是镜像对象本人" in prompt
+    assert "进入深度镜像模式" in prompt
+    assert "高精度认知棱镜" in prompt
     assert "镜像参考对象：妈妈。" in prompt
 
 
