@@ -94,9 +94,9 @@ async def stream_chat(request: AgentChatRequest):
                         await queue.put({"content": chunk})
 
                 await queue.put({"done": True})
-            except Exception as exc:
-                logger.error("FamilyAgent stream failed: %s", exc)
-                await queue.put({"error": str(exc)})
+            except Exception:
+                logger.exception("FamilyAgent stream failed")
+                await queue.put({"error": "AI service unavailable, please retry later."})
 
         task = asyncio.create_task(produce())
         try:

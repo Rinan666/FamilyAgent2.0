@@ -96,3 +96,37 @@ def _sanitize_organized_draft(data: dict, scene: str, fallback_content: str) -> 
         "scenario": str(data.get("scenario", "")).strip()[:30],
         "reason": str(data.get("reason", "")).strip()[:120],
     }
+
+
+def _sanitize_persona_material_draft(data: dict, fallback_profile: dict, fallback_content: str) -> dict:
+    profile_data = data.get("profile") if isinstance(data.get("profile"), dict) else {}
+    profile = {
+        "name": str(profile_data.get("name") or fallback_profile.get("name") or "").strip()[:100],
+        "description": str(profile_data.get("description") or fallback_profile.get("description") or "").strip()[:500],
+        "era_identity": str(profile_data.get("era_identity") or fallback_profile.get("era_identity") or "").strip()[:200],
+        "values": str(profile_data.get("values") or fallback_profile.get("values") or "").strip()[:1000],
+        "speaking_style": str(profile_data.get("speaking_style") or fallback_profile.get("speaking_style") or "").strip()[:1000],
+        "personality": str(profile_data.get("personality") or fallback_profile.get("personality") or "").strip()[:1000],
+    }
+
+    materials: list[dict] = []
+    raw_materials = data.get("materials") if isinstance(data.get("materials"), list) else []
+    for index, item in enumerate(raw_materials[:5], start=1):
+        if not isinstance(item, dict):
+            continue
+        content = str(item.get("content", "")).strip()[:600]
+        if len(content) < 8:
+            continue
+        title = str(item.get("title", "")).strip()[:40] or f"材料卡 {index}"
+        materials.append({
+            "title": title,
+            "content": content,
+            "tags": _compact_string_list(item.get("tags"), 6, 24),
+        })
+
+    return {
+        "profile": profile,
+        "materials": materials,
+        "reason": str(data.get("reason", "")).strip()[:120]
+        or ("未生成可保存材料卡，请补充材料后重新整理。" if not materials else ""),
+    }

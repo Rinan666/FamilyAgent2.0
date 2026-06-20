@@ -6,6 +6,15 @@ interface WebSearchBadgeProps {
   metadata?: ChatMessage['metadata'];
 }
 
+function safeHttpUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function WebSearchBadge({ metadata }: WebSearchBadgeProps) {
   const webSearch = metadata?.webSearch;
   if (!webSearch) return null;
@@ -26,18 +35,22 @@ export default function WebSearchBadge({ metadata }: WebSearchBadgeProps) {
         ? 'border-yellow-100 bg-yellow-50 text-yellow-700'
         : 'border-gray-100 bg-white/70 text-gray-500';
 
+  const safeSources = webSearch.sources
+    .map((source) => ({ ...source, url: safeHttpUrl(source.url) }))
+    .filter((source): source is typeof source & { url: string } => Boolean(source.url));
+
   return (
     <div className="mt-2 whitespace-normal text-[11px] leading-5">
-      {webSearch.sources.length > 0 ? (
+      {safeSources.length > 0 ? (
         <details className={`rounded-lg border px-2 py-1 ${toneClass}`}>
           <summary className="cursor-pointer list-none font-medium">{label}</summary>
           <div className="mt-1 space-y-1">
-            {webSearch.sources.slice(0, 4).map((source) => (
+            {safeSources.slice(0, 4).map((source) => (
               <a
                 key={source.url}
                 href={source.url}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className="block truncate text-blue-700 underline-offset-2 hover:underline"
               >
                 {source.title || source.url}

@@ -82,6 +82,52 @@ ORGANIZED_DRAFT_SCHEMA = {
 }
 
 
+PERSONA_MATERIAL_DRAFT_SCHEMA = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "persona_material_draft",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "profile": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "description": {"type": "string"},
+                        "era_identity": {"type": "string"},
+                        "values": {"type": "string"},
+                        "speaking_style": {"type": "string"},
+                        "personality": {"type": "string"},
+                    },
+                    "required": [
+                        "name",
+                        "description",
+                        "era_identity",
+                        "values",
+                        "speaking_style",
+                        "personality",
+                    ],
+                },
+                "materials": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "title": {"type": "string"},
+                            "content": {"type": "string"},
+                            "tags": {"type": "array", "items": {"type": "string"}},
+                        },
+                        "required": ["title", "content", "tags"],
+                    },
+                },
+                "reason": {"type": "string"},
+            },
+            "required": ["profile", "materials", "reason"],
+        },
+    },
+}
+
+
 WEEKLY_REPORT_SCHEMA = {
     "type": "json_schema",
     "json_schema": {

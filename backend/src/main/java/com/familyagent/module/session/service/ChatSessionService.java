@@ -234,13 +234,21 @@ public class ChatSessionService {
     @Transactional
     public void deleteSession(Long sessionId) {
         ChatSession session = getOwnedSessionHeader(sessionId);
-        archiveRepository.findBySessionId(session.getId()).stream()
-                .map(ChatSessionArchive::getObjectKey)
-                .filter(objectKey -> objectKey != null && !objectKey.isBlank())
-                .forEach(archiveStorageService::deleteTranscript);
-        archiveRepository.deleteBySessionId(session.getId());
-        messageRepository.deleteBySessionId(session.getId());
-        sessionRepository.deleteById(session.getId());
+        deleteSessionData(session);
+    }
+
+    @Transactional
+    public int deleteFamilyAgentSessions(Long familyId) {
+        if (familyId == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "familyId is required");
+        }
+        Long userId = CurrentUserGuard.currentUserId();
+        familyService.checkMembership(familyId);
+        List<ChatSession> sessions = sessionRepository.findFamilyAgentByUserAndFamily(userId, familyId);
+        for (ChatSession session : sessions) {
+            deleteSessionData(session);
+        }
+        return sessions.size();
     }
 
     public List<ChatSessionArchiveSummary> listArchives(Long sessionId) {
@@ -354,6 +362,16 @@ public class ChatSessionService {
         }
         CurrentUserGuard.requireSelf(session.getUserId());
         return session;
+    }
+
+    void deleteSessionData(ChatSession session) {
+        archiveRepository.findBySessionId(session.getId()).stream()
+                .map(ChatSessionArchive::getObjectKey)
+                .filter(objectKey -> objectKey != null && !objectKey.isBlank())
+                .forEach(archiveStorageService::deleteTranscript);
+        archiveRepository.deleteBySessionId(session.getId());
+        messageRepository.deleteBySessionId(session.getId());
+        sessionRepository.deleteOwnedById(session.getId());
     }
 
     private ChatSessionSummary toSummary(ChatSession session) {

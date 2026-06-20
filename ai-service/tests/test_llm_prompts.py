@@ -1,5 +1,6 @@
 from app.llm.prompts.chat import build_family_agent_system_prompt
 from app.llm.prompts.mirror import MIRROR_AGENT_MODE_RULES
+from app.llm.prompts.persona import PERSONA_MEMBER_MODE_RULES
 
 
 def test_build_family_agent_system_prompt_uses_defaults():
@@ -64,3 +65,21 @@ def test_build_family_agent_system_prompt_adds_mirror_rules_for_mirror_context()
     assert MIRROR_AGENT_MODE_RULES in prompt
     assert "你是镜像参考 Agent，不是镜像对象本人" in prompt
     assert "镜像参考对象：妈妈。" in prompt
+
+
+def test_build_family_agent_system_prompt_adds_persona_rules_for_persona_context():
+    prompt = build_family_agent_system_prompt(
+        subject="PersonaMemberAgent",
+        context_label="persona_member",
+        memory_context="精神成员：外公\n价值观：重视家风。",
+        viewer_role="MEMBER",
+        target_role="MEMBER",
+        response_mode="think",
+        client_timestamp="",
+        client_timezone="",
+        public_web_context="",
+    )
+
+    assert PERSONA_MEMBER_MODE_RULES in prompt
+    assert "你是基于家族创建档案运行的精神成员 Agent" in prompt
+    assert "精神成员：外公" in prompt

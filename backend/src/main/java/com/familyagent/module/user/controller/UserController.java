@@ -1,6 +1,7 @@
 package com.familyagent.module.user.controller;
 
 import com.familyagent.common.response.Result;
+import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.user.dto.ChangePasswordRequest;
 import com.familyagent.module.user.dto.LoginRequest;
 import com.familyagent.module.user.dto.LoginResponse;
@@ -68,6 +69,7 @@ public class UserController {
     @Operation(summary = "获取用户信息")
     @GetMapping("/{id}")
     public Result<User> getUserById(@PathVariable Long id) {
+        CurrentUserGuard.requireSelf(id);
         User user = userService.getById(id);
         return Result.success(user);
     }

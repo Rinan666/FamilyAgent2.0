@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import type { FamilyMember } from '@/types';
+import type { FamilyMember, PersonaMember } from '@/types';
 import {
   normalizeTargetSelection,
+  personaTargetSelection,
+  selectionFromRequestedPersonaId,
   selectionFromRequestedTargetUserId,
   selectionLabel,
   selectionMirrorTargetUserId,
   selectionMode,
+  selectionPersonaId,
+  selectionTargetPersona,
 } from './agentTarget';
 
 function member(userId: number, relationshipLabel: string): FamilyMember {
@@ -23,6 +27,14 @@ function member(userId: number, relationshipLabel: string): FamilyMember {
 describe('agentTarget helpers', () => {
   const selfUserId = 100;
   const members = [member(100, '我自己'), member(101, '妈妈'), member(102, '孩子')];
+  const personas: PersonaMember[] = [{
+    id: 7,
+    familyId: 1,
+    name: '外公',
+    createdBy: 100,
+    hasMaterial: false,
+    createdAt: '2026-06-13T00:00:00.000Z',
+  }];
 
   it('uses NONE when no targetUserId is provided', () => {
     expect(selectionFromRequestedTargetUserId(null, selfUserId, members)).toBe('NONE');
@@ -49,5 +61,16 @@ describe('agentTarget helpers', () => {
     expect(normalizeTargetSelection(null, selfUserId)).toBe('NONE');
     expect(normalizeTargetSelection(0, selfUserId)).toBe('NONE');
     expect(normalizeTargetSelection(selfUserId, selfUserId)).toBe('SELF');
+  });
+
+  it('keeps persona targets separate from real member mirror targets', () => {
+    const selection = personaTargetSelection(7);
+
+    expect(selectionFromRequestedPersonaId(7, personas)).toBe(selection);
+    expect(selectionMode(selection, selfUserId)).toBe('persona');
+    expect(selectionMirrorTargetUserId(selection, selfUserId)).toBeNull();
+    expect(selectionPersonaId(selection)).toBe(7);
+    expect(selectionTargetPersona(selection, personas)).toBe(personas[0]);
+    expect(selectionLabel(selection, null, personas[0])).toBe('外公');
   });
 });

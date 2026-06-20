@@ -31,6 +31,11 @@ def test_auth_fail_open_defaults_to_development_only():
     assert Settings(app_env="production", auth_fail_open=None).auth_fail_open_enabled is False
 
 
+def test_auth_fail_open_cannot_be_enabled_outside_development():
+    assert Settings(app_env="production", auth_fail_open=True).auth_fail_open_enabled is False
+    assert Settings(app_env="prod", auth_fail_open=True).auth_fail_open_enabled is False
+
+
 def test_production_env_vars_override_local_dotenv(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("APP_DEBUG", "false")

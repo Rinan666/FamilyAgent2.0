@@ -52,16 +52,25 @@ export function memberName(member?: FamilyMember | null) {
 
 export function normalizeAgentSessionMetadata(metadata?: Record<string, unknown> | null): AgentSessionMetadata {
   const targetUserId = parsePositiveNumber(metadata?.targetUserId);
+  const targetPersonaId = parsePositiveNumber(metadata?.targetPersonaId);
   const targetMemberName = typeof metadata?.targetMemberName === 'string' && metadata.targetMemberName.trim()
     ? metadata.targetMemberName.trim()
     : null;
+  const targetPersonaName = typeof metadata?.targetPersonaName === 'string' && metadata.targetPersonaName.trim()
+    ? metadata.targetPersonaName.trim()
+    : null;
+  const agentMode = metadata?.agentMode === 'mirror' || metadata?.agentMode === 'persona'
+    ? metadata.agentMode
+    : 'family';
   return {
     ...(metadata || {}),
     entry: typeof metadata?.entry === 'string' ? metadata.entry : 'agent',
     contextLabel: typeof metadata?.contextLabel === 'string' ? metadata.contextLabel : undefined,
-    agentMode: metadata?.agentMode === 'mirror' ? 'mirror' : 'family',
+    agentMode,
     targetUserId,
+    targetPersonaId,
     targetMemberName,
+    targetPersonaName,
     hasTargetSwitches: Boolean(metadata?.hasTargetSwitches),
   };
 }
@@ -78,6 +87,12 @@ export function sessionBadge(metadata?: Record<string, unknown> | null) {
     return {
       label: '镜像参考',
       className: 'bg-emerald-100 text-emerald-800',
+    };
+  }
+  if (normalized.agentMode === 'persona') {
+    return {
+      label: '精神成员',
+      className: 'bg-violet-100 text-violet-800',
     };
   }
   return {

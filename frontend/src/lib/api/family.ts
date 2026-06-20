@@ -1,5 +1,5 @@
 import { normalizeFamilyMembers, request } from './shared';
-import type { CareAuthorization, CreatePersonaMemberRequest, Family, FamilyMember, FamilyRelationship, PersonaMember, UpdatePersonaMemberRequest } from '@/types';
+import type { CareAuthorization, CreatePersonaMemberRequest, DeleteFamilyRequest, Family, FamilyCreationQuota, FamilyMember, FamilyRelationship, PersonaMaterial, PersonaMember, UpdatePersonaMemberRequest, UpsertPersonaMaterialRequest } from '@/types';
 
 export const familyApi = {
   create: (data: { name: string; description?: string }) =>
@@ -7,7 +7,13 @@ export const familyApi = {
   join: (inviteCode: string) =>
     request<FamilyMember>(`/families/join?inviteCode=${inviteCode}`, { method: 'POST' }),
   getMyFamilies: () => request<Family[]>('/families/my'),
+  getCreationQuota: () => request<FamilyCreationQuota>('/families/creation-quota'),
   getFamily: (id: number) => request<Family>(`/families/${id}`),
+  deleteFamily: (familyId: number, data: DeleteFamilyRequest) =>
+    request<void>(`/families/${familyId}`, {
+      method: 'DELETE',
+      body: JSON.stringify(data),
+    }),
   getMembers: (familyId: number) =>
     request<FamilyMember[]>(`/families/${familyId}/members`).then(normalizeFamilyMembers),
   getMyRelationshipLabels: (familyId: number) =>
@@ -59,5 +65,21 @@ export const familyApi = {
     request<void>(`/families/${familyId}/persona-members/${personaId}`, {
       method: 'DELETE',
       body: JSON.stringify({ confirmationWord }),
+    }),
+  listPersonaMaterials: (familyId: number, personaId: number) =>
+    request<PersonaMaterial[]>(`/families/${familyId}/persona-members/${personaId}/materials`),
+  createPersonaMaterial: (familyId: number, personaId: number, data: UpsertPersonaMaterialRequest) =>
+    request<PersonaMaterial>(`/families/${familyId}/persona-members/${personaId}/materials`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updatePersonaMaterial: (familyId: number, personaId: number, materialId: number, data: UpsertPersonaMaterialRequest) =>
+    request<PersonaMaterial>(`/families/${familyId}/persona-members/${personaId}/materials/${materialId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  deletePersonaMaterial: (familyId: number, personaId: number, materialId: number) =>
+    request<void>(`/families/${familyId}/persona-members/${personaId}/materials/${materialId}`, {
+      method: 'DELETE',
     }),
 };

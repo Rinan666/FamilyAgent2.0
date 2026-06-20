@@ -83,9 +83,10 @@ public class AIServiceClient {
             int responseCode = conn.getResponseCode();
             if (responseCode != HttpURLConnection.HTTP_OK) {
                 String errorBody = readResponseBody(conn);
+                log.warn("AI service response error: status={}, body={}", responseCode, truncateForLog(errorBody));
                 throw new BusinessException(
                         ErrorCode.AI_SERVICE_ERROR,
-                        "AI service response error: " + responseCode + (errorBody.isBlank() ? "" : " - " + errorBody)
+                        "AI service unavailable, please retry later."
                 );
             }
 
@@ -101,7 +102,7 @@ public class AIServiceClient {
             throw e;
         } catch (Exception e) {
             log.error("FamilyAgent chat SSE proxy failed", e);
-            throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "FamilyAgent chat SSE proxy failed: " + e.getMessage());
+            throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "AI service unavailable, please retry later.");
         } finally {
             if (conn != null) {
                 conn.disconnect();
@@ -126,6 +127,13 @@ public class AIServiceClient {
             log.warn("Failed to read AI service error body", e);
             return "";
         }
+    }
+
+    private String truncateForLog(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        return value.length() <= 500 ? value : value.substring(0, 500) + "...";
     }
 
     /**

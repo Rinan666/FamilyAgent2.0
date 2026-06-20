@@ -3,6 +3,8 @@ package com.familyagent.module.family.controller;
 import com.familyagent.common.response.Result;
 import com.familyagent.module.family.dto.CreateFamilyRequest;
 import com.familyagent.module.family.dto.CareAuthorizationVO;
+import com.familyagent.module.family.dto.DeleteFamilyRequest;
+import com.familyagent.module.family.dto.FamilyCreationQuotaVO;
 import com.familyagent.module.family.dto.FamilyMemberVO;
 import com.familyagent.module.family.dto.FamilyRelationshipVO;
 import com.familyagent.module.family.dto.UpsertCareAuthorizationRequest;
@@ -51,10 +53,25 @@ public class FamilyController {
         return Result.success(familyService.getMyFamilies());
     }
 
+    @Operation(summary = "获取当前用户家族创建额度")
+    @GetMapping("/creation-quota")
+    public Result<FamilyCreationQuotaVO> getCreationQuota() {
+        return Result.success(familyService.getCreationQuota());
+    }
+
     @Operation(summary = "获取家族详情")
     @GetMapping("/{familyId}")
     public Result<Family> getFamily(@PathVariable Long familyId) {
         return Result.success(familyService.getFamily(familyId));
+    }
+
+    @Operation(summary = "Delete family and all family-scoped data")
+    @DeleteMapping("/{familyId}")
+    public Result<Void> deleteFamily(
+            @PathVariable Long familyId,
+            @Valid @RequestBody DeleteFamilyRequest request) {
+        familyService.deleteFamily(familyId, request);
+        return Result.success();
     }
 
     @Operation(summary = "获取家族成员列表")

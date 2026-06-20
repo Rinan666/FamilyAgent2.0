@@ -4,8 +4,12 @@ import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.infra.ai.AIServiceClient;
+import com.familyagent.module.agent.dto.AgentChatStreamRequest;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RAtomicLong;
@@ -35,17 +39,21 @@ import java.util.concurrent.TimeUnit;
 public class AgentChatController {
 
     private static final int MAX_CHATS_PER_HOUR = 20;
+    private static final int MAX_CHAT_REQUEST_BYTES = 32 * 1024;
     private static final DateTimeFormatter HOUR_KEY_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH");
 
     private final AIServiceClient aiServiceClient;
     private final RedissonClient redissonClient;
+    private final ObjectMapper objectMapper;
 
     @Operation(summary = "Proxy FamilyAgent chat stream")
     @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public void stream(@RequestBody Map<String, Object> request,
+    public void stream(@Valid @RequestBody AgentChatStreamRequest request,
                        @RequestHeader(value = "Authorization", required = false) String authorization,
                        HttpServletResponse response) throws IOException {
         Long userId = CurrentUserGuard.currentUserId();
+        Map<String, Object> aiPayload = request.toAiPayload();
+        enforceRequestSize(aiPayload);
         String hourKey = "quota:chat:user:" + userId + ":" + LocalDateTime.now().format(HOUR_KEY_FMT);
         RAtomicLong counter = redissonClient.getAtomicLong(hourKey);
         long count = counter.incrementAndGet();
@@ -64,7 +72,7 @@ public class AgentChatController {
         response.setHeader("X-Accel-Buffering", "no");
 
         try (OutputStream outputStream = response.getOutputStream()) {
-            aiServiceClient.proxyChatStream(request, outputStream, authorization);
+            aiServiceClient.proxyChatStream(aiPayload, outputStream, authorization);
         } catch (BusinessException e) {
             if (!response.isCommitted()) {
                 response.resetBuffer();
@@ -82,6 +90,17 @@ public class AgentChatController {
 
             log.warn("FamilyAgent chat stream failed after response committed: {}", e.getMessage());
             writeErrorEvent(response.getOutputStream(), e.getMessage());
+        }
+    }
+
+    private void enforceRequestSize(Map<String, Object> request) {
+        try {
+            int bytes = objectMapper.writeValueAsBytes(request == null ? Map.of() : request).length;
+            if (bytes > MAX_CHAT_REQUEST_BYTES) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "Chat request is too large");
+            }
+        } catch (JsonProcessingException e) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Chat request could not be processed");
         }
     }
 

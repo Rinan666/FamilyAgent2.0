@@ -4,6 +4,8 @@ import cn.hutool.core.util.RandomUtil;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.family.dto.CreateFamilyRequest;
+import com.familyagent.module.family.dto.DeleteFamilyRequest;
+import com.familyagent.module.family.dto.FamilyCreationQuotaVO;
 import com.familyagent.module.family.dto.FamilyMemberVO;
 import com.familyagent.module.family.entity.Family;
 import com.familyagent.module.family.entity.FamilyMember;
@@ -34,6 +36,7 @@ import java.util.stream.Collectors;
 public class FamilyService {
 
     private static final int MAX_FAMILIES_PER_USER = 3;
+    private static final String FAMILY_DELETE_REASON = "FAMILY_DELETE_BY_OWNER";
 
     private final FamilyRepository familyRepository;
     private final FamilyMemberRepository memberRepository;
@@ -119,6 +122,16 @@ public class FamilyService {
             return List.of();
         }
         return familyRepository.findBasicByIds(familyIds);
+    }
+
+    public FamilyCreationQuotaVO getCreationQuota() {
+        User currentUser = userService.getCurrentUser();
+        int createdFamilies = familyRepository.countByCreatedBy(currentUser.getId());
+        return FamilyCreationQuotaVO.builder()
+                .maxFamilies(MAX_FAMILIES_PER_USER)
+                .createdFamilies(createdFamilies)
+                .remainingFamilies(Math.max(0, MAX_FAMILIES_PER_USER - createdFamilies))
+                .build();
     }
 
     public List<FamilyMemberVO> getMembers(Long familyId) {
@@ -247,6 +260,31 @@ public class FamilyService {
         }
 
         familyLifecycleService.transferOwner(familyId, targetUserId, currentUser.getId());
+    }
+
+    @Transactional
+    public void deleteFamily(Long familyId, DeleteFamilyRequest request) {
+        User currentUser = userService.getCurrentUser();
+        Family family = familyRepository.selectById(familyId);
+        if (family == null) {
+            throw new BusinessException(ErrorCode.FAMILY_NOT_FOUND);
+        }
+
+        boolean platformAdmin = "ADMIN".equalsIgnoreCase(currentUser.getRole());
+        FamilyMember currentMember = memberRepository.findByFamilyAndUser(familyId, currentUser.getId());
+        if (!platformAdmin && (currentMember == null || !isOwner(currentMember.getRole()))) {
+            throw new BusinessException(ErrorCode.INSUFFICIENT_PERMISSION);
+        }
+
+        String expectedName = family.getName() == null ? "" : family.getName().trim();
+        String confirmationName = request.getConfirmationName() == null ? "" : request.getConfirmationName().trim();
+        if (!request.isDeleteAllData() || !expectedName.equals(confirmationName)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Family deletion confirmation does not match");
+        }
+
+        familyLifecycleService.dissolveFamily(familyId, FAMILY_DELETE_REASON);
+        log.info("Family delete requested: familyId={}, operatorUserId={}, platformAdmin={}",
+                familyId, currentUser.getId(), platformAdmin);
     }
 
     private String normalizeFamilyRole(String role) {

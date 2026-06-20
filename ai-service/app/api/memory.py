@@ -9,11 +9,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.agents.family_skill_registry import family_skill_registry, get_family_skill
 from app.api.memory_contracts import (
     ORGANIZED_DRAFT_SCHEMA,
+    PERSONA_MATERIAL_DRAFT_SCHEMA,
     SAVE_TOOL_PLAN_SCHEMA,
 )
 from app.api.memory_models import (
     ExtractMemoryRequest,
     OrganizeDraftRequest,
+    PersonaMaterialDraftRequest,
     SaveToolPlanRequest,
 )
 from app.api.memory_archive_helpers import (
@@ -21,6 +23,7 @@ from app.api.memory_archive_helpers import (
 )
 from app.api.memory_generation_helpers import (
     _sanitize_organized_draft,
+    _sanitize_persona_material_draft,
 )
 from app.api.memory_helpers import (
     _blocked_save_tool_plan,
@@ -32,8 +35,10 @@ from app.api.memory_helpers import (
 from app.llm.client import llm_client
 from app.llm.prompts.memory import (
     ORGANIZE_DRAFT_SYSTEM_PROMPT,
+    PERSONA_MATERIAL_DRAFT_SYSTEM_PROMPT,
     SAVE_TOOL_PLAN_SYSTEM_PROMPT,
     build_organize_draft_user_prompt,
+    build_persona_material_draft_user_prompt,
     build_save_tool_plan_user_prompt,
 )
 from app.middleware.auth import verify_token
@@ -155,4 +160,37 @@ async def organize_family_draft(request: OrganizeDraftRequest):
         raise
     except Exception as e:
         logger.error("Draft organization failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/persona-material-draft")
+async def organize_persona_material_draft(request: PersonaMaterialDraftRequest):
+    try:
+        content = request.content.strip()
+        if len(content) < 8:
+            raise HTTPException(status_code=400, detail="材料太短，无法整理")
+
+        guarded_content = redact_with_note(content, max_length=6000).text
+        guarded_family_context = redact_with_note(request.family_context, max_length=1200).text
+        profile = request.profile.model_dump()
+        user_prompt = build_persona_material_draft_user_prompt(
+            profile,
+            guarded_family_context,
+            guarded_content,
+        )
+        raw = await llm_client.chat(
+            messages=[
+                {"role": "system", "content": PERSONA_MATERIAL_DRAFT_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.12,
+            max_tokens=1600,
+            response_format=PERSONA_MATERIAL_DRAFT_SCHEMA,
+        )
+        data = json.loads(raw)
+        return {"success": True, "data": _sanitize_persona_material_draft(data, profile, content)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Persona material draft organization failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))

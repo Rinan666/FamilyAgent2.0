@@ -136,7 +136,7 @@ class FamilyLifecycleServiceTest {
     }
 
     @Test
-    void dissolveFamily_deletesFamilyScopedTablesAndResourcesInOrder() {
+    void dissolveFamily_deletesAllFamilyScopedTablesInOrder() {
         when(familyRepository.selectById(10L)).thenReturn(family(10L, "Test Family"));
         when(jdbcTemplate.queryForObject(eq("SELECT to_regclass(?) IS NOT NULL"), eq(Boolean.class), anyString()))
                 .thenReturn(true);
@@ -151,8 +151,11 @@ class FamilyLifecycleServiceTest {
         verify(jdbcTemplate).update("DELETE FROM growth_guard_staleness_votes WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM memory_entry_votes WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM photos WHERE family_id = ?", 10L);
+        verify(jdbcTemplate).update("DELETE FROM family_persona_members WHERE family_id = ?", 10L);
+        verify(jdbcTemplate).update("DELETE FROM growth_guard_reports WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM growth_guard_records WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM memory_embeddings WHERE family_id = ?", 10L);
+        verify(jdbcTemplate).update("DELETE FROM heritage_tasks WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM skill_runs WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM diary_entries WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM memory_entries WHERE family_id = ?", 10L);

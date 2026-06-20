@@ -53,7 +53,7 @@ export interface RegisterRequest {
   email?: string;
 }
 
-export type AgentMode = 'family' | 'mirror';
+export type AgentMode = 'family' | 'mirror' | 'persona';
 export type AgentResponseMode = 'quick' | 'think';
 export type WriteCategory = 'RECORD' | 'EXPERIENCE' | 'OBSERVATION';
 export type PhotoScope = 'PERSONAL' | 'FAMILY';
@@ -118,7 +118,9 @@ export interface AgentSessionMetadata extends Record<string, unknown> {
   contextLabel?: string;
   agentMode?: AgentMode;
   targetUserId?: number | null;
+  targetPersonaId?: number | null;
   targetMemberName?: string | null;
+  targetPersonaName?: string | null;
   hasTargetSwitches?: boolean;
 }
 
@@ -132,6 +134,17 @@ export interface Family {
   maxMembers: number;
   createdBy: number;
   createdAt: string;
+}
+
+export interface DeleteFamilyRequest {
+  confirmationName: string;
+  deleteAllData: boolean;
+}
+
+export interface FamilyCreationQuota {
+  maxFamilies: number;
+  createdFamilies: number;
+  remainingFamilies: number;
 }
 
 export type FamilyTab = 'library' | 'members' | 'personas';
@@ -151,6 +164,24 @@ export interface PersonaMember {
   updatedAt?: string;
 }
 
+export interface PersonaMaterial {
+  id: number;
+  familyId: number;
+  personaId: number;
+  title: string;
+  content: string;
+  tags: string[];
+  createdBy: number;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface UpsertPersonaMaterialRequest {
+  title: string;
+  content: string;
+  tags?: string[];
+}
+
 export interface CreatePersonaMemberRequest {
   name: string;
   description?: string;
@@ -161,6 +192,27 @@ export interface CreatePersonaMemberRequest {
 }
 
 export type UpdatePersonaMemberRequest = Partial<CreatePersonaMemberRequest>;
+
+export interface PersonaMaterialDraftProfile {
+  name: string;
+  description: string;
+  eraIdentity: string;
+  values: string;
+  speakingStyle: string;
+  personality: string;
+}
+
+export interface PersonaMaterialDraftCard {
+  title: string;
+  content: string;
+  tags: string[];
+}
+
+export interface PersonaMaterialDraft {
+  profile: PersonaMaterialDraftProfile;
+  materials: PersonaMaterialDraftCard[];
+  reason: string;
+}
 
 export interface FamilyMember {
   id: number;
@@ -277,7 +329,9 @@ export interface ChatMessage {
     };
     agentMode?: AgentMode;
     targetUserId?: number | null;
+    targetPersonaId?: number | null;
     targetMemberName?: string | null;
+    targetPersonaName?: string | null;
     hasTargetSwitches?: boolean;
     switchMarker?: boolean;
     sessionContextPatch?: AgentSessionMetadata;

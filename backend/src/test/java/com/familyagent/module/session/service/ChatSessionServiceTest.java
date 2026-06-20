@@ -288,7 +288,7 @@ class ChatSessionServiceTest {
         inOrder.verify(archiveStorageService).deleteTranscript("archive-2");
         inOrder.verify(archiveRepository).deleteBySessionId(100L);
         inOrder.verify(messageRepository).deleteBySessionId(100L);
-        inOrder.verify(sessionRepository).deleteById(100L);
+        inOrder.verify(sessionRepository).deleteOwnedById(100L);
     }
 
     @Test
@@ -308,7 +308,7 @@ class ChatSessionServiceTest {
         verify(archiveStorageService, never()).deleteTranscript(any());
         verify(archiveRepository).deleteBySessionId(100L);
         verify(messageRepository).deleteBySessionId(100L);
-        verify(sessionRepository).deleteById(100L);
+        verify(sessionRepository).deleteOwnedById(100L);
     }
 
     @Test
@@ -326,9 +326,29 @@ class ChatSessionServiceTest {
             org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> service.deleteSession(100L));
         }
 
-        verify(sessionRepository, never()).deleteById(100L);
+        verify(sessionRepository, never()).deleteOwnedById(100L);
         verify(archiveRepository, never()).deleteBySessionId(anyLong());
         verify(messageRepository, never()).deleteBySessionId(anyLong());
+    }
+
+    @Test
+    void deleteFamilyAgentSessions_deletesAllOwnedFamilyAgentSessions() {
+        ChatSession first = sessionHeader(100L, 10L, "ACTIVE");
+        ChatSession second = sessionHeader(101L, 10L, "ENDED");
+        second.setFamilyId(1L);
+        ChatSessionArchive archive = archive(1000L, 1, 4, "archive-1");
+
+        when(sessionRepository.findFamilyAgentByUserAndFamily(10L, 1L)).thenReturn(List.of(first, second));
+        when(archiveRepository.findBySessionId(100L)).thenReturn(List.of(archive));
+        when(archiveRepository.findBySessionId(101L)).thenReturn(List.of());
+
+        int deleted = withUser(10L, () -> service.deleteFamilyAgentSessions(1L));
+
+        assertEquals(2, deleted);
+        verify(familyService).checkMembership(1L);
+        verify(archiveStorageService).deleteTranscript("archive-1");
+        verify(sessionRepository).deleteOwnedById(100L);
+        verify(sessionRepository).deleteOwnedById(101L);
     }
 
     private static <T> T withUser(Long userId, java.util.concurrent.Callable<T> action) {

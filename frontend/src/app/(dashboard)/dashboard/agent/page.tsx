@@ -3,17 +3,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Bot, History, Loader2, Plus, Send, Sparkles, Square, UserRound } from 'lucide-react';
+import { Bot, ChevronDown, History, Loader2, MoreHorizontal, Plus, Send, Sparkles, Square, UserRound } from 'lucide-react';
 import AgentContextPanel from '@/components/agent/AgentContextPanel';
 import AgentMessageList from '@/components/agent/AgentMessageList';
 import AgentSessionDrawer from '@/components/agent/AgentSessionDrawer';
 import {
   normalizeTargetSelection,
   selectionFromRequestedTargetUserId,
+  selectionFromRequestedPersonaId,
   selectionLabel,
   selectionMirrorTargetUserId,
+  selectionPersonaId,
   selectionMode,
   selectionTargetMember,
+  selectionTargetPersona,
   type AgentTargetSelection,
 } from '@/components/agent/agentTarget';
 import {
@@ -60,22 +63,47 @@ import type {
   FamilyMember,
   MirrorContextResponse,
   MirrorSourceRef,
+  PersonaMaterial,
+  PersonaMember,
 } from '@/types';
 
 function buildSessionMetadata(
   mode: AgentMode,
   targetLabel: string,
   targetMember?: FamilyMember | null,
+  targetPersona?: PersonaMember | null,
   hasTargetSwitches = false,
 ): AgentSessionMetadata {
   return {
     entry: 'agent',
-    contextLabel: mode === 'mirror' ? 'mirror_agent' : 'family_memory',
+    contextLabel: mode === 'mirror' ? 'mirror_agent' : mode === 'persona' ? 'persona_member' : 'family_memory',
     agentMode: mode,
     targetUserId: mode === 'mirror' ? targetMember?.userId ?? null : null,
+    targetPersonaId: mode === 'persona' ? targetPersona?.id ?? null : null,
     targetMemberName: mode === 'mirror' ? targetLabel : null,
+    targetPersonaName: mode === 'persona' ? targetLabel : null,
     hasTargetSwitches,
   };
+}
+
+function personaProfileContext(persona: PersonaMember, materials: PersonaMaterial[] = []) {
+  const lines = [
+    `精神成员：${persona.name}`,
+    persona.eraIdentity ? `时代/身份：${persona.eraIdentity}` : '',
+    persona.description ? `简介：${persona.description}` : '',
+    persona.values ? `价值观：${persona.values}` : '',
+    persona.speakingStyle ? `说话风格：${persona.speakingStyle}` : '',
+    persona.personality ? `性格气质：${persona.personality}` : '',
+  ].filter(Boolean);
+
+  return [
+    '你正在以家族创建的精神成员档案回应，而不是真实注册用户或逝者本人。',
+    '你可以参考档案中的价值观、表达风格和性格给出建议，但必须避免声称自己拥有真实记忆、真实经历或本人意图。',
+    lines.join('\n'),
+    materials.length
+      ? `材料卡：\n${materials.map((item, index) => `${index + 1}. ${item.title}\n${item.content}`).join('\n\n')}`
+      : '当前没有材料卡，只能基于基础人设克制回答。',
+  ].join('\n\n');
 }
 
 function savedMemoryHref(familyId?: number | null) {
@@ -185,6 +213,7 @@ function normalizeMirrorAssistantMetadata(metadata: Record<string, unknown>): No
 }
 
 let cachedAgentMembersByFamilyId: Record<number, FamilyMember[]> = {};
+let cachedAgentPersonasByFamilyId: Record<number, PersonaMember[]> = {};
 let cachedAgentSessionsByFamilyId: Record<number, ChatSessionSummary[]> = {};
 let cachedMirrorContextByFamilyTarget: Record<string, MirrorContextResponse> = {};
 
@@ -192,11 +221,14 @@ function buildTargetSwitchMessage(
   nextMode: AgentMode,
   nextTargetLabel: string,
   nextTarget: FamilyMember | null,
+  nextPersona: PersonaMember | null,
 ): ChatMessage {
   const targetLabel = nextMode === 'mirror'
     ? `已切换到 “${nextTargetLabel}” 的镜像参考模式。后续回答只基于授权可见记录，不代表本人真实意图。`
-    : '已切回家庭 Agent 自身上下文。后续回答将基于当前家庭共享记忆与记录。';
-  const sessionContextPatch = buildSessionMetadata(nextMode, nextTargetLabel, nextTarget, true);
+    : nextMode === 'persona'
+      ? `已切换到精神成员 “${nextTargetLabel}”。后续回答将基于该档案给出建议，不代表真实成员本人。`
+      : '已切回家庭 Agent 自身上下文。后续回答将基于当前家庭共享记忆与记录。';
+  const sessionContextPatch = buildSessionMetadata(nextMode, nextTargetLabel, nextTarget, nextPersona, true);
   return {
     id: generateId(),
     role: 'system',
@@ -216,6 +248,7 @@ export default function AgentPage() {
   const routePrompt = searchParams.get('prompt')?.trim() || '';
   const requestedFamilyId = useMemo(() => parsePositiveNumber(searchParams.get('familyId')), [searchParams]);
   const requestedTargetUserId = useMemo(() => parsePositiveNumber(searchParams.get('targetUserId')), [searchParams]);
+  const requestedPersonaId = useMemo(() => parsePositiveNumber(searchParams.get('targetPersonaId')), [searchParams]);
 
   const routePromptAppliedRef = useRef('');
   const sessionSavedMemoriesRef = useRef<SessionSavedMemory[]>([]);
@@ -223,21 +256,26 @@ export default function AgentPage() {
   const sessionGenerationRef = useRef(0);
   const sessionIdRef = useRef<number | null>(null);
   const activeSessionDetailRef = useRef<ChatSessionDetail | null>(null);
+  const autoRestoreFamilyIdRef = useRef<number | null>(null);
+  const actionsMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [input, setInput] = useState('');
   const [members, setMembers] = useState<FamilyMember[]>([]);
+  const [personas, setPersonas] = useState<PersonaMember[]>([]);
   const [targetSelection, setTargetSelection] = useState<AgentTargetSelection>('NONE');
   const [mirrorContext, setMirrorContext] = useState<MirrorContextResponse | null>(null);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
   const [activeSessionDetail, setActiveSessionDetail] = useState<ChatSessionDetail | null>(null);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
+  const [isClearingSessions, setIsClearingSessions] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [sessionError, setSessionError] = useState('');
   const [contextError, setContextError] = useState('');
   const [saveFeedback, setSaveFeedback] = useState<Record<string, SaveFeedback>>({});
   const [isSessionsOpen, setIsSessionsOpen] = useState(false);
   const [isContextOpen, setIsContextOpen] = useState(false);
+  const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [responseMode, setResponseMode] = useState<AgentResponseMode>('think');
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
 
@@ -263,6 +301,18 @@ export default function AgentPage() {
   }, [activeSessionDetail]);
 
   useEffect(() => {
+    if (!isActionsOpen) return;
+
+    const closeOnOutsidePointerDown = (event: PointerEvent) => {
+      if (actionsMenuRef.current?.contains(event.target as Node)) return;
+      setIsActionsOpen(false);
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsidePointerDown);
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointerDown);
+  }, [isActionsOpen]);
+
+  useEffect(() => {
     if (requestedFamilyId && requestedFamilyId !== activeFamilyId) {
       setActiveFamilyId(requestedFamilyId);
     }
@@ -276,13 +326,21 @@ export default function AgentPage() {
     () => selectionTargetMember(targetSelection, members, mirrorTargetUserId, mirrorContext?.targetMember || null),
     [members, mirrorContext?.targetMember, mirrorTargetUserId, targetSelection],
   );
+  const targetPersonaId = useMemo(
+    () => selectionPersonaId(targetSelection),
+    [targetSelection],
+  );
+  const targetPersona = useMemo(
+    () => selectionTargetPersona(targetSelection, personas),
+    [personas, targetSelection],
+  );
   const mode = useMemo<AgentMode>(
     () => selectionMode(targetSelection, selfUserId),
     [selfUserId, targetSelection],
   );
   const targetLabel = useMemo(
-    () => selectionLabel(targetSelection, targetMember),
-    [targetMember, targetSelection],
+    () => selectionLabel(targetSelection, targetMember, targetPersona),
+    [targetMember, targetPersona, targetSelection],
   );
   const modeReadiness = useMemo(() => readinessLevel(mirrorContext), [mirrorContext]);
   const activeSessionMetadata = useMemo(
@@ -302,51 +360,71 @@ export default function AgentPage() {
   }, []);
 
   const loadMembers = useCallback(async (familyId: number, forceRefresh: boolean = false) => {
-    if (!forceRefresh && cachedAgentMembersByFamilyId[familyId]) {
-      const cachedMembers = cachedAgentMembersByFamilyId[familyId];
+    const applySelection = (current: AgentTargetSelection, nextMembers: FamilyMember[], nextPersonas: PersonaMember[]) => {
+      const preferredPersona = selectionFromRequestedPersonaId(requestedPersonaId, nextPersonas);
+      if (preferredPersona !== 'NONE') return preferredPersona;
+      const preferredMember = selectionFromRequestedTargetUserId(requestedTargetUserId, selfUserId, nextMembers);
+      if (preferredMember !== 'NONE') return preferredMember;
+
+      const normalizedCurrent = normalizeTargetSelection(current, selfUserId);
+      if (normalizedCurrent === 'SELF') return 'SELF';
+      const currentPersonaId = selectionPersonaId(normalizedCurrent);
+      if (currentPersonaId && nextPersonas.some((persona) => persona.id === currentPersonaId)) {
+        return normalizedCurrent;
+      }
+      if (typeof normalizedCurrent === 'number' && nextMembers.some((member) => member.userId === normalizedCurrent)) {
+        return normalizedCurrent;
+      }
+      return 'NONE';
+    };
+
+    const cachedMembersForFamily = cachedAgentMembersByFamilyId[familyId];
+    const cachedPersonasForFamily = cachedAgentPersonasByFamilyId[familyId];
+    const cacheHasRequestedPersona = !requestedPersonaId
+      || cachedPersonasForFamily?.some((persona) => persona.id === requestedPersonaId);
+    if (!forceRefresh && cachedMembersForFamily && cachedPersonasForFamily && cacheHasRequestedPersona) {
+      const cachedMembers = cachedMembersForFamily;
+      const cachedPersonas = cachedPersonasForFamily;
       setMembers(cachedMembers);
-      setTargetSelection((current) => {
-        const preferred = selectionFromRequestedTargetUserId(requestedTargetUserId, selfUserId, cachedMembers);
-        if (preferred !== 'NONE') return preferred;
-        const normalizedCurrent = normalizeTargetSelection(current, selfUserId);
-        if (normalizedCurrent === 'SELF') return 'SELF';
-        if (typeof normalizedCurrent === 'number' && cachedMembers.some((member) => member.userId === normalizedCurrent)) {
-          return normalizedCurrent;
-        }
-        return 'NONE';
-      });
+      setPersonas(cachedPersonas);
+      setTargetSelection((current) => applySelection(current, cachedMembers, cachedPersonas));
       return;
     }
 
     setIsLoadingMembers(true);
     setContextError('');
     try {
-      const memberList = await familyApi.getMembers(familyId);
-      const nextMembers = Array.isArray(memberList) ? memberList : [];
-      cachedAgentMembersByFamilyId[familyId] = nextMembers;
-      setMembers(nextMembers);
-      setTargetSelection((current) => {
-        const preferred = selectionFromRequestedTargetUserId(requestedTargetUserId, selfUserId, nextMembers);
-        if (preferred !== 'NONE') return preferred;
-        const normalizedCurrent = normalizeTargetSelection(current, selfUserId);
-        if (normalizedCurrent === 'SELF') return 'SELF';
-        if (typeof normalizedCurrent === 'number' && nextMembers.some((member) => member.userId === normalizedCurrent)) {
-          return normalizedCurrent;
+      const personaRequest = familyApi.listPersonaMembers(familyId).catch((error) => {
+        if (requestedPersonaId) {
+          throw error;
         }
-        return 'NONE';
+        return [] as PersonaMember[];
       });
+      const [memberList, personaList] = await Promise.all([
+        familyApi.getMembers(familyId),
+        personaRequest,
+      ]);
+      const nextMembers = Array.isArray(memberList) ? memberList : [];
+      const nextPersonas = Array.isArray(personaList) ? personaList : [];
+      cachedAgentMembersByFamilyId[familyId] = nextMembers;
+      cachedAgentPersonasByFamilyId[familyId] = nextPersonas;
+      setMembers(nextMembers);
+      setPersonas(nextPersonas);
+      setTargetSelection((current) => applySelection(current, nextMembers, nextPersonas));
     } catch (error) {
       setMembers([]);
+      setPersonas([]);
       setTargetSelection('NONE');
-      setContextError(error instanceof Error ? error.message : '加载家庭成员失败。');
+      setContextError(error instanceof Error ? error.message : '加载对话对象失败。');
     } finally {
       setIsLoadingMembers(false);
     }
-  }, [requestedTargetUserId, selfUserId]);
+  }, [requestedPersonaId, requestedTargetUserId, selfUserId]);
 
   useEffect(() => {
     if (!activeFamilyId) {
       setMembers([]);
+      setPersonas([]);
       setTargetSelection('NONE');
       setMirrorContext(null);
       setContextError('');
@@ -370,10 +448,15 @@ export default function AgentPage() {
     return context;
   }, []);
 
+  const loadPersonaMaterials = useCallback(async (familyId: number, personaId: number) => {
+    const materials = await familyApi.listPersonaMaterials(familyId, personaId);
+    return Array.isArray(materials) ? materials : [];
+  }, []);
+
   useEffect(() => {
     if (mode !== 'mirror' || !activeFamilyId || !mirrorTargetUserId || responseMode === 'quick') {
       setMirrorContext(null);
-      if (mode === 'family') {
+      if (mode === 'family' || mode === 'persona') {
         setContextError('');
       }
       return;
@@ -406,6 +489,33 @@ export default function AgentPage() {
     history: Pick<ChatMessage, 'role' | 'content'>[];
     defaultRecall: () => Promise<{ context: string; metadata?: NonNullable<ChatMessage['metadata']> }>;
   }) => {
+    if (mode === 'persona' && targetPersona) {
+      const personaMaterials = activeFamilyId
+        ? await loadPersonaMaterials(activeFamilyId, targetPersona.id).catch(() => [] as PersonaMaterial[])
+        : [];
+      const personaContext = personaProfileContext(targetPersona, personaMaterials);
+      const recalled: { context: string; metadata?: NonNullable<ChatMessage['metadata']> } = responseMode === 'quick'
+        ? { context: '' }
+        : await defaultRecall();
+      const metadata: NonNullable<ChatMessage['metadata']> = {
+        ...(recalled.metadata || {}),
+        agentMode: 'persona',
+        responseMode,
+        targetPersonaId: targetPersona.id,
+        targetPersonaName: targetPersona.name,
+        targetMemberName: targetPersona.name,
+        sourceSummary: recalled.context
+          ? `基于精神成员档案、${personaMaterials.length} 张材料卡，并参考当前家庭可见经验沉淀。`
+          : `基于精神成员档案和 ${personaMaterials.length} 张材料卡。当前未附加家庭经验沉淀。`,
+      };
+      return {
+        context: [
+          personaContext,
+          recalled.context ? `家庭可见参考资料：\n${recalled.context}` : '',
+        ].filter(Boolean).join('\n\n'),
+        metadata,
+      };
+    }
     if (mode === 'mirror' && responseMode === 'quick') {
       const quickMetadata: NonNullable<ChatMessage['metadata']> = {
         agentMode: 'mirror',
@@ -435,7 +545,7 @@ export default function AgentPage() {
         metadata: buildMirrorAnswerMetadata(mirrorContext, targetMember),
       };
     }
-  }, [activeFamilyId, mirrorContext, mirrorTargetUserId, mode, refreshMirrorContext, responseMode, targetLabel, targetMember]);
+  }, [activeFamilyId, loadPersonaMaterials, mirrorContext, mirrorTargetUserId, mode, refreshMirrorContext, responseMode, targetLabel, targetMember, targetPersona]);
 
   const prepareRequest = useCallback(async ({ defaultRequest }: {
     message: string;
@@ -443,6 +553,14 @@ export default function AgentPage() {
     memoryContext: { context: string; metadata?: NonNullable<ChatMessage['metadata']> };
     defaultRequest: UseChatRequestConfig;
   }) => {
+    if (mode === 'persona' && targetPersona) {
+      return {
+        ...defaultRequest,
+        subject: 'PersonaMemberAgent',
+        contextLabel: 'persona_member',
+        targetRole: 'MEMBER' as const,
+      };
+    }
     if (mode !== 'mirror' || !targetMember) {
       return defaultRequest;
     }
@@ -452,16 +570,24 @@ export default function AgentPage() {
       contextLabel: 'mirror_agent',
       targetRole: 'MEMBER' as const,
     };
-  }, [mode, targetMember]);
+  }, [mode, targetMember, targetPersona]);
 
   const normalizeStreamMetadata = useCallback((metadata: Record<string, unknown>): NonNullable<ChatMessage['metadata']> => (
     mode === 'mirror'
       ? normalizeMirrorAssistantMetadata(metadata)
+      : mode === 'persona'
+        ? {
+            agentMode: 'persona',
+            targetPersonaId: targetPersona?.id ?? null,
+            targetPersonaName: targetPersona?.name ?? targetLabel,
+            targetMemberName: targetPersona?.name ?? targetLabel,
+            ...normalizeAssistantMetadata(metadata),
+          }
       : {
           agentMode: 'family',
           ...normalizeAssistantMetadata(metadata),
         }
-  ), [mode]);
+  ), [mode, targetLabel, targetPersona]);
 
   const ensureSessionHeader = useCallback(async () => {
     if (!activeFamilyId) {
@@ -486,9 +612,9 @@ export default function AgentPage() {
       const createGeneration = generation;
       const createPromise = sessionApi.createSession({
         familyId: activeFamilyId,
-        subject: 'FamilyAgent',
+        subject: mode === 'persona' ? 'PersonaMemberAgent' : 'FamilyAgent',
         source: 'FAMILY_AGENT',
-        metadata: buildSessionMetadata(mode, targetLabel, targetMember, false),
+        metadata: buildSessionMetadata(mode, targetLabel, targetMember, targetPersona, false),
       });
       let createRequest: Promise<ChatSessionDetail>;
       createRequest = createPromise
@@ -510,7 +636,7 @@ export default function AgentPage() {
       createSessionPromiseRef.current = createRequest;
     }
     return createSessionPromiseRef.current;
-  }, [activeFamilyId, mode, setSessionId, targetLabel, targetMember, upsertSession]);
+  }, [activeFamilyId, mode, setSessionId, targetLabel, targetMember, targetPersona, upsertSession]);
 
   const appendSessionMessages = useCallback(async (newMessages: ChatMessage[]) => {
     if (!newMessages.length || !activeFamilyId) return;
@@ -565,14 +691,14 @@ export default function AgentPage() {
     if (!activeFamilyId) {
       setSessions([]);
       setSessionsLoaded(false);
-      return;
+      return [];
     }
 
     const cachedSessions = cachedAgentSessionsByFamilyId[activeFamilyId];
     if (cachedSessions) {
       setSessions(cachedSessions);
       setSessionsLoaded(true);
-      return;
+      return cachedSessions;
     }
 
     setIsLoadingSessions(true);
@@ -586,8 +712,10 @@ export default function AgentPage() {
       cachedAgentSessionsByFamilyId[activeFamilyId] = filtered;
       setSessions(filtered);
       setSessionsLoaded(true);
+      return filtered;
     } catch (error) {
       setSessionError(error instanceof Error ? error.message : '加载会话历史失败。');
+      return [];
     } finally {
       setIsLoadingSessions(false);
     }
@@ -607,6 +735,8 @@ export default function AgentPage() {
     sessionSavedMemoriesRef.current = [];
     setIsSessionsOpen(false);
     setIsContextOpen(false);
+    setIsActionsOpen(false);
+    autoRestoreFamilyIdRef.current = null;
 
     if (!activeFamilyId) {
       setSessions([]);
@@ -695,6 +825,43 @@ export default function AgentPage() {
     }
   }, [discardStreaming, loadAllSessionMessages, setMessages, setSessionId, upsertSession]);
 
+  useEffect(() => {
+    if (!activeFamilyId || autoRestoreFamilyIdRef.current === activeFamilyId) return;
+
+    autoRestoreFamilyIdRef.current = activeFamilyId;
+    const generation = sessionGenerationRef.current;
+    let cancelled = false;
+
+    const restoreRecentSession = async () => {
+      const availableSessions = await loadSessions();
+      if (
+        cancelled
+        || sessionGenerationRef.current !== generation
+        || sessionIdRef.current
+        || activeSessionDetailRef.current
+      ) {
+        return;
+      }
+
+      const recentSession = availableSessions
+        .filter((session) => (session.messageCount || 0) > 0)
+        .sort((left, right) => {
+          const rightTime = Date.parse(right.lastMessageAt || right.startedAt || '');
+          const leftTime = Date.parse(left.lastMessageAt || left.startedAt || '');
+          return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
+        })[0];
+
+      if (recentSession) {
+        await handleLoadSession(recentSession.id);
+      }
+    };
+
+    void restoreRecentSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeFamilyId, handleLoadSession, loadSessions]);
+
   const handleDeleteSession = useCallback(async (targetSessionId: number) => {
     try {
       await sessionApi.deleteSession(targetSessionId);
@@ -713,6 +880,29 @@ export default function AgentPage() {
     }
   }, [activeFamilyId, handleNewChat, sessionId]);
 
+  const handleClearSessions = useCallback(async () => {
+    if (!activeFamilyId || sessions.length === 0 || isClearingSessions) return;
+
+    setIsClearingSessions(true);
+    setSessionError('');
+    try {
+      await sessionApi.deleteFamilyAgentSessions(activeFamilyId);
+      cachedAgentSessionsByFamilyId[activeFamilyId] = [];
+      setSessions([]);
+      setSessionsLoaded(true);
+      if (sessionId && sessions.some((session) => session.id === sessionId)) {
+        handleNewChat();
+      }
+    } catch (error) {
+      delete cachedAgentSessionsByFamilyId[activeFamilyId];
+      setSessionsLoaded(false);
+      setSessionError(error instanceof Error ? error.message : '删除全部会话失败。');
+      void loadSessions();
+    } finally {
+      setIsClearingSessions(false);
+    }
+  }, [activeFamilyId, handleNewChat, isClearingSessions, loadSessions, sessionId, sessions]);
+
   const handleTargetChange = useCallback(async (nextTargetSelection: AgentTargetSelection) => {
     const normalizedSelection = normalizeTargetSelection(nextTargetSelection, selfUserId);
     const currentSelection = normalizeTargetSelection(targetSelection, selfUserId);
@@ -726,7 +916,8 @@ export default function AgentPage() {
     const nextMode: AgentMode = selectionMode(normalizedSelection, selfUserId);
     const nextMirrorTargetUserId = selectionMirrorTargetUserId(normalizedSelection, selfUserId);
     const nextTargetMember = selectionTargetMember(normalizedSelection, members, nextMirrorTargetUserId, null);
-    const nextTargetLabel = selectionLabel(normalizedSelection, nextTargetMember);
+    const nextPersona = selectionTargetPersona(normalizedSelection, personas);
+    const nextTargetLabel = selectionLabel(normalizedSelection, nextTargetMember, nextPersona);
     const hasConversation = useChatStore.getState().messages.length > 0 || Boolean(activeSessionDetailRef.current?.messageCount);
 
     setTargetSelection(normalizedSelection);
@@ -736,7 +927,7 @@ export default function AgentPage() {
       return;
     }
 
-    const marker = buildTargetSwitchMessage(nextMode, nextTargetLabel, nextTargetMember);
+    const marker = buildTargetSwitchMessage(nextMode, nextTargetLabel, nextTargetMember, nextPersona);
     setMessages([...useChatStore.getState().messages, marker]);
     try {
       await appendSessionMessages([marker]);
@@ -752,7 +943,7 @@ export default function AgentPage() {
         // non-critical
       }
     }
-  }, [appendSessionMessages, isStreaming, members, selfUserId, setMessages, stopStreaming, targetSelection]);
+  }, [appendSessionMessages, isStreaming, members, personas, selfUserId, setMessages, stopStreaming, targetSelection]);
 
   const handleSaveMessage = useCallback(async (message: ChatMessage) => {
     if (!activeFamilyId) {
@@ -772,7 +963,11 @@ export default function AgentPage() {
     }));
 
     const currentMode = mode;
-    const currentTargetName = currentMode === 'mirror' ? memberName(targetMember) : (activeMembership?.relationshipLabel || '');
+    const currentTargetName = currentMode === 'mirror'
+      ? memberName(targetMember)
+      : currentMode === 'persona'
+        ? targetPersona?.name || targetLabel
+        : (activeMembership?.relationshipLabel || '');
     let skillRunId: number | null = null;
 
     try {
@@ -780,7 +975,11 @@ export default function AgentPage() {
         familyId: activeFamilyId,
         skillName: 'save_memory',
         status: 'RUNNING',
-        source: currentMode === 'mirror' ? 'MIRROR_AGENT_CHAT' : 'FAMILY_AGENT_CHAT',
+        source: currentMode === 'mirror'
+          ? 'MIRROR_AGENT_CHAT'
+          : currentMode === 'persona'
+            ? 'PERSONA_MEMBER_CHAT'
+            : 'FAMILY_AGENT_CHAT',
         inputSummary: truncateAuditText(originalContent),
         saved: false,
       });
@@ -832,6 +1031,17 @@ export default function AgentPage() {
             viewerRole,
             ...saveMemorySkillMetadata(plan, savedAt),
           }
+        : currentMode === 'persona'
+          ? {
+              source: 'PERSONA_MEMBER_TOOL',
+              relationSource: 'PERSONA_MEMBER_TOOL',
+              relatedPersonaId: targetPersona?.id ?? targetPersonaId,
+              relatedPersonaName: currentTargetName,
+              savedFromMessageRole: message.role,
+              familyName: activeFamily?.name || '',
+              viewerRole,
+              ...saveMemorySkillMetadata(plan, savedAt),
+            }
         : {
             source: 'FAMILY_COMPANION_TOOL',
             relationSource: 'FAMILY_AGENT_TOOL',
@@ -850,6 +1060,13 @@ export default function AgentPage() {
             ? {
                 sourceType: 'FAMILY_EXPERIENCE',
                 scenario: '镜像对话保存',
+                target: currentTargetName,
+              }
+            : {}),
+          ...(plan.tool === 'FAMILY_MEMORY' && currentMode === 'persona'
+            ? {
+                sourceType: 'FAMILY_EXPERIENCE',
+                scenario: '精神成员对话保存',
                 target: currentTargetName,
               }
             : {}),
@@ -910,7 +1127,19 @@ export default function AgentPage() {
         },
       }));
     }
-  }, [activeFamily?.name, activeFamilyId, activeMembership?.relationshipLabel, mirrorTargetUserId, mode, recentMessages, targetMember, viewerRole]);
+  }, [
+    activeFamily?.name,
+    activeFamilyId,
+    activeMembership?.relationshipLabel,
+    mirrorTargetUserId,
+    mode,
+    recentMessages,
+    targetLabel,
+    targetMember,
+    targetPersona,
+    targetPersonaId,
+    viewerRole,
+  ]);
 
   const selectorOptions = useMemo(
     () => members.filter((member) => member.userId !== selfUserId),
@@ -952,7 +1181,11 @@ export default function AgentPage() {
   const archiveCount = activeSessionDetail?.archives?.length || 0;
   const currentSessionTitle = activeSessionDetail
     ? getSessionTitle(activeSessionDetail)
-    : (mode === 'mirror' ? `与 ${targetLabel} 的镜像对话` : '新的家庭对话');
+    : (mode === 'mirror'
+        ? `与 ${targetLabel} 的镜像对话`
+        : mode === 'persona'
+          ? `请教 ${targetLabel}`
+          : '新的家庭对话');
 
   return (
     <div className="h-[calc(100dvh-6rem)] overflow-hidden px-0 py-0 lg:h-[calc(100dvh-2rem)]">
@@ -971,9 +1204,13 @@ export default function AgentPage() {
                   <h1 className="truncate text-base font-semibold text-stone-950">FamilyAgent</h1>
                   <span className={cn(
                     'rounded-full px-2.5 py-1 text-xs font-medium',
-                    mode === 'mirror' ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-200 text-stone-700',
+                    mode === 'mirror'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : mode === 'persona'
+                        ? 'bg-violet-100 text-violet-800'
+                        : 'bg-stone-200 text-stone-700',
                   )}>
-                    {mode === 'mirror' ? '镜像参考' : '家庭对话'}
+                    {mode === 'mirror' ? '镜像参考' : mode === 'persona' ? '精神成员' : '家庭对话'}
                   </span>
                   <span className="text-xs text-stone-400">{activeFamily?.name}</span>
                 </div>
@@ -998,44 +1235,66 @@ export default function AgentPage() {
                 </div>
               </div>
 
-              <div className="absolute right-2 top-2 flex shrink-0 items-center gap-1 rounded-l-xl border border-r-0 border-stone-200 bg-white/95 p-1 shadow-sm">
+              <div ref={actionsMenuRef} className="absolute right-2 top-2 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setIsSessionsOpen((current) => !current)}
-                  aria-label="会话历史"
+                  onClick={() => setIsActionsOpen((current) => !current)}
+                  aria-label="打开助手操作"
+                  aria-expanded={isActionsOpen}
                   className={cn(
-                    'inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg border text-xs font-medium transition',
-                    isSessionsOpen
+                    'inline-flex h-9 items-center justify-center gap-1 rounded-lg border px-2.5 text-xs font-medium shadow-sm transition',
+                    isActionsOpen
                       ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                       : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50',
                   )}
                 >
-                  <History className="h-4 w-4" />
-                  会话历史
+                  <MoreHorizontal className="h-4 w-4" />
+                  <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', isActionsOpen && 'rotate-180')} />
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setIsContextOpen((current) => !current)}
-                  aria-label="上下文"
-                  className={cn(
-                    'inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg border text-xs font-medium transition',
-                    isContextOpen
-                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                      : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50',
-                  )}
-                >
-                  <Bot className="h-4 w-4" />
-                  上下文
-                </button>
-                <button
-                  type="button"
-                  onClick={handleNewChat}
-                  aria-label="新会话"
-                  className="inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-stone-950 text-xs font-medium text-white transition hover:bg-stone-800"
-                >
-                  <Plus className="h-4 w-4" />
-                  新会话
-                </button>
+
+                {isActionsOpen && (
+                  <div className="absolute right-0 top-11 z-20 w-56 overflow-hidden rounded-md border border-stone-200 bg-white py-1 shadow-xl">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsSessionsOpen(true);
+                        setIsActionsOpen(false);
+                      }}
+                      className={cn(
+                        'flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm transition',
+                        isSessionsOpen ? 'bg-emerald-50 text-emerald-800' : 'text-stone-700 hover:bg-stone-50',
+                      )}
+                    >
+                      <History className="h-4 w-4" />
+                      <span className="min-w-0 flex-1 truncate">会话历史</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsContextOpen(true);
+                        setIsActionsOpen(false);
+                      }}
+                      className={cn(
+                        'flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm transition',
+                        isContextOpen ? 'bg-emerald-50 text-emerald-800' : 'text-stone-700 hover:bg-stone-50',
+                      )}
+                    >
+                      <Bot className="h-4 w-4" />
+                      <span className="min-w-0 flex-1 truncate">上下文</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleNewChat();
+                        setIsActionsOpen(false);
+                      }}
+                      className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-stone-700 transition hover:bg-stone-50"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span className="min-w-0 flex-1 truncate">新会话</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1065,7 +1324,7 @@ export default function AgentPage() {
               <div className="hidden">
                 <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-stone-500">
                   <span className="rounded-full bg-stone-100 px-2.5 py-1 font-medium text-stone-700">
-                    {mode === 'mirror' ? '镜像 AI' : 'FamilyAgent'}
+                    {mode === 'mirror' ? '镜像 AI' : mode === 'persona' ? targetLabel : 'FamilyAgent'}
                   </span>
                 </div>
               </div>
@@ -1074,7 +1333,9 @@ export default function AgentPage() {
                 onChange={(event) => setInput(event.target.value)}
                 placeholder={mode === 'mirror'
                   ? `问问 ${targetLabel} 的日常记录和成长观察里有什么线索...`
-                  : '可以聊需要家族经验沉淀来参考的问题...'}
+                  : mode === 'persona'
+                    ? `向 ${targetLabel} 请教一个家庭问题...`
+                    : '可以聊需要家族经验沉淀来参考的问题...'}
                 disabled={isStreaming}
                 rows={2}
                 className="min-h-[72px] max-h-40 w-full resize-none rounded-md border border-stone-100 bg-stone-50/70 px-3 py-2 text-sm leading-6 text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-100 disabled:bg-stone-100"
@@ -1145,6 +1406,7 @@ export default function AgentPage() {
         sessionId={sessionId}
         isLoadingSessions={isLoadingSessions}
         sessionError={sessionError}
+        isClearingSessions={isClearingSessions}
         onClose={() => setIsSessionsOpen(false)}
         onRefresh={() => {
           if (!activeFamilyId) return;
@@ -1154,6 +1416,7 @@ export default function AgentPage() {
         }}
         onLoadSession={(targetSessionId) => { void handleLoadSession(targetSessionId); }}
         onDeleteSession={(targetSessionId) => { void handleDeleteSession(targetSessionId); }}
+        onClearSessions={() => { void handleClearSessions(); }}
       />
 
       <AgentContextPanel
@@ -1162,6 +1425,8 @@ export default function AgentPage() {
         targetLabel={targetLabel}
         targetSelection={targetSelection}
         selectorOptions={selectorOptions}
+        personaOptions={personas}
+        targetPersona={targetPersona}
         isLoadingMembers={isLoadingMembers}
         modeReadiness={modeReadiness}
         mirrorContext={mirrorContext}

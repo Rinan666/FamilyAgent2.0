@@ -22,6 +22,8 @@ import java.util.Locale;
 public class ResponseHeaderFilter implements Filter {
 
     private static final String NO_STORE = "no-store, max-age=0, must-revalidate";
+    private static final String CONTENT_SECURITY_POLICY = "default-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'";
+    private static final String PERMISSIONS_POLICY = "camera=(), microphone=(), geolocation=(), payment=()";
 
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
@@ -30,6 +32,10 @@ public class ResponseHeaderFilter implements Filter {
         HttpServletResponse httpResponse = (HttpServletResponse) response;
 
         httpResponse.setHeader("X-Content-Type-Options", "nosniff");
+        httpResponse.setHeader("X-Frame-Options", "DENY");
+        httpResponse.setHeader("Content-Security-Policy", CONTENT_SECURITY_POLICY);
+        httpResponse.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+        httpResponse.setHeader("Permissions-Policy", PERMISSIONS_POLICY);
         httpResponse.setCharacterEncoding(StandardCharsets.UTF_8.name());
 
         String path = httpRequest.getRequestURI();

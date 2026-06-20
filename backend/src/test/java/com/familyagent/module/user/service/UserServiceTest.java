@@ -11,6 +11,7 @@ import com.familyagent.module.user.dto.RegisterRequest;
 import com.familyagent.module.user.dto.UpdateProfileRequest;
 import com.familyagent.module.user.entity.User;
 import com.familyagent.module.user.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -18,11 +19,14 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.redisson.api.RAtomicLong;
+import org.redisson.api.RedissonClient;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -31,9 +35,11 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -44,9 +50,16 @@ class UserServiceTest {
 
     @Mock private UserRepository userRepository;
     @Mock private InviteCodeRepository inviteCodeRepository;
+    @Mock private RedissonClient redissonClient;
+    @Mock private RAtomicLong loginFailureCounter;
     @InjectMocks private UserService userService;
 
     private static final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+
+    @BeforeEach
+    void setUpLoginRateLimit() {
+        lenient().when(redissonClient.getAtomicLong(anyString())).thenReturn(loginFailureCounter);
+    }
 
     @Test
     void register_shouldCreateUserWithBCryptHash() {
@@ -264,23 +277,44 @@ class UserServiceTest {
         user.setStatus("ACTIVE");
 
         when(userRepository.findByUsername("alice")).thenReturn(user);
+        when(loginFailureCounter.incrementAndGet()).thenReturn(1L);
 
         LoginRequest req = new LoginRequest();
         req.setUsername("alice");
         req.setPassword("wrongpassword");
 
-        assertThrows(BusinessException.class, () -> userService.login(req));
+        BusinessException error = assertThrows(BusinessException.class, () -> userService.login(req));
+
+        assertEquals(ErrorCode.LOGIN_FAILED.getCode(), error.getCode());
+        verify(loginFailureCounter).expire(15, TimeUnit.MINUTES);
     }
 
     @Test
     void login_shouldFailWhenUserNotFound() {
         when(userRepository.findByUsername("nobody")).thenReturn(null);
+        when(loginFailureCounter.incrementAndGet()).thenReturn(2L);
 
         LoginRequest req = new LoginRequest();
         req.setUsername("nobody");
         req.setPassword("anything");
 
-        assertThrows(BusinessException.class, () -> userService.login(req));
+        BusinessException error = assertThrows(BusinessException.class, () -> userService.login(req));
+
+        assertEquals(ErrorCode.LOGIN_FAILED.getCode(), error.getCode());
+    }
+
+    @Test
+    void login_shouldRateLimitRepeatedFailures() {
+        when(loginFailureCounter.get()).thenReturn(10L);
+
+        LoginRequest req = new LoginRequest();
+        req.setUsername("alice");
+        req.setPassword("anything");
+
+        BusinessException error = assertThrows(BusinessException.class, () -> userService.login(req));
+
+        assertEquals(ErrorCode.RATE_LIMIT_EXCEEDED.getCode(), error.getCode());
+        verify(userRepository, never()).findByUsername(anyString());
     }
 
     @Test

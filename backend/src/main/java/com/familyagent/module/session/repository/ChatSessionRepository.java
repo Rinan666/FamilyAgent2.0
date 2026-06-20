@@ -2,6 +2,7 @@ package com.familyagent.module.session.repository;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.familyagent.module.session.entity.ChatSession;
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -52,6 +53,36 @@ public interface ChatSessionRepository extends BaseMapper<ChatSession> {
 
     @Select("SELECT COUNT(*) FROM chat_sessions WHERE user_id = #{userId} AND status = 'ACTIVE'")
     int countActiveByUserId(@Param("userId") Long userId);
+
+    @Select("""
+            SELECT id, user_id, family_id, subject,
+                   title, summary, status, visibility, source, metadata,
+                   started_at, ended_at, last_message_at, message_count, token_count,
+                   archived_before_seq, archive_status, archive_metadata
+            FROM chat_sessions
+            WHERE user_id = #{userId}
+              AND family_id = #{familyId}
+              AND (source IS NULL OR source IN ('FAMILY_AGENT', 'TUTOR'))
+            ORDER BY COALESCE(last_message_at, started_at) DESC, started_at DESC
+            """)
+    List<ChatSession> findFamilyAgentByUserAndFamily(@Param("userId") Long userId, @Param("familyId") Long familyId);
+
+    @Select("""
+            SELECT *
+            FROM chat_sessions
+            WHERE family_id = #{familyId}
+              AND metadata IS NOT NULL
+              AND metadata->>'targetPersonaId' = CAST(#{personaId} AS TEXT)
+            ORDER BY id ASC
+            """)
+    List<ChatSession> findByFamilyAndTargetPersonaId(@Param("familyId") Long familyId,
+                                                     @Param("personaId") Long personaId);
+
+    @Delete("""
+            DELETE FROM chat_sessions
+            WHERE id = #{sessionId}
+            """)
+    int deleteOwnedById(@Param("sessionId") Long sessionId);
 
     @Select("""
             SELECT *

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { UserRound, X } from 'lucide-react';
 import type { AgentTargetSelection } from '@/components/agent/agentTarget';
 import type { ModeReadiness } from '@/components/agent/agentDisplay';
-import type { AgentMode, FamilyMember, MirrorContextResponse } from '@/types';
+import type { AgentMode, FamilyMember, MirrorContextResponse, PersonaMember } from '@/types';
 
 interface AgentContextPanelProps {
   open: boolean;
@@ -12,6 +12,8 @@ interface AgentContextPanelProps {
   targetLabel: string;
   targetSelection: AgentTargetSelection;
   selectorOptions: FamilyMember[];
+  personaOptions: PersonaMember[];
+  targetPersona: PersonaMember | null;
   isLoadingMembers: boolean;
   modeReadiness: ModeReadiness;
   mirrorContext: MirrorContextResponse | null;
@@ -34,6 +36,8 @@ export default function AgentContextPanel({
   targetLabel,
   targetSelection,
   selectorOptions,
+  personaOptions,
+  targetPersona,
   isLoadingMembers,
   modeReadiness,
   mirrorContext,
@@ -84,11 +88,15 @@ export default function AgentContextPanel({
             <div className="mt-3 space-y-2">
               <select
                 id="agent-target-selector"
-                value={targetSelection === 'NONE' || targetSelection === 'SELF' ? targetSelection : String(targetSelection)}
+                value={typeof targetSelection === 'number' ? String(targetSelection) : targetSelection}
                 onChange={(event) => {
                   const value = event.target.value;
                   if (value === 'NONE' || value === 'SELF') {
                     onTargetChange(value);
+                    return;
+                  }
+                  if (value.startsWith('PERSONA:')) {
+                    onTargetChange(value as AgentTargetSelection);
                     return;
                   }
                   onTargetChange(Number(value));
@@ -97,24 +105,54 @@ export default function AgentContextPanel({
               >
                 <option value="NONE">无</option>
                 <option value="SELF">镜像自己</option>
-                {selectorOptions.map((member) => (
-                  <option key={member.userId} value={member.userId}>
-                    {member.relationshipLabel || member.nickname || member.username || `用户 ${member.userId}`}
-                  </option>
-                ))}
+                {selectorOptions.length > 0 && (
+                  <optgroup label="家庭成员">
+                    {selectorOptions.map((member) => (
+                      <option key={member.userId} value={member.userId}>
+                        {member.relationshipLabel || member.nickname || member.username || `用户 ${member.userId}`}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {personaOptions.length > 0 && (
+                  <optgroup label="精神成员">
+                    {personaOptions.map((persona) => (
+                      <option key={persona.id} value={`PERSONA:${persona.id}`}>
+                        {persona.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
               <div className="rounded-2xl bg-stone-50 px-3 py-2 text-xs text-stone-500">
                 {isLoadingMembers
-                  ? '正在加载家庭成员...'
-                  : selectorOptions.length > 0
-                    ? `可切换 ${selectorOptions.length} 位家庭成员`
-                    : '当前没有其他可切换的家庭成员'}
+                  ? '正在加载对话对象...'
+                  : selectorOptions.length + personaOptions.length > 0
+                    ? `可切换 ${selectorOptions.length} 位家庭成员、${personaOptions.length} 位精神成员`
+                    : '当前没有其他可切换的对话对象'}
               </div>
             </div>
           </div>
 
           {mode === 'family' ? (
             null
+          ) : mode === 'persona' ? (
+            <div className="rounded-[24px] border border-violet-100 bg-violet-50/80 p-4 text-xs leading-6 text-violet-900">
+              <div className="text-sm font-semibold">精神成员档案</div>
+              <div className="mt-3 space-y-2">
+                {targetPersona?.eraIdentity && <p>身份：{targetPersona.eraIdentity}</p>}
+                {targetPersona?.description && <p>简介：{targetPersona.description}</p>}
+                {targetPersona?.values && <p>价值观：{targetPersona.values}</p>}
+                {targetPersona?.speakingStyle && <p>说话风格：{targetPersona.speakingStyle}</p>}
+                {targetPersona?.personality && <p>性格气质：{targetPersona.personality}</p>}
+              </div>
+              <Link
+                href={`/dashboard/family?tab=personas${activeFamilyId ? `&familyId=${activeFamilyId}` : ''}`}
+                className="mt-4 block rounded-2xl border border-violet-200 bg-white px-3 py-2.5 text-violet-700 transition hover:border-violet-300 hover:bg-violet-50"
+              >
+                管理精神成员
+              </Link>
+            </div>
           ) : (
             <>
               {contextError && (

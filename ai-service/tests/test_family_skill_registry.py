@@ -27,6 +27,7 @@ def test_family_skills_include_active_memory_workflows():
     assert {
         "save_memory",
         "organize_draft",
+        "persona_material_draft",
     }.issubset(names)
 
     save_memory = get_family_skill("save_memory")
@@ -34,6 +35,12 @@ def test_family_skills_include_active_memory_workflows():
     assert save_memory["requires_confirmation"] is True
     assert "L0" in save_memory["writes"]
     assert "USER_CONFIRMATION" in save_memory["confirmation_policy"]
+
+    persona_material = get_family_skill("persona_material_draft")
+    assert persona_material is not None
+    assert persona_material["endpoint"] == "/ai/memory/persona-material-draft"
+    assert persona_material["requires_confirmation"] is True
+    assert persona_material["confirmation_policy"] == "RETURNS_DRAFT_ONLY"
 
 
 def test_family_skill_status_filter_is_case_insensitive():

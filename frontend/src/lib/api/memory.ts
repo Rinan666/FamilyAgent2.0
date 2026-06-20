@@ -9,6 +9,8 @@ import type {
   MemoryEntry,
   MemoryVoteType,
   PageResult,
+  PersonaMaterialDraft,
+  PersonaMaterialDraftProfile,
   RebuildMemoryIndexResult,
 } from '@/types';
 
@@ -66,6 +68,23 @@ export const memoryApi = {
       current_type: body.currentType || '',
       current_visibility: body.currentVisibility || '',
       target: body.target || '',
+    }),
+  organizePersonaMaterialDraft: (body: {
+    content: string;
+    profile: Partial<PersonaMaterialDraftProfile>;
+    familyContext?: string;
+  }) =>
+    aiRequest<{ success: boolean; data: PersonaMaterialDraft }>('/memory/persona-material-draft', {
+      content: body.content,
+      profile: {
+        name: body.profile.name || '',
+        description: body.profile.description || '',
+        era_identity: body.profile.eraIdentity || '',
+        values: body.profile.values || '',
+        speaking_style: body.profile.speakingStyle || '',
+        personality: body.profile.personality || '',
+      },
+      family_context: body.familyContext || '',
     }),
   recall: (body: { query?: string; subject?: string; limit?: number }) =>
     request<MemoryEntry[]>('/memories/recall', {

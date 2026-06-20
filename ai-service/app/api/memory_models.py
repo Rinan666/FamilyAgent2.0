@@ -24,3 +24,18 @@ class OrganizeDraftRequest(BaseModel):
     current_type: str = ""
     current_visibility: str = ""
     target: str = ""
+
+
+class PersonaProfileInput(BaseModel):
+    name: str = ""
+    description: str = ""
+    era_identity: str = ""
+    values: str = ""
+    speaking_style: str = ""
+    personality: str = ""
+
+
+class PersonaMaterialDraftRequest(BaseModel):
+    content: str = Field(..., min_length=8)
+    profile: PersonaProfileInput = Field(default_factory=PersonaProfileInput)
+    family_context: str = ""

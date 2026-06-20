@@ -104,6 +104,12 @@ public class ChatSessionController {
         return Result.success();
     }
 
+    @Operation(summary = "删除当前用户指定家族的 FamilyAgent 会话")
+    @DeleteMapping("/family/{familyId}/agent")
+    public Result<Integer> deleteFamilyAgentSessions(@PathVariable Long familyId) {
+        return Result.success(sessionService.deleteFamilyAgentSessions(familyId));
+    }
+
     @Operation(summary = "获取会话归档摘要")
     @GetMapping("/{id}/archives")
     public Result<List<ChatSessionArchiveSummary>> getArchives(@PathVariable Long id) {

@@ -62,4 +62,5 @@ export const sessionApi = {
       body: JSON.stringify(data),
     }).then(normalizeSessionDetail),
   deleteSession: (id: number) => request<void>(`/sessions/${id}`, { method: 'DELETE' }),
+  deleteFamilyAgentSessions: (familyId: number) => request<number>(`/sessions/family/${familyId}/agent`, { method: 'DELETE' }),
 };

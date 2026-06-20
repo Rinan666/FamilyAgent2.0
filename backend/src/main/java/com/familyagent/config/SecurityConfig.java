@@ -21,7 +21,7 @@ public class SecurityConfig implements WebMvcConfigurer {
                         "/api/users/login",
                         "/docs/**",
                         "/v3/api-docs/**",
-                        "/actuator/**"
+                        "/actuator/health"
                 );
     }
 }

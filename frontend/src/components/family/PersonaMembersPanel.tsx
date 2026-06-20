@@ -1,9 +1,17 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BookOpen, Loader2, Pencil, Plus, Trash2, UserCheck, X } from 'lucide-react';
-import { familyApi } from '@/lib/api';
-import type { CreatePersonaMemberRequest, PersonaMember, UpdatePersonaMemberRequest } from '@/types';
+import Link from 'next/link';
+import { BookOpen, Loader2, MessageCircle, Pencil, Plus, Trash2, UserCheck, X } from 'lucide-react';
+import { familyApi, memoryApi } from '@/lib/api';
+import type {
+  CreatePersonaMemberRequest,
+  PersonaMaterial,
+  PersonaMaterialDraft,
+  PersonaMaterialDraftCard,
+  PersonaMember,
+  UpdatePersonaMemberRequest,
+} from '@/types';
 
 interface PersonaMembersPanelProps {
   familyId?: number | null;
@@ -32,11 +40,13 @@ function PersonaCard({
   persona,
   isOwner,
   onEdit,
+  onMaterials,
   onDelete,
 }: {
   persona: PersonaMember;
   isOwner: boolean;
   onEdit: (persona: PersonaMember) => void;
+  onMaterials: (persona: PersonaMember) => void;
   onDelete: (persona: PersonaMember) => void;
 }) {
   return (
@@ -66,8 +76,24 @@ function PersonaCard({
             </div>
           </div>
         </div>
-        {isOwner && (
-          <div className="flex shrink-0 gap-1">
+        <div className="flex shrink-0 gap-1">
+          <Link
+            href={`/dashboard/agent?familyId=${persona.familyId}&targetPersonaId=${persona.id}`}
+            className="rounded-lg p-1.5 text-gray-400 hover:bg-violet-50 hover:text-violet-700"
+            title="请教"
+          >
+            <MessageCircle className="h-3.5 w-3.5" />
+          </Link>
+          {isOwner && (
+            <>
+            <button
+              type="button"
+              onClick={() => onMaterials(persona)}
+              className="rounded-lg p-1.5 text-gray-400 hover:bg-emerald-50 hover:text-emerald-700"
+              title="材料"
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+            </button>
             <button
               type="button"
               onClick={() => onEdit(persona)}
@@ -84,8 +110,9 @@ function PersonaCard({
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
     </article>
   );
@@ -232,12 +259,320 @@ function DeleteConfirmModal({
   );
 }
 
+function tagsToText(tags?: string[]) {
+  return (tags || []).join(' ');
+}
+
+function textToTags(value: string) {
+  return value
+    .split(/[\s,，]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
+function profileFromPersona(persona: PersonaMember): CreatePersonaMemberRequest {
+  return {
+    name: persona.name,
+    description: persona.description ?? '',
+    eraIdentity: persona.eraIdentity ?? '',
+    values: persona.values ?? '',
+    speakingStyle: persona.speakingStyle ?? '',
+    personality: persona.personality ?? '',
+  };
+}
+
+function normalizeDraftProfile(profile: PersonaMaterialDraft['profile']): CreatePersonaMemberRequest {
+  return {
+    name: profile.name || '',
+    description: profile.description || '',
+    eraIdentity: profile.eraIdentity || '',
+    values: profile.values || '',
+    speakingStyle: profile.speakingStyle || '',
+    personality: profile.personality || '',
+  };
+}
+
+function PersonaMaterialModal({
+  familyId,
+  persona,
+  onClose,
+  onSaved,
+}: {
+  familyId: number;
+  persona: PersonaMember;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [materials, setMaterials] = useState<PersonaMaterial[]>([]);
+  const [rawText, setRawText] = useState('');
+  const [draftProfile, setDraftProfile] = useState<CreatePersonaMemberRequest>(profileFromPersona(persona));
+  const [draftCards, setDraftCards] = useState<PersonaMaterialDraftCard[]>([]);
+  const [reason, setReason] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [organizing, setOrganizing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const loadMaterials = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const list = await familyApi.listPersonaMaterials(familyId, persona.id);
+      setMaterials(Array.isArray(list) ? list : []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '加载材料失败');
+    } finally {
+      setLoading(false);
+    }
+  }, [familyId, persona.id]);
+
+  useEffect(() => {
+    void loadMaterials();
+  }, [loadMaterials]);
+
+  function setProfileField(key: keyof CreatePersonaMemberRequest, value: string) {
+    setDraftProfile((current) => ({ ...current, [key]: value }));
+  }
+
+  function setCard(index: number, patch: Partial<PersonaMaterialDraftCard>) {
+    setDraftCards((current) => current.map((card, itemIndex) => (
+      itemIndex === index ? { ...card, ...patch } : card
+    )));
+  }
+
+  async function handleOrganize() {
+    if (!rawText.trim()) return;
+    setOrganizing(true);
+    setError('');
+    try {
+      const result = await memoryApi.organizePersonaMaterialDraft({
+        content: rawText,
+        profile: draftProfile,
+      });
+      const data = result.data;
+      setDraftProfile(normalizeDraftProfile(data.profile));
+      setDraftCards(data.materials || []);
+      setReason(data.reason || '');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'AI 整理失败');
+    } finally {
+      setOrganizing(false);
+    }
+  }
+
+  async function handleSaveDraft() {
+    const cards = draftCards
+      .map((card) => ({
+        title: card.title.trim(),
+        content: card.content.trim(),
+        tags: card.tags || [],
+      }))
+      .filter((card) => card.title && card.content);
+    if (!cards.length) {
+      setError('请至少保留一张可保存的材料卡');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    try {
+      await familyApi.updatePersonaMember(familyId, persona.id, draftProfile);
+      await Promise.all(cards.map((card) => familyApi.createPersonaMaterial(familyId, persona.id, card)));
+      setRawText('');
+      setDraftCards([]);
+      setReason('');
+      await loadMaterials();
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '保存材料失败');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeleteMaterial(materialId: number) {
+    setSaving(true);
+    setError('');
+    try {
+      await familyApi.deletePersonaMaterial(familyId, persona.id, materialId);
+      await loadMaterials();
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '删除材料失败');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-4xl rounded-2xl bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">整理精神成员材料</h2>
+            <p className="mt-1 text-xs text-gray-500">{persona.name}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="max-h-[78vh] overflow-y-auto px-5 py-4">
+          {error && (
+            <div className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
+          )}
+
+          <div className="grid gap-4 lg:grid-cols-[1fr_1.15fr]">
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-700">粘贴原始材料</label>
+                <textarea
+                  rows={12}
+                  value={rawText}
+                  onChange={(event) => setRawText(event.target.value)}
+                  className="w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm leading-6 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => { void handleOrganize(); }}
+                disabled={organizing || rawText.trim().length < 8}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+              >
+                {organizing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                AI 整理草案
+              </button>
+
+              <div>
+                <div className="mb-2 text-xs font-medium text-gray-700">已保存材料</div>
+                {loading ? (
+                  <div className="text-sm text-gray-400">正在加载材料...</div>
+                ) : materials.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-gray-200 px-3 py-4 text-sm text-gray-400">暂无材料卡</div>
+                ) : (
+                  <div className="space-y-2">
+                    {materials.map((material) => (
+                      <div key={material.id} className="rounded-xl border border-gray-200 px-3 py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-900">{material.title}</p>
+                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">{material.content}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => { void handleDeleteMaterial(material.id); }}
+                            disabled={saving}
+                            className="shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                            title="删除材料"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="rounded-xl border border-violet-100 bg-violet-50/70 px-4 py-3">
+                <div className="text-xs font-medium text-violet-700">预览草案</div>
+                {reason && <p className="mt-1 text-xs leading-5 text-violet-600">{reason}</p>}
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                {PERSONA_FIELDS.map(({ key, label }) => (
+                  <label key={key} className="block">
+                    <span className="mb-1 block text-xs font-medium text-gray-700">{label}</span>
+                    <textarea
+                      rows={key === 'name' || key === 'eraIdentity' ? 1 : 2}
+                      value={draftProfile[key] ?? ''}
+                      onChange={(event) => setProfileField(key, event.target.value)}
+                      className="w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400"
+                    />
+                  </label>
+                ))}
+              </div>
+
+              {draftCards.length > 0 && (
+                <div className="space-y-3">
+                  {draftCards.map((card, index) => (
+                    <div key={`${card.title}-${index}`} className="rounded-xl border border-gray-200 px-3 py-3">
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setDraftCards((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                          className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                          title="移除草案"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <label className="block">
+                        <span className="mb-1 block text-xs font-medium text-gray-700">标题</span>
+                        <input
+                          value={card.title}
+                          onChange={(event) => setCard(index, { title: event.target.value })}
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400"
+                        />
+                      </label>
+                      <label className="mt-3 block">
+                        <span className="mb-1 block text-xs font-medium text-gray-700">内容</span>
+                        <textarea
+                          rows={4}
+                          value={card.content}
+                          onChange={(event) => setCard(index, { content: event.target.value })}
+                          className="w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm leading-6 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400"
+                        />
+                      </label>
+                      <label className="mt-3 block">
+                        <span className="mb-1 block text-xs font-medium text-gray-700">标签</span>
+                        <input
+                          value={tagsToText(card.tags)}
+                          onChange={(event) => setCard(index, { tags: textToTags(event.target.value) })}
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400"
+                        />
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-5 flex justify-end gap-2 border-t border-gray-100 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+            >
+              关闭
+            </button>
+            <button
+              type="button"
+              onClick={() => { void handleSaveDraft(); }}
+              disabled={saving || draftCards.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              保存草案
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PersonaMembersPanel({ familyId, isOwner = false }: PersonaMembersPanelProps) {
   const [personas, setPersonas] = useState<PersonaMember[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [editTarget, setEditTarget] = useState<PersonaMember | null>(null);
+  const [materialTarget, setMaterialTarget] = useState<PersonaMember | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PersonaMember | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
@@ -338,6 +673,7 @@ export default function PersonaMembersPanel({ familyId, isOwner = false }: Perso
                   persona={persona}
                   isOwner={isOwner}
                   onEdit={setEditTarget}
+                  onMaterials={setMaterialTarget}
                   onDelete={setDeleteTarget}
                 />
               ))}
@@ -394,6 +730,15 @@ export default function PersonaMembersPanel({ familyId, isOwner = false }: Perso
           onConfirm={handleDelete}
           onClose={() => setDeleteTarget(null)}
           submitting={submitting}
+        />
+      )}
+
+      {familyId && materialTarget && (
+        <PersonaMaterialModal
+          familyId={familyId}
+          persona={materialTarget}
+          onClose={() => setMaterialTarget(null)}
+          onSaved={load}
         />
       )}
 

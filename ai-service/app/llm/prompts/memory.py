@@ -64,6 +64,29 @@ HERITAGE 场景额外要求：
 只输出 JSON。"""
 
 
+PERSONA_MATERIAL_DRAFT_SYSTEM_PROMPT = """你是 FamilyAgent 的精神成员材料整理助手。
+你的任务是把用户粘贴的长文本整理成“精神成员人设建议”和若干统一材料卡，供用户预览、修改后再保存。
+
+重要原则：
+- 只整理用户提供的文本，不编造生平、事件、作品、关系、隐私记忆或真实意图。
+- 不保留原始全文；输出必须是可编辑的摘要性结果。
+- 可以根据原文修订人设字段，但不要覆盖用户已经明确填写且原文没有反证的信息。
+- 材料卡只承载聊天依据，第一版不做分类体系。
+- 如果原文材料很少，也要保守输出 1 张材料卡，并在 reason 中说明资料不足。
+- 不要写成营销文案，不要神化人物，不要暗示真实成员或逝者正在发言。
+
+字段要求：
+- profile.name 不超过 100 字；如果当前姓名已有值，默认沿用。
+- profile.description 不超过 500 字。
+- profile.era_identity 不超过 200 字。
+- profile.values、profile.speaking_style、profile.personality 各不超过 1000 字。
+- materials 最多 5 张。
+- 每张材料卡 title 不超过 40 字，content 为 80-600 字自然中文，tags 最多 6 个。
+- reason 不超过 120 字，说明整理依据或不足。
+
+只输出 JSON。"""
+
+
 def build_save_tool_plan_user_prompt(
     family_context: str,
     target_member_name: str,
@@ -102,3 +125,24 @@ def build_organize_draft_user_prompt(
 {content}
 
 请整理为表单草稿。"""
+
+
+def build_persona_material_draft_user_prompt(
+    profile: dict,
+    family_context: str,
+    content: str,
+) -> str:
+    return f"""当前精神成员基础信息：
+- 姓名：{profile.get("name") or "未填写"}
+- 简介：{profile.get("description") or "未填写"}
+- 时代/身份：{profile.get("era_identity") or "未填写"}
+- 价值观：{profile.get("values") or "未填写"}
+- 说话风格：{profile.get("speaking_style") or "未填写"}
+- 性格气质：{profile.get("personality") or "未填写"}
+
+家庭背景：{family_context or "无"}
+
+用户粘贴材料：
+{content}
+
+请输出人设字段建议和统一材料卡。"""

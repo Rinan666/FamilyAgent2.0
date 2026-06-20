@@ -8,6 +8,8 @@ import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.invite.entity.InviteCode;
 import com.familyagent.module.invite.repository.InviteCodeRepository;
 import com.familyagent.module.user.dto.ChangePasswordRequest;
+import org.redisson.api.RAtomicLong;
+import org.redisson.api.RedissonClient;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import com.familyagent.module.user.dto.LoginRequest;
@@ -33,6 +35,7 @@ import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -43,6 +46,10 @@ public class UserService {
     private final InviteCodeRepository inviteCodeRepository;
     private static final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
     private static final ObjectMapper objectMapper = new ObjectMapper();
+    private static final int MAX_LOGIN_FAILURES_PER_WINDOW = 10;
+    private static final int LOGIN_FAILURE_WINDOW_MINUTES = 15;
+
+    private final RedissonClient redissonClient;
 
     private boolean passwordMatches(String rawPassword, String storedHash) {
         if (storedHash.startsWith("$2a$")) {
@@ -93,9 +100,13 @@ public class UserService {
     }
 
     public LoginResponse login(LoginRequest request) {
-        User user = userRepository.findByUsername(request.getUsername());
+        String username = request.getUsername() == null ? "" : request.getUsername().trim();
+        checkLoginFailureLimit(username);
+
+        User user = userRepository.findByUsername(username);
         if (user == null) {
-            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+            recordLoginFailure(username);
+            throw new BusinessException(ErrorCode.LOGIN_FAILED, "Username or password is incorrect");
         }
 
         if (!EntityStatus.ACTIVE.name().equals(user.getStatus())) {
@@ -103,7 +114,8 @@ public class UserService {
         }
 
         if (!passwordMatches(request.getPassword(), user.getPasswordHash())) {
-            throw new BusinessException(ErrorCode.PASSWORD_ERROR);
+            recordLoginFailure(username);
+            throw new BusinessException(ErrorCode.LOGIN_FAILED, "Username or password is incorrect");
         }
 
         if (!user.getPasswordHash().startsWith("$2a$")) {
@@ -130,6 +142,27 @@ public class UserService {
                 .token(token)
                 .tokenName("Authorization")
                 .build();
+    }
+
+    private void checkLoginFailureLimit(String username) {
+        RAtomicLong counter = redissonClient.getAtomicLong(loginFailureKey(username));
+        if (counter.get() >= MAX_LOGIN_FAILURES_PER_WINDOW) {
+            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED,
+                    "Too many failed login attempts. Please try again later.");
+        }
+    }
+
+    private void recordLoginFailure(String username) {
+        RAtomicLong counter = redissonClient.getAtomicLong(loginFailureKey(username));
+        long count = counter.incrementAndGet();
+        if (count == 1) {
+            counter.expire(LOGIN_FAILURE_WINDOW_MINUTES, TimeUnit.MINUTES);
+        }
+    }
+
+    private String loginFailureKey(String username) {
+        String normalized = username == null ? "" : username.trim().toLowerCase(Locale.ROOT);
+        return "security:login:failures:" + SecureUtil.sha256(normalized);
     }
 
     @Cacheable(value = "user", key = "#id")

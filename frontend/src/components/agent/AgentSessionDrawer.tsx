@@ -17,10 +17,12 @@ interface AgentSessionDrawerProps {
   sessionId: number | null;
   isLoadingSessions: boolean;
   sessionError: string;
+  isClearingSessions?: boolean;
   onClose: () => void;
   onRefresh: () => void;
   onLoadSession: (sessionId: number) => void;
   onDeleteSession: (sessionId: number) => void;
+  onClearSessions: () => void;
 }
 
 export default function AgentSessionDrawer({
@@ -30,10 +32,12 @@ export default function AgentSessionDrawer({
   sessionId,
   isLoadingSessions,
   sessionError,
+  isClearingSessions = false,
   onClose,
   onRefresh,
   onLoadSession,
   onDeleteSession,
+  onClearSessions,
 }: AgentSessionDrawerProps) {
   if (!open) return null;
 
@@ -42,6 +46,14 @@ export default function AgentSessionDrawer({
     const confirmed = window.confirm(`永久删除“${title}”？\n\n删除后会话、消息和归档内容都无法恢复。`);
     if (confirmed) {
       onDeleteSession(session.id);
+    }
+  };
+
+  const confirmClearSessions = () => {
+    if (sessions.length === 0 || isClearingSessions) return;
+    const confirmed = window.confirm(`永久删除当前家庭的 ${sessions.length} 个会话？\n\n删除后会话、消息和归档内容都无法恢复。`);
+    if (confirmed) {
+      onClearSessions();
     }
   };
 
@@ -82,6 +94,20 @@ export default function AgentSessionDrawer({
             </button>
           </div>
         </div>
+
+        {sessions.length > 0 && (
+          <div className="border-b border-stone-200/80 px-5 py-3">
+            <button
+              type="button"
+              onClick={confirmClearSessions}
+              disabled={isClearingSessions || isLoadingSessions}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-medium text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isClearingSessions ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              一键删除全部 {sessions.length} 个会话
+            </button>
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto px-4 py-4">
           {sessionError && (
@@ -137,6 +163,11 @@ export default function AgentSessionDrawer({
                       {metadata.targetMemberName && metadata.agentMode === 'mirror' && !metadata.hasTargetSwitches && (
                         <div className="mt-2 text-[11px] text-emerald-700">
                           对象：{metadata.targetMemberName}
+                        </div>
+                      )}
+                      {metadata.targetPersonaName && metadata.agentMode === 'persona' && !metadata.hasTargetSwitches && (
+                        <div className="mt-2 text-[11px] text-violet-700">
+                          精神成员：{metadata.targetPersonaName}
                         </div>
                       )}
                       <div className="mt-3 flex items-center justify-between text-[11px] text-stone-500">

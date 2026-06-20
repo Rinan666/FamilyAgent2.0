@@ -36,12 +36,18 @@ export default function AgentMessageList({
             <Sparkles className="h-6 w-6" />
           </div>
           <h3 className="mt-5 text-xl font-semibold text-stone-950">
-            {mode === 'mirror' ? `开始与 ${targetLabel} 的镜像参考对话` : '开始一段家庭对话'}
+            {mode === 'mirror'
+              ? `开始与 ${targetLabel} 的镜像参考对话`
+              : mode === 'persona'
+                ? `开始请教 ${targetLabel}`
+                : '开始一段家庭对话'}
           </h3>
           <p className="mx-auto mt-3 max-w-2xl text-sm leading-7 text-stone-500">
             {mode === 'mirror'
               ? '镜像 AI 会参考上下文、授权日常记录和成长观察，不使用家族经验沉淀。'
-              : 'FamilyAgent 会参考当前上下文和家族经验沉淀，不召回日常记录或成长观察。'}
+              : mode === 'persona'
+                ? '精神成员会基于家族创建的档案和当前可见家庭经验提供建议，不代表真实成员本人。'
+                : 'FamilyAgent 会参考当前上下文和家族经验沉淀，不召回日常记录或成长观察。'}
           </p>
           {onOpenContext && (
             <div className="mt-6">
@@ -83,6 +89,7 @@ export default function AgentMessageList({
 
           const isAssistant = message.role === 'assistant';
           const isMirrorAssistant = message.metadata?.agentMode === 'mirror' || Boolean(message.metadata?.sourceRefs?.length);
+          const isPersonaAssistant = message.metadata?.agentMode === 'persona';
 
           return (
             <div
@@ -98,7 +105,7 @@ export default function AgentMessageList({
               >
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div className={`text-xs font-semibold ${isAssistant ? 'text-emerald-700' : 'text-emerald-800'}`}>
-                    {isAssistant ? (isMirrorAssistant ? 'MirrorAgent' : 'FamilyAgent') : '你'}
+                    {isAssistant ? (isPersonaAssistant ? targetLabel : isMirrorAssistant ? 'MirrorAgent' : 'FamilyAgent') : '你'}
                   </div>
                   <div className="text-[11px] text-stone-400">
                     {formatSessionTime(message.timestamp)}

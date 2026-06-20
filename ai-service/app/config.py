@@ -135,10 +135,12 @@ class Settings(BaseSettings):
 
     @property
     def auth_fail_open_enabled(self) -> bool:
-        """Only development defaults to fail-open; all other environments fail-closed."""
+        """Fail-open is only permitted in local development."""
+        if not self.is_development_env:
+            return False
         if self.auth_fail_open is not None:
             return self.auth_fail_open
-        return self.is_development_env
+        return True
 
     @property
     def is_development_env(self) -> bool:

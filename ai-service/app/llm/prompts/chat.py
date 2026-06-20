@@ -1,6 +1,7 @@
 """Chat prompt definitions for FamilyAgent."""
 
 from app.llm.prompts.mirror import MIRROR_AGENT_CONTEXT_LABEL, MIRROR_AGENT_MODE_RULES
+from app.llm.prompts.persona import PERSONA_MEMBER_CONTEXT_LABEL, PERSONA_MEMBER_MODE_RULES
 
 FAMILY_AGENT_PROMPT = """
 # 角色设定
@@ -103,6 +104,8 @@ def _current_time_context(client_timestamp: str = "", client_timezone: str = "")
 def _mode_rules(subject: str, context_label: str) -> str:
     if (context_label or "").strip() == MIRROR_AGENT_CONTEXT_LABEL or (subject or "").strip() == "MirrorAgent":
         return MIRROR_AGENT_MODE_RULES
+    if (context_label or "").strip() == PERSONA_MEMBER_CONTEXT_LABEL or (subject or "").strip() == "PersonaMemberAgent":
+        return PERSONA_MEMBER_MODE_RULES
     return ""
 
 
