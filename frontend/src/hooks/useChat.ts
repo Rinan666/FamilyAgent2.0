@@ -230,9 +230,7 @@ export function useChat(options: UseChatOptions = {}) {
     const assistantMessage = addMessage('assistant', '');
     setStreaming(true);
 
-    const persistUserMessageTask = enqueuePersist([userMessage])
-      .then(() => null)
-      .catch((error: unknown) => error);
+    const persistUserMessageTask = enqueuePersist([userMessage]).catch(() => undefined);
 
     const timeContext = currentTimeContext();
     const memoryContext = await (memoryContextResolver
@@ -242,13 +240,6 @@ export function useChat(options: UseChatOptions = {}) {
           defaultRecall: () => recallMemoryContext(message, history),
         })
       : recallMemoryContext(message, history));
-
-    const persistUserMessageError = await persistUserMessageTask;
-    if (persistUserMessageError) {
-      removeMessageById(assistantMessage.id);
-      setStreaming(false);
-      throw persistUserMessageError;
-    }
 
     if (!isRunActive(runId) || stoppedRunsRef.current.has(runId)) {
       removeMessageById(assistantMessage.id);
@@ -345,6 +336,7 @@ export function useChat(options: UseChatOptions = {}) {
     }
 
     activeStreamRef.current = handle;
+    void persistUserMessageTask;
   }, [
     addMessage,
     appendToLastMessage,

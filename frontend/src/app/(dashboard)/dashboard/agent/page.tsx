@@ -36,7 +36,7 @@ import {
 import VoiceInputButton from '@/components/voice/VoiceInputButton';
 import { useChat, type SessionSavedMemory, type UseChatRequestConfig } from '@/hooks/useChat';
 import { useViewerRole } from '@/hooks/useViewerRole';
-import { normalizeAssistantMetadata } from '@/hooks/chat/useChatHelpers';
+import { normalizeAssistantMetadata, withTimeout } from '@/hooks/chat/useChatHelpers';
 import { useAuthStore } from '@/stores/authStore';
 import { useChatStore } from '@/stores/chatStore';
 import { cn, generateId } from '@/lib/utils';
@@ -216,6 +216,7 @@ let cachedAgentMembersByFamilyId: Record<number, FamilyMember[]> = {};
 let cachedAgentPersonasByFamilyId: Record<number, PersonaMember[]> = {};
 let cachedAgentSessionsByFamilyId: Record<number, ChatSessionSummary[]> = {};
 let cachedMirrorContextByFamilyTarget: Record<string, MirrorContextResponse> = {};
+const PERSONA_MATERIALS_TIMEOUT_MS = 800;
 
 function buildTargetSwitchMessage(
   nextMode: AgentMode,
@@ -491,7 +492,11 @@ export default function AgentPage() {
   }) => {
     if (mode === 'persona' && targetPersona) {
       const personaMaterials = activeFamilyId
-        ? await loadPersonaMaterials(activeFamilyId, targetPersona.id).catch(() => [] as PersonaMaterial[])
+        ? await withTimeout(
+            loadPersonaMaterials(activeFamilyId, targetPersona.id),
+            [] as PersonaMaterial[],
+            PERSONA_MATERIALS_TIMEOUT_MS,
+          ).catch(() => [] as PersonaMaterial[])
         : [];
       const personaContext = personaProfileContext(targetPersona, personaMaterials);
       const recalled: { context: string; metadata?: NonNullable<ChatMessage['metadata']> } = responseMode === 'quick'
@@ -641,6 +646,7 @@ export default function AgentPage() {
   const appendSessionMessages = useCallback(async (newMessages: ChatMessage[]) => {
     if (!newMessages.length || !activeFamilyId) return;
     const generation = sessionGenerationRef.current;
+    const isUserMessageDraft = newMessages.length === 1 && newMessages[0].role === 'user';
     setSessionError('');
     try {
       const detail = await ensureSessionHeader();
@@ -654,7 +660,7 @@ export default function AgentPage() {
       setActiveSessionDetail(updated);
       upsertSession(updated);
     } catch (error) {
-      if (sessionGenerationRef.current === generation) {
+      if (sessionGenerationRef.current === generation && !isUserMessageDraft) {
         setSessionError(error instanceof Error ? error.message : '自动保存聊天记录失败。');
       }
       throw error;
@@ -1302,6 +1308,7 @@ export default function AgentPage() {
           <AgentMessageList
             messages={messages}
             isLoadingMessages={isLoadingMessages}
+            isStreaming={isStreaming}
             mode={mode}
             targetLabel={targetLabel}
             saveFeedback={saveFeedback}

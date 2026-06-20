@@ -12,6 +12,7 @@ import type { AgentMode, ChatMessage } from '@/types';
 interface AgentMessageListProps {
   messages: ChatMessage[];
   isLoadingMessages: boolean;
+  isStreaming: boolean;
   mode: AgentMode;
   targetLabel: string;
   saveFeedback: Record<string, SaveFeedback>;
@@ -22,6 +23,7 @@ interface AgentMessageListProps {
 export default function AgentMessageList({
   messages,
   isLoadingMessages,
+  isStreaming,
   mode,
   targetLabel,
   saveFeedback,
@@ -90,6 +92,7 @@ export default function AgentMessageList({
           const isAssistant = message.role === 'assistant';
           const isMirrorAssistant = message.metadata?.agentMode === 'mirror' || Boolean(message.metadata?.sourceRefs?.length);
           const isPersonaAssistant = message.metadata?.agentMode === 'persona';
+          const showSaveControls = !isStreaming && Boolean(message.content.trim());
 
           return (
             <div
@@ -127,6 +130,7 @@ export default function AgentMessageList({
                 {isAssistant && <WebSearchBadge metadata={message.metadata} />}
                 {isAssistant && isMirrorAssistant && <AnswerEvidenceDisclosure message={message} />}
 
+                {showSaveControls && (
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                   <button
                     type="button"
@@ -158,6 +162,7 @@ export default function AgentMessageList({
                     </div>
                   )}
                 </div>
+                )}
               </div>
             </div>
           );
