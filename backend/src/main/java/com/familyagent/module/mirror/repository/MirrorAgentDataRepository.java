@@ -26,7 +26,7 @@ public interface MirrorAgentDataRepository extends BaseMapper<MirrorAgentData> {
                 AND fm.role = 'OWNER'
             )
             OR (
-              visibility IN ('CARE_VISIBLE', 'PARENT_VISIBLE')
+              visibility = 'CARE_VISIBLE'
               AND EXISTS (
                 SELECT 1 FROM care_authorizations ca
                 WHERE ca.family_id = mirror_agent_data.primary_family_id

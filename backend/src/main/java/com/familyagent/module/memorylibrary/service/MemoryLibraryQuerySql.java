@@ -41,7 +41,7 @@ class MemoryLibraryQuerySql {
                 de.user_id = ?
                 OR de.visibility IN ('FAMILY_VISIBLE', 'FAMILY')
                 OR (
-                  de.visibility IN ('CARE_VISIBLE', 'PARENT_VISIBLE')
+                  de.visibility = 'CARE_VISIBLE'
                   AND EXISTS (
                     SELECT 1 FROM family_members fm
                     WHERE fm.family_id = de.family_id
@@ -50,7 +50,7 @@ class MemoryLibraryQuerySql {
                   )
                 )
                 OR (
-                  de.visibility IN ('CARE_VISIBLE', 'PARENT_VISIBLE')
+                  de.visibility = 'CARE_VISIBLE'
                   AND EXISTS (
                     SELECT 1 FROM care_authorizations ca
                     WHERE ca.family_id = de.family_id
@@ -124,7 +124,7 @@ class MemoryLibraryQuerySql {
                 OR gr.created_by = ?
                 OR gr.target_user_id = ?
                 OR (
-                  gr.visibility IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
+                  gr.visibility = 'CARE_VISIBLE'
                   AND EXISTS (
                     SELECT 1 FROM family_members fm
                     WHERE fm.family_id = gr.family_id
@@ -133,7 +133,7 @@ class MemoryLibraryQuerySql {
                   )
                 )
                 OR (
-                  gr.visibility IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
+                  gr.visibility = 'CARE_VISIBLE'
                   AND gr.target_user_id IS NOT NULL
                   AND EXISTS (
                     SELECT 1 FROM care_authorizations ca
@@ -212,7 +212,7 @@ class MemoryLibraryQuerySql {
                 me.scope = 'FAMILY_VISIBLE'
                 OR me.user_id = ?
                 OR (
-                  me.scope IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
+                  me.scope = 'CARE_VISIBLE'
                   AND EXISTS (
                     SELECT 1 FROM family_members fm
                     WHERE fm.family_id = me.family_id
@@ -221,7 +221,7 @@ class MemoryLibraryQuerySql {
                   )
                 )
                 OR (
-                  me.scope IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
+                  me.scope = 'CARE_VISIBLE'
                   AND EXISTS (
                     SELECT 1 FROM care_authorizations ca
                     WHERE ca.family_id = me.family_id

@@ -20,7 +20,7 @@ public interface DiaryEntryRepository extends BaseMapper<DiaryEntry> {
             OR visibility = 'FAMILY_VISIBLE'
             OR visibility = 'FAMILY'
             OR (
-              visibility IN ('CARE_VISIBLE', 'PARENT_VISIBLE')
+              visibility = 'CARE_VISIBLE'
               AND EXISTS (
                 SELECT 1 FROM family_members fm
                 WHERE fm.family_id = diary_entries.family_id
@@ -29,7 +29,7 @@ public interface DiaryEntryRepository extends BaseMapper<DiaryEntry> {
               )
             )
             OR (
-              visibility IN ('CARE_VISIBLE', 'PARENT_VISIBLE')
+              visibility = 'CARE_VISIBLE'
               AND EXISTS (
                 SELECT 1 FROM care_authorizations ca
                 WHERE ca.family_id = diary_entries.family_id
@@ -70,7 +70,7 @@ public interface DiaryEntryRepository extends BaseMapper<DiaryEntry> {
             OR visibility = 'FAMILY_VISIBLE'
             OR visibility = 'FAMILY'
             OR (
-              visibility IN ('CARE_VISIBLE', 'PARENT_VISIBLE')
+              visibility = 'CARE_VISIBLE'
               AND EXISTS (
                 SELECT 1 FROM family_members fm
                 WHERE fm.family_id = diary_entries.family_id
@@ -79,7 +79,7 @@ public interface DiaryEntryRepository extends BaseMapper<DiaryEntry> {
               )
             )
             OR (
-              visibility IN ('CARE_VISIBLE', 'PARENT_VISIBLE')
+              visibility = 'CARE_VISIBLE'
               AND EXISTS (
                 SELECT 1 FROM care_authorizations ca
                 WHERE ca.family_id = diary_entries.family_id
@@ -118,7 +118,7 @@ public interface DiaryEntryRepository extends BaseMapper<DiaryEntry> {
             OR visibility = 'FAMILY_VISIBLE'
             OR visibility = 'FAMILY'
             OR (
-              visibility IN ('CARE_VISIBLE', 'PARENT_VISIBLE')
+              visibility = 'CARE_VISIBLE'
               AND EXISTS (
                 SELECT 1 FROM family_members fm
                 WHERE fm.family_id = diary_entries.family_id
@@ -127,7 +127,7 @@ public interface DiaryEntryRepository extends BaseMapper<DiaryEntry> {
               )
             )
             OR (
-              visibility IN ('CARE_VISIBLE', 'PARENT_VISIBLE')
+              visibility = 'CARE_VISIBLE'
               AND EXISTS (
                 SELECT 1 FROM care_authorizations ca
                 WHERE ca.family_id = diary_entries.family_id
@@ -176,7 +176,7 @@ public interface DiaryEntryRepository extends BaseMapper<DiaryEntry> {
             OR visibility = 'FAMILY_VISIBLE'
             OR visibility = 'FAMILY'
             OR (
-              visibility IN ('CARE_VISIBLE', 'PARENT_VISIBLE')
+              visibility = 'CARE_VISIBLE'
               AND EXISTS (
                 SELECT 1 FROM family_members fm
                 WHERE fm.family_id = diary_entries.family_id
@@ -185,7 +185,7 @@ public interface DiaryEntryRepository extends BaseMapper<DiaryEntry> {
               )
             )
             OR (
-              visibility IN ('CARE_VISIBLE', 'PARENT_VISIBLE')
+              visibility = 'CARE_VISIBLE'
               AND EXISTS (
                 SELECT 1 FROM care_authorizations ca
                 WHERE ca.family_id = diary_entries.family_id
@@ -216,7 +216,7 @@ public interface DiaryEntryRepository extends BaseMapper<DiaryEntry> {
             OR visibility = 'FAMILY_VISIBLE'
             OR visibility = 'FAMILY'
             OR (
-              visibility IN ('CARE_VISIBLE', 'PARENT_VISIBLE')
+              visibility = 'CARE_VISIBLE'
               AND EXISTS (
                 SELECT 1 FROM family_members fm
                 WHERE fm.family_id = diary_entries.family_id
@@ -225,7 +225,7 @@ public interface DiaryEntryRepository extends BaseMapper<DiaryEntry> {
               )
             )
             OR (
-              visibility IN ('CARE_VISIBLE', 'PARENT_VISIBLE')
+              visibility = 'CARE_VISIBLE'
               AND EXISTS (
                 SELECT 1 FROM care_authorizations ca
                 WHERE ca.family_id = diary_entries.family_id

@@ -35,7 +35,6 @@ const MEMORY_TYPES = new Set<MemoryEntryType>([
 ]);
 const MEMORY_SCOPES = new Set<MemoryScope>([
   'PRIVATE',
-  'PARENT_VISIBLE',
   'CARE_VISIBLE',
   'FAMILY_VISIBLE',
 ]);
@@ -234,6 +233,5 @@ function visibilityLabel(value?: string) {
   if (normalized === 'FAMILY_VISIBLE') return '家庭可见';
   if (normalized === 'CARE_VISIBLE') return '照护可见';
   if (normalized === 'LEGACY_VISIBLE') return '传承可见';
-  if (normalized === 'PARENT_VISIBLE') return '父母可见';
   return value || '未设置';
 }

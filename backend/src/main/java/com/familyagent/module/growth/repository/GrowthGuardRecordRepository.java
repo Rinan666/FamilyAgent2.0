@@ -20,7 +20,7 @@ public interface GrowthGuardRecordRepository extends BaseMapper<GrowthGuardRecor
             OR created_by = #{viewerUserId}
             OR target_user_id = #{viewerUserId}
             OR (
-              visibility IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
+              visibility = 'CARE_VISIBLE'
               AND EXISTS (
                 SELECT 1 FROM family_members fm
                 WHERE fm.family_id = growth_guard_records.family_id
@@ -29,7 +29,7 @@ public interface GrowthGuardRecordRepository extends BaseMapper<GrowthGuardRecor
               )
             )
             OR (
-              visibility IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
+              visibility = 'CARE_VISIBLE'
               AND target_user_id IS NOT NULL
               AND EXISTS (
                 SELECT 1 FROM care_authorizations ca
@@ -69,7 +69,7 @@ public interface GrowthGuardRecordRepository extends BaseMapper<GrowthGuardRecor
             OR created_by = #{viewerUserId}
             OR target_user_id = #{viewerUserId}
             OR (
-              visibility IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
+              visibility = 'CARE_VISIBLE'
               AND EXISTS (
                 SELECT 1 FROM family_members fm
                 WHERE fm.family_id = growth_guard_records.family_id
@@ -78,7 +78,7 @@ public interface GrowthGuardRecordRepository extends BaseMapper<GrowthGuardRecor
               )
             )
             OR (
-              visibility IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
+              visibility = 'CARE_VISIBLE'
               AND target_user_id IS NOT NULL
               AND EXISTS (
                 SELECT 1 FROM care_authorizations ca
@@ -116,7 +116,7 @@ public interface GrowthGuardRecordRepository extends BaseMapper<GrowthGuardRecor
             OR created_by = #{viewerUserId}
             OR target_user_id = #{viewerUserId}
             OR (
-              visibility IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
+              visibility = 'CARE_VISIBLE'
               AND EXISTS (
                 SELECT 1 FROM family_members fm
                 WHERE fm.family_id = growth_guard_records.family_id
@@ -125,7 +125,7 @@ public interface GrowthGuardRecordRepository extends BaseMapper<GrowthGuardRecor
               )
             )
             OR (
-              visibility IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
+              visibility = 'CARE_VISIBLE'
               AND target_user_id IS NOT NULL
               AND EXISTS (
                 SELECT 1 FROM care_authorizations ca

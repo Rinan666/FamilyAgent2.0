@@ -482,7 +482,7 @@ export type MemoryEntryType =
   | 'VALUE'
   | string;
 
-export type MemoryScope = 'PRIVATE' | 'PARENT_VISIBLE' | 'CARE_VISIBLE' | 'FAMILY_VISIBLE';
+export type MemoryScope = 'PRIVATE' | 'CARE_VISIBLE' | 'FAMILY_VISIBLE';
 
 export type MemoryLibraryItemType = 'LIFE_RECORD' | 'FAMILY_EXPERIENCE' | 'GROWTH_OBSERVATION' | 'AI_SUMMARY';
 

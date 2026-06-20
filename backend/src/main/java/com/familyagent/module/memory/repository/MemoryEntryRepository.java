@@ -29,7 +29,7 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
             scope = 'FAMILY_VISIBLE'
             OR user_id = #{viewerUserId}
             OR (
-              scope IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
+              scope = 'CARE_VISIBLE'
               AND EXISTS (
                 SELECT 1 FROM family_members fm
                 WHERE fm.family_id = memory_entries.family_id
@@ -38,7 +38,7 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
               )
             )
             OR (
-              scope IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
+              scope = 'CARE_VISIBLE'
               AND EXISTS (
                 SELECT 1 FROM care_authorizations ca
                 WHERE ca.family_id = memory_entries.family_id
@@ -78,7 +78,7 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
             scope = 'FAMILY_VISIBLE'
             OR user_id = #{viewerUserId}
             OR (
-              scope IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
+              scope = 'CARE_VISIBLE'
               AND EXISTS (
                 SELECT 1 FROM family_members fm
                 WHERE fm.family_id = memory_entries.family_id
@@ -87,7 +87,7 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
               )
             )
             OR (
-              scope IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
+              scope = 'CARE_VISIBLE'
               AND EXISTS (
                 SELECT 1 FROM care_authorizations ca
                 WHERE ca.family_id = memory_entries.family_id
@@ -125,7 +125,7 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
             scope = 'FAMILY_VISIBLE'
             OR user_id = #{viewerUserId}
             OR (
-              scope IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
+              scope = 'CARE_VISIBLE'
               AND EXISTS (
                 SELECT 1 FROM family_members fm
                 WHERE fm.family_id = memory_entries.family_id
@@ -134,7 +134,7 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
               )
             )
             OR (
-              scope IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
+              scope = 'CARE_VISIBLE'
               AND EXISTS (
                 SELECT 1 FROM care_authorizations ca
                 WHERE ca.family_id = memory_entries.family_id
@@ -167,7 +167,7 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
             scope = 'FAMILY_VISIBLE'
             OR user_id = #{viewerUserId}
             OR (
-              scope IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
+              scope = 'CARE_VISIBLE'
               AND EXISTS (
                 SELECT 1 FROM family_members fm
                 WHERE fm.family_id = memory_entries.family_id
@@ -176,7 +176,7 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
               )
             )
             OR (
-              scope IN ('PARENT_VISIBLE', 'CARE_VISIBLE')
+              scope = 'CARE_VISIBLE'
               AND EXISTS (
                 SELECT 1 FROM care_authorizations ca
                 WHERE ca.family_id = memory_entries.family_id

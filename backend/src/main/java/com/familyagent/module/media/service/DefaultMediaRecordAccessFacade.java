@@ -148,8 +148,7 @@ public class DefaultMediaRecordAccessFacade implements MediaRecordAccessFacade {
     }
 
     private static boolean isCareVisible(String visibility) {
-        return MemoryScope.CARE_VISIBLE.name().equalsIgnoreCase(visibility)
-                || MemoryScope.PARENT_VISIBLE.name().equalsIgnoreCase(visibility);
+        return MemoryScope.CARE_VISIBLE.name().equalsIgnoreCase(visibility);
     }
 
     private static boolean isArchived(Object metadata) {

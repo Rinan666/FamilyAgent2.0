@@ -40,7 +40,7 @@ type EditDraft = {
 };
 
 const pageSizeOptions = [6, 12, 24];
-const familyVisibilityOptions = ['PRIVATE', 'PARENT_VISIBLE', 'CARE_VISIBLE', 'FAMILY_VISIBLE'];
+const familyVisibilityOptions = ['PRIVATE', 'CARE_VISIBLE', 'FAMILY_VISIBLE'];
 const diaryVisibilityOptions = [...familyVisibilityOptions, 'LEGACY_VISIBLE'];
 const diaryTypeOptions = ['DAILY', 'IMPORTANT_EVENT', 'LESSON', 'EMOTION', 'MESSAGE_TO_FAMILY', 'SELF_REFLECTION'];
 const memoryTypeOptions = ['FAMILY_STORY', 'ELDER_ADVICE', 'HEALTH_REMINDER', 'GROWTH_RISK', 'VALUE', 'PLAN'];
@@ -134,7 +134,7 @@ function metadataBoolean(item: MemoryLibraryItem, key: string) {
 function visibilityLabel(value?: string) {
   const text = String(value || '').toUpperCase();
   if (text === 'PRIVATE') return '仅自己可见';
-  if (text === 'CARE_VISIBLE' || text === 'PARENT_VISIBLE') return '照护可见';
+  if (text === 'CARE_VISIBLE') return '照护可见';
   if (text === 'LEGACY_VISIBLE') return '传承预留';
   if (text === 'FAMILY_VISIBLE' || text === 'FAMILY') return '全家可见';
   return value || '按权限可见';
