@@ -1,4 +1,4 @@
-import type { ApiResult, PhotoItem, PhotoScope } from '@/types';
+import type { ApiResult, PhotoClusterResult, PhotoItem, PhotoScope } from '@/types';
 import { ApiError, request } from './shared';
 
 function authHeaders(): HeadersInit {
@@ -45,7 +45,7 @@ export const photoApi = {
   listMyPhotos: (limit = 50) => request<PhotoItem[]>(`/photos/my?limit=${limit}`),
   listFamilyPhotos: (familyId: number, limit = 50) => request<PhotoItem[]>(`/photos/family/${familyId}?limit=${limit}`),
   deletePhoto: (photoId: number) => request<void>(`/photos/${photoId}`, { method: 'DELETE' }),
-  saveClusterResult: (photoId: number, clusterResult: object) => request<void>(`/photos/${photoId}/cluster-result`, {
+  saveClusterResult: (photoId: number, clusterResult: PhotoClusterResult) => request<void>(`/photos/${photoId}/cluster-result`, {
     method: 'PATCH',
     body: JSON.stringify(clusterResult),
   }),

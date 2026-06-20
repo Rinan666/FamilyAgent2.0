@@ -1,6 +1,7 @@
 package com.familyagent.module.family.service;
 
 import com.familyagent.common.exception.BusinessException;
+import com.familyagent.common.lifecycle.FamilyScopedResourceCleaner;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.family.entity.Family;
 import com.familyagent.module.family.entity.FamilyMember;
@@ -28,6 +29,7 @@ public class FamilyLifecycleService {
             new TableColumn("care_authorizations", "family_id"),
             new TableColumn("growth_guard_staleness_votes", "family_id"),
             new TableColumn("memory_entry_votes", "family_id"),
+            new TableColumn("photos", "family_id"),
             new TableColumn("growth_guard_records", "family_id"),
             new TableColumn("memory_embeddings", "family_id"),
             new TableColumn("skill_runs", "family_id"),
@@ -40,6 +42,7 @@ public class FamilyLifecycleService {
     private final JdbcTemplate jdbcTemplate;
     private final FamilyRepository familyRepository;
     private final FamilyMemberRepository familyMemberRepository;
+    private final List<FamilyScopedResourceCleaner> resourceCleaners;
 
     @Transactional
     public void prepareFamiliesForUserDeletion(Long userId) {
@@ -168,6 +171,9 @@ public class FamilyLifecycleService {
             return;
         }
 
+        for (FamilyScopedResourceCleaner cleaner : resourceCleaners) {
+            cleaner.cleanFamilyResources(familyId);
+        }
         familyMemberRepository.removeByFamilyId(familyId);
         for (TableColumn target : FAMILY_SCOPED_DELETE_TARGETS) {
             deleteByLongColumnIfTableExists(target.tableName(), target.columnName(), familyId);

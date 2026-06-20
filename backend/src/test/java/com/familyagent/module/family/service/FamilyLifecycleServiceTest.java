@@ -1,14 +1,16 @@
 package com.familyagent.module.family.service;
 
 import com.familyagent.common.exception.BusinessException;
+import com.familyagent.common.lifecycle.FamilyScopedResourceCleaner;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.family.entity.Family;
 import com.familyagent.module.family.entity.FamilyMember;
 import com.familyagent.module.family.repository.FamilyMemberRepository;
 import com.familyagent.module.family.repository.FamilyRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -20,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -30,7 +33,17 @@ class FamilyLifecycleServiceTest {
     @Mock private JdbcTemplate jdbcTemplate;
     @Mock private FamilyRepository familyRepository;
     @Mock private FamilyMemberRepository familyMemberRepository;
-    @InjectMocks private FamilyLifecycleService familyLifecycleService;
+    @Mock private FamilyScopedResourceCleaner resourceCleaner;
+    private FamilyLifecycleService familyLifecycleService;
+
+    @BeforeEach
+    void setUp() {
+        familyLifecycleService = new FamilyLifecycleService(
+                jdbcTemplate,
+                familyRepository,
+                familyMemberRepository,
+                List.of(resourceCleaner));
+    }
 
     @Test
     void prepareFamiliesForUserDeletion_blocksOwnerWithRemainingMembers() {
@@ -123,18 +136,21 @@ class FamilyLifecycleServiceTest {
     }
 
     @Test
-    void dissolveFamily_deletesAllTwelveTablesInOrder() {
+    void dissolveFamily_deletesFamilyScopedTablesAndResourcesInOrder() {
         when(familyRepository.selectById(10L)).thenReturn(family(10L, "Test Family"));
         when(jdbcTemplate.queryForObject(eq("SELECT to_regclass(?) IS NOT NULL"), eq(Boolean.class), anyString()))
                 .thenReturn(true);
 
         familyLifecycleService.dissolveFamily(10L, "TEST");
 
-        verify(familyMemberRepository).removeByFamilyId(10L);
+        InOrder inOrder = inOrder(resourceCleaner, familyMemberRepository);
+        inOrder.verify(resourceCleaner).cleanFamilyResources(10L);
+        inOrder.verify(familyMemberRepository).removeByFamilyId(10L);
         verify(jdbcTemplate).update("DELETE FROM family_relationships WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM care_authorizations WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM growth_guard_staleness_votes WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM memory_entry_votes WHERE family_id = ?", 10L);
+        verify(jdbcTemplate).update("DELETE FROM photos WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM growth_guard_records WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM memory_embeddings WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM skill_runs WHERE family_id = ?", 10L);

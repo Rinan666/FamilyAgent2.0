@@ -6,25 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image as ImageIcon, Images, RefreshCw, Trash2, Upload, UserRound, UsersRound, X } from 'lucide-react';
 import { photoApi } from '@/lib/api/photos';
 import { useViewerRole } from '@/hooks/useViewerRole';
-import type { PhotoItem, PhotoScope } from '@/types';
-
-interface FaceMeta {
-  photo_id: number;
-  file_index: number;
-  face_index: number;
-  bbox: { x: number; y: number; w: number; h: number };
-}
-
-interface Group {
-  group_id: number;
-  faces: FaceMeta[];
-}
-
-interface ClusterResult {
-  groups: Group[];
-  total_faces: number;
-  silhouette_score: number | null;
-}
+import type { PhotoClusterResult, PhotoFaceMeta, PhotoItem, PhotoScope } from '@/types';
 
 type Stage = 'idle' | 'uploading' | 'clustering' | 'done';
 type TabKey = 'personal' | 'family' | 'faces';
@@ -38,6 +20,20 @@ function getToken() {
   return typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 }
 
+function authHeadersForPhotoUrl(assetUrl: string): HeadersInit {
+  const token = getToken();
+  if (!token || typeof window === 'undefined') return {};
+
+  try {
+    const url = new URL(assetUrl, window.location.origin);
+    const trustedPhotoPath = url.origin === window.location.origin
+      && /^\/api\/photos\/\d+\/content$/.test(url.pathname);
+    return trustedPhotoPath ? { Authorization: token } : {};
+  } catch {
+    return {};
+  }
+}
+
 function formatBytes(bytes?: number) {
   if (!bytes) return '';
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -49,6 +45,46 @@ function formatDate(value?: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
   return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+}
+
+function useAuthenticatedObjectUrl(assetUrl?: string) {
+  const [src, setSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!assetUrl) {
+      setSrc(null);
+      return;
+    }
+    const targetUrl = assetUrl;
+
+    let cancelled = false;
+    let objectUrl: string | null = null;
+
+    async function loadImage() {
+      setSrc(null);
+      try {
+        const res = await fetch(targetUrl, {
+          headers: authHeadersForPhotoUrl(targetUrl),
+          cache: 'no-store',
+        });
+        if (!res.ok) return;
+        const blob = await res.blob();
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setSrc(objectUrl);
+      } catch {
+        setSrc(null);
+      }
+    }
+
+    void loadImage();
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [assetUrl]);
+
+  return src;
 }
 
 function validateImageFiles(files: File[], minFiles = 1) {
@@ -73,7 +109,7 @@ function validateImageFiles(files: File[], minFiles = 1) {
   return null;
 }
 
-async function clusterByUrls(urls: string[], photoIds: number[]): Promise<ClusterResult> {
+async function clusterByUrls(urls: string[], photoIds: number[]): Promise<PhotoClusterResult> {
   const token = getToken();
 
   const res = await fetch('/ai-proxy/dip/faces/cluster-by-urls', {
@@ -88,39 +124,19 @@ async function clusterByUrls(urls: string[], photoIds: number[]): Promise<Cluste
   if (!res.ok || !data?.success) {
     throw new Error(data?.detail || '人脸聚类失败。');
   }
-  return data as ClusterResult;
+  return {
+    groups: Array.isArray(data.groups) ? data.groups : [],
+    total_faces: Number(data.total_faces) || 0,
+    silhouette_score: typeof data.silhouette_score === 'number' ? data.silhouette_score : null,
+  };
 }
 
 function AuthImage({ photo, className }: { photo: PhotoItem; className?: string }) {
-  const [src, setSrc] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    let objectUrl: string | null = null;
-
-    async function loadImage() {
-      const token = getToken();
-      const res = await fetch(photo.assetUrl, {
-        headers: token ? { Authorization: token } : {},
-        cache: 'no-store',
-      });
-      if (!res.ok) return;
-      const blob = await res.blob();
-      if (cancelled) return;
-      objectUrl = URL.createObjectURL(blob);
-      setSrc(objectUrl);
-    }
-
-    void loadImage();
-    return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [photo.assetUrl]);
+  const src = useAuthenticatedObjectUrl(photo.assetUrl);
 
   if (!src) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-gray-100 text-gray-400">
+      <div className="flex h-full w-full items-center justify-center bg-stone-100 text-stone-400">
         <ImageIcon className="h-6 w-6" />
       </div>
     );
@@ -162,7 +178,7 @@ function UploadStrip({
 
   return (
     <div className="space-y-2">
-      <label className={`inline-flex h-10 items-center gap-2 rounded-md px-4 text-sm font-medium text-white ${disabled ? 'cursor-not-allowed bg-gray-300' : 'cursor-pointer bg-blue-600 hover:bg-blue-700'}`}>
+      <label className={`inline-flex h-10 items-center gap-2 rounded-md px-4 text-sm font-medium text-white transition ${disabled ? 'cursor-not-allowed bg-stone-300' : 'cursor-pointer bg-stone-950 hover:bg-stone-800'}`}>
         {isUploading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
         {isUploading ? '上传中' : label}
         <input
@@ -186,16 +202,18 @@ function PhotoGrid({
   photos,
   emptyText,
   onDelete,
+  onSelect,
 }: {
   photos: PhotoItem[];
   emptyText: string;
   onDelete: (photoId: number) => Promise<void>;
+  onSelect: (photo: PhotoItem) => void;
 }) {
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
   if (photos.length === 0) {
     return (
-      <div className="flex min-h-64 items-center justify-center rounded-md border border-dashed border-gray-300 bg-gray-50 text-sm text-gray-500">
+      <div className="flex min-h-64 items-center justify-center rounded-md border border-dashed border-stone-300 bg-stone-50 text-sm text-stone-500">
         {emptyText}
       </div>
     );
@@ -204,9 +222,16 @@ function PhotoGrid({
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
       {photos.map((photo) => (
-        <div key={photo.id} className="group overflow-hidden rounded-md border border-gray-200 bg-white">
-          <div className="relative aspect-square bg-gray-100">
-            <AuthImage photo={photo} />
+        <div key={photo.id} className="group overflow-hidden rounded-md border border-stone-200 bg-white transition hover:border-stone-300 hover:shadow-sm">
+          <div className="relative aspect-square bg-stone-100">
+            <button
+              type="button"
+              onClick={() => onSelect(photo)}
+              className="block h-full w-full text-left"
+              aria-label={`查看 ${photo.originalName || `Photo ${photo.id}`}`}
+            >
+              <AuthImage photo={photo} />
+            </button>
             <button
               type="button"
               aria-label="删除图片"
@@ -225,8 +250,8 @@ function PhotoGrid({
             </button>
           </div>
           <div className="space-y-1 px-3 py-2">
-            <p className="truncate text-sm font-medium text-gray-800">{photo.originalName || `Photo ${photo.id}`}</p>
-            <p className="text-xs text-gray-500">
+            <p className="truncate text-sm font-medium text-stone-800">{photo.originalName || `Photo ${photo.id}`}</p>
+            <p className="text-xs text-stone-500">
               {[formatDate(photo.createdAt), formatBytes(photo.fileSize)].filter(Boolean).join(' · ')}
             </p>
           </div>
@@ -236,33 +261,198 @@ function PhotoGrid({
   );
 }
 
-function FaceCrop({ face, src }: { face: FaceMeta; src?: string }) {
+function PhotoPreviewDialog({
+  photo,
+  onClose,
+  onDelete,
+}: {
+  photo: PhotoItem | null;
+  onClose: () => void;
+  onDelete: (photoId: number) => Promise<void>;
+}) {
+  const src = useAuthenticatedObjectUrl(photo?.assetUrl);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    setIsDeleting(false);
+  }, [photo?.id]);
+
+  if (!photo) return null;
+
+  const details = [
+    { label: '文件名', value: photo.originalName || `Photo ${photo.id}` },
+    { label: '上传时间', value: formatDate(photo.createdAt) || '-' },
+    { label: '大小', value: formatBytes(photo.fileSize) || '-' },
+    { label: '范围', value: photo.scope === 'PERSONAL' ? '我的相册' : '家庭相册' },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-md bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-semibold text-stone-900">{photo.originalName || `Photo ${photo.id}`}</h2>
+            <p className="text-xs text-stone-500">{[formatDate(photo.createdAt), formatBytes(photo.fileSize)].filter(Boolean).join(' · ')}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                setIsDeleting(true);
+                try {
+                  await onDelete(photo.id);
+                  onClose();
+                } finally {
+                  setIsDeleting(false);
+                }
+              }}
+              disabled={isDeleting}
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-red-200 px-3 text-sm text-red-600 hover:bg-red-50 disabled:opacity-60"
+            >
+              {isDeleting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              删除
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50"
+              aria-label="关闭预览"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[1fr_240px]">
+          <div className="flex min-h-[320px] items-center justify-center bg-stone-950 p-4">
+            {src ? (
+              <img src={src} alt={photo.originalName || ''} className="max-h-[70vh] max-w-full object-contain" />
+            ) : (
+              <div className="flex h-40 w-40 items-center justify-center rounded-md bg-stone-900 text-stone-500">
+                <ImageIcon className="h-8 w-8" />
+              </div>
+            )}
+          </div>
+          <dl className="space-y-4 border-t border-stone-200 p-4 md:border-l md:border-t-0">
+            {details.map((detail) => (
+              <div key={detail.label}>
+                <dt className="text-xs font-medium text-stone-500">{detail.label}</dt>
+                <dd className="mt-1 break-words text-sm text-stone-900">{detail.value}</dd>
+              </div>
+            ))}
+            {photo.description && (
+              <div>
+                <dt className="text-xs font-medium text-stone-500">描述</dt>
+                <dd className="mt-1 whitespace-pre-wrap break-words text-sm text-stone-900">{photo.description}</dd>
+              </div>
+            )}
+          </dl>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FaceCrop({ face, src }: { face: PhotoFaceMeta; src?: string }) {
+  const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null);
+
+  useEffect(() => {
+    setNaturalSize(null);
+  }, [src]);
+
   if (!src) {
-    return <div className="aspect-square rounded-md border border-gray-200 bg-gray-100" />;
+    return <div className="aspect-square rounded-md border border-stone-200 bg-stone-100" />;
   }
 
   const size = 80;
-  const scale = size / Math.max(face.bbox.w, 1);
+  const scale = naturalSize ? size / Math.max(face.bbox.w, 1) : 1;
 
   return (
     <div
       style={{ width: size, height: size, overflow: 'hidden', position: 'relative' }}
-      className="rounded-md border border-gray-200 bg-gray-100"
+      className="rounded-md border border-stone-200 bg-stone-100"
     >
       <img
         src={src}
         alt=""
+        onLoad={(event) => {
+          const image = event.currentTarget;
+          setNaturalSize({ width: image.naturalWidth, height: image.naturalHeight });
+        }}
         style={{
           position: 'absolute',
           maxWidth: 'none',
-          left: -face.bbox.x * scale,
-          top: -face.bbox.y * scale,
-          width: 'auto',
-          height: 'auto',
-          transform: `scale(${scale})`,
-          transformOrigin: 'top left',
+          left: naturalSize ? -face.bbox.x * scale : 0,
+          top: naturalSize ? -face.bbox.y * scale : 0,
+          width: naturalSize ? naturalSize.width * scale : '100%',
+          height: naturalSize ? naturalSize.height * scale : '100%',
+          objectFit: naturalSize ? undefined : 'cover',
         }}
       />
+    </div>
+  );
+}
+
+function SavedFaceCrop({ face, photosById }: { face: PhotoFaceMeta; photosById: Map<number, PhotoItem> }) {
+  const photo = photosById.get(face.photo_id);
+  const src = useAuthenticatedObjectUrl(photo?.assetUrl);
+
+  return <FaceCrop face={face} src={src ?? undefined} />;
+}
+
+function ClusterResultSummary({
+  clusterResult,
+  photosById,
+  previewUrls,
+  title,
+}: {
+  clusterResult: PhotoClusterResult;
+  photosById?: Map<number, PhotoItem>;
+  previewUrls?: string[];
+  title?: string;
+}) {
+  const validGroups = clusterResult.groups.filter((group) => group.group_id !== -1);
+  const noiseGroup = clusterResult.groups.find((group) => group.group_id === -1);
+
+  const renderFace = (face: PhotoFaceMeta, key: string) => (
+    photosById
+      ? <SavedFaceCrop key={key} face={face} photosById={photosById} />
+      : <FaceCrop key={key} face={face} src={previewUrls?.[face.file_index]} />
+  );
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-stone-200 bg-white px-4 py-3 text-sm text-stone-600">
+        <div className="flex flex-wrap gap-4">
+          {title && <span className="font-medium text-stone-800">{title}</span>}
+          <span>人脸 <strong className="text-stone-900">{clusterResult.total_faces}</strong></span>
+          <span>人物 <strong className="text-stone-900">{validGroups.length}</strong></span>
+          {clusterResult.silhouette_score !== null && (
+            <span>轮廓系数 <strong className="text-stone-900">{clusterResult.silhouette_score.toFixed(3)}</strong></span>
+          )}
+        </div>
+      </div>
+
+      {validGroups.map((group, index) => (
+        <div key={group.group_id} className="rounded-md border border-stone-200 bg-white p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <UserRound className="h-4 w-4 text-emerald-700" />
+            <span className="text-sm font-medium text-stone-700">人物 {index + 1}（{group.faces.length} 张）</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-8">
+            {group.faces.map((face, faceIndex) => renderFace(face, `${group.group_id}-${faceIndex}`))}
+          </div>
+        </div>
+      ))}
+
+      {noiseGroup && noiseGroup.faces.length > 0 && (
+        <div className="rounded-md border border-stone-200 bg-stone-50 p-4">
+          <h2 className="mb-3 text-sm font-medium text-stone-500">未归类（{noiseGroup.faces.length}）</h2>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-8">
+            {noiseGroup.faces.map((face, faceIndex) => renderFace(face, `noise-${faceIndex}`))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -274,11 +464,12 @@ export default function AlbumPage() {
   const [familyPhotos, setFamilyPhotos] = useState<PhotoItem[]>([]);
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
+  const [previewPhoto, setPreviewPhoto] = useState<PhotoItem | null>(null);
 
   const [clusterFiles, setClusterFiles] = useState<File[]>([]);
   const [clusterPreviews, setClusterPreviews] = useState<string[]>([]);
   const [stage, setStage] = useState<Stage>('idle');
-  const [clusterResult, setClusterResult] = useState<ClusterResult | null>(null);
+  const [clusterResult, setClusterResult] = useState<PhotoClusterResult | null>(null);
   const [clusterError, setClusterError] = useState<string | null>(null);
   const [clusterWarning, setClusterWarning] = useState<string | null>(null);
   const clusterPreviewsRef = useRef<string[]>([]);
@@ -328,6 +519,7 @@ export default function AlbumPage() {
     await photoApi.deletePhoto(photoId);
     setPersonalPhotos((current) => current.filter((photo) => photo.id !== photoId));
     setFamilyPhotos((current) => current.filter((photo) => photo.id !== photoId));
+    setPreviewPhoto((current) => (current?.id === photoId ? null : current));
   }, []);
 
   const addClusterFiles = useCallback((incoming: FileList | null) => {
@@ -415,11 +607,14 @@ export default function AlbumPage() {
     }
   }, [activeFamilyId, clusterFiles]);
 
-  const validGroups = useMemo(
-    () => clusterResult?.groups.filter((group) => group.group_id !== -1) ?? [],
-    [clusterResult],
+  const savedClusterResult = useMemo(
+    () => familyPhotos.find((photo) => photo.metadata?.groups?.length)?.metadata ?? null,
+    [familyPhotos],
   );
-  const noiseGroup = clusterResult?.groups.find((group) => group.group_id === -1);
+  const familyPhotosById = useMemo(
+    () => new Map(familyPhotos.map((photo) => [photo.id, photo])),
+    [familyPhotos],
+  );
   const isClusterLoading = stage === 'uploading' || stage === 'clustering';
 
   const tabs = [
@@ -473,7 +668,7 @@ export default function AlbumPage() {
             disabled={!activeFamilyId}
             onUpload={(files) => uploadToScope('PERSONAL', files)}
           />
-          <PhotoGrid photos={personalPhotos} emptyText="还没有个人照片" onDelete={deletePhoto} />
+          <PhotoGrid photos={personalPhotos} emptyText="还没有个人照片" onDelete={deletePhoto} onSelect={setPreviewPhoto} />
         </div>
       )}
 
@@ -484,7 +679,7 @@ export default function AlbumPage() {
             disabled={!activeFamilyId}
             onUpload={(files) => uploadToScope('FAMILY', files)}
           />
-          <PhotoGrid photos={familyPhotos} emptyText="还没有家庭照片" onDelete={deletePhoto} />
+          <PhotoGrid photos={familyPhotos} emptyText="还没有家庭照片" onDelete={deletePhoto} onSelect={setPreviewPhoto} />
         </div>
       )}
 
@@ -537,19 +732,20 @@ export default function AlbumPage() {
                 {isClusterLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Images className="h-4 w-4" />}
                 {stage === 'uploading' ? '上传中' : stage === 'clustering' ? '聚类中' : `按人物分类（${clusterFiles.length}）`}
               </button>
+
+              {savedClusterResult && (
+                <ClusterResultSummary
+                  clusterResult={savedClusterResult}
+                  photosById={familyPhotosById}
+                  title="最近一次已保存分类"
+                />
+              )}
             </>
           )}
 
           {clusterResult && (
             <div className="space-y-5">
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
-                <div className="flex flex-wrap gap-4">
-                  <span>人脸 <strong className="text-gray-900">{clusterResult.total_faces}</strong></span>
-                  <span>人物 <strong className="text-gray-900">{validGroups.length}</strong></span>
-                  {clusterResult.silhouette_score !== null && (
-                    <span>轮廓系数 <strong className="text-gray-900">{clusterResult.silhouette_score.toFixed(3)}</strong></span>
-                  )}
-                </div>
+              <div className="flex justify-end">
                 <button type="button" onClick={resetCluster} className="inline-flex h-8 items-center gap-2 rounded-md border border-gray-200 px-3 text-sm text-gray-600 hover:bg-gray-50">
                   <X className="h-4 w-4" />
                   重置
@@ -558,41 +754,12 @@ export default function AlbumPage() {
 
               {clusterWarning && <p className="rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-700">{clusterWarning}</p>}
               {clusterError && <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-600">{clusterError}</p>}
-
-              {validGroups.map((group, index) => (
-                <div key={group.group_id} className="rounded-md border border-gray-200 bg-white p-4">
-                  <div className="mb-3 flex items-center gap-2">
-                    <UserRound className="h-4 w-4 text-gray-400" />
-                    <span className="text-sm font-medium text-gray-700">人物 {index + 1}（{group.faces.length} 张）</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-8">
-                    {group.faces.map((face, faceIndex) => (
-                      <FaceCrop
-                        key={`${group.group_id}-${faceIndex}`}
-                        face={face}
-                        src={clusterPreviews[face.file_index]}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
-
-              {noiseGroup && noiseGroup.faces.length > 0 && (
-                <div className="rounded-md border border-gray-200 bg-gray-50 p-4">
-                  <h2 className="mb-3 text-sm font-medium text-gray-500">未归类（{noiseGroup.faces.length}）</h2>
-                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-8">
-                    {noiseGroup.faces.map((face, faceIndex) => (
-                      <div key={`noise-${faceIndex}`} className="aspect-square overflow-hidden rounded-md border border-gray-200 bg-gray-100">
-                        <img src={clusterPreviews[face.file_index]} alt="" className="h-full w-full object-cover" />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <ClusterResultSummary clusterResult={clusterResult} previewUrls={clusterPreviews} title="本次分类结果" />
             </div>
           )}
         </div>
       )}
+      <PhotoPreviewDialog photo={previewPhoto} onClose={() => setPreviewPhoto(null)} onDelete={deletePhoto} />
     </div>
   );
 }

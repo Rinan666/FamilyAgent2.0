@@ -22,4 +22,7 @@ public interface PhotoMapper extends BaseMapper<Photo> {
             @Param("uploaderId") Long uploaderId,
             @Param("scope") String scope,
             @Param("limit") int limit);
+
+    @Select("SELECT object_key FROM photos WHERE family_id = #{familyId} AND object_key IS NOT NULL")
+    List<String> selectObjectKeysByFamilyId(@Param("familyId") Long familyId);
 }

@@ -57,6 +57,25 @@ export type AgentMode = 'family' | 'mirror';
 export type AgentResponseMode = 'quick' | 'think';
 export type WriteCategory = 'RECORD' | 'EXPERIENCE' | 'OBSERVATION';
 export type PhotoScope = 'PERSONAL' | 'FAMILY';
+export type MediaRecordType = 'DIARY' | 'GROWTH' | 'MEMORY';
+
+export interface PhotoFaceMeta {
+  photo_id: number;
+  file_index: number;
+  face_index: number;
+  bbox: { x: number; y: number; w: number; h: number };
+}
+
+export interface PhotoClusterGroup {
+  group_id: number;
+  faces: PhotoFaceMeta[];
+}
+
+export interface PhotoClusterResult {
+  groups: PhotoClusterGroup[];
+  total_faces: number;
+  silhouette_score: number | null;
+}
 
 export interface PhotoItem {
   id: number;
@@ -68,8 +87,21 @@ export interface PhotoItem {
   fileSize?: number;
   originalName?: string;
   description?: string;
-  metadata?: unknown;
+  metadata?: PhotoClusterResult | null;
   takenAt?: string;
+  createdAt?: string;
+}
+
+export interface MediaAttachment {
+  id: number;
+  uploaderId: number;
+  familyId: number;
+  assetUrl: string;
+  mimeType?: string;
+  fileSize?: number;
+  originalName?: string;
+  recordType: MediaRecordType;
+  recordId: number;
   createdAt?: string;
 }
 

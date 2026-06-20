@@ -1,6 +1,7 @@
 package com.familyagent.module.photo.controller;
 
 import com.familyagent.common.response.Result;
+import com.familyagent.module.photo.dto.PhotoClusterMetadata;
 import com.familyagent.module.photo.dto.PhotoContentResource;
 import com.familyagent.module.photo.dto.PhotoUploadResponse;
 import com.familyagent.module.photo.service.PhotoService;
@@ -14,7 +15,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/photos")
@@ -35,7 +35,7 @@ public class PhotoController {
     @PatchMapping("/{id}/cluster-result")
     public Result<Void> updateClusterResult(
             @PathVariable Long id,
-            @RequestBody Map<String, Object> clusterResult) {
+            @RequestBody PhotoClusterMetadata clusterResult) {
         photoService.updateClusterResult(id, clusterResult);
         return Result.success();
     }

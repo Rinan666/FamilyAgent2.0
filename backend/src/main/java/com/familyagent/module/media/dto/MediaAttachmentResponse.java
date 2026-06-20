@@ -1,5 +1,6 @@
-package com.familyagent.module.photo.dto;
+package com.familyagent.module.media.dto;
 
+import com.familyagent.common.constant.MediaRecordType;
 import lombok.Builder;
 import lombok.Data;
 
@@ -7,17 +8,15 @@ import java.time.LocalDateTime;
 
 @Data
 @Builder
-public class PhotoUploadResponse {
+public class MediaAttachmentResponse {
     private Long id;
-    private Long familyId;
     private Long uploaderId;
-    private String scope;
+    private Long familyId;
     private String assetUrl;
     private String mimeType;
     private Long fileSize;
     private String originalName;
-    private String description;
-    private PhotoClusterMetadata metadata;
-    private LocalDateTime takenAt;
+    private MediaRecordType recordType;
+    private Long recordId;
     private LocalDateTime createdAt;
 }

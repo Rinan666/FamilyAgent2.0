@@ -5,16 +5,19 @@ import com.familyagent.common.constant.PhotoScope;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.photo.dto.PhotoClusterMetadata;
 import com.familyagent.module.photo.dto.PhotoContentResource;
 import com.familyagent.module.photo.dto.PhotoUploadResponse;
 import com.familyagent.module.photo.entity.Photo;
 import com.familyagent.module.photo.mapper.PhotoMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 
@@ -26,8 +29,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -37,6 +42,7 @@ class PhotoServiceTest {
     @Mock private PhotoStorageService storageService;
     @Mock private PhotoMapper photoMapper;
     @Mock private FamilyService familyService;
+    @Spy private ObjectMapper objectMapper = new ObjectMapper();
     @InjectMocks private PhotoService photoService;
 
     @Test
@@ -137,7 +143,50 @@ class PhotoServiceTest {
     void updateClusterResult_rejectsMissingPhoto() {
         when(photoMapper.selectById(999L)).thenReturn(null);
 
-        assertThrows(BusinessException.class, () -> photoService.updateClusterResult(999L, List.of()));
+        PhotoClusterMetadata metadata = new PhotoClusterMetadata(List.of(), 0, null);
+
+        assertThrows(BusinessException.class, () -> photoService.updateClusterResult(999L, metadata));
+    }
+
+    @Test
+    void updateClusterResult_requiresUploaderAndMembershipForFamilyPhoto() {
+        Photo photo = new Photo();
+        photo.setId(12L);
+        photo.setFamilyId(20L);
+        photo.setUploaderId(301L);
+        photo.setScope("FAMILY");
+        PhotoClusterMetadata metadata = new PhotoClusterMetadata(List.of(), 0, null);
+
+        when(photoMapper.selectById(12L)).thenReturn(photo);
+
+        try (MockedStatic<CurrentUserGuard> currentUserMock = mockStatic(CurrentUserGuard.class)) {
+            currentUserMock.when(CurrentUserGuard::currentUserId).thenReturn(301L);
+
+            photoService.updateClusterResult(12L, metadata);
+
+            verify(familyService).checkMembership(20L);
+            verify(photoMapper).updateById(photo);
+            assertEquals(metadata, photo.getMetadata());
+        }
+    }
+
+    @Test
+    void updateClusterResult_rejectsNonUploader() {
+        Photo photo = new Photo();
+        photo.setId(12L);
+        photo.setFamilyId(20L);
+        photo.setUploaderId(301L);
+        photo.setScope("FAMILY");
+        PhotoClusterMetadata metadata = new PhotoClusterMetadata(List.of(), 0, null);
+
+        when(photoMapper.selectById(12L)).thenReturn(photo);
+
+        try (MockedStatic<CurrentUserGuard> currentUserMock = mockStatic(CurrentUserGuard.class)) {
+            currentUserMock.when(CurrentUserGuard::currentUserId).thenReturn(302L);
+
+            assertThrows(BusinessException.class, () -> photoService.updateClusterResult(12L, metadata));
+            verify(photoMapper, never()).updateById(any(Photo.class));
+        }
     }
 
     @Test
@@ -195,6 +244,30 @@ class PhotoServiceTest {
         photo.setObjectKey("family/20/12.jpg");
 
         when(photoMapper.selectById(12L)).thenReturn(photo);
+
+        try (MockedStatic<CurrentUserGuard> currentUserMock = mockStatic(CurrentUserGuard.class)) {
+            currentUserMock.when(CurrentUserGuard::currentUserId).thenReturn(301L);
+
+            photoService.delete(12L);
+
+            InOrder inOrder = inOrder(photoMapper, storageService);
+            inOrder.verify(photoMapper).deleteById(12L);
+            inOrder.verify(storageService).delete("family/20/12.jpg");
+        }
+    }
+
+    @Test
+    void delete_keepsSuccessWhenObjectCleanupFailsAfterRowRemoval() {
+        Photo photo = new Photo();
+        photo.setId(12L);
+        photo.setFamilyId(20L);
+        photo.setUploaderId(301L);
+        photo.setScope("FAMILY");
+        photo.setObjectKey("family/20/12.jpg");
+
+        when(photoMapper.selectById(12L)).thenReturn(photo);
+        doThrow(new BusinessException(ErrorCode.OSS_UPLOAD_FAILED, "storage offline"))
+                .when(storageService).delete("family/20/12.jpg");
 
         try (MockedStatic<CurrentUserGuard> currentUserMock = mockStatic(CurrentUserGuard.class)) {
             currentUserMock.when(CurrentUserGuard::currentUserId).thenReturn(301L);

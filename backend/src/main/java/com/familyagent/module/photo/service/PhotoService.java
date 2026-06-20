@@ -5,10 +5,12 @@ import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.photo.dto.PhotoClusterMetadata;
 import com.familyagent.module.photo.dto.PhotoContentResource;
 import com.familyagent.module.photo.dto.PhotoUploadResponse;
 import com.familyagent.module.photo.entity.Photo;
 import com.familyagent.module.photo.mapper.PhotoMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,6 +33,7 @@ public class PhotoService {
     private final PhotoStorageService storageService;
     private final PhotoMapper photoMapper;
     private final FamilyService familyService;
+    private final ObjectMapper objectMapper;
 
     private static final int MAX_FILES = 50;
     private static final long MAX_FILE_BYTES = 10L * 1024 * 1024;
@@ -105,8 +108,8 @@ public class PhotoService {
         return results;
     }
 
-    public void updateClusterResult(Long photoId, Object clusterResult) {
-        Photo photo = requireAccessiblePhoto(photoId);
+    public void updateClusterResult(Long photoId, PhotoClusterMetadata clusterResult) {
+        Photo photo = requireUploaderPhoto(photoId);
         photo.setMetadata(clusterResult);
         photoMapper.updateById(photo);
     }
@@ -139,10 +142,13 @@ public class PhotoService {
         if (!currentUserId.equals(photo.getUploaderId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "Only the uploader can delete this photo");
         }
-        // Remove the row first: if storage deletion later fails we have a harmless
-        // orphan object rather than a row pointing at content that no longer exists.
         photoMapper.deleteById(photoId);
-        storageService.delete(photo.getObjectKey());
+        try {
+            storageService.delete(photo.getObjectKey());
+        } catch (RuntimeException e) {
+            log.warn("Photo row deleted but object cleanup failed: photoId={}, objectKey={}, error={}",
+                    photoId, photo.getObjectKey(), e.getMessage());
+        }
     }
 
     private Photo requireAccessiblePhoto(Long photoId) {
@@ -162,6 +168,21 @@ public class PhotoService {
         return photo;
     }
 
+    private Photo requireUploaderPhoto(Long photoId) {
+        Photo photo = photoMapper.selectById(photoId);
+        if (photo == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "Photo not found");
+        }
+        Long currentUserId = CurrentUserGuard.currentUserId();
+        if (!currentUserId.equals(photo.getUploaderId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "Only the uploader can update this photo");
+        }
+        if (PhotoScope.fromNullable(photo.getScope()) != PhotoScope.PERSONAL) {
+            familyService.checkMembership(photo.getFamilyId());
+        }
+        return photo;
+    }
+
     private PhotoUploadResponse toResponse(Photo photo) {
         return PhotoUploadResponse.builder()
                 .id(photo.getId())
@@ -173,7 +194,7 @@ public class PhotoService {
                 .fileSize(photo.getFileSize())
                 .originalName(photo.getOriginalName())
                 .description(photo.getDescription())
-                .metadata(photo.getMetadata())
+                .metadata(toClusterMetadata(photo.getMetadata()))
                 .takenAt(photo.getTakenAt())
                 .createdAt(photo.getCreatedAt())
                 .build();
@@ -199,5 +220,24 @@ public class PhotoService {
 
     private String buildAssetUrl(Long photoId) {
         return "/api/photos/" + photoId + "/content";
+    }
+
+    private PhotoClusterMetadata toClusterMetadata(Object metadata) {
+        if (metadata == null) {
+            return null;
+        }
+        if (metadata instanceof PhotoClusterMetadata clusterMetadata) {
+            return clusterMetadata;
+        }
+        try {
+            PhotoClusterMetadata converted = objectMapper.convertValue(metadata, PhotoClusterMetadata.class);
+            if (converted == null
+                    || (converted.groups() == null && converted.totalFaces() == null && converted.silhouetteScore() == null)) {
+                return null;
+            }
+            return converted;
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 }
