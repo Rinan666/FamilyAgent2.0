@@ -131,6 +131,7 @@ class FamilyAgent:
                         client_timestamp=client_timestamp,
                         client_timezone=client_timezone,
                         public_web_context=web_prompt,
+                        member_message=member_message,
                     ),
                 },
                 *(history or []),

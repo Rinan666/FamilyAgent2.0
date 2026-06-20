@@ -6,7 +6,7 @@ import MathRenderer from '@/components/agent/MathRenderer';
 import RagMemoryBadge from '@/components/agent/RagMemoryBadge';
 import WebSearchBadge from '@/components/agent/WebSearchBadge';
 import AnswerEvidenceDisclosure from '@/components/agent/AnswerEvidenceDisclosure';
-import { formatSessionTime, type SaveFeedback } from '@/components/agent/agentDisplay';
+import { type SaveFeedback } from '@/components/agent/agentDisplay';
 import type { AgentMode, ChatMessage } from '@/types';
 
 interface AgentMessageListProps {
@@ -18,6 +18,35 @@ interface AgentMessageListProps {
   saveFeedback: Record<string, SaveFeedback>;
   onSaveMessage: (message: ChatMessage) => void;
   onOpenContext?: () => void;
+}
+
+function AssistantThinkingIndicator() {
+  return (
+    <div
+      className="inline-flex items-center gap-2 rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-500"
+      aria-live="polite"
+    >
+      <Loader2 className="h-4 w-4 animate-spin text-emerald-700" />
+      <span>AI 正在思考...</span>
+    </div>
+  );
+}
+
+function metadataLabel(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : '';
+}
+
+function assistantDisplayName(message: ChatMessage) {
+  const metadata = message.metadata;
+  if (metadata?.agentMode === 'persona') {
+    return metadataLabel(metadata.targetPersonaName)
+      || metadataLabel(metadata.targetMemberName)
+      || 'PersonaMemberAgent';
+  }
+  if (metadata?.agentMode === 'mirror' || Boolean(metadata?.sourceRefs?.length)) {
+    return metadataLabel(metadata.targetMemberName) || 'MirrorAgent';
+  }
+  return 'FamilyAgent';
 }
 
 export default function AgentMessageList({
@@ -91,7 +120,8 @@ export default function AgentMessageList({
 
           const isAssistant = message.role === 'assistant';
           const isMirrorAssistant = message.metadata?.agentMode === 'mirror' || Boolean(message.metadata?.sourceRefs?.length);
-          const isPersonaAssistant = message.metadata?.agentMode === 'persona';
+          const displayName = isAssistant ? assistantDisplayName(message) : '你';
+          const showThinkingIndicator = isAssistant && isStreaming && !message.content.trim();
           const showSaveControls = !isStreaming && Boolean(message.content.trim());
 
           return (
@@ -106,17 +136,18 @@ export default function AgentMessageList({
                     : 'border-emerald-100 bg-emerald-50 text-stone-900'
                 }`}
               >
-                <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="mb-3 flex items-center">
                   <div className={`text-xs font-semibold ${isAssistant ? 'text-emerald-700' : 'text-emerald-800'}`}>
-                    {isAssistant ? (isPersonaAssistant ? targetLabel : isMirrorAssistant ? 'MirrorAgent' : 'FamilyAgent') : '你'}
-                  </div>
-                  <div className="text-[11px] text-stone-400">
-                    {formatSessionTime(message.timestamp)}
+                    {displayName}
                   </div>
                 </div>
 
                 <div className="whitespace-pre-wrap text-sm leading-7 text-stone-800">
-                  {isAssistant ? <MathRenderer content={message.content} /> : message.content}
+                  {showThinkingIndicator
+                    ? <AssistantThinkingIndicator />
+                    : isAssistant
+                      ? <MathRenderer content={message.content} />
+                      : message.content}
                 </div>
 
                 {isAssistant && message.metadata?.thinkingSummary && (

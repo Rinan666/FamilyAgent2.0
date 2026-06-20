@@ -28,9 +28,11 @@ def test_build_family_agent_system_prompt_uses_defaults():
     assert "- 用户提问时间：未提供。" in prompt
     assert "未触发联网搜索。" in prompt
     assert "当前没有命中明确的已授权家族上下文。" in prompt
-    assert "不要只处理用户字面的问题" in prompt
-    assert "不要把“承接、分析、建议”写成固定段落" in prompt
+    assert "先回应用户真正关心的点" in prompt
+    assert "不背模板" in prompt
     assert "不把真话说成刀子" in prompt
+    assert "按用户当前问题自然回应" in prompt
+    assert "不协助现实伤害" in prompt
 
 
 def test_build_family_agent_system_prompt_includes_full_context():
@@ -55,6 +57,24 @@ def test_build_family_agent_system_prompt_includes_full_context():
     assert "当用户提到今天、明天、本周、最近、刚才等相对时间时，以这个时间为基准。" in prompt
     assert "已联网搜索并整理公共信息。" in prompt
     assert "授权记忆片段" in prompt
+
+
+def test_build_family_agent_system_prompt_adds_self_intro_style_hint():
+    prompt = build_family_agent_system_prompt(
+        subject="FamilyAgent",
+        context_label="family_memory",
+        memory_context="",
+        viewer_role="MEMBER",
+        target_role="MEMBER",
+        response_mode="quick",
+        client_timestamp="2026-06-12T09:00:00+08:00",
+        client_timezone="Asia/Shanghai",
+        public_web_context="",
+        member_message="介绍一下你自己",
+    )
+
+    assert "用户在问你是谁" in prompt
+    assert "按用户当前问题自然回应" not in prompt
 
 
 def test_build_family_agent_system_prompt_adds_mirror_rules_for_mirror_context():

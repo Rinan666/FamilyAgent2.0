@@ -61,6 +61,7 @@ interface UseChatOptions {
     defaultRequest: UseChatRequestConfig;
   }) => Promise<UseChatRequestConfig> | UseChatRequestConfig;
   normalizeStreamMetadata?: (metadata: Record<string, unknown>) => NonNullable<ChatMessage['metadata']>;
+  getInitialAssistantMetadata?: () => NonNullable<ChatMessage['metadata']>;
 }
 
 export function useChat(options: UseChatOptions = {}) {
@@ -89,6 +90,7 @@ export function useChat(options: UseChatOptions = {}) {
     memoryContextResolver,
     prepareRequest,
     normalizeStreamMetadata,
+    getInitialAssistantMetadata,
   } = options;
 
   const activeStreamRef = useRef<AIStreamHandle | null>(null);
@@ -228,6 +230,10 @@ export function useChat(options: UseChatOptions = {}) {
 
     const userMessage = addMessage('user', message);
     const assistantMessage = addMessage('assistant', '');
+    const initialAssistantMetadata = getInitialAssistantMetadata?.();
+    if (initialAssistantMetadata) {
+      mergeLastAssistantMetadata(initialAssistantMetadata);
+    }
     setStreaming(true);
 
     const persistUserMessageTask = enqueuePersist([userMessage]).catch(() => undefined);
@@ -343,6 +349,7 @@ export function useChat(options: UseChatOptions = {}) {
     clearActiveStream,
     contextLabel,
     flushFinalAssistantMessage,
+    getInitialAssistantMetadata,
     isRunActive,
     isStreaming,
     mergeLastAssistantMetadata,

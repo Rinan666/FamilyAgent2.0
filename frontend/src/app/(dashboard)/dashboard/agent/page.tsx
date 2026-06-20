@@ -324,6 +324,17 @@ export default function AgentPage() {
     () => selectionLabel(targetSelection, targetMember, targetPersona),
     [targetMember, targetPersona, targetSelection],
   );
+  const inputPlaceholder = useMemo(() => {
+    const modeHint = responseMode === 'quick'
+      ? '当前为快速模式：更快，少检索上下文，适合简单问题。思考模式会先整理家庭记忆和身份资料，回答更完整但稍慢。'
+      : '当前为思考模式：会先整理家庭记忆和身份资料，回答更完整但稍慢。快速模式更快，少检索上下文，适合简单问题。';
+    const promptHint = mode === 'mirror'
+      ? `可以问 ${targetLabel} 的日常记录和成长观察里有什么线索...`
+      : mode === 'persona'
+        ? `可以向 ${targetLabel} 请教一个家庭问题...`
+        : '可以聊需要家庭经验沉淀来参考的问题...';
+    return `${modeHint}\n${promptHint}`;
+  }, [mode, responseMode, targetLabel]);
   const modeReadiness = useMemo(() => readinessLevel(mirrorContext), [mirrorContext]);
   const activeSessionMetadata = useMemo(
     () => normalizeAgentSessionMetadata(activeSessionDetail?.metadata),
@@ -558,22 +569,17 @@ export default function AgentPage() {
     };
   }, [mode, targetMember, targetPersona]);
 
-  const normalizeStreamMetadata = useCallback((metadata: Record<string, unknown>): NonNullable<ChatMessage['metadata']> => (
-    mode === 'mirror'
+  const getInitialAssistantMetadata = useCallback(
+    () => buildSessionMetadata(mode, targetLabel, targetMember, targetPersona, false),
+    [mode, targetLabel, targetMember, targetPersona],
+  );
+
+  const normalizeStreamMetadata = useCallback((metadata: Record<string, unknown>): NonNullable<ChatMessage['metadata']> => ({
+    ...getInitialAssistantMetadata(),
+    ...(mode === 'mirror'
       ? normalizeMirrorAssistantMetadata(metadata)
-      : mode === 'persona'
-        ? {
-            agentMode: 'persona',
-            targetPersonaId: targetPersona?.id ?? null,
-            targetPersonaName: targetPersona?.name ?? targetLabel,
-            targetMemberName: targetPersona?.name ?? targetLabel,
-            ...normalizeAssistantMetadata(metadata),
-          }
-      : {
-          agentMode: 'family',
-          ...normalizeAssistantMetadata(metadata),
-        }
-  ), [mode, targetLabel, targetPersona]);
+      : normalizeAssistantMetadata(metadata)),
+  }), [getInitialAssistantMetadata, mode]);
 
   const ensureSessionHeader = useCallback(async () => {
     if (!activeFamilyId) {
@@ -667,6 +673,7 @@ export default function AgentPage() {
     memoryContextResolver,
     prepareRequest,
     normalizeStreamMetadata,
+    getInitialAssistantMetadata,
   });
 
   const recentMessages = useMemo(
@@ -1319,14 +1326,10 @@ export default function AgentPage() {
               <textarea
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
-                placeholder={mode === 'mirror'
-                  ? `问问 ${targetLabel} 的日常记录和成长观察里有什么线索...`
-                  : mode === 'persona'
-                    ? `向 ${targetLabel} 请教一个家庭问题...`
-                    : '可以聊需要家族经验沉淀来参考的问题...'}
+                placeholder={inputPlaceholder}
                 disabled={isStreaming}
-                rows={2}
-                className="min-h-[72px] max-h-40 w-full resize-none rounded-md border border-stone-100 bg-stone-50/70 px-3 py-2 text-sm leading-6 text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-100 disabled:bg-stone-100"
+                rows={3}
+                className="min-h-[88px] max-h-40 w-full resize-none rounded-md border border-stone-100 bg-stone-50/70 px-3 py-2 text-sm leading-6 text-stone-900 outline-none transition placeholder:text-stone-500 focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-100 disabled:bg-stone-100"
               />
 
               <div className="mt-2 flex flex-col gap-2 px-1 pb-1 sm:flex-row sm:items-center sm:justify-between">
