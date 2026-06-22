@@ -16,7 +16,7 @@ jobs:
 
     services:
       postgres:
-        image: pgvector/pgvector:pg16
+        image: docker.m.daocloud.io/pgvector/pgvector:pg16
         env:
           POSTGRES_DB: familyagent_test
           POSTGRES_USER: fa_test
