@@ -7,7 +7,13 @@ ENV PYTHONUNBUFFERED=1
 
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN sed -i \
+    -e 's|http://deb.debian.org/debian|https://mirrors.tuna.tsinghua.edu.cn/debian|g' \
+    -e 's|http://deb.debian.org/debian-security|https://mirrors.tuna.tsinghua.edu.cn/debian-security|g' \
+    -e 's|http://security.debian.org/debian-security|https://mirrors.tuna.tsinghua.edu.cn/debian-security|g' \
+    /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
     libxcb1 \
     libglib2.0-0 \
     libgomp1 \
