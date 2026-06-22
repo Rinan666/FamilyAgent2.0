@@ -56,6 +56,13 @@ def _load_dip_router() -> tuple[APIRouter, Optional[str]]:
             "requirements to enable these endpoints."
         )
         return _build_unavailable_dip_router(detail), detail
+    except ImportError as exc:
+        detail = (
+            "DIP image processing is unavailable because an optional runtime "
+            f"dependency failed to load: {exc}. Install ai-service image "
+            "system dependencies to enable these endpoints."
+        )
+        return _build_unavailable_dip_router(detail), detail
 
 
 dip_router, dip_unavailable_reason = _load_dip_router()
