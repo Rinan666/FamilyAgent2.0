@@ -42,6 +42,7 @@ def test_cluster_by_urls_skips_http_status_failures(monkeypatch):
 
     class FakeAsyncClient:
         def __init__(self, *args, **kwargs):
+            assert kwargs["trust_env"] is False
             pass
 
         async def __aenter__(self):
@@ -88,3 +89,41 @@ def test_cluster_by_urls_skips_http_status_failures(monkeypatch):
     }]
     assert body["groups"][0]["faces"][0]["photo_id"] == 170
     assert body["groups"][0]["faces"][1]["photo_id"] == 172
+
+
+def test_cluster_by_urls_fails_when_no_photos_can_be_read(monkeypatch):
+    router_module = _load_router_with_stubbed_dip(monkeypatch)
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            assert kwargs["trust_env"] is False
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def get(self, url, headers=None):
+            return httpx.Response(502, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(router_module.httpx, "AsyncClient", FakeAsyncClient)
+
+    app = FastAPI()
+    app.dependency_overrides[router_module.verify_token] = lambda: None
+    app.dependency_overrides[router_module.enforce_ai_rate_limit] = lambda: None
+    app.dependency_overrides[router_module.enforce_ai_concurrency] = lambda: None
+    app.include_router(router_module.router)
+    client = TestClient(app)
+
+    response = client.post(
+        "/faces/cluster-by-urls",
+        json={
+            "urls": ["http://photos/one", "http://photos/two"],
+            "photo_ids": [170, 171],
+        },
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "All photos failed to fetch for clustering."

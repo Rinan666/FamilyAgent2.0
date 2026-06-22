@@ -165,7 +165,7 @@ async def cluster_faces_by_urls(req: ClusterByUrlsRequest, request: Request) -> 
             "failure": None,
         }
 
-    async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=120, follow_redirects=True, trust_env=False) as client:
         fetched = await asyncio.gather(*[
             _fetch(i, url, pid) for i, (url, pid) in enumerate(zip(req.urls, req.photo_ids))
         ])
@@ -179,6 +179,9 @@ async def cluster_faces_by_urls(req: ClusterByUrlsRequest, request: Request) -> 
         for emb, meta in file_results["faces"]:
             all_embeddings.append(emb)
             face_meta.append(meta)
+
+    if not all_embeddings and failed_photos:
+        raise HTTPException(status_code=502, detail="All photos failed to fetch for clustering.")
 
     if len(all_embeddings) < 2:
         return JSONResponse(content={

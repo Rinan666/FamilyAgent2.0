@@ -167,6 +167,14 @@ async function clusterByUrls(urls: string[], photoIds: number[]): Promise<PhotoC
   };
 }
 
+function summarizeClusterFailures(failures: PhotoClusterResult['failed_photos']): string {
+  if (!failures?.length) return '';
+  const reasons = Array.from(new Set(failures.map((item) => (
+    item.status_code ? `HTTP ${item.status_code}` : item.reason
+  ))));
+  return `聚类已完成，但有 ${failures.length} 张图片无法读取，已跳过（${reasons.slice(0, 3).join('、')}）。`;
+}
+
 function AuthImage({ photo, className }: { photo: PhotoItem; className?: string }) {
   const src = useAuthenticatedObjectUrl(photo.assetUrl);
 
@@ -634,8 +642,9 @@ export default function AlbumPage() {
       setClusterResult(nextResult);
 
       const warnings: string[] = [];
-      if ((nextResult.failed_photos?.length ?? 0) > 0) {
-        warnings.push(`聚类已完成，但有 ${nextResult.failed_photos?.length} 张图片无法读取，已跳过。`);
+      const clusterFailureSummary = summarizeClusterFailures(nextResult.failed_photos);
+      if (clusterFailureSummary) {
+        warnings.push(clusterFailureSummary);
       }
 
       const saveResults = await Promise.allSettled(
