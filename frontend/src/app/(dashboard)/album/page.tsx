@@ -129,14 +129,41 @@ async function clusterByUrls(urls: string[], photoIds: number[]): Promise<PhotoC
     },
     body: JSON.stringify({ urls, photo_ids: photoIds }),
   });
-  const data = await res.json().catch(() => null);
+  const responseText = await res.text();
+  let data: {
+    success?: boolean;
+    detail?: string;
+    message?: string;
+    groups?: unknown;
+    total_faces?: unknown;
+    silhouette_score?: unknown;
+    failed_photos?: unknown;
+  } | null = null;
+  try {
+    data = responseText ? JSON.parse(responseText) : null;
+  } catch {
+    data = null;
+  }
   if (!res.ok || !data?.success) {
-    throw new Error(data?.detail || '人脸聚类失败。');
+    const detail = data?.detail || data?.message || responseText.trim();
+    throw new Error(detail ? `人脸聚类失败（HTTP ${res.status}）：${detail}` : `人脸聚类失败（HTTP ${res.status}）。`);
   }
   return {
     groups: Array.isArray(data.groups) ? data.groups : [],
     total_faces: Number(data.total_faces) || 0,
     silhouette_score: typeof data.silhouette_score === 'number' ? data.silhouette_score : null,
+    failed_photos: Array.isArray(data.failed_photos)
+      ? data.failed_photos
+        .map((item: { photo_id?: unknown; file_index?: unknown; reason?: unknown; status_code?: unknown }) => ({
+          photo_id: Number(item.photo_id),
+          file_index: Number(item.file_index),
+          reason: typeof item.reason === 'string' ? item.reason : 'UNKNOWN',
+          status_code: typeof item.status_code === 'number' ? item.status_code : null,
+        }))
+        .filter((item: { photo_id: number; file_index: number }) => (
+          Number.isFinite(item.photo_id) && Number.isFinite(item.file_index)
+        ))
+      : [],
   };
 }
 
@@ -422,6 +449,7 @@ function ClusterResultSummary({
 }) {
   const validGroups = clusterResult.groups.filter((group) => group.group_id !== -1);
   const noiseGroup = clusterResult.groups.find((group) => group.group_id === -1);
+  const failedPhotoCount = clusterResult.failed_photos?.length ?? 0;
 
   const renderFace = (face: PhotoFaceMeta, key: string) => (
     photosById
@@ -438,6 +466,9 @@ function ClusterResultSummary({
           <span>人物 <strong className="text-stone-900">{validGroups.length}</strong></span>
           {clusterResult.silhouette_score !== null && (
             <span>轮廓系数 <strong className="text-stone-900">{clusterResult.silhouette_score.toFixed(3)}</strong></span>
+          )}
+          {failedPhotoCount > 0 && (
+            <span>跳过图片 <strong className="text-stone-900">{failedPhotoCount}</strong></span>
           )}
         </div>
       </div>
@@ -602,12 +633,20 @@ export default function AlbumPage() {
       );
       setClusterResult(nextResult);
 
+      const warnings: string[] = [];
+      if ((nextResult.failed_photos?.length ?? 0) > 0) {
+        warnings.push(`聚类已完成，但有 ${nextResult.failed_photos?.length} 张图片无法读取，已跳过。`);
+      }
+
       const saveResults = await Promise.allSettled(
         photos.map((photo) => photoApi.saveClusterResult(photo.id, nextResult)),
       );
       const failedSaves = saveResults.filter((item) => item.status === 'rejected').length;
       if (failedSaves > 0) {
-        setClusterWarning(`聚类已完成，但有 ${failedSaves} 张图片的结果未能保存。`);
+        warnings.push(`有 ${failedSaves} 张图片的结果未能保存。`);
+      }
+      if (warnings.length > 0) {
+        setClusterWarning(warnings.join(' '));
       }
     } catch (nextError) {
       setClusterError(nextError instanceof Error ? nextError.message : '人脸聚类失败，请重试。');

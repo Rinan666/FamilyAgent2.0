@@ -9,7 +9,13 @@ public record PhotoClusterMetadata(
         @JsonProperty("total_faces")
         Integer totalFaces,
         @JsonProperty("silhouette_score")
-        Double silhouetteScore) {
+        Double silhouetteScore,
+        @JsonProperty("failed_photos")
+        List<FailedPhoto> failedPhotos) {
+
+    public PhotoClusterMetadata(List<Group> groups, Integer totalFaces, Double silhouetteScore) {
+        this(groups, totalFaces, silhouetteScore, List.of());
+    }
 
     public record Group(
             @JsonProperty("group_id")
@@ -32,5 +38,15 @@ public record PhotoClusterMetadata(
             Double y,
             Double w,
             Double h) {
+    }
+
+    public record FailedPhoto(
+            @JsonProperty("photo_id")
+            Long photoId,
+            @JsonProperty("file_index")
+            Integer fileIndex,
+            String reason,
+            @JsonProperty("status_code")
+            Integer statusCode) {
     }
 }

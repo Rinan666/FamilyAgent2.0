@@ -232,7 +232,8 @@ public class PhotoService {
         try {
             PhotoClusterMetadata converted = objectMapper.convertValue(metadata, PhotoClusterMetadata.class);
             if (converted == null
-                    || (converted.groups() == null && converted.totalFaces() == null && converted.silhouetteScore() == null)) {
+                    || (converted.groups() == null && converted.totalFaces() == null
+                    && converted.silhouetteScore() == null && converted.failedPhotos() == null)) {
                 return null;
             }
             return converted;

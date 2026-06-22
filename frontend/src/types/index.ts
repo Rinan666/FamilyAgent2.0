@@ -71,10 +71,18 @@ export interface PhotoClusterGroup {
   faces: PhotoFaceMeta[];
 }
 
+export interface PhotoClusterFailure {
+  photo_id: number;
+  file_index: number;
+  reason: string;
+  status_code?: number | null;
+}
+
 export interface PhotoClusterResult {
   groups: PhotoClusterGroup[];
   total_faces: number;
   silhouette_score: number | null;
+  failed_photos?: PhotoClusterFailure[];
 }
 
 export interface PhotoItem {

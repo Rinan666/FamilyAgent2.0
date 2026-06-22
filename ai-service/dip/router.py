@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import Optional
 
 import cv2
@@ -19,6 +20,7 @@ router = APIRouter(dependencies=[
     Depends(enforce_ai_rate_limit),
     Depends(enforce_ai_concurrency),
 ])
+logger = logging.getLogger(__name__)
 
 _face_app = FaceAnalysis(name="buffalo_sc", providers=["CPUExecutionProvider"])
 _face_app.prepare(ctx_id=0, det_size=(640, 640))
@@ -118,17 +120,50 @@ async def cluster_faces_by_urls(req: ClusterByUrlsRequest, request: Request) -> 
         try:
             resp = await client.get(resolved_url, headers=request_headers)
             resp.raise_for_status()
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Failed to fetch photo {photo_id}: {type(e).__name__}")
+        except httpx.HTTPStatusError as e:
+            status_code = e.response.status_code if e.response is not None else None
+            logger.warning("Skipping photo %s during clustering: fetch returned %s", photo_id, status_code)
+            return {
+                "faces": [],
+                "failure": {
+                    "photo_id": photo_id,
+                    "file_index": file_idx,
+                    "reason": "HTTP_STATUS",
+                    "status_code": status_code,
+                },
+            }
+        except httpx.HTTPError as e:
+            logger.warning("Skipping photo %s during clustering: %s", photo_id, type(e).__name__)
+            return {
+                "faces": [],
+                "failure": {
+                    "photo_id": photo_id,
+                    "file_index": file_idx,
+                    "reason": type(e).__name__,
+                    "status_code": None,
+                },
+            }
         try:
             img = _decode_bgr(resp.content)
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"Cannot decode photo {photo_id}")
-        return [
-            (emb, {"photo_id": photo_id, "file_index": file_idx, "face_index": fi,
-                   "bbox": {"x": box[0], "y": box[1], "w": box[2], "h": box[3]}})
-            for fi, (emb, box) in enumerate(_extract(img))
-        ]
+            logger.warning("Skipping photo %s during clustering: cannot decode image", photo_id)
+            return {
+                "faces": [],
+                "failure": {
+                    "photo_id": photo_id,
+                    "file_index": file_idx,
+                    "reason": "DECODE_FAILED",
+                    "status_code": None,
+                },
+            }
+        return {
+            "faces": [
+                (emb, {"photo_id": photo_id, "file_index": file_idx, "face_index": fi,
+                       "bbox": {"x": box[0], "y": box[1], "w": box[2], "h": box[3]}})
+                for fi, (emb, box) in enumerate(_extract(img))
+            ],
+            "failure": None,
+        }
 
     async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
         fetched = await asyncio.gather(*[
@@ -137,14 +172,21 @@ async def cluster_faces_by_urls(req: ClusterByUrlsRequest, request: Request) -> 
 
     all_embeddings: list[np.ndarray] = []
     face_meta: list[dict] = []
+    failed_photos: list[dict] = []
     for file_results in fetched:
-        for emb, meta in file_results:
+        if file_results["failure"] is not None:
+            failed_photos.append(file_results["failure"])
+        for emb, meta in file_results["faces"]:
             all_embeddings.append(emb)
             face_meta.append(meta)
 
     if len(all_embeddings) < 2:
         return JSONResponse(content={
-            "success": True, "groups": [], "total_faces": len(all_embeddings), "silhouette_score": None,
+            "success": True,
+            "groups": [],
+            "total_faces": len(all_embeddings),
+            "silhouette_score": None,
+            "failed_photos": failed_photos,
         })
 
     labels, score = cluster(np.array(all_embeddings), eps=0.5)
@@ -157,4 +199,5 @@ async def cluster_faces_by_urls(req: ClusterByUrlsRequest, request: Request) -> 
         "groups": [{"group_id": gid, "faces": faces} for gid, faces in sorted(groups.items())],
         "total_faces": len(all_embeddings),
         "silhouette_score": score,
+        "failed_photos": failed_photos,
     })
