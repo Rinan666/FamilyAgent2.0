@@ -1,4 +1,6 @@
-FROM node:22-alpine AS build
+ARG NODE_IMAGE=docker.m.daocloud.io/library/node:22-alpine
+
+FROM ${NODE_IMAGE} AS build
 
 WORKDIR /app
 
@@ -14,7 +16,7 @@ RUN npm ci --include=dev --registry=https://registry.npmmirror.com
 COPY . .
 RUN npm run build --registry=https://registry.npmmirror.com && npm prune --omit=dev --registry=https://registry.npmmirror.com
 
-FROM node:22-alpine AS runtime
+FROM ${NODE_IMAGE} AS runtime
 
 WORKDIR /app
 

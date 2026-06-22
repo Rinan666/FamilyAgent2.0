@@ -155,6 +155,7 @@ services:
     build:
       context: ./frontend
       args:
+        NODE_IMAGE: ${DOCKER_NODE_IMAGE:-docker.m.daocloud.io/library/node:22-alpine}
         BACKEND_URL: ${DOCKER_FRONTEND_BACKEND_URL:-http://backend:8080}
         AI_SERVICE_URL: ${DOCKER_FRONTEND_AI_SERVICE_URL:-http://ai-service:8000}
     restart: unless-stopped
