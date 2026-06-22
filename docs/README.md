@@ -8,4 +8,4 @@ FamilyAgent 是一个面向家庭场景的智能协作系统，目标不是做�
 
 ## 使用说明
 
-本地开发时，先准备根目录 `.env`，再启动 PostgreSQL、Redis、RabbitMQ 和 MinIO 等依赖服务。前端位于 `frontend`，使用 `npm install` 与 `npm run dev`；后端位于 `backend`，使用 `.\mvnw.cmd spring-boot:run`；AI 服务位于 `ai-service`，先创建 `.venv` 并安装 `requirements.txt`，再执行 `start.bat`。默认访问入口为前端 `http://localhost:3000`，后端 `http://localhost:8080`，AI 文档 `http://localhost:8090/docs`。
+本地开发时，先准备根目录 `.env`，再启动 PostgreSQL、Redis、RabbitMQ 和 MinIO 等依赖服务。前端位于 `frontend`，使用 `npm install` 与 `npm run dev`；后端位于 `backend`，使用 `.\mvnw.cmd spring-boot:run`；AI 服务位于 `ai-service`，先创建 `.venv` 并安装 `requirements.txt`，再执行 `start.bat`。默认访问入口为前端 `http://localhost:3000`，后端 `http://localhost:8080`，AI 文档 `http://localhost:8000/docs`。

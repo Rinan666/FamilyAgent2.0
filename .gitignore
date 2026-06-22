@@ -30,6 +30,7 @@ out/
 .turbo/
 *.tsbuildinfo
 .next
+miniprogram/
 
 # --- IDE ---
 .idea/
@@ -72,6 +73,7 @@ storage/
 *.gguf
 models/
 checkpoints/
+.claude/
 
 # --- Coverage ---
 coverage/
