@@ -1,6 +1,21 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+const DEFAULT_AI_SERVICE_URL = process.env.NODE_ENV === 'production'
+  ? 'http://ai-service:8000'
+  : 'http://localhost:8000';
+const AI_SERVICE_URL = (process.env.AI_SERVICE_URL || DEFAULT_AI_SERVICE_URL).replace(/\/+$/, '');
+
+function upstreamOrigin(): string {
+  try {
+    return new URL(AI_SERVICE_URL).origin;
+  } catch {
+    return AI_SERVICE_URL;
+  }
+}
+
+function plainTextSnippet(text: string): string {
+  return text.replace(/\s+/g, ' ').trim().slice(0, 240);
+}
 
 async function proxyToAi(request: NextRequest, path: string[]): Promise<NextResponse> {
   const targetUrl = `${AI_SERVICE_URL}/ai/${path.join('/')}`;
@@ -34,10 +49,24 @@ async function proxyToAi(request: NextRequest, path: string[]): Promise<NextResp
   }
 
   const responseBody = await res.text();
+  const contentType = res.headers.get('content-type') || 'application/json';
+  const isHtmlResponse = contentType.toLowerCase().includes('text/html')
+    || /^\s*<!doctype html/i.test(responseBody)
+    || /^\s*<html/i.test(responseBody);
+
+  if (isHtmlResponse) {
+    const detail = [
+      `AI upstream returned HTML with HTTP ${res.status} from ${upstreamOrigin()}.`,
+      'Check AI_SERVICE_URL; Docker production should use http://ai-service:8000 instead of a Cloudflare/public web domain.',
+      plainTextSnippet(responseBody),
+    ].filter(Boolean).join(' ');
+    return NextResponse.json({ success: false, detail }, { status: res.ok ? 502 : res.status });
+  }
+
   return new NextResponse(responseBody, {
     status: res.status,
     headers: {
-      'Content-Type': res.headers.get('content-type') || 'application/json',
+      'Content-Type': contentType,
     },
   });
 }
