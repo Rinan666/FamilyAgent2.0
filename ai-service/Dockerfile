@@ -4,8 +4,9 @@ WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV HOME=/home/appuser
 
-RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+RUN groupadd -r appgroup && useradd -r -m -d /home/appuser -g appgroup appuser
 
 RUN sed -i \
     -e 's|http://deb.debian.org/debian|https://mirrors.tuna.tsinghua.edu.cn/debian|g' \
@@ -19,6 +20,8 @@ RUN sed -i \
     libglib2.0-0 \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /home/appuser/.insightface && chown -R appuser:appgroup /home/appuser
 
 COPY requirements.txt ./
 RUN pip install --no-cache-dir --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple && \

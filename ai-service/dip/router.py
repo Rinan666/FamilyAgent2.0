@@ -22,8 +22,24 @@ router = APIRouter(dependencies=[
 ])
 logger = logging.getLogger(__name__)
 
-_face_app = FaceAnalysis(name="buffalo_sc", providers=["CPUExecutionProvider"])
-_face_app.prepare(ctx_id=0, det_size=(640, 640))
+_face_app: FaceAnalysis | None = None
+
+
+def _get_face_app() -> FaceAnalysis:
+    global _face_app
+    if _face_app is not None:
+        return _face_app
+    try:
+        app = FaceAnalysis(name="buffalo_sc", providers=["CPUExecutionProvider"])
+        app.prepare(ctx_id=0, det_size=(640, 640))
+    except Exception as exc:
+        logger.exception("DIP face model initialization failed")
+        raise HTTPException(
+            status_code=503,
+            detail=f"DIP face model is unavailable: {type(exc).__name__}: {exc}",
+        ) from exc
+    _face_app = app
+    return app
 
 
 def _decode_bgr(data: bytes) -> np.ndarray:
@@ -45,7 +61,7 @@ def _ensure_min_size(img: np.ndarray, min_side: int = 160) -> np.ndarray:
 def _extract(img_bgr: np.ndarray) -> list[tuple[np.ndarray, tuple]]:
     """Return [(embedding_512, (x,y,w,h)), ...]. Falls back to whole-image if no face detected."""
     img_bgr = _ensure_min_size(img_bgr)
-    faces = _face_app.get(img_bgr)
+    faces = _get_face_app().get(img_bgr)
     if faces:
         return [
             (face.embedding.astype(np.float32),

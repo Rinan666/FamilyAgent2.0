@@ -8,12 +8,14 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 
-def _load_router_with_stubbed_dip(monkeypatch):
+def _load_router_with_stubbed_dip(monkeypatch, face_prepare_error: Exception | None = None):
     class FakeFaceAnalysis:
         def __init__(self, *args, **kwargs):
             pass
 
         def prepare(self, *args, **kwargs):
+            if face_prepare_error is not None:
+                raise face_prepare_error
             return None
 
         def get(self, img):
@@ -127,3 +129,44 @@ def test_cluster_by_urls_fails_when_no_photos_can_be_read(monkeypatch):
 
     assert response.status_code == 502
     assert response.json()["detail"] == "All photos failed to fetch for clustering."
+
+
+def test_cluster_by_urls_returns_503_when_face_model_cannot_initialize(monkeypatch):
+    router_module = _load_router_with_stubbed_dip(
+        monkeypatch,
+        face_prepare_error=PermissionError("Permission denied: '/home/appuser'"),
+    )
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            assert kwargs["trust_env"] is False
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def get(self, url, headers=None):
+            return httpx.Response(200, content=b"image", request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(router_module.httpx, "AsyncClient", FakeAsyncClient)
+
+    app = FastAPI()
+    app.dependency_overrides[router_module.verify_token] = lambda: None
+    app.dependency_overrides[router_module.enforce_ai_rate_limit] = lambda: None
+    app.dependency_overrides[router_module.enforce_ai_concurrency] = lambda: None
+    app.include_router(router_module.router)
+    client = TestClient(app)
+
+    response = client.post(
+        "/faces/cluster-by-urls",
+        json={
+            "urls": ["http://photos/one", "http://photos/two"],
+            "photo_ids": [170, 171],
+        },
+    )
+
+    assert response.status_code == 503
+    assert "DIP face model is unavailable" in response.json()["detail"]
