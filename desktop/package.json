@@ -8,8 +8,9 @@
   "scripts": {
     "dev": "electron .",
     "check": "node --check src/main.js",
-    "pack": "electron-builder --dir",
-    "dist:win": "electron-builder --win nsis"
+    "stage": "node scripts/stage-stack.js",
+    "pack": "npm run stage && electron-builder --dir",
+    "dist:win": "npm run stage && electron-builder --win nsis"
   },
   "build": {
     "appId": "cn.familyagent.desktop",
@@ -23,23 +24,10 @@
     ],
     "extraResources": [
       {
-        "from": "..",
+        "from": ".stack",
         "to": "familyagent-stack",
         "filter": [
-          "backend/**",
-          "frontend/**",
-          "ai-service/**",
-          "docker-compose.stack.yml",
-          ".env.docker.example",
-          "!**/node_modules/**",
-          "!**/.next/**",
-          "!**/target/**",
-          "!**/.venv/**",
-          "!**/.venv-test/**",
-          "!**/.pytest_cache/**",
-          "!**/.ruff_cache/**",
-          "!**/logs/**",
-          "!**/*.log"
+          "**/*"
         ]
       }
     ],

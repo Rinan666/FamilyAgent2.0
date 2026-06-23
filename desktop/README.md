@@ -7,7 +7,7 @@ This directory packages FamilyAgent as a Windows desktop launcher. The launcher 
 - Windows 10/11
 - Docker Desktop with Docker Compose
 - Network access for the first image build and dependency download
-- A configured `.env.docker` file, especially AI provider keys and internal tokens
+- Configured AI provider keys and internal tokens
 
 ## Development
 
@@ -17,7 +17,7 @@ npm install
 npm run dev
 ```
 
-In development mode the launcher uses the repository root as the stack directory.
+In development mode, the launcher uses the repository root as the stack directory.
 
 ## Build Installer
 
@@ -27,19 +27,26 @@ npm install
 npm run dist:win
 ```
 
-The installer is written to `desktop\dist`.
+The build command first creates a trimmed Docker stack under `desktop\.stack`, then writes the installer to `desktop\dist`.
+
+Common outputs:
+
+- `desktop\dist\FamilyAgent Setup 0.1.0.exe`
+- `desktop\dist\win-unpacked\FamilyAgent.exe`
+
+`desktop\.stack` and `desktop\dist` are generated artifacts and are ignored by git.
 
 ## Runtime Behavior
 
 - On first launch, the app copies `.env.docker.example` into the Electron user data directory as `.env.docker`.
-- The menu item `打开配置文件` opens that file for editing.
-- The launcher runs:
+- The app menu has an item for opening that config file.
+- The launcher sets `STACK_ENV_FILE` to the user-data config file and runs:
 
 ```powershell
 docker compose --env-file <user-data>\config\.env.docker -f <stack>\docker-compose.stack.yml up -d --build --remove-orphans
 ```
 
-- Closing the desktop window does not stop containers. Use `停止服务` from the app menu when you want to run `docker compose down`.
+- Closing the desktop window does not stop containers. Use the stop-services menu item when you want to run `docker compose down`.
 
 ## Packaged Stack
 
