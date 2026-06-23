@@ -52,6 +52,17 @@ class WeChatMiniAppClientTest {
         assertEquals(ErrorCode.LOGIN_FAILED.getCode(), error.getCode());
     }
 
+    @Test
+    void exchangeCodeForSession_shouldRejectUnsafeCodeBeforeRequest() {
+        WeChatMiniAppClient client = new WeChatMiniAppClient(new RestTemplate(), "demo-app-id", "demo-secret",
+                "http://127.0.0.1/sns/jscode2session");
+
+        BusinessException error = assertThrows(BusinessException.class,
+                () -> client.exchangeCodeForSession("demo-code&url=http://169.254.169.254/latest"));
+
+        assertEquals(ErrorCode.BAD_REQUEST.getCode(), error.getCode());
+    }
+
     private WeChatMiniAppClient createClient() {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(5_000);
