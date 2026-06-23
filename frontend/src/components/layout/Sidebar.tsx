@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { BookHeart, Images, Menu, Settings, Sparkles, Users, X } from 'lucide-react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { BookHeart, Images, Menu, Search, Settings, Sparkles, Users, X } from 'lucide-react';
 import type { ViewerRole } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 
@@ -20,14 +20,6 @@ const navItems: readonly NavItem[] = [
   { href: '/dashboard/diary', label: '日记', icon: BookHeart, roles: ['MEMBER', 'ADMIN'] },
   { href: '/album', label: '相册', icon: Images, roles: ['MEMBER', 'ADMIN'] },
   { href: '/dashboard/family', label: '家庭空间', icon: Users, roles: ['MEMBER', 'ADMIN'] },
-  { href: '/dashboard/settings', label: '设置', icon: Settings, roles: ['MEMBER', 'ADMIN'] },
-] as const;
-
-const mobilePrimaryNav: readonly NavItem[] = [
-  { href: '/dashboard/agent', label: '助手', icon: Sparkles, roles: ['MEMBER', 'ADMIN'] },
-  { href: '/dashboard/diary', label: '日记', icon: BookHeart, roles: ['MEMBER', 'ADMIN'] },
-  { href: '/album', label: '相册', icon: Images, roles: ['MEMBER', 'ADMIN'] },
-  { href: '/dashboard/family', label: '家庭', icon: Users, roles: ['MEMBER', 'ADMIN'] },
   { href: '/dashboard/settings', label: '设置', icon: Settings, roles: ['MEMBER', 'ADMIN'] },
 ] as const;
 
@@ -87,61 +79,65 @@ function NavigationLinks({
   );
 }
 
-export function MobileBottomNav({
-  viewerRole = 'MEMBER',
-}: {
-  viewerRole?: ViewerRole;
-}) {
-  const pathname = usePathname();
-  const items = mobilePrimaryNav.filter((item) => item.roles.includes(viewerRole)).slice(0, 5);
-
-  return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-stone-200 bg-white/96 px-2 pb-[max(env(safe-area-inset-bottom),0.35rem)] pt-1 shadow-[0_-12px_30px_rgba(24,39,32,0.08)] backdrop-blur lg:hidden">
-      <div className="mx-auto grid max-w-lg grid-cols-5 gap-1">
-        {items.map((item) => {
-          const Icon = item.icon;
-          const isActive = isActivePath(pathname, item.href);
-
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-label={item.label}
-              className={cn(
-                'flex min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-[11px] font-medium transition-colors',
-                isActive ? 'bg-stone-950 text-white' : 'text-stone-500 hover:bg-stone-100 hover:text-stone-800',
-              )}
-            >
-              <Icon className="h-5 w-5" />
-              <span className="truncate">{item.label}</span>
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
-  );
-}
-
 export default function Sidebar({ viewerRole = 'MEMBER', isPlatformAdmin = false, className }: SidebarProps) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [librarySearch, setLibrarySearch] = useState('');
+
+  useEffect(() => {
+    if (!pathname.startsWith('/dashboard/family')) return;
+    setLibrarySearch(searchParams.get('q') || '');
+  }, [pathname, searchParams]);
+
+  const handleLibrarySearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const params = new URLSearchParams();
+    params.set('tab', 'library');
+    const familyId = searchParams.get('familyId');
+    if (familyId) params.set('familyId', familyId);
+    if (librarySearch.trim()) params.set('q', librarySearch.trim());
+    router.push(`/dashboard/family?${params.toString()}`);
+  };
+
   return (
-    <aside className={cn('hidden w-16 shrink-0 border-r border-stone-200 bg-white lg:flex 2xl:w-56', className)}>
-      <div className="flex h-full w-full flex-col px-2 pb-4 pt-4 2xl:px-3">
+    <header className={cn('hidden shrink-0 border-b border-stone-200 bg-white lg:block', className)}>
+      <div className="flex h-16 items-center gap-4 px-5">
         <Link
           href="/dashboard/agent"
           title="FamilyAgent"
-          className="flex h-11 items-center justify-center rounded-md text-stone-950 transition hover:bg-stone-100 2xl:justify-start 2xl:gap-3 2xl:px-3"
+          className="flex shrink-0 items-center gap-3 text-stone-950"
         >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-stone-950 text-white shadow-sm">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-stone-950 text-white shadow-sm">
             <BookHeart className="h-5 w-5" />
           </div>
-          <p className="hidden text-sm font-semibold 2xl:block">FamilyAgent</p>
+          <p className="text-base font-semibold">FamilyAgent</p>
         </Link>
 
-        <nav className="mt-4 flex-1 space-y-1">
+        <nav className="flex shrink-0 items-center gap-1">
           <NavigationLinks viewerRole={viewerRole} isPlatformAdmin={isPlatformAdmin} />
         </nav>
+
+        <form onSubmit={handleLibrarySearch} className="mx-auto w-full max-w-xl">
+          <label className="relative block">
+            <input
+              value={librarySearch}
+              onChange={(event) => setLibrarySearch(event.target.value)}
+              placeholder="搜索家族记忆库"
+              className="h-10 w-full rounded-md border border-stone-200 bg-stone-50 pl-4 pr-11 text-sm text-stone-800 outline-none transition placeholder:text-stone-400 focus:border-emerald-300 focus:bg-white focus:ring-2 focus:ring-emerald-100"
+            />
+            <button
+              type="submit"
+              className="absolute right-1 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-stone-500 transition hover:bg-stone-100 hover:text-stone-900"
+              aria-label="搜索记忆库"
+            >
+              <Search className="h-4 w-4" />
+            </button>
+          </label>
+        </form>
+
       </div>
-    </aside>
+    </header>
   );
 }
 

@@ -64,12 +64,12 @@ export default function AgentMessageList({
 }: AgentMessageListProps) {
   if (!isLoadingMessages && messages.length === 0) {
     return (
-      <div className="mx-auto flex w-full max-w-5xl min-h-0 flex-1 items-center overflow-y-auto px-2 py-6">
-        <div className="w-full rounded-md border border-dashed border-stone-300 bg-white px-6 py-10 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-md bg-emerald-100 text-emerald-800">
+      <div className="mx-auto flex w-full max-w-5xl min-h-0 flex-1 items-center justify-center overflow-y-auto px-4 py-8">
+        <div className="w-full px-4 py-8 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-md bg-emerald-100 text-emerald-800 shadow-sm">
             <Sparkles className="h-6 w-6" />
           </div>
-          <h3 className="mt-5 text-xl font-semibold text-stone-950">
+          <h3 className="mt-5 text-2xl font-semibold text-stone-950">
             {mode === 'mirror'
               ? `开始与 ${targetLabel} 的镜像参考对话`
               : mode === 'persona'
@@ -88,7 +88,7 @@ export default function AgentMessageList({
               <button
                 type="button"
                 onClick={onOpenContext}
-                className="inline-flex h-10 items-center rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 transition hover:border-stone-300 hover:bg-stone-50"
+                className="inline-flex h-10 items-center rounded-full border border-emerald-200 bg-emerald-50 px-4 text-sm font-medium text-emerald-800 transition hover:bg-emerald-100"
               >
                 查看上下文
               </button>
@@ -101,7 +101,7 @@ export default function AgentMessageList({
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 md:px-5">
-      <div className="mx-auto max-w-5xl space-y-3">
+      <div className="mx-auto max-w-4xl space-y-4">
         {isLoadingMessages && (
           <div className="rounded-md border border-stone-200 bg-white px-4 py-3 text-center text-sm text-stone-500">
             <Loader2 className="mx-auto mb-2 h-4 w-4 animate-spin" />
@@ -133,11 +133,9 @@ export default function AgentMessageList({
               className={`flex ${isAssistant ? 'justify-start' : 'justify-end'}`}
             >
               <div
-                className={`max-w-[96%] rounded-md border px-4 py-3 md:max-w-[88%] ${
-                  isAssistant
-                    ? 'border-stone-200 bg-white text-stone-900'
-                    : 'border-emerald-100 bg-emerald-50 text-stone-900'
-                }`}
+                className={isAssistant
+                  ? 'max-w-[96%] rounded-md px-1 py-2 text-stone-900 md:max-w-[88%]'
+                  : 'max-w-[96%] rounded-md bg-emerald-50 px-4 py-3 text-stone-900 ring-1 ring-emerald-100 md:max-w-[76%]'}
               >
                 <div className="mb-3 flex items-center">
                   <div className={`text-xs font-semibold ${isAssistant ? 'text-emerald-700' : 'text-emerald-800'}`}>

@@ -47,7 +47,7 @@ describe('agentTarget helpers', () => {
     expect(selectionFromRequestedTargetUserId(selfUserId, selfUserId, members)).toBe('SELF');
     expect(selectionMode('SELF', selfUserId)).toBe('mirror');
     expect(selectionMirrorTargetUserId('SELF', selfUserId)).toBe(selfUserId);
-    expect(selectionLabel('SELF', members[0])).toBe('镜像自己');
+    expect(selectionLabel('SELF', members[0])).toBe('user-100');
   });
 
   it('keeps other family members as mirror targets', () => {

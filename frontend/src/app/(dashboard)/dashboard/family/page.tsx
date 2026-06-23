@@ -1,39 +1,35 @@
 'use client';
 
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Loader2, Sparkles, Users } from 'lucide-react';
+import { Archive, BookHeart, Loader2, UserCheck, Users } from 'lucide-react';
 import FamilyMembersPanel from '@/components/family/FamilyMembersPanel';
 import PersonaMembersPanel from '@/components/family/PersonaMembersPanel';
-import {
-  WorkbenchBadge,
-  WorkbenchEmptyState,
-  WorkbenchHero,
-  WorkbenchPage,
-  WorkbenchSectionTitle,
-  WorkbenchSurface,
-  WorkbenchTabs,
-} from '@/components/layout/Workbench';
 import MemoryLibraryWorkbench from '@/components/memory-library/MemoryLibraryWorkbench';
 import { useViewerRole } from '@/hooks/useViewerRole';
+import { cn } from '@/lib/utils';
 import type { FamilyTab } from '@/types';
 
-const tabs: { value: FamilyTab; label: string }[] = [
-  { value: 'library', label: '记忆库' },
-  { value: 'members', label: '成员列表' },
-  { value: 'personas', label: '精神成员' },
+type FamilySpaceTab = FamilyTab | 'archive';
+
+const tabs: { value: FamilySpaceTab; label: string; icon: typeof BookHeart }[] = [
+  { value: 'library', label: '当前记忆', icon: BookHeart },
+  { value: 'archive', label: '归档箱', icon: Archive },
+  { value: 'members', label: '成员列表', icon: Users },
+  { value: 'personas', label: '精神成员', icon: UserCheck },
 ];
 
-const legacyTabRedirects: Record<string, FamilyTab> = {
+const legacyTabRedirects: Record<string, FamilySpaceTab> = {
   overview: 'members',
   heritage: 'library',
   library: 'library',
+  archive: 'archive',
   growth: 'library',
   stream: 'library',
 };
 
-function parseFamilyTab(value: string | null): FamilyTab {
-  if (tabs.some((tab) => tab.value === value)) return value as FamilyTab;
+function parseFamilyTab(value: string | null): FamilySpaceTab {
+  if (tabs.some((tab) => tab.value === value)) return value as FamilySpaceTab;
   if (value && legacyTabRedirects[value]) return legacyTabRedirects[value];
   return 'library';
 }
@@ -51,8 +47,14 @@ export default function FamilyPage() {
     isLoading: loadingFamilies,
   } = useViewerRole();
 
+  const [librarySearch, setLibrarySearch] = useState('');
+
   const requestedTab = searchParams.get('tab');
   const currentTab = useMemo(() => parseFamilyTab(requestedTab), [requestedTab]);
+  const requestedLibrarySearch = useMemo(
+    () => searchParams.get('q')?.trim() || '',
+    [searchParams],
+  );
 
   const requestedFamilyId = useMemo(() => {
     const value = Number(searchParams.get('familyId'));
@@ -69,12 +71,7 @@ export default function FamilyPage() {
       || null;
   }, [activeFamilyId, families, requestedFamilyId]);
 
-  const selectedFamily = useMemo(
-    () => families.find((family) => family.id === selectedFamilyId) || null,
-    [families, selectedFamilyId],
-  );
-
-  const updateUrl = useCallback((nextTab: FamilyTab, nextFamilyId?: number | null) => {
+  const updateUrl = useCallback((nextTab: FamilySpaceTab, nextFamilyId?: number | null) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set('tab', nextTab);
     if (nextFamilyId) {
@@ -84,6 +81,10 @@ export default function FamilyPage() {
     }
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   }, [pathname, router, searchParams]);
+
+  const handleTabChange = useCallback((nextTab: FamilySpaceTab) => {
+    updateUrl(nextTab, selectedFamilyId);
+  }, [selectedFamilyId, updateUrl]);
 
   useEffect(() => {
     if (!requestedTab) {
@@ -107,6 +108,10 @@ export default function FamilyPage() {
     }
   }, [activeFamilyId, selectedFamilyId, setActiveFamilyId]);
 
+  useEffect(() => {
+    setLibrarySearch(requestedLibrarySearch);
+  }, [requestedLibrarySearch]);
+
   if (loadingFamilies) {
     return (
       <div className="flex h-60 items-center justify-center text-stone-400">
@@ -117,78 +122,72 @@ export default function FamilyPage() {
   }
 
   return (
-    <WorkbenchPage className="max-w-[1500px]">
-      <WorkbenchHero
-        badge={(
-          <WorkbenchBadge icon={<Sparkles className="h-3.5 w-3.5" />}>
-            家族空间
-          </WorkbenchBadge>
-        )}
-        title="成员与家族记忆"
-        aside={(
-          <div>
-            <p className="text-xs font-medium text-stone-400">当前家族</p>
-            <div className="mt-3 space-y-2">
-              {selectedFamily ? (
-                <p className="text-base font-semibold text-stone-950">{selectedFamily.name}</p>
-              ) : (
-                <p className="text-sm text-stone-500">先创建或加入一个家族空间。</p>
-              )}
-            </div>
-          </div>
-        )}
-      />
-
-      <WorkbenchTabs
-        items={tabs}
-        value={currentTab}
-        onChange={(nextTab) => updateUrl(nextTab, selectedFamilyId)}
-        className="grid-cols-3"
-      />
+    <div className="mx-auto w-full max-w-[1500px]">
+      <div className="mb-3 rounded-md border border-stone-200 bg-white p-2">
+        <nav className="flex min-w-0 gap-1 overflow-x-auto">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const active = currentTab === tab.value;
+            return (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => handleTabChange(tab.value)}
+                className={cn(
+                  'inline-flex h-9 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium transition',
+                  active ? 'bg-stone-950 text-white' : 'text-stone-600 hover:bg-stone-100 hover:text-stone-950',
+                )}
+              >
+                <Icon className={cn('h-4 w-4', active ? 'text-emerald-300' : 'text-stone-400')} />
+                {tab.label}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
 
       {families.length === 0 ? (
-        <WorkbenchEmptyState
-          icon={<Users className="h-6 w-6" />}
-          title="还没有家族空间"
-          description="创建或加入家族后，就可以在这里查看成员列表，并把家族记忆沉淀到统一记忆库。"
-          action={(
-            <div className="w-full max-w-4xl">
-              <FamilyMembersPanel viewerRole={viewerRole} families={families} focusedFamilyId={selectedFamilyId} />
-            </div>
-          )}
-        />
+        <div className="rounded-md border border-dashed border-stone-300 bg-white px-6 py-16 text-center">
+          <Users className="mx-auto mb-3 h-10 w-10 text-stone-300" />
+          <h2 className="text-lg font-semibold text-stone-950">还没有家族空间</h2>
+          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-stone-500">
+            创建或加入家族后，就可以在这里查看成员列表，并把家族记忆沉淀到统一记忆库。
+          </p>
+          <div className="mx-auto mt-6 w-full max-w-4xl">
+            <FamilyMembersPanel viewerRole={viewerRole} families={families} focusedFamilyId={selectedFamilyId} />
+          </div>
+        </div>
       ) : (
         <>
-          {currentTab === 'library' && <MemoryLibraryWorkbench embedded />}
+          {(currentTab === 'library' || currentTab === 'archive') && (
+            <MemoryLibraryWorkbench
+              embedded
+              simplified
+              searchQuery={librarySearch}
+              libraryViewMode={currentTab === 'archive' ? 'ARCHIVED' : 'ACTIVE'}
+            />
+          )}
 
           {currentTab === 'members' && (
-            <WorkbenchSurface className="space-y-4">
-              <WorkbenchSectionTitle
-                title="成员列表"
-                description='在成员列表中查看当前家族成员，并通过"成员记忆"入口进入对应成员的记忆视图。'
-              />
+            <div className="rounded-md border border-stone-200 bg-white p-4">
               <FamilyMembersPanel
                 viewerRole={viewerRole}
                 families={families}
                 focusedFamilyId={selectedFamilyId}
               />
-            </WorkbenchSurface>
+            </div>
           )}
 
           {currentTab === 'personas' && (
-            <WorkbenchSurface className="space-y-4">
-              <WorkbenchSectionTitle
-                title="精神成员"
-                description="精神成员是家族创建的档案角色，可在聊天中以稳定声音提供建议。每个家族最多 3 个。"
-              />
+            <div className="rounded-md border border-stone-200 bg-white p-4">
               <PersonaMembersPanel
                 familyId={selectedFamilyId}
                 isOwner={activeMembership?.role === 'OWNER'}
               />
-            </WorkbenchSurface>
+            </div>
           )}
         </>
       )}
-    </WorkbenchPage>
+    </div>
   );
 }

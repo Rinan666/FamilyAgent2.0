@@ -3,14 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { BookHeart, CheckCircle, ChevronDown, Lock, RefreshCw, Save, Sparkles, Users } from 'lucide-react';
+import { CheckCircle, ChevronDown, Lock, RefreshCw, Save, Sparkles, Users } from 'lucide-react';
 import { familyApi, memoryApi, writeMemoryApi } from '@/lib/api';
 import { useViewerRole } from '@/hooks/useViewerRole';
 import { useAuthStore } from '@/stores/authStore';
 import VoiceInputButton from '@/components/voice/VoiceInputButton';
 import {
   WorkbenchEmptyState,
-  WorkbenchHero,
   WorkbenchPage,
   WorkbenchSurface,
 } from '@/components/layout/Workbench';
@@ -669,16 +668,114 @@ export default function DiaryPage() {
 
   return (
     <WorkbenchPage className="max-w-[1500px]">
-      <WorkbenchHero
-        badge={(
-          <span className="inline-flex items-center gap-2 rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
-            <BookHeart className="h-3.5 w-3.5" />
-            日记
-          </span>
+      {error && (
+        <div className="rounded-md border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="flex items-center gap-2 rounded-md border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <CheckCircle className="h-4 w-4 text-emerald-700" />
+          {success}
+        </div>
+      )}
+
+      <div className="space-y-3">
+        <div className="overflow-hidden rounded-[1.35rem] border border-emerald-400 bg-white shadow-sm transition focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100">
+          <textarea
+            value={content}
+            onChange={(event) => setContent(event.target.value)}
+            rows={14}
+            placeholder={
+              category === 'EXPERIENCE'
+                ? '把这次经历里值得以后再用上的经验写下来。'
+                : category === 'OBSERVATION'
+                  ? '写下你观察到的情况、想继续留意的点和下次复核方向。'
+                  : '直接写下此刻发生的事、感受、判断或想留给家人的一句话。'
+            }
+            className="min-h-[28rem] w-full resize-none border-0 bg-white px-5 py-5 text-base leading-8 text-stone-800 outline-none placeholder:text-stone-400 sm:px-7 sm:py-6"
+          />
+
+          <div className="flex flex-col gap-3 px-3 pb-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowTemplates((current) => !current)}
+                className="inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium text-stone-500 transition hover:bg-stone-100 hover:text-stone-900"
+              >
+                不会开头
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showTemplates ? 'rotate-180' : ''}`} />
+              </button>
+              <VoiceInputButton onTranscript={(text) => {
+                setContent((current) => (current.trim() ? `${current.trim()}\n${text}` : text));
+              }}
+              disabled={saving || organizing}
+              />
+              <button
+                type="button"
+                onClick={() => void handleOrganize()}
+                disabled={!content.trim() || saving || organizing}
+                className="inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {organizing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                帮我整理
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 sm:justify-end">
+              <span className="min-w-0 truncate text-xs text-stone-400">
+                {draftStatus || '草稿会自动保存在本地'}
+              </span>
+              {hasDraftContent && (
+                <button
+                  type="button"
+                  onClick={clearDraft}
+                  className="text-xs font-medium text-stone-400 transition hover:text-red-600"
+                >
+                  清空草稿
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => void handleSave()}
+                disabled={!selectedFamilyId || !content.trim() || saving}
+                className="inline-flex h-10 min-w-10 items-center justify-center gap-2 rounded-md bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-300"
+                aria-label={primaryActionLabel(category)}
+              >
+                {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                <span className="hidden sm:inline">{saving ? '正在保存...' : primaryActionLabel(category)}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {showTemplates && (
+          <div className="rounded-md border border-emerald-100 bg-emerald-50 p-3">
+            <p className="mb-2 text-xs font-medium text-emerald-800">从一句开头开始</p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {visibleTemplates.map((template) => (
+                <button
+                  key={template.id}
+                  type="button"
+                  onClick={() => applyTemplate(template)}
+                  className="rounded-md border border-emerald-100 bg-white px-3 py-2 text-left text-xs font-medium text-emerald-800 transition hover:bg-emerald-100"
+                >
+                  {template.label}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
-        title="日记"
-        aside={(
-          <label className="block text-xs font-medium text-stone-500">
+
+        {relatedMemberLabel && (
+          <div className="rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            当前内容会关联到 {relatedMemberLabel}。
+          </div>
+        )}
+
+        <div className="grid gap-3 rounded-md bg-stone-50 p-3 md:grid-cols-2 xl:grid-cols-4">
+          <label className="text-xs font-medium text-stone-500">
             家族空间
             <select
               value={selectedFamilyId || ''}
@@ -695,202 +792,81 @@ export default function DiaryPage() {
               ))}
             </select>
           </label>
-        )}
-      />
 
-      {error && (
-        <div className="rounded-md border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      {success && (
-        <div className="flex items-center gap-2 rounded-md border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          <CheckCircle className="h-4 w-4 text-emerald-700" />
-          {success}
-        </div>
-      )}
-
-      <WorkbenchSurface className="p-3 sm:p-4">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] xl:grid-cols-[minmax(0,1fr)_20rem]">
-          <div className="min-w-0">
-            <div className="mb-3 grid grid-cols-3 gap-2">
+          <div className="text-xs font-medium text-stone-500">
+            类型
+            <div className="mt-1 grid grid-cols-3 gap-1.5 rounded-md border border-stone-200 bg-white p-1">
               {categoryOptions.map((item) => (
                 <button
                   key={item.value}
                   type="button"
                   onClick={() => handleCategoryChange(item.value)}
-                  className={`rounded-md border px-3 py-2 text-left transition ${
+                  className={`h-7 rounded px-2 text-xs font-medium transition ${
                     category === item.value
-                      ? 'border-emerald-200 bg-emerald-50'
-                      : 'border-stone-200 bg-white hover:bg-stone-50'
+                      ? 'bg-stone-950 text-white'
+                      : 'text-stone-500 hover:bg-stone-100 hover:text-stone-900'
                   }`}
                 >
-                  <p className="text-sm font-semibold text-stone-950">{item.label}</p>
-                  <p className="mt-1 hidden text-xs leading-5 text-stone-500 sm:block">{item.description}</p>
+                  {item.label}
                 </button>
               ))}
             </div>
-
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md bg-stone-50 px-3 py-2 text-xs text-stone-500">
-              <span>{draftStatus || '草稿会自动保存在本地'}</span>
-              {hasDraftContent && (
-                <button
-                  type="button"
-                  onClick={clearDraft}
-                  className="font-medium text-stone-500 transition hover:text-red-600"
-                >
-                  清空草稿
-                </button>
-              )}
-            </div>
-
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowTemplates((current) => !current)}
-                className="inline-flex h-8 items-center gap-2 rounded-md border border-stone-200 bg-white px-3 text-xs font-medium text-stone-600 transition hover:bg-stone-50"
-              >
-                不会开头
-                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showTemplates ? 'rotate-180' : ''}`} />
-              </button>
-              <VoiceInputButton onTranscript={(text) => {
-                setContent((current) => (current.trim() ? `${current.trim()}\n${text}` : text));
-              }}
-              disabled={saving || organizing}
-              />
-              <button
-                type="button"
-                onClick={() => void handleOrganize()}
-                disabled={!content.trim() || saving || organizing}
-                className="inline-flex h-8 items-center gap-2 rounded-md border border-emerald-100 bg-emerald-50 px-3 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {organizing ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                帮我整理
-              </button>
-            </div>
-
-            {showTemplates && (
-              <div className="mb-3 rounded-md border border-emerald-100 bg-emerald-50 p-3">
-                <p className="mb-2 text-xs font-medium text-emerald-800">从一句开头开始</p>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {visibleTemplates.map((template) => (
-                    <button
-                      key={template.id}
-                      type="button"
-                      onClick={() => applyTemplate(template)}
-                      className="rounded-md border border-emerald-100 bg-white px-3 py-2 text-left text-xs font-medium text-emerald-800 transition hover:bg-emerald-100"
-                    >
-                      {template.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {relatedMemberLabel && (
-              <div className="mb-3 rounded-md border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-800">
-                当前内容会关联到 {relatedMemberLabel}。
-              </div>
-            )}
-
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium text-stone-800">正文</span>
-              <textarea
-                value={content}
-                onChange={(event) => setContent(event.target.value)}
-                rows={18}
-                placeholder={
-                  category === 'EXPERIENCE'
-                    ? '把这次经历里值得以后再用上的经验写下来。'
-                    : category === 'OBSERVATION'
-                      ? '写下你观察到的情况、想继续留意的点和下次复核方向。'
-                      : '直接写下此刻发生的事、感受、判断或想留给家人的一句话。'
-                }
-                className="min-h-[34rem] w-full resize-none rounded-md border border-stone-200 bg-white px-5 py-4 text-base leading-8 text-stone-800 outline-none transition placeholder:text-stone-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-              />
-            </label>
           </div>
 
-          <aside className="space-y-3 rounded-md border border-stone-200 bg-stone-50 p-3 lg:self-start">
-            {title && (
-              <div className="rounded-md border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                当前整理出的标题：{title}
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 gap-3">
-              <label className="text-xs font-medium text-stone-500">
-                可见范围
-                <select
-                  value={visibility}
-                  onChange={(event) => setVisibility(event.target.value as DiaryVisibility)}
-                  className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                >
-                  {visibilityOptions.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-                <span className="mt-1 block text-[11px] text-stone-400">
-                  {visibilityOptions.find((option) => option.value === visibility)?.note}
-                </span>
-              </label>
-
-              <label className="text-xs font-medium text-stone-500">
-                标签
-                <input
-                  value={tagText}
-                  onChange={(event) => setTagText(event.target.value)}
-                  placeholder="例如：日常 经验 观察 照护"
-                  className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                />
-              </label>
-            </div>
-
-            {category === 'OBSERVATION' && (
-              <div className="grid grid-cols-1 gap-3">
-                <label className="text-xs font-medium text-stone-500">
-                  关联成员
-                  <select
-                    value={relatedUserId || ''}
-                    onChange={(event) => {
-                      const value = Number(event.target.value);
-                      setRelatedUserId(Number.isFinite(value) && value > 0 ? value : undefined);
-                    }}
-                    className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                  >
-                    <option value="">请选择一位成员</option>
-                    {members.map((member) => (
-                      <option key={member.userId} value={member.userId}>{memberDisplayName(member)}</option>
-                    ))}
-                  </select>
-                </label>
-                <div className="rounded-md border border-stone-200 bg-white px-3 py-3 text-xs leading-6 text-stone-500">
-                  观察类内容只保留最小字段，保存后再去记忆库继续筛选和整理。
-                </div>
-              </div>
-            )}
-
-            <div className="rounded-md bg-white p-3 text-xs leading-6 text-stone-500">
-              <div className="mb-1 flex items-center gap-1.5 font-medium text-stone-700">
-                <Lock className="h-3.5 w-3.5" />
-                AI 使用边界
-              </div>
-              这里只保留“帮我整理”一个辅助动作，不会自动整理、自动合并，也不会替你自动保存。
-            </div>
-
-            <button
-              type="button"
-              onClick={() => void handleSave()}
-              disabled={!selectedFamilyId || !content.trim() || saving}
-              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-50"
+          <label className="text-xs font-medium text-stone-500">
+            可见范围
+            <select
+              value={visibility}
+              onChange={(event) => setVisibility(event.target.value as DiaryVisibility)}
+              className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
             >
-              {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {saving ? '正在保存...' : primaryActionLabel(category)}
-            </button>
-          </aside>
+              {visibilityOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="text-xs font-medium text-stone-500">
+            标签
+            <input
+              value={tagText}
+              onChange={(event) => setTagText(event.target.value)}
+              placeholder="例如：日常 经验 观察 照护"
+              className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+            />
+          </label>
+
+          {category === 'OBSERVATION' && (
+            <label className="text-xs font-medium text-stone-500">
+              关联成员
+              <select
+                value={relatedUserId || ''}
+                onChange={(event) => {
+                  const value = Number(event.target.value);
+                  setRelatedUserId(Number.isFinite(value) && value > 0 ? value : undefined);
+                }}
+                className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+              >
+                <option value="">请选择一位成员</option>
+                {members.map((member) => (
+                  <option key={member.userId} value={member.userId}>{memberDisplayName(member)}</option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {title && (
+            <div className="rounded-md border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800 xl:col-span-2">
+              当前整理出的标题：{title}
+            </div>
+          )}
+
+          <div className="flex items-start gap-2 rounded-md bg-white px-3 py-2 text-xs leading-5 text-stone-500 md:col-span-2 xl:col-span-2">
+            <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-stone-500" />
+            <span>“帮我整理”只是辅助动作，不会自动合并，也不会替你自动保存。</span>
+          </div>
         </div>
-      </WorkbenchSurface>
+      </div>
     </WorkbenchPage>
   );
 }
