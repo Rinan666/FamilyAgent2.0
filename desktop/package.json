@@ -1,0 +1,62 @@
+{
+  "name": "familyagent-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FamilyAgent Windows desktop launcher",
+  "author": "FamilyAgent",
+  "main": "src/main.js",
+  "scripts": {
+    "dev": "electron .",
+    "check": "node --check src/main.js",
+    "pack": "electron-builder --dir",
+    "dist:win": "electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "cn.familyagent.desktop",
+    "productName": "FamilyAgent",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "..",
+        "to": "familyagent-stack",
+        "filter": [
+          "backend/**",
+          "frontend/**",
+          "ai-service/**",
+          "docker-compose.stack.yml",
+          ".env.docker.example",
+          "!**/node_modules/**",
+          "!**/.next/**",
+          "!**/target/**",
+          "!**/.venv/**",
+          "!**/.venv-test/**",
+          "!**/.pytest_cache/**",
+          "!**/.ruff_cache/**",
+          "!**/logs/**",
+          "!**/*.log"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  },
+  "devDependencies": {
+    "electron": "^42.4.1",
+    "electron-builder": "^26.0.12"
+  }
+}
