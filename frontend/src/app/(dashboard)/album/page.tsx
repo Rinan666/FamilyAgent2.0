@@ -119,52 +119,7 @@ function validateImageFiles(files: File[], minFiles = 1) {
 }
 
 async function clusterByUrls(urls: string[], photoIds: number[]): Promise<PhotoClusterResult> {
-  const token = getToken();
-
-  const res = await fetch('/ai-proxy/dip/faces/cluster-by-urls', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: token } : {}),
-    },
-    body: JSON.stringify({ urls, photo_ids: photoIds }),
-  });
-  const responseText = await res.text();
-  let data: {
-    success?: boolean;
-    detail?: string;
-    message?: string;
-    groups?: unknown;
-    total_faces?: unknown;
-    silhouette_score?: unknown;
-    failed_photos?: unknown;
-  } | null = null;
-  try {
-    data = responseText ? JSON.parse(responseText) : null;
-  } catch {
-    data = null;
-  }
-  if (!res.ok || !data?.success) {
-    const detail = data?.detail || data?.message || responseText.trim();
-    throw new Error(detail ? `人脸聚类失败（HTTP ${res.status}）：${detail}` : `人脸聚类失败（HTTP ${res.status}）。`);
-  }
-  return {
-    groups: Array.isArray(data.groups) ? data.groups : [],
-    total_faces: Number(data.total_faces) || 0,
-    silhouette_score: typeof data.silhouette_score === 'number' ? data.silhouette_score : null,
-    failed_photos: Array.isArray(data.failed_photos)
-      ? data.failed_photos
-        .map((item: { photo_id?: unknown; file_index?: unknown; reason?: unknown; status_code?: unknown }) => ({
-          photo_id: Number(item.photo_id),
-          file_index: Number(item.file_index),
-          reason: typeof item.reason === 'string' ? item.reason : 'UNKNOWN',
-          status_code: typeof item.status_code === 'number' ? item.status_code : null,
-        }))
-        .filter((item: { photo_id: number; file_index: number }) => (
-          Number.isFinite(item.photo_id) && Number.isFinite(item.file_index)
-        ))
-      : [],
-  };
+  return photoApi.clusterByUrls(urls, photoIds);
 }
 
 function summarizeClusterFailures(failures: PhotoClusterResult['failed_photos']): string {

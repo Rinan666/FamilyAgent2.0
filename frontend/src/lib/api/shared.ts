@@ -311,14 +311,19 @@ export function sessionMessageItemToChatMessage(item: ChatSessionMessageItem): C
 }
 export async function aiRequest<T>(path: string, body: unknown): Promise<T> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-  const res = await fetch(`/ai-proxy${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json;charset=UTF-8',
-      ...(token ? { Authorization: token } : {}),
-    },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`/ai-proxy${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json;charset=UTF-8',
+        ...(token ? { Authorization: token } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError(503, 'AI service unavailable. Please check the Python AI service and retry.');
+  }
   if (!res.ok) {
     // 401 from AI is likely a transient auth issue (backend unreachable) — don't kill session
     const detail = await readErrorDetail(res);
@@ -335,13 +340,18 @@ export async function aiFileRequest<T>(path: string, file: File): Promise<T> {
   const formData = new FormData();
   formData.append('file', file);
 
-  const res = await fetch(`/ai-proxy${path}`, {
-    method: 'POST',
-    headers: {
-      ...(token ? { Authorization: token } : {}),
-    },
-    body: formData,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`/ai-proxy${path}`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: token } : {}),
+      },
+      body: formData,
+    });
+  } catch {
+    throw new ApiError(503, 'AI service unavailable. Please check the Python AI service and retry.');
+  }
 
   const data = await res.json().catch(() => null);
   if (!res.ok) {
