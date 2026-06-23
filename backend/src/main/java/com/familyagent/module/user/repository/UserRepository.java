@@ -20,7 +20,7 @@ public interface UserRepository extends BaseMapper<User> {
 
     @ResultMap("userWithPassword")
     @Select("""
-        SELECT id, username, password_hash, nickname, avatar_url, email, phone, role, status, metadata,
+        SELECT id, username, wechat_open_id, password_hash, nickname, avatar_url, email, phone, role, status, metadata,
                last_login_at, created_at, updated_at
         FROM users
         WHERE username = #{username}
@@ -29,19 +29,28 @@ public interface UserRepository extends BaseMapper<User> {
 
     @ResultMap("userWithPassword")
     @Select("""
-        SELECT id, username, password_hash, nickname, avatar_url, email, phone, role, status, metadata,
+        SELECT id, username, wechat_open_id, password_hash, nickname, avatar_url, email, phone, role, status, metadata,
                last_login_at, created_at, updated_at
         FROM users
         WHERE id = #{id}
         """)
     User findByIdWithPassword(Long id);
 
+    @ResultMap("userWithPassword")
+    @Select("""
+        SELECT id, username, wechat_open_id, password_hash, nickname, avatar_url, email, phone, role, status, metadata,
+               last_login_at, created_at, updated_at
+        FROM users
+        WHERE wechat_open_id = #{wechatOpenId}
+        """)
+    User findByWechatOpenId(String wechatOpenId);
+
     @Results(id = "userWithPassword", value = {
         @Result(column = "metadata", property = "metadata",
                 typeHandler = PgJsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
     })
     @Select("""
-        SELECT id, username, nickname, avatar_url, email, phone, role, status, metadata,
+        SELECT id, username, wechat_open_id, nickname, avatar_url, email, phone, role, status, metadata,
                last_login_at, created_at, updated_at
         FROM users
         WHERE id = #{id}

@@ -78,6 +78,20 @@ class MemoryServiceTest {
         verify(memoryRepository).insert(any(MemoryEntry.class));
     }
 
+    @Test
+    void createFamilyMemory_shouldDefaultMissingTypeToFamilyStory() throws InterruptedException {
+        MemoryService service = serviceWithAcquiredLock();
+        CreateFamilyMemoryRequest request = requestWithMetadata(Map.of());
+        request.setType(null);
+        when(memoryMergeService.findSimilar(any(), any(), eq(10L), any(), any())).thenReturn(null);
+
+        try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
+            stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
+            MemoryEntry result = service.createFamilyMemory(request);
+            assertEquals("FAMILY_STORY", result.getType());
+        }
+    }
+
     // --- MemoryMergeService ---
 
     @Test

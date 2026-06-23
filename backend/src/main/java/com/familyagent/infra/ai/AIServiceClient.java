@@ -15,20 +15,21 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.InterruptedIOException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
  * AI service client for the Python FastAPI service.
- * <p>
- * All external dependencies ({@link RestTemplate}, {@link ObjectMapper}) are
- * managed by Spring and injected — no manual construction.
  */
 @Slf4j
 @Component
@@ -61,33 +62,12 @@ public class AIServiceClient {
     public void proxyChatStream(Map<String, Object> request, OutputStream downstream, String authorization) {
         HttpURLConnection conn = null;
         try {
-            String jsonBody = objectMapper.writeValueAsString(request);
-
-            URI uri = URI.create(baseUrl + "/ai/agent/chat/stream");
-            conn = (HttpURLConnection) uri.toURL().openConnection();
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/json;charset=UTF-8");
-            conn.setRequestProperty("Accept", "text/event-stream");
-            if (authorization != null && !authorization.isBlank()) {
-                conn.setRequestProperty("Authorization", authorization);
-            }
-            conn.setDoOutput(true);
-            conn.setConnectTimeout(MAX_CONNECT_TIMEOUT_MILLIS);
-            conn.setReadTimeout(STREAM_TIMEOUT_MILLIS);
-
-            try (OutputStream os = conn.getOutputStream()) {
-                os.write(jsonBody.getBytes(StandardCharsets.UTF_8));
-                os.flush();
-            }
-
+            conn = openChatConnection(request, authorization);
             int responseCode = conn.getResponseCode();
             if (responseCode != HttpURLConnection.HTTP_OK) {
                 String errorBody = readResponseBody(conn);
                 log.warn("AI service response error: status={}, body={}", responseCode, truncateForLog(errorBody));
-                throw new BusinessException(
-                        ErrorCode.AI_SERVICE_ERROR,
-                        "AI service unavailable, please retry later."
-                );
+                throw toBusinessException(responseCode, errorBody);
             }
 
             try (InputStream upstream = conn.getInputStream()) {
@@ -100,6 +80,8 @@ public class AIServiceClient {
             }
         } catch (BusinessException e) {
             throw e;
+        } catch (InterruptedIOException e) {
+            throw new BusinessException(ErrorCode.AI_TIMEOUT, "AI service timed out, please retry later.");
         } catch (Exception e) {
             log.error("FamilyAgent chat SSE proxy failed", e);
             throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "AI service unavailable, please retry later.");
@@ -110,30 +92,45 @@ public class AIServiceClient {
         }
     }
 
-    private String readResponseBody(HttpURLConnection conn) {
-        InputStream errorStream = conn.getErrorStream();
-        if (errorStream == null) {
-            return "";
-        }
-
-        try (InputStream input = errorStream; ByteArrayOutputStream output = new ByteArrayOutputStream()) {
-            byte[] buffer = new byte[STREAM_BUFFER_SIZE];
-            int bytesRead;
-            while ((bytesRead = input.read(buffer)) != -1) {
-                output.write(buffer, 0, bytesRead);
+    /**
+     * Complete a chat request by aggregating the downstream SSE stream into one response.
+     */
+    @CircuitBreaker(name = "aiService", fallbackMethod = "fallbackCompleteChat")
+    public ChatCompletionResponse completeChat(Map<String, Object> request, String authorization) {
+        HttpURLConnection conn = null;
+        try {
+            conn = openChatConnection(request, authorization);
+            int responseCode = conn.getResponseCode();
+            if (responseCode != HttpURLConnection.HTTP_OK) {
+                String errorBody = readResponseBody(conn);
+                log.warn("AI service response error: status={}, body={}", responseCode, truncateForLog(errorBody));
+                throw toBusinessException(responseCode, errorBody);
             }
-            return output.toString(StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            log.warn("Failed to read AI service error body", e);
-            return "";
-        }
-    }
 
-    private String truncateForLog(String value) {
-        if (value == null || value.isBlank()) {
-            return "";
+            StringBuilder content = new StringBuilder();
+            Map<String, Object> metadata = new LinkedHashMap<>();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (handleSseLine(line, content, metadata)) {
+                        break;
+                    }
+                }
+            }
+            return new ChatCompletionResponse(content.toString(), metadata);
+        } catch (BusinessException e) {
+            throw e;
+        } catch (InterruptedIOException e) {
+            throw new BusinessException(ErrorCode.AI_TIMEOUT, "AI service timed out, please retry later.");
+        } catch (Exception e) {
+            log.error("FamilyAgent chat completion failed", e);
+            throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "AI service unavailable, please retry later.");
+        } finally {
+            if (conn != null) {
+                conn.disconnect();
+            }
         }
-        return value.length() <= 500 ? value : value.substring(0, 500) + "...";
     }
 
     /**
@@ -195,6 +192,97 @@ public class AIServiceClient {
         }
     }
 
+    private HttpURLConnection openChatConnection(Map<String, Object> request, String authorization) throws IOException {
+        String jsonBody = objectMapper.writeValueAsString(request);
+        URI uri = URI.create(baseUrl + "/ai/agent/chat/stream");
+        HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
+        conn.setRequestMethod("POST");
+        conn.setRequestProperty("Content-Type", "application/json;charset=UTF-8");
+        conn.setRequestProperty("Accept", "text/event-stream");
+        if (authorization != null && !authorization.isBlank()) {
+            conn.setRequestProperty("Authorization", authorization);
+        }
+        conn.setDoOutput(true);
+        conn.setConnectTimeout(MAX_CONNECT_TIMEOUT_MILLIS);
+        conn.setReadTimeout(STREAM_TIMEOUT_MILLIS);
+
+        try (OutputStream os = conn.getOutputStream()) {
+            os.write(jsonBody.getBytes(StandardCharsets.UTF_8));
+            os.flush();
+        }
+        return conn;
+    }
+
+    private boolean handleSseLine(String rawLine, StringBuilder content, Map<String, Object> metadata) throws IOException {
+        String line = rawLine == null ? "" : rawLine.trim();
+        if (line.isEmpty() || line.startsWith(":") || !line.startsWith("data:")) {
+            return false;
+        }
+
+        String payloadText = line.substring(5).trim();
+        if (payloadText.isEmpty()) {
+            return false;
+        }
+
+        Map<String, Object> payload = objectMapper.readValue(payloadText, Map.class);
+        if (Boolean.TRUE.equals(payload.get("done"))) {
+            return true;
+        }
+        if (payload.get("error") instanceof String errorMessage && !errorMessage.isBlank()) {
+            throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, errorMessage.trim());
+        }
+        if (payload.get("metadata") instanceof Map<?, ?> payloadMetadata) {
+            for (Map.Entry<?, ?> entry : payloadMetadata.entrySet()) {
+                if (entry.getKey() instanceof String key) {
+                    metadata.put(key, entry.getValue());
+                }
+            }
+        }
+        if (payload.get("content") instanceof String text) {
+            content.append(text);
+        }
+        return false;
+    }
+
+    private String readResponseBody(HttpURLConnection conn) {
+        InputStream errorStream = conn.getErrorStream();
+        if (errorStream == null) {
+            return "";
+        }
+
+        try (InputStream input = errorStream; ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[STREAM_BUFFER_SIZE];
+            int bytesRead;
+            while ((bytesRead = input.read(buffer)) != -1) {
+                output.write(buffer, 0, bytesRead);
+            }
+            return output.toString(StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            log.warn("Failed to read AI service error body", e);
+            return "";
+        }
+    }
+
+    private BusinessException toBusinessException(int responseCode, String errorBody) {
+        if (responseCode == HttpURLConnection.HTTP_GATEWAY_TIMEOUT) {
+            return new BusinessException(ErrorCode.AI_TIMEOUT, "AI service timed out, please retry later.");
+        }
+        if (responseCode == 429) {
+            return new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED, "AI service is busy, please retry later.");
+        }
+        if (responseCode == HttpURLConnection.HTTP_BAD_REQUEST && errorBody != null && !errorBody.isBlank()) {
+            return new BusinessException(ErrorCode.BAD_REQUEST, truncateForLog(errorBody));
+        }
+        return new BusinessException(ErrorCode.AI_SERVICE_ERROR, "AI service unavailable, please retry later.");
+    }
+
+    private String truncateForLog(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        return value.length() <= 500 ? value : value.substring(0, 500) + "...";
+    }
+
     // --- Fallback methods ---
 
     private Map<String, Object> fallbackEmbedText(Map<String, Object> request, Exception ex) {
@@ -217,4 +305,11 @@ public class AIServiceClient {
             // downstream already closed
         }
     }
+
+    private ChatCompletionResponse fallbackCompleteChat(Map<String, Object> request, String authorization, Exception ex) {
+        log.warn("AI chat completion fallback triggered: {}", ex.getMessage());
+        throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "AI service unavailable, please retry later.");
+    }
+
+    public record ChatCompletionResponse(String content, Map<String, Object> metadata) {}
 }

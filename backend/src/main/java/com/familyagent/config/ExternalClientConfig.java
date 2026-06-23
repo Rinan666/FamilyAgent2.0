@@ -47,6 +47,18 @@ public class ExternalClientConfig {
                 .build();
     }
 
+    @Bean
+    public RestTemplate wechatMiniAppRestTemplate(RestTemplateBuilder builder,
+                                                  @Value("${wechat.mini-app.timeout:10}") int timeoutSeconds) {
+        int readTimeoutMillis = Math.max(1, timeoutSeconds) * 1000;
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(Math.min(readTimeoutMillis, MAX_CONNECT_TIMEOUT_MILLIS));
+        requestFactory.setReadTimeout(readTimeoutMillis);
+        return builder
+                .requestFactory(() -> requestFactory)
+                .build();
+    }
+
     private static String normalizeEndpoint(String endpoint) {
         if (endpoint == null || endpoint.isBlank()) {
             throw new IllegalArgumentException("MinIO endpoint must not be blank");

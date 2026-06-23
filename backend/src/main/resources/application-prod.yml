@@ -44,6 +44,12 @@ ai-service:
   timeout: ${AI_SERVICE_TIMEOUT:60}
   internal-token: ${AI_INTERNAL_SERVICE_TOKEN}
 
+wechat:
+  mini-app:
+    app-id: ${WECHAT_MINI_APP_APP_ID}
+    app-secret: ${WECHAT_MINI_APP_APP_SECRET}
+    timeout: ${WECHAT_MINI_APP_TIMEOUT_SECONDS:10}
+
 minio:
   endpoint: ${MINIO_ENDPOINT}
   access-key: ${MINIO_ACCESS_KEY}

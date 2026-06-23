@@ -18,6 +18,7 @@ public class User {
     private Long id;
 
     private String username;
+    private String wechatOpenId;
 
     @TableField(select = false)
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)

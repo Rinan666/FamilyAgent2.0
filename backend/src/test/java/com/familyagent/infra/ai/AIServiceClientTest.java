@@ -96,6 +96,25 @@ class AIServiceClientTest {
                 downstream.toString(StandardCharsets.UTF_8));
     }
 
+    @Test
+    void completeChat_shouldAggregateContentAndMetadata() throws Exception {
+        server = startServer("/ai/agent/chat/stream", exchange -> respond(exchange, "text/event-stream", 200,
+                "data: {\"metadata\":{\"mode\":\"think\"}}\n\n"
+                        + "data: {\"content\":\"hello \"}\n\n"
+                        + "data: {\"content\":\"world\"}\n\n"
+                        + "data: {\"done\":true}\n\n"));
+
+        AIServiceClient client = createClient("secret-token");
+
+        AIServiceClient.ChatCompletionResponse response = client.completeChat(
+                Map.of("member_message", "tell me one thing"),
+                "Bearer demo-token"
+        );
+
+        assertEquals("hello world", response.content());
+        assertEquals("think", response.metadata().get("mode"));
+    }
+
     private HttpServer startServer(String path, ExchangeHandler handler) throws IOException {
         HttpServer httpServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         httpServer.createContext(path, exchange -> {

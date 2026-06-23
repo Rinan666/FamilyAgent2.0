@@ -31,6 +31,7 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class MemoryService {
 
+    private static final MemoryType DEFAULT_FAMILY_MEMORY_TYPE = MemoryType.FAMILY_STORY;
     private static final Set<String> FAMILY_MEMORY_TYPES = MemoryType.names();
     private static final Set<String> FAMILY_MEMORY_SCOPES = MemoryScope.familyNames();
 
@@ -148,7 +149,7 @@ public class MemoryService {
     }
 
     private static String normalizeFamilyMemoryType(String type) {
-        String normalized = type == null ? MemoryType.DEFAULT.name() : type.trim().toUpperCase(Locale.ROOT);
+        String normalized = type == null ? DEFAULT_FAMILY_MEMORY_TYPE.name() : type.trim().toUpperCase(Locale.ROOT);
         if (!FAMILY_MEMORY_TYPES.contains(normalized)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "家族经验类型不支持");
         }

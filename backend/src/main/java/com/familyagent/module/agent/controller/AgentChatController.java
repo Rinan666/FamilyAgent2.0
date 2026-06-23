@@ -2,9 +2,13 @@ package com.familyagent.module.agent.controller;
 
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
+import com.familyagent.common.response.Result;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.infra.ai.AIServiceClient;
+import com.familyagent.module.agent.dto.AgentChatRequest;
+import com.familyagent.module.agent.dto.AgentChatResponse;
 import com.familyagent.module.agent.dto.AgentChatStreamRequest;
+import com.familyagent.module.agent.service.FamilyAgentChatService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
@@ -30,7 +34,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Primary FamilyAgent chat stream endpoint.
+ * FamilyAgent chat endpoints.
  */
 @Slf4j
 @RestController
@@ -45,6 +49,7 @@ public class AgentChatController {
     private final AIServiceClient aiServiceClient;
     private final RedissonClient redissonClient;
     private final ObjectMapper objectMapper;
+    private final FamilyAgentChatService familyAgentChatService;
 
     @Operation(summary = "Proxy FamilyAgent chat stream")
     @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -54,15 +59,7 @@ public class AgentChatController {
         Long userId = CurrentUserGuard.currentUserId();
         Map<String, Object> aiPayload = request.toAiPayload();
         enforceRequestSize(aiPayload);
-        String hourKey = "quota:chat:user:" + userId + ":" + LocalDateTime.now().format(HOUR_KEY_FMT);
-        RAtomicLong counter = redissonClient.getAtomicLong(hourKey);
-        long count = counter.incrementAndGet();
-        if (count == 1) {
-            counter.expire(1, TimeUnit.HOURS);
-        } else if (count > MAX_CHATS_PER_HOUR) {
-            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED,
-                    "每小时对话次数已达上限（" + MAX_CHATS_PER_HOUR + " 次），请稍后再试");
-        }
+        enforceChatQuota(userId);
 
         response.setStatus(HttpServletResponse.SC_OK);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
@@ -90,6 +87,27 @@ public class AgentChatController {
 
             log.warn("FamilyAgent chat stream failed after response committed: {}", e.getMessage());
             writeErrorEvent(response.getOutputStream(), e.getMessage());
+        }
+    }
+
+    @Operation(summary = "FamilyAgent mobile chat")
+    @PostMapping
+    public Result<AgentChatResponse> chat(@Valid @RequestBody AgentChatRequest request,
+                                          @RequestHeader(value = "Authorization", required = false) String authorization) {
+        enforceChatQuota(CurrentUserGuard.currentUserId());
+        enforceRequestSize(request.toAiPayload("FamilyAgent", "MEMBER", ""));
+        return Result.success(familyAgentChatService.chat(request, authorization));
+    }
+
+    private void enforceChatQuota(Long userId) {
+        String hourKey = "quota:chat:user:" + userId + ":" + LocalDateTime.now().format(HOUR_KEY_FMT);
+        RAtomicLong counter = redissonClient.getAtomicLong(hourKey);
+        long count = counter.incrementAndGet();
+        if (count == 1) {
+            counter.expire(1, TimeUnit.HOURS);
+        } else if (count > MAX_CHATS_PER_HOUR) {
+            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED,
+                    "姣忓皬鏃跺璇濇鏁板凡杈句笂闄愶紙" + MAX_CHATS_PER_HOUR + " 娆★級锛岃绋嶅悗鍐嶈瘯");
         }
     }
 
