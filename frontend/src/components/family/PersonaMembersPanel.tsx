@@ -124,12 +124,14 @@ function PersonaFormModal({
   onSubmit,
   onClose,
   submitting,
+  error,
 }: {
   title: string;
   initialValues: CreatePersonaMemberRequest;
   onSubmit: (data: CreatePersonaMemberRequest) => void;
   onClose: () => void;
   submitting: boolean;
+  error?: string;
 }) {
   const [form, setForm] = useState<CreatePersonaMemberRequest>(initialValues);
 
@@ -152,6 +154,9 @@ function PersonaFormModal({
           </button>
         </div>
         <form onSubmit={handleSubmit} className="max-h-[70vh] overflow-y-auto px-5 py-4">
+          {error && (
+            <div className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
+          )}
           <div className="space-y-4">
             {PERSONA_FIELDS.map(({ key, label, rows }) => (
               <div key={key}>
@@ -702,8 +707,9 @@ export default function PersonaMembersPanel({ familyId, isOwner = false }: Perso
           title="新增精神成员"
           initialValues={EMPTY_FORM}
           onSubmit={handleCreate}
-          onClose={() => setShowCreate(false)}
+          onClose={() => { setFormError(''); setShowCreate(false); }}
           submitting={submitting}
+          error={formError}
         />
       )}
 
@@ -719,8 +725,9 @@ export default function PersonaMembersPanel({ familyId, isOwner = false }: Perso
             personality: editTarget.personality ?? '',
           }}
           onSubmit={handleUpdate}
-          onClose={() => setEditTarget(null)}
+          onClose={() => { setFormError(''); setEditTarget(null); }}
           submitting={submitting}
+          error={formError}
         />
       )}
 
@@ -740,10 +747,6 @@ export default function PersonaMembersPanel({ familyId, isOwner = false }: Perso
           onClose={() => setMaterialTarget(null)}
           onSaved={load}
         />
-      )}
-
-      {formError && (
-        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{formError}</div>
       )}
     </div>
   );

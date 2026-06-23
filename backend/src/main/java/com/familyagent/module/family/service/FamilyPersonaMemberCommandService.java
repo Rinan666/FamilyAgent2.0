@@ -9,6 +9,7 @@ import com.familyagent.module.family.dto.DeletePersonaMemberRequest;
 import com.familyagent.module.family.dto.PersonaMemberVO;
 import com.familyagent.module.family.dto.UpdatePersonaMemberRequest;
 import com.familyagent.module.family.entity.FamilyPersonaMember;
+import com.familyagent.module.family.repository.FamilyRepository;
 import com.familyagent.module.family.repository.FamilyPersonaMemberRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,11 +31,13 @@ public class FamilyPersonaMemberCommandService {
     private final FamilyPersonaMemberAssembler assembler;
     private final FamilyPersonaMaterialService materialService;
     private final FamilyService familyService;
+    private final FamilyRepository familyRepository;
     private final List<PersonaScopedResourceCleaner> personaResourceCleaners;
 
     @Transactional
     public PersonaMemberVO create(Long familyId, CreatePersonaMemberRequest request) {
         familyService.checkOwner(familyId);
+        familyRepository.lockById(familyId);
 
         int count = repository.countByFamilyId(familyId);
         if (count >= MAX_PERSONA_MEMBERS) {

@@ -5,6 +5,7 @@ import com.familyagent.common.lifecycle.PersonaScopedResourceCleaner;
 import com.familyagent.module.family.dto.CreatePersonaMemberRequest;
 import com.familyagent.module.family.dto.DeletePersonaMemberRequest;
 import com.familyagent.module.family.entity.FamilyPersonaMember;
+import com.familyagent.module.family.repository.FamilyRepository;
 import com.familyagent.module.family.repository.FamilyPersonaMemberRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,6 +31,7 @@ class FamilyPersonaMemberCommandServiceTest {
     @Mock private FamilyPersonaMemberQueryService queryService;
     @Mock private FamilyPersonaMaterialService materialService;
     @Mock private FamilyService familyService;
+    @Mock private FamilyRepository familyRepository;
     @Mock private PersonaScopedResourceCleaner personaResourceCleaner;
 
     @Test
@@ -49,6 +51,22 @@ class FamilyPersonaMemberCommandServiceTest {
         assertEquals("重视家风", entity.getDescription());
         assertNull(entity.getEraIdentity());
         assertEquals(8L, entity.getCreatedBy());
+    }
+
+    @Test
+    void create_locksFamilyBeforeCheckingPersonaLimit() {
+        FamilyPersonaMemberCommandService service = service();
+        when(repository.countByFamilyId(10L)).thenReturn(0);
+
+        try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
+            stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(8L);
+            service.create(10L, createRequest());
+        }
+
+        InOrder inOrder = inOrder(familyService, familyRepository, repository);
+        inOrder.verify(familyService).checkOwner(10L);
+        inOrder.verify(familyRepository).lockById(10L);
+        inOrder.verify(repository).countByFamilyId(10L);
     }
 
     @Test
@@ -77,6 +95,7 @@ class FamilyPersonaMemberCommandServiceTest {
                 new FamilyPersonaMemberAssembler(),
                 materialService,
                 familyService,
+                familyRepository,
                 List.of(personaResourceCleaner));
     }
 
