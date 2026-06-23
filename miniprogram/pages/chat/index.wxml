@@ -1,0 +1,44 @@
+<view class="screen">
+  <view class="hero">
+    <view class="eyebrow">家庭对话</view>
+    <view class="title">{{activeFamily ? activeFamily.name : '请选择家庭'}}</view>
+    <view class="subtitle">当前是非流式一问一答。聊完觉得有价值，再手动存成家庭记忆。</view>
+  </view>
+
+  <view class="button-row">
+    <button class="ghost-button" bindtap="goFamilies">切换家庭</button>
+    <button class="ghost-button" bindtap="goMemories">查看记忆</button>
+  </view>
+
+  <view wx:if="{{error}}" class="error-text">{{error}}</view>
+
+  <view class="panel">
+    <view wx:if="{{messages.length === 0}}" class="empty-state">
+      可以先问一些和家庭经验、日常安排、成长观察相关的问题。
+    </view>
+
+    <view wx:for="{{messages}}" wx:key="index" class="panel">
+      <view class="badge">{{item.role === 'assistant' ? 'FamilyAgent' : '我'}}</view>
+      <view class="panel-copy">{{item.content}}</view>
+      <view class="panel-copy muted">{{item.time}}</view>
+      <button
+        wx:if="{{item.role === 'assistant' && item.canSave}}"
+        class="ghost-button"
+        data-index="{{index}}"
+        bindtap="handleSaveMessage"
+      >
+        保存为家庭记忆
+      </button>
+    </view>
+  </view>
+
+  <view class="panel">
+    <textarea
+      class="text-area"
+      placeholder="输入你想问 FamilyAgent 的内容"
+      value="{{inputValue}}"
+      bindinput="handleInput"
+    />
+    <button class="primary-button" loading="{{sending}}" bindtap="handleSend">发送</button>
+  </view>
+</view>

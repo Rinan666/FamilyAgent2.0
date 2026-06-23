@@ -1,0 +1,26 @@
+<view class="screen">
+  <view class="hero">
+    <view class="eyebrow">FamilyAgent Mini</view>
+    <view class="title">把家庭对话和记忆带进小程序</view>
+    <view class="subtitle">首个版本只保留最核心的闭环：登录、进家庭、聊天、存记忆。</view>
+  </view>
+
+  <view class="panel">
+    <view class="panel-title">微信登录</view>
+    <view class="panel-copy">昵称可选。你也可以先用默认昵称进入，之后再补充资料。</view>
+
+    <view class="field-label">昵称</view>
+    <input
+      class="text-input"
+      placeholder="例如：妈妈、小宇、外公"
+      value="{{nickname}}"
+      bindinput="handleNicknameInput"
+    />
+
+    <view wx:if="{{error}}" class="error-text">{{error}}</view>
+
+    <button class="primary-button" loading="{{loading}}" bindtap="handleLogin">
+      继续使用微信登录
+    </button>
+  </view>
+</view>

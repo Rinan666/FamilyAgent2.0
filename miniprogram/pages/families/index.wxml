@@ -1,0 +1,43 @@
+<view class="screen">
+  <view class="hero">
+    <view class="eyebrow">家庭入口</view>
+    <view class="title">先选好你要进入的家庭空间</view>
+    <view class="subtitle">这个版本不做复杂家庭管理，只保留创建、加入、切换和进入聊天。</view>
+  </view>
+
+  <view wx:if="{{error}}" class="error-text">{{error}}</view>
+
+  <view class="panel">
+    <view class="panel-title">我的家庭</view>
+    <view wx:if="{{families.length === 0}}" class="empty-state">
+      你还没有加入任何家庭。下面可以直接创建一个新的，或者用邀请码加入。
+    </view>
+
+    <view wx:for="{{families}}" wx:key="id" class="panel">
+      <view class="button-row">
+        <view>
+          <view class="panel-title">{{item.name}}</view>
+          <view class="panel-copy">{{item.description || '暂无描述'}}</view>
+          <view class="panel-copy muted">邀请码：{{item.inviteCode || '稍后可查看'}}</view>
+        </view>
+      </view>
+      <view class="badge" wx:if="{{activeFamilyId === item.id}}">当前家庭</view>
+      <button class="ghost-button" data-family-id="{{item.id}}" bindtap="handleSelectFamily">切换到这个家庭</button>
+    </view>
+
+    <button class="primary-button" bindtap="goChat">进入对话</button>
+  </view>
+
+  <view class="panel">
+    <view class="panel-title">创建家庭</view>
+    <input class="text-input" placeholder="家庭名称" value="{{createName}}" data-field="createName" bindinput="handleInput" />
+    <textarea class="text-area" placeholder="一句简短描述，例如：我们的三口之家" value="{{createDescription}}" data-field="createDescription" bindinput="handleInput" />
+    <button class="secondary-button" loading="{{loading}}" bindtap="handleCreateFamily">创建并设为当前家庭</button>
+  </view>
+
+  <view class="panel">
+    <view class="panel-title">加入已有家庭</view>
+    <input class="text-input" placeholder="输入邀请码" value="{{joinCode}}" data-field="joinCode" bindinput="handleInput" />
+    <button class="ghost-button" loading="{{loading}}" bindtap="handleJoinFamily">加入家庭</button>
+  </view>
+</view>

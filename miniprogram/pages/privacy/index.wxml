@@ -1,0 +1,14 @@
+<view class="screen">
+  <view class="hero">
+    <view class="eyebrow">隐私政策</view>
+    <view class="title">FamilyAgent 小程序隐私说明</view>
+    <view class="subtitle">这个页面是 MVP 的本地说明页，正式上线前应替换为完整法务版本。</view>
+  </view>
+
+  <view class="panel">
+    <view class="panel-copy">1. 我们会处理你主动提交的登录信息、家庭信息、聊天内容与家庭记忆内容，用于完成核心服务。</view>
+    <view class="panel-copy">2. 当前 MVP 不包含图片、语音、定位等能力，也不会要求这些授权。</view>
+    <view class="panel-copy">3. 你的数据通过后端接口传输，正式发布前应确保所有服务域名都已使用 HTTPS。</view>
+    <view class="panel-copy">4. 若后续接入头像、手机号、相册、麦克风等能力，需要在微信公众平台补齐用途说明与隐私指引。</view>
+  </view>
+</view>

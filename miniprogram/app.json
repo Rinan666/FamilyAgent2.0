@@ -1,0 +1,43 @@
+{
+  "pages": [
+    "pages/login/index",
+    "pages/families/index",
+    "pages/chat/index",
+    "pages/memories/index",
+    "pages/settings/index",
+    "pages/privacy/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "FamilyAgent",
+    "navigationBarBackgroundColor": "#f7efe6",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f4efe7",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#6d6257",
+    "selectedColor": "#1f6b4f",
+    "backgroundColor": "#fffaf4",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/families/index",
+        "text": "家庭"
+      },
+      {
+        "pagePath": "pages/chat/index",
+        "text": "对话"
+      },
+      {
+        "pagePath": "pages/memories/index",
+        "text": "记忆"
+      },
+      {
+        "pagePath": "pages/settings/index",
+        "text": "我的"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

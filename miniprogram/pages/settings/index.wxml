@@ -1,0 +1,26 @@
+<view class="screen">
+  <view class="hero">
+    <view class="eyebrow">我的</view>
+    <view class="title">{{session ? session.nickname : 'FamilyAgent 用户'}}</view>
+    <view class="subtitle">当前登录用户信息、家庭切换和隐私入口都放在这里。</view>
+  </view>
+
+  <view class="panel">
+    <view class="panel-title">账号信息</view>
+    <view class="panel-copy">用户名：{{session ? session.username : '-'}}</view>
+    <view class="panel-copy">昵称：{{session ? session.nickname : '-'}}</view>
+    <view class="panel-copy">当前家庭：{{activeFamily ? activeFamily.name : '未选择'}}</view>
+  </view>
+
+  <view class="panel">
+    <view class="panel-title">快捷操作</view>
+    <button class="ghost-button" bindtap="goFamilies">切换家庭</button>
+    <button class="ghost-button" bindtap="goPrivacyPage">查看隐私政策</button>
+    <button class="ghost-button" bindtap="openPrivacyContract">打开用户隐私保护指引</button>
+  </view>
+
+  <view class="panel">
+    <view class="panel-title">登录状态</view>
+    <button class="danger-button" bindtap="handleLogout">退出登录</button>
+  </view>
+</view>

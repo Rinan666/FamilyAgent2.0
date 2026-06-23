@@ -1,0 +1,6 @@
+.screen {
+  background:
+    radial-gradient(circle at top right, rgba(239, 118, 87, 0.18), transparent 32%),
+    radial-gradient(circle at left 20%, rgba(31, 107, 79, 0.12), transparent 30%),
+    #f4efe7;
+}

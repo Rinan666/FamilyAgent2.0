@@ -1,0 +1,3 @@
+.panel-copy + .panel-copy {
+  margin-top: 10rpx;
+}

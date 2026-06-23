@@ -1,0 +1,33 @@
+<view class="screen">
+  <view class="hero">
+    <view class="eyebrow">家庭记忆</view>
+    <view class="title">{{activeFamily ? activeFamily.name : '家庭记忆'}}</view>
+    <view class="subtitle">这里展示当前家庭最近的家庭记忆，也可以手动补记一条。</view>
+  </view>
+
+  <view wx:if="{{error}}" class="error-text">{{error}}</view>
+
+  <view class="panel">
+    <view class="panel-title">新增一条家庭记忆</view>
+    <textarea
+      class="text-area"
+      placeholder="比如：我们家每周日晚会一起复盘这周的开心事和难题"
+      value="{{newContent}}"
+      bindinput="handleInput"
+    />
+    <button class="primary-button" loading="{{saving}}" bindtap="handleCreateMemory">保存记忆</button>
+  </view>
+
+  <view class="panel">
+    <view class="panel-title">最近保存</view>
+    <view wx:if="{{memories.length === 0 && !loading}}" class="empty-state">
+      还没有家庭记忆。可以从聊天回答里一键保存，或者直接在上面手动补记。
+    </view>
+
+    <view wx:for="{{memories}}" wx:key="id" class="panel">
+      <view class="badge">{{item.type || 'FAMILY_STORY'}}</view>
+      <view class="panel-copy">{{item.content}}</view>
+      <view class="panel-copy muted">{{item.displayTime}}</view>
+    </view>
+  </view>
+</view>
