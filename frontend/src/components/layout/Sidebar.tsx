@@ -3,7 +3,7 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { BookHeart, Images, Menu, Search, Settings, Sparkles, Users, X } from 'lucide-react';
+import { BookHeart, ChevronUp, Images, Search, Settings, Sparkles, Users, X } from 'lucide-react';
 import type { ViewerRole } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 
@@ -79,6 +79,10 @@ function NavigationLinks({
   );
 }
 
+function visibleNavItems(viewerRole: ViewerRole, isPlatformAdmin: boolean) {
+  return navItems.filter((item) => item.roles.includes(viewerRole) && (!item.platformAdminOnly || isPlatformAdmin));
+}
+
 export default function Sidebar({ viewerRole = 'MEMBER', isPlatformAdmin = false, className }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -148,55 +152,109 @@ export function MobileNav({
   viewerRole?: ViewerRole;
   isPlatformAdmin?: boolean;
 }) {
+  const pathname = usePathname();
+
+  return (
+    <nav className="grid shrink-0 grid-cols-5 gap-1 border-t border-stone-200 bg-white px-2 py-1.5 lg:hidden">
+      {visibleNavItems(viewerRole, isPlatformAdmin).map((item) => {
+        const Icon = item.icon;
+        const active = isActivePath(pathname, item.href);
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={cn(
+              'flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1.5 text-[11px] font-medium transition',
+              active ? 'bg-stone-950 text-white' : 'text-stone-500 hover:bg-stone-100 hover:text-stone-950',
+            )}
+          >
+            <Icon className={cn('h-4 w-4 shrink-0', active ? 'text-emerald-300' : 'text-stone-400')} />
+            <span className="max-w-full truncate">{item.label}</span>
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+export function MobileNavDrawer({
+  viewerRole = 'MEMBER',
+  isPlatformAdmin = false,
+}: {
+  viewerRole?: ViewerRole;
+  isPlatformAdmin?: boolean;
+}) {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const items = visibleNavItems(viewerRole, isPlatformAdmin);
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-stone-200 bg-white text-stone-600 shadow-sm lg:hidden"
-        aria-label="打开导航"
-      >
-        <Menu className="h-5 w-5" />
-      </button>
+      <div className="shrink-0 bg-white px-4 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-0.5 lg:hidden">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="mx-auto flex h-5 w-10 items-center justify-center rounded-full transition"
+          style={{
+            backgroundColor: 'transparent',
+            boxShadow: 'none',
+            color: '#d6d3d1',
+          }}
+          aria-label="打开底部菜单"
+          aria-expanded={open}
+        >
+          <ChevronUp className="h-5 w-5" />
+        </button>
+      </div>
 
       {open && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <button
             type="button"
-            className="absolute inset-0 bg-stone-950/30 backdrop-blur-sm"
-            aria-label="关闭导航"
+            className="absolute inset-0 bg-stone-950/24"
+            aria-label="关闭底部菜单"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute inset-y-0 left-0 flex w-[min(20rem,86vw)] flex-col border-r border-stone-200 bg-white shadow-xl">
-            <div className="flex h-16 items-center justify-between px-4">
-              <Link href="/dashboard/agent" onClick={() => setOpen(false)} className="flex items-center gap-2">
-                <div className="flex h-10 w-10 items-center justify-center rounded-md bg-stone-950 text-white shadow-sm">
-                  <BookHeart className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-base font-semibold text-stone-950">FamilyAgent</p>
-                </div>
-              </Link>
+          <aside className="absolute inset-x-0 bottom-0 rounded-t-[20px] border-t border-stone-200 bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-18px_48px_rgba(24,39,32,0.18)]">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-semibold text-stone-900">
+                <span className="h-1.5 w-8 rounded-full bg-stone-300" aria-hidden />
+                快捷入口
+              </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-md text-stone-500 transition hover:bg-stone-100"
-                aria-label="关闭导航"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-stone-500 transition hover:bg-stone-100 hover:text-stone-950"
+                aria-label="关闭底部菜单"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            <nav className="flex-1 space-y-1.5 overflow-y-auto px-4 py-2">
-              <NavigationLinks
-                viewerRole={viewerRole}
-                isPlatformAdmin={isPlatformAdmin}
-                onNavigate={() => setOpen(false)}
-              />
+            <nav className="grid grid-cols-5 gap-1">
+              {items.map((item) => {
+                const Icon = item.icon;
+                const active = isActivePath(pathname, item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      'flex min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-[11px] font-medium transition',
+                      active ? 'bg-stone-950 text-white' : 'text-stone-500 hover:bg-stone-100 hover:text-stone-950',
+                    )}
+                  >
+                    <Icon className={cn('h-5 w-5 shrink-0', active ? 'text-emerald-300' : 'text-stone-400')} />
+                    <span className="max-w-full truncate">{item.label}</span>
+                  </Link>
+                );
+              })}
             </nav>
-          </div>
+          </aside>
         </div>
       )}
     </>

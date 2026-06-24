@@ -32,26 +32,6 @@ function AssistantThinkingIndicator() {
   );
 }
 
-function metadataLabel(value: unknown) {
-  return typeof value === 'string' && value.trim() ? value.trim() : '';
-}
-
-function assistantDisplayName(message: ChatMessage) {
-  const metadata = message.metadata;
-  if (!metadata) {
-    return 'FamilyAgent';
-  }
-  if (metadata?.agentMode === 'persona') {
-    return metadataLabel(metadata.targetPersonaName)
-      || metadataLabel(metadata.targetMemberName)
-      || 'PersonaMemberAgent';
-  }
-  if (metadata?.agentMode === 'mirror' || Boolean(metadata?.sourceRefs?.length)) {
-    return metadataLabel(metadata.targetMemberName) || 'MirrorAgent';
-  }
-  return 'FamilyAgent';
-}
-
 export default function AgentMessageList({
   messages,
   isLoadingMessages,
@@ -100,8 +80,8 @@ export default function AgentMessageList({
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 md:px-5">
-      <div className="mx-auto max-w-4xl space-y-4">
+    <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+      <div className="mx-auto max-w-4xl space-y-7">
         {isLoadingMessages && (
           <div className="rounded-md border border-stone-200 bg-white px-4 py-3 text-center text-sm text-stone-500">
             <Loader2 className="mx-auto mb-2 h-4 w-4 animate-spin" />
@@ -114,7 +94,7 @@ export default function AgentMessageList({
           if (message.role === 'system') {
             return (
               <div key={message.id} className="text-center">
-                <div className="inline-flex max-w-3xl rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-xs leading-5 text-amber-800">
+                <div className="inline-flex max-w-3xl rounded-full bg-stone-100/80 px-3 py-1.5 text-[11px] leading-5 text-stone-500">
                   {message.content}
                 </div>
               </div>
@@ -123,7 +103,6 @@ export default function AgentMessageList({
 
           const isAssistant = message.role === 'assistant';
           const isMirrorAssistant = message.metadata?.agentMode === 'mirror' || Boolean(message.metadata?.sourceRefs?.length);
-          const displayName = isAssistant ? assistantDisplayName(message) : '你';
           const showThinkingIndicator = isAssistant && isStreaming && !message.content.trim();
           const showSaveControls = !isStreaming && Boolean(message.content.trim());
 
@@ -134,16 +113,20 @@ export default function AgentMessageList({
             >
               <div
                 className={isAssistant
-                  ? 'max-w-[96%] rounded-md px-1 py-2 text-stone-900 md:max-w-[88%]'
-                  : 'max-w-[96%] rounded-md bg-emerald-50 px-4 py-3 text-stone-900 ring-1 ring-emerald-100 md:max-w-[76%]'}
+                  ? 'max-w-full rounded-md px-0 py-1 text-stone-900'
+                  : 'max-w-[78%] rounded-[22px] bg-blue-50 px-4 py-3 text-stone-900'}
               >
-                <div className="mb-3 flex items-center">
-                  <div className={`text-xs font-semibold ${isAssistant ? 'text-emerald-700' : 'text-emerald-800'}`}>
-                    {displayName}
+                {isAssistant && !showThinkingIndicator && (
+                  <div className="mb-2 inline-flex items-center gap-1.5 text-xs font-medium text-stone-400">
+                    <span>已思考</span>
+                    <span aria-hidden>›</span>
                   </div>
-                </div>
+                )}
 
-                <div className="whitespace-pre-wrap text-sm leading-7 text-stone-800">
+                <div className={isAssistant
+                  ? 'whitespace-pre-wrap text-[17px] leading-8 text-stone-900'
+                  : 'whitespace-pre-wrap text-base leading-7 text-stone-900'}
+                >
                   {showThinkingIndicator
                     ? <AssistantThinkingIndicator />
                     : isAssistant
@@ -168,12 +151,12 @@ export default function AgentMessageList({
                     type="button"
                     onClick={() => { onSaveMessage(message); }}
                     disabled={feedback?.status === 'saving'}
-                    className="inline-flex items-center gap-1 rounded-md border border-stone-200 bg-white px-2.5 py-1 text-xs font-medium text-stone-600 transition hover:bg-stone-50 disabled:opacity-60"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-stone-400 transition hover:bg-stone-100 hover:text-stone-700 disabled:opacity-60"
+                    aria-label="智能保存"
                   >
                     {feedback?.status === 'saving'
                       ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       : <Save className="h-3.5 w-3.5" />}
-                    智能保存
                   </button>
 
                   {feedback && (

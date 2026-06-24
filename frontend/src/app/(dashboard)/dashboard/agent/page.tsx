@@ -3,11 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Bot, Loader2, Plus, Send, Sparkles, Square } from 'lucide-react';
+import { Bot, Loader2, Menu, Plus, Send, Sparkles, Square } from 'lucide-react';
 import AgentContextPanel from '@/components/agent/AgentContextPanel';
 import AgentMessageList from '@/components/agent/AgentMessageList';
 import AgentSessionDrawer from '@/components/agent/AgentSessionDrawer';
-import AgentSessionSidebar from '@/components/agent/AgentSessionSidebar';
 import { buildPersonaProfileContext, personaSwitchMessage } from '@/components/agent/personaContext';
 import {
   normalizeTargetSelection,
@@ -239,6 +238,7 @@ export default function AgentPage() {
   const sessionIdRef = useRef<number | null>(null);
   const activeSessionDetailRef = useRef<ChatSessionDetail | null>(null);
   const autoRestoreFamilyIdRef = useRef<number | null>(null);
+  const inputTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const [input, setInput] = useState('');
   const [members, setMembers] = useState<FamilyMember[]>([]);
@@ -256,7 +256,6 @@ export default function AgentPage() {
   const [saveFeedback, setSaveFeedback] = useState<Record<string, SaveFeedback>>({});
   const [isSessionsOpen, setIsSessionsOpen] = useState(false);
   const [isContextOpen, setIsContextOpen] = useState(false);
-  const [isSessionSidebarCollapsed, setIsSessionSidebarCollapsed] = useState(false);
   const [responseMode, setResponseMode] = useState<AgentResponseMode>('think');
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
 
@@ -325,17 +324,6 @@ export default function AgentPage() {
       : selectionLabel(targetSelection, targetMember, targetPersona),
     [selfTargetLabel, targetMember, targetPersona, targetSelection],
   );
-  const inputPlaceholder = useMemo(() => {
-    const modeHint = responseMode === 'quick'
-      ? '当前为快速模式：更快，少检索上下文，适合简单问题。思考模式会先整理家庭记忆和身份资料，回答更完整但稍慢。'
-      : '当前为思考模式：会先整理家庭记忆和身份资料，回答更完整但稍慢。快速模式更快，少检索上下文，适合简单问题。';
-    const promptHint = mode === 'mirror'
-      ? `可以问 ${targetLabel} 的日常记录和成长观察里有什么线索...`
-      : mode === 'persona'
-        ? `可以向 ${targetLabel} 请教一个家庭问题...`
-        : '可以聊需要家庭经验沉淀来参考的问题...';
-    return `${modeHint}\n${promptHint}`;
-  }, [mode, responseMode, targetLabel]);
   const modeReadiness = useMemo(() => readinessLevel(mirrorContext), [mirrorContext]);
 
   const upsertSession = useCallback((session: ChatSessionSummary) => {
@@ -752,6 +740,14 @@ export default function AgentPage() {
     routePromptAppliedRef.current = routePrompt;
     setInput(routePrompt);
   }, [routePrompt]);
+
+  useEffect(() => {
+    const textarea = inputTextareaRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = 'auto';
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 144)}px`;
+  }, [input]);
 
   const handleNewChat = useCallback(() => {
     discardStreaming();
@@ -1176,28 +1172,8 @@ export default function AgentPage() {
           : '新的家庭对话');
 
   return (
-    <div className="h-[calc(100dvh-5rem)] overflow-hidden px-0 py-0 lg:h-[calc(100dvh-2rem)]">
-      <div className="mx-auto flex h-full max-w-[1600px] min-h-0 overflow-hidden rounded-md border border-stone-200 bg-white shadow-sm">
-        <AgentSessionSidebar
-          collapsed={isSessionSidebarCollapsed}
-          familyName={activeFamily?.name}
-          sessions={sessions}
-          sessionId={sessionId}
-          isLoadingSessions={isLoadingSessions}
-          sessionError={sessionError}
-          isClearingSessions={isClearingSessions}
-          onToggleCollapsed={() => setIsSessionSidebarCollapsed((current) => !current)}
-          onRefresh={() => {
-            if (!activeFamilyId) return;
-            delete cachedAgentSessionsByFamilyId[activeFamilyId];
-            setSessionsLoaded(false);
-            void loadSessions();
-          }}
-          onLoadSession={(targetSessionId) => { void handleLoadSession(targetSessionId); }}
-          onDeleteSession={(targetSessionId) => { void handleDeleteSession(targetSessionId); }}
-          onClearSessions={() => { void handleClearSessions(); }}
-        />
-
+    <div className="h-[calc(100dvh-0.75rem)] overflow-hidden px-0 py-0 lg:h-[calc(100dvh-2rem)]">
+      <div className="mx-auto flex h-full max-w-[1600px] min-h-0 overflow-hidden bg-white">
         <section className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
           {sessionError && (
             <div className="mx-3 mt-3 shrink-0 rounded-md border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700 lg:hidden">
@@ -1205,18 +1181,34 @@ export default function AgentPage() {
             </div>
           )}
 
-          <div className="sticky top-0 z-10 shrink-0 border-b border-stone-200 bg-white/96 px-4 py-2.5 backdrop-blur md:px-5">
-            <h1 className="mx-auto max-w-[min(34rem,calc(100%-4rem))] truncate text-center text-sm font-semibold text-stone-950">
+          <div className="sticky top-0 z-10 shrink-0 bg-white/96 px-14 py-3.5 backdrop-blur">
+            <button
+              type="button"
+              onClick={() => setIsSessionsOpen(true)}
+              className="absolute left-3 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-stone-950 transition hover:bg-stone-100 hover:text-emerald-700 md:left-5"
+              aria-label="会话历史"
+              title="会话历史"
+            >
+              <Menu className="h-6 w-6" />
+            </button>
+            <h1 className="mx-auto max-w-[min(34rem,calc(100%-10rem))] truncate text-center text-base font-semibold leading-5 text-stone-950">
               {currentSessionTitle}
             </h1>
+            <p className="mt-1 text-center text-xs leading-4 text-stone-400">
+              {responseMode === 'think' ? '思考模式' : '快速模式'}
+            </p>
+            <p className="text-center text-xs leading-4 text-stone-400">
+              回答由 AI 生成，仅供参考
+            </p>
             <button
               type="button"
               onClick={handleNewChat}
-              className="absolute right-3 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-stone-500 transition hover:bg-stone-100 hover:text-emerald-700 md:right-5"
+              className="absolute right-3 top-1/2 inline-flex h-9 -translate-y-1/2 items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 text-sm font-medium text-stone-900 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 md:right-5"
               aria-label="新会话"
               title="新会话"
             >
               <Plus className="h-4 w-4" />
+              <span>新会话</span>
             </button>
           </div>
 
@@ -1240,32 +1232,33 @@ export default function AgentPage() {
               }
               void handleSubmit();
             }}
-            className="shrink-0 bg-white px-2 pb-3 pt-2 md:px-5 md:pb-5"
+            className="shrink-0 bg-white px-3 pb-3 pt-2 md:px-5 md:pb-5"
           >
-            <div className="mx-auto max-w-4xl rounded-lg border border-stone-200 bg-white p-2 shadow-[0_18px_40px_rgba(24,39,32,0.08)]">
+            <div className="mx-auto max-w-4xl rounded-[26px] border border-stone-100 bg-white p-2.5 shadow-[0_12px_34px_rgba(24,39,32,0.12)] md:p-3">
               <textarea
+                ref={inputTextareaRef}
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
-                placeholder={inputPlaceholder}
+                placeholder="发消息或按住说话"
                 disabled={isStreaming}
-                rows={3}
-                className="min-h-[88px] max-h-40 w-full resize-none rounded-md border-0 bg-white px-3 py-2 text-sm leading-6 text-stone-900 outline-none transition placeholder:text-stone-400 disabled:bg-stone-50"
+                rows={1}
+                className="max-h-36 min-h-12 w-full resize-none overflow-y-auto rounded-[20px] border-0 bg-white px-3 py-2 text-base leading-7 text-stone-900 outline-none transition placeholder:text-stone-400 disabled:bg-stone-50"
               />
 
-              <div className="mt-2 flex flex-col gap-2 border-t border-stone-100 px-1 pb-1 pt-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="mt-1.5 flex items-center justify-between gap-2 px-1 pb-1 pt-1">
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setIsContextOpen(true)}
                     className={cn(
-                      'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition',
+                      'inline-flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition sm:px-3',
                       isContextOpen
-                        ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                        : 'border-stone-200 bg-white text-stone-600 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800',
+                        ? 'border-blue-200 bg-blue-50 text-blue-700'
+                        : 'border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-300 hover:bg-blue-100',
                     )}
                   >
                     <Bot className="h-3.5 w-3.5" />
-                    上下文
+                    <span className="hidden sm:inline">上下文</span>
                   </button>
                   <div className="inline-flex rounded-full bg-stone-100/90 p-1">
                     <button
@@ -1275,7 +1268,7 @@ export default function AgentPage() {
                       className={cn(
                         'inline-flex h-7 items-center rounded-full px-3 text-xs font-medium transition',
                         responseMode === 'quick'
-                          ? 'bg-stone-950 text-white shadow-sm'
+                          ? 'bg-blue-600 text-white shadow-sm'
                           : 'text-stone-600 hover:bg-white/80',
                       )}
                     >
@@ -1288,8 +1281,8 @@ export default function AgentPage() {
                       className={cn(
                         'inline-flex h-7 items-center rounded-full px-3 text-xs font-medium transition',
                         responseMode === 'think'
-                          ? 'bg-emerald-700 text-white shadow-sm'
-                          : 'text-emerald-700 hover:bg-white/80',
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'text-blue-700 hover:bg-white/80',
                       )}
                     >
                       思考
@@ -1314,7 +1307,6 @@ export default function AgentPage() {
                     aria-label={isStreaming ? '停止输出' : '发送消息'}
                   >
                     {isStreaming ? <Square className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-                    <span className="hidden sm:inline">{isStreaming ? '停止' : '发送'}</span>
                   </button>
                 </div>
               </div>
