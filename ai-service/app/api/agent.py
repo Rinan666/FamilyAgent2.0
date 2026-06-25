@@ -5,16 +5,24 @@ import asyncio
 import json
 import logging
 from contextlib import suppress
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.agents.family_agent import family_agent
 from app.middleware.auth import verify_token
 from app.utils.input_guard import enforce_input_guard
 from app.utils.privacy_guard import redact_with_note
-from app.utils.safety_limits import enforce_ai_concurrency, enforce_ai_rate_limit
+from app.utils.safety_limits import (
+    PromptLeakAttemptError,
+    RoleHijackAttemptError,
+    enforce_ai_concurrency,
+    enforce_ai_rate_limit,
+    validate_no_prompt_leak_attempt,
+    validate_no_role_hijack_attempt,
+)
 from app.utils.sanitizer import sanitize_text
 
 logger = logging.getLogger("familyagent.ai.api.agent")
@@ -27,9 +35,19 @@ router = APIRouter(dependencies=[
 ])
 
 
+class AgentHistoryMessage(BaseModel):
+    role: Literal["user", "assistant"] = Field(default="user", description="Conversation role")
+    content: str = Field(default="", max_length=4000, description="Conversation content")
+
+    @field_validator("content", mode="before")
+    @classmethod
+    def normalize_content(cls, value):
+        return "" if value is None else str(value)
+
+
 class AgentChatRequest(BaseModel):
     member_message: str = Field(default="", description="User message")
-    history: list[dict] | None = Field(default=None, description="Conversation history")
+    history: list[AgentHistoryMessage] | None = Field(default=None, max_length=20, description="Conversation history")
     subject: str = Field(default="FamilyAgent", description="Conversation subject")
     knowledge_point: str = Field(default="family_memory", description="Generic context label")
     memory_context: str = Field(default="", description="Authorized memory context")
@@ -42,6 +60,32 @@ class AgentChatRequest(BaseModel):
 
 def _sse_data(payload: dict) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _stream_event(event_type: str, **fields: Any) -> dict:
+    payload = {"type": event_type}
+    payload.update(fields)
+    return payload
+
+
+def _stream_error_event(
+    *,
+    code: str = "AI_STREAM_UNAVAILABLE",
+    message: str = "AI service unavailable, please retry later.",
+    retryable: bool = True,
+) -> dict:
+    return _stream_event(
+        "error",
+        error=True,
+        code=code,
+        message=message,
+        retryable=retryable,
+        degraded=False,
+    )
+
+
+def _stream_done_event(*, degraded: bool = False) -> dict:
+    return _stream_event("done", done=True, degraded=degraded)
 
 
 def _sse_comment(comment: str) -> str:
@@ -68,6 +112,12 @@ async def stream_chat(request: AgentChatRequest):
     member_message = sanitize_text(request.member_message)
     enforce_input_guard(member_message)
     memory_context = redact_with_note(request.memory_context).text
+    try:
+        validate_no_prompt_leak_attempt(memory_context)
+        validate_no_role_hijack_attempt(memory_context)
+    except (PromptLeakAttemptError, RoleHijackAttemptError):
+        logger.warning("Rejected unsafe memory_context in FamilyAgent request")
+        memory_context = "已授权上下文因包含疑似指令注入内容被本轮忽略。"
 
     async def generate():
         queue: asyncio.Queue[dict] = asyncio.Queue()
@@ -76,7 +126,7 @@ async def stream_chat(request: AgentChatRequest):
             try:
                 async for chunk in family_agent.chat_stream(
                     member_message=member_message,
-                    history=request.history,
+                    history=[item.model_dump() for item in request.history] if request.history else [],
                     subject=request.subject,
                     context_label=request.knowledge_point,
                     memory_context=memory_context,
@@ -87,16 +137,16 @@ async def stream_chat(request: AgentChatRequest):
                     client_timezone=request.client_timezone,
                 ):
                     if isinstance(chunk, dict) and chunk.get("type") == "metadata":
-                        await queue.put({"metadata": chunk})
+                        await queue.put(chunk)
                     elif isinstance(chunk, dict):
-                        await queue.put({"content": chunk.get("content", "")})
+                        await queue.put(_stream_event("content", content=chunk.get("content", "")))
                     else:
-                        await queue.put({"content": chunk})
+                        await queue.put(_stream_event("content", content=chunk))
 
-                await queue.put({"done": True})
+                await queue.put(_stream_done_event())
             except Exception:
                 logger.exception("FamilyAgent stream failed")
-                await queue.put({"error": "AI service unavailable, please retry later."})
+                await queue.put(_stream_error_event())
 
         task = asyncio.create_task(produce())
         try:

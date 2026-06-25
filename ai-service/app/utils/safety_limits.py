@@ -78,14 +78,19 @@ def validate_text_budget(
 def validate_messages(messages: list[dict]) -> None:
     """Validate per-message and total prompt size for LLM chat calls."""
     total = 0
-    for message in messages:
+    for index, message in enumerate(messages):
+        role = message.get("role", "message")
+        if role not in {"system", "user", "assistant"}:
+            raise SafetyLimitError(f"Unsupported chat message role: {role}")
+        if role == "system" and index != 0:
+            raise SafetyLimitError("System messages are only allowed as the first trusted prompt message")
+
         content_size = total_text_chars(message.get("content", ""))
         total += content_size
-        if message.get("role") != "system":
+        if role != "system":
             validate_no_prompt_leak_attempt(str(message.get("content", "")))
             validate_no_role_hijack_attempt(str(message.get("content", "")))
         if content_size > settings.ai_max_message_chars:
-            role = message.get("role", "message")
             raise SafetyLimitError(
                 f"{role} content is too large: {content_size} chars, "
                 f"limit {settings.ai_max_message_chars}"

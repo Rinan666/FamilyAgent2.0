@@ -2,6 +2,10 @@ package com.familyagent.infra.ai;
 
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
+import com.familyagent.infra.ai.dto.EmbeddingRequest;
+import com.familyagent.infra.ai.dto.EmbeddingResponse;
+import com.familyagent.infra.ai.dto.MemoryExtractionRequest;
+import com.familyagent.infra.ai.dto.MemoryExtractionResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
@@ -38,6 +42,10 @@ public class AIServiceClient {
     private static final int STREAM_TIMEOUT_MILLIS = 300_000;
     private static final int STREAM_BUFFER_SIZE = 1024;
     private static final String INTERNAL_SERVICE_TOKEN_HEADER = "X-Internal-Service-Token";
+    private static final String STREAM_ERROR_UNAVAILABLE = """
+            data: {"type":"error","error":true,"code":"AI_STREAM_UNAVAILABLE","message":"AI service unavailable, please retry later.","retryable":true,"degraded":false}
+
+            """;
 
     private final RestTemplate restTemplate;
     private final String baseUrl;
@@ -141,21 +149,21 @@ public class AIServiceClient {
      */
     @CircuitBreaker(name = "aiService", fallbackMethod = "fallbackExtractMemories")
     @Retry(name = "aiService")
-    public Map<String, Object> extractMemories(Map<String, Object> request, String authorization) {
+    public MemoryExtractionResponse extractMemories(MemoryExtractionRequest request, String authorization) {
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             if (authorization != null && !authorization.isBlank()) {
                 headers.set("Authorization", authorization);
             }
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+            HttpEntity<MemoryExtractionRequest> entity = new HttpEntity<>(request, headers);
 
-            ResponseEntity<Map> response = restTemplate.postForEntity(
-                    baseUrl + "/ai/memory/extract", entity, Map.class);
+            ResponseEntity<MemoryExtractionResponse> response = restTemplate.postForEntity(
+                    baseUrl + "/ai/memory/extract", entity, MemoryExtractionResponse.class);
             return response.getBody();
         } catch (Exception e) {
-            log.warn("Memory extraction call failed: {}", e.getMessage());
-            return Map.of("success", false, "error", e.getMessage());
+            log.warn("Memory extraction transport failed: {}", e.getMessage());
+            throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "AI service unavailable");
         }
     }
 
@@ -164,21 +172,21 @@ public class AIServiceClient {
      */
     @CircuitBreaker(name = "aiService", fallbackMethod = "fallbackEmbedText")
     @Retry(name = "aiService")
-    public Map<String, Object> embedText(Map<String, Object> request) {
+    public EmbeddingResponse embedText(EmbeddingRequest request) {
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             if (internalToken != null && !internalToken.isBlank()) {
                 headers.set(INTERNAL_SERVICE_TOKEN_HEADER, internalToken);
             }
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+            HttpEntity<EmbeddingRequest> entity = new HttpEntity<>(request, headers);
 
-            ResponseEntity<Map> response = restTemplate.postForEntity(
-                    baseUrl + "/ai/embedding/embed", entity, Map.class);
+            ResponseEntity<EmbeddingResponse> response = restTemplate.postForEntity(
+                    baseUrl + "/ai/embedding/embed", entity, EmbeddingResponse.class);
             return response.getBody();
         } catch (Exception e) {
-            log.warn("Embedding service call failed: {}", e.getMessage());
-            return Map.of("success", false, "error", e.getMessage());
+            log.warn("Embedding service transport failed: {}", e.getMessage());
+            throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "AI service unavailable");
         }
     }
 
@@ -197,21 +205,20 @@ public class AIServiceClient {
 
     // --- Fallback methods ---
 
-    private Map<String, Object> fallbackEmbedText(Map<String, Object> request, Exception ex) {
+    private EmbeddingResponse fallbackEmbedText(EmbeddingRequest request, Exception ex) {
         log.warn("AI embedding fallback triggered: {}", ex.getMessage());
-        return Map.of("success", false, "error", "AI service unavailable");
+        return EmbeddingResponse.unavailable();
     }
 
-    private Map<String, Object> fallbackExtractMemories(Map<String, Object> request, String authorization, Exception ex) {
+    private MemoryExtractionResponse fallbackExtractMemories(MemoryExtractionRequest request, String authorization, Exception ex) {
         log.warn("AI memory extraction fallback triggered: {}", ex.getMessage());
-        return Map.of("success", false, "error", "AI service unavailable");
+        return MemoryExtractionResponse.unavailable();
     }
 
     private void fallbackProxyChatStream(Map<String, Object> request, OutputStream downstream, String authorization, Exception ex) {
         log.warn("AI chat stream fallback triggered: {}", ex.getMessage());
         try {
-            String msg = "data: {\"error\":\"AI service unavailable, please retry later.\"}\n\n";
-            downstream.write(msg.getBytes(StandardCharsets.UTF_8));
+            downstream.write(STREAM_ERROR_UNAVAILABLE.getBytes(StandardCharsets.UTF_8));
             downstream.flush();
         } catch (IOException ignored) {
             // downstream already closed

@@ -3,6 +3,7 @@ package com.familyagent.module.agent.dto;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -77,6 +78,7 @@ public class AgentChatStreamRequest {
 
     @Data
     public static class HistoryMessage {
+        @Pattern(regexp = "^(user|assistant)$")
         @Size(max = 32)
         private String role;
 

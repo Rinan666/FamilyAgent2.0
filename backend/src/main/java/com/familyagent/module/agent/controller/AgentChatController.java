@@ -41,6 +41,10 @@ public class AgentChatController {
     private static final int MAX_CHATS_PER_HOUR = 20;
     private static final int MAX_CHAT_REQUEST_BYTES = 32 * 1024;
     private static final DateTimeFormatter HOUR_KEY_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH");
+    private static final String STREAM_ERROR_UNAVAILABLE = """
+            data: {"type":"error","error":true,"code":"AI_STREAM_UNAVAILABLE","message":"AI service unavailable, please retry later.","retryable":true,"degraded":false}
+
+            """;
 
     private final AIServiceClient aiServiceClient;
     private final RedissonClient redissonClient;
@@ -106,8 +110,7 @@ public class AgentChatController {
 
     private void writeErrorEvent(OutputStream outputStream, String message) {
         try {
-            String payload = "data: {\"error\":" + toJsonString(message) + "}\n\n";
-            outputStream.write(payload.getBytes(StandardCharsets.UTF_8));
+            outputStream.write(STREAM_ERROR_UNAVAILABLE.getBytes(StandardCharsets.UTF_8));
             outputStream.flush();
         } catch (IOException ioException) {
             log.warn("Failed to send downstream SSE error event", ioException);
