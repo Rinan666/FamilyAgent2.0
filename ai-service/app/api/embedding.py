@@ -1,6 +1,7 @@
 """
 Embedding API for backend-owned family memory indexing.
 """
+import asyncio
 import hashlib
 import logging
 import math
@@ -30,6 +31,9 @@ class EmbedRequest(BaseModel):
     text: str = Field(..., min_length=1)
     model: Optional[str] = None
     dimensions: Optional[int] = Field(default=None, ge=128, le=4096)
+    source_type: Optional[str] = Field(default=None, max_length=64)
+    family_id: Optional[int] = Field(default=None, ge=1)
+    user_id: Optional[int] = Field(default=None, ge=1)
 
 
 class EmbedResponse(BaseModel):
@@ -90,7 +94,10 @@ async def _embed(text: str, model: str, dimensions: int) -> list[float]:
         return await _dashscope_embedding(text, model.removeprefix("dashscope/"), dimensions)
 
     try:
-        response = await litellm.aembedding(model=model, input=[text])
+        response = await asyncio.wait_for(
+            litellm.aembedding(model=model, input=[text]),
+            timeout=settings.ai_embedding_timeout_seconds,
+        )
         values = response["data"][0]["embedding"]
         return _fit_dimensions([float(item) for item in values], dimensions)
     except Exception as e:
@@ -104,7 +111,7 @@ async def _dashscope_embedding(text: str, model: str, dimensions: int) -> list[f
         raise HTTPException(status_code=503, detail="Embedding provider is not configured")
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=settings.ai_embedding_timeout_seconds) as client:
             response = await client.post(
                 f"{settings.dashscope_base_url.rstrip('/')}/embeddings",
                 headers={
@@ -134,7 +141,7 @@ async def _dashscope_multimodal_embedding(text: str, model: str, dimensions: int
 
     request_dimension = _dashscope_multimodal_dimension(model, dimensions)
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=settings.ai_embedding_timeout_seconds) as client:
             response = await client.post(
                 settings.dashscope_multimodal_url,
                 headers={

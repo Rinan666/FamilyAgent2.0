@@ -4,6 +4,7 @@ from app.utils.safety_limits import (
     PromptLeakAttemptError,
     RateLimitExceededError,
     RoleHijackAttemptError,
+    _embedding_user_key,
     check_rate_limit,
     looks_like_prompt_leak_attempt,
     looks_like_role_hijack_attempt,
@@ -74,6 +75,35 @@ def test_validate_messages_rejects_unsupported_role():
 
     with pytest.raises(Exception, match="Unsupported chat message role"):
         validate_messages(messages)
+
+
+@pytest.mark.asyncio
+async def test_internal_embedding_rate_limit_key_uses_business_identity():
+    class Request:
+        async def json(self):
+            return {
+                "source_type": "MEMORY_INDEX",
+                "family_id": 12,
+                "user_id": 34,
+            }
+
+    request = Request()
+    request.state = type("State", (), {"internal_service": True, "user_id": -100})()
+
+    assert await _embedding_user_key(request) == "internal:MEMORY_INDEX:family:12:user:34"
+
+
+@pytest.mark.asyncio
+async def test_external_embedding_rate_limit_key_uses_user_id():
+    class Request:
+        async def json(self):  # pragma: no cover - should not be called for external requests
+            raise AssertionError("external requests should not parse body for rate key")
+
+    request = Request()
+    request.state = type("State", (), {"internal_service": False, "user_id": 56})()
+    request.client = None
+
+    assert await _embedding_user_key(request) == "56"
 
 
 @pytest.mark.asyncio

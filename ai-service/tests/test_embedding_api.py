@@ -2,7 +2,7 @@ from fastapi import HTTPException
 import pytest
 
 from app.api import embedding
-from app.api.embedding import _dashscope_multimodal_dimension, _embed, _embedding_provider, _hash_embedding
+from app.api.embedding import EmbedRequest, _dashscope_multimodal_dimension, _embed, _embedding_provider, _hash_embedding
 
 
 def test_hash_embedding_is_stable_and_normalized():
@@ -50,6 +50,19 @@ async def test_dashscope_missing_key_is_not_hash_fallback(monkeypatch):
         await _embed("家庭记忆", "dashscope/text-embedding-v4", 128)
 
     assert exc.value.status_code == 503
+
+
+def test_embed_request_accepts_internal_identity_fields():
+    request = EmbedRequest(
+        text="家庭记忆",
+        source_type="MEMORY_INDEX",
+        family_id=12,
+        user_id=34,
+    )
+
+    assert request.source_type == "MEMORY_INDEX"
+    assert request.family_id == 12
+    assert request.user_id == 34
 
 
 def test_embedding_router_requires_backend_token_verification():

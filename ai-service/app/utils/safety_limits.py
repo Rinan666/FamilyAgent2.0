@@ -299,9 +299,25 @@ async def enforce_ai_rate_limit(request: Request):
     )
 
 
+async def _embedding_user_key(request: Request) -> str:
+    if not getattr(request.state, "internal_service", False):
+        return _user_key(request)
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+
+    source_type = str(payload.get("source_type") or "internal").strip()[:64] or "internal"
+    family_id = payload.get("family_id") or "unknown-family"
+    user_id = payload.get("user_id") or "system"
+    return f"internal:{source_type}:family:{family_id}:user:{user_id}"
+
+
 async def enforce_embedding_rate_limit(request: Request):
     """Separate, looser limiter for backend-triggered embedding rebuild work."""
-    user_key = _user_key(request)
+    user_key = await _embedding_user_key(request)
     ip = _client_ip(request)
     await check_rate_limit(
         f"embedding:user:{user_key}",
