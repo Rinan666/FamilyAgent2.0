@@ -14,16 +14,19 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.ClientHttpRequest;
+import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -38,8 +41,6 @@ import java.util.Map;
 @Component
 public class AIServiceClient {
 
-    private static final int MAX_CONNECT_TIMEOUT_MILLIS = 10_000;
-    private static final int STREAM_TIMEOUT_MILLIS = 300_000;
     private static final int STREAM_BUFFER_SIZE = 1024;
     private static final String INTERNAL_SERVICE_TOKEN_HEADER = "X-Internal-Service-Token";
     private static final String STREAM_ERROR_UNAVAILABLE = """
@@ -67,59 +68,63 @@ public class AIServiceClient {
      */
     @CircuitBreaker(name = "aiService", fallbackMethod = "fallbackProxyChatStream")
     public void proxyChatStream(Map<String, Object> request, OutputStream downstream, String authorization) {
-        HttpURLConnection conn = null;
         try {
             String jsonBody = objectMapper.writeValueAsString(request);
-
             URI uri = URI.create(baseUrl + "/ai/agent/chat/stream");
-            conn = (HttpURLConnection) uri.toURL().openConnection();
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/json;charset=UTF-8");
-            conn.setRequestProperty("Accept", "text/event-stream");
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.setAccept(java.util.List.of(MediaType.TEXT_EVENT_STREAM));
             if (authorization != null && !authorization.isBlank()) {
-                conn.setRequestProperty("Authorization", authorization);
+                headers.set("Authorization", authorization);
             }
-            conn.setDoOutput(true);
-            conn.setConnectTimeout(MAX_CONNECT_TIMEOUT_MILLIS);
-            conn.setReadTimeout(STREAM_TIMEOUT_MILLIS);
+            HttpEntity<String> entity = new HttpEntity<>(jsonBody, headers);
 
-            try (OutputStream os = conn.getOutputStream()) {
-                os.write(jsonBody.getBytes(StandardCharsets.UTF_8));
-                os.flush();
-            }
-
-            int responseCode = conn.getResponseCode();
-            if (responseCode != HttpURLConnection.HTTP_OK) {
-                String errorBody = readResponseBody(conn);
-                log.warn("AI service response error: status={}, body={}", responseCode, truncateForLog(errorBody));
-                throw new BusinessException(
-                        ErrorCode.AI_SERVICE_ERROR,
-                        "AI service unavailable, please retry later."
-                );
-            }
-
-            try (InputStream upstream = conn.getInputStream()) {
-                byte[] buffer = new byte[STREAM_BUFFER_SIZE];
-                int bytesRead;
-                while ((bytesRead = upstream.read(buffer)) != -1) {
-                    downstream.write(buffer, 0, bytesRead);
-                    downstream.flush();
+            restTemplate.execute(uri, HttpMethod.POST, httpRequest -> writeStreamRequest(httpRequest, entity, jsonBody), response -> {
+                if (!response.getStatusCode().is2xxSuccessful()) {
+                    String errorBody = readResponseBody(response);
+                    log.warn("AI service response error: status={}, body={}", response.getStatusCode().value(), truncateForLog(errorBody));
+                    throw new BusinessException(
+                            ErrorCode.AI_SERVICE_ERROR,
+                            "AI service unavailable, please retry later."
+                    );
                 }
-            }
+                copyStream(response.getBody(), downstream);
+                return null;
+            });
         } catch (BusinessException e) {
             throw e;
+        } catch (HttpStatusCodeException e) {
+            log.warn("AI service response error: status={}, body={}", e.getStatusCode().value(), truncateForLog(e.getResponseBodyAsString()));
+            throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "AI service unavailable, please retry later.");
         } catch (Exception e) {
             log.error("FamilyAgent chat SSE proxy failed", e);
             throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "AI service unavailable, please retry later.");
-        } finally {
-            if (conn != null) {
-                conn.disconnect();
-            }
         }
     }
 
-    private String readResponseBody(HttpURLConnection conn) {
-        InputStream errorStream = conn.getErrorStream();
+    private void writeStreamRequest(ClientHttpRequest httpRequest, HttpEntity<String> entity, String jsonBody) throws IOException {
+        httpRequest.getHeaders().putAll(entity.getHeaders());
+        httpRequest.getBody().write(jsonBody.getBytes(StandardCharsets.UTF_8));
+        httpRequest.getBody().flush();
+    }
+
+    private void copyStream(InputStream upstream, OutputStream downstream) throws IOException {
+        byte[] buffer = new byte[STREAM_BUFFER_SIZE];
+        int bytesRead;
+        while ((bytesRead = upstream.read(buffer)) != -1) {
+            downstream.write(buffer, 0, bytesRead);
+            downstream.flush();
+        }
+    }
+
+    private String readResponseBody(ClientHttpResponse response) {
+        InputStream errorStream;
+        try {
+            errorStream = response.getBody();
+        } catch (IOException e) {
+            log.warn("Failed to open AI service error body", e);
+            return "";
+        }
         if (errorStream == null) {
             return "";
         }

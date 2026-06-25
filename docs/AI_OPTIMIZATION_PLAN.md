@@ -255,21 +255,22 @@ FamilyAgent 的 AI 部分已经具备较完整的功能雏形：
 
 ---
 
-### 4.9 流式代理手写 `HttpURLConnection`
+### 4.9 流式代理已迁移到统一 HTTP client
 
 问题：
 
 - 非流式 AI 调用使用统一 `RestTemplate`。
-- 流式代理手写 `HttpURLConnection`。
+- 流式代理曾手写 `HttpURLConnection`，第一轮已迁移为注入的 `aiServiceRestTemplate.execute(...)`。
 
 影响：
 
-- timeout、连接复用、metrics、trace、header、错误映射不统一。
+- 第一轮迁移后，backend stream proxy 已复用统一 request factory / timeout 配置，并保留原始 SSE 透传、header 传递和非 2xx 错误映射。
+- metrics、trace、完整观测字段仍需在统一 client 层继续补齐。
 
 优化方向：
 
-1. 短期将 timeout、header、错误格式集中配置。
-2. 中期迁移到统一 streaming HTTP client，例如 Spring `WebClient`。
+1. 短期继续将 timeout、header、错误格式集中配置。
+2. 中期按需要评估是否进一步迁移到专用 streaming HTTP client，例如 Spring `WebClient`。
 3. 增加 stream 中断、非 200、半截 SSE 测试。
 
 ---
@@ -492,7 +493,7 @@ FamilyAgent 的 AI 部分已经具备较完整的功能雏形：
 
 ## Phase 5：隐私、限流、超时和观测治理
 
-状态：已完成第一轮 Web Search 隐私治理、内部 embedding 限流身份治理和前端 stream error 解析增强；timeout budget、stream HTTP client 封装/迁移和完整观测字段仍待继续
+状态：已完成第一轮 Web Search 隐私治理、内部 embedding 限流身份治理、前端 stream error 解析增强和 backend stream HTTP client 封装迁移；timeout budget 和完整观测字段仍待继续
 
 时间：2026-07-29 到 2026-08-12
 
@@ -503,7 +504,7 @@ FamilyAgent 的 AI 部分已经具备较完整的功能雏形：
 1. Web Search 增加 query rewrite / PII stripping。已完成第一轮：外部搜索前会改写公开 query、移除常见 PII；含手机号、地址、家庭记忆等隐私标记的 query 默认跳过外部搜索，并补充回归测试。
 2. 内部 embedding 限流从固定 `-100` 改成业务维度。已完成第一轮：AI service `EmbedRequest` 接收 `source_type` / `family_id` / `user_id`，内部限流 key 改为 `internal:{source_type}:family:{family_id}:user:{user_id}`。
 3. 统一 AI timeout budget。已部分完成：embedding LiteLLM / DashScope 调用统一使用 `ai_embedding_timeout_seconds`；整体端到端 timeout budget、backend stream timeout 和文档化配置仍待继续。
-4. stream 代理迁移或封装到统一 HTTP client。未完成：backend stream proxy 仍使用 `HttpURLConnection` 过渡。
+4. stream 代理迁移或封装到统一 HTTP client。已完成第一轮：backend stream proxy 从手写 `HttpURLConnection` 迁移到注入的 `aiServiceRestTemplate.execute(...)`，复用统一 timeout / request factory 配置，并保留原始 SSE frame 透传与非 2xx 结构化失败语义。
 5. 增加 metrics/log 字段：provider、model、latency、degraded、errorCode、requestId。已部分完成：embedding response 已有 provider/model/dimensions/degraded；完整 latency、errorCode、requestId 和结构化日志/metrics 仍待继续。
 
 验收标准：
@@ -511,7 +512,7 @@ FamilyAgent 的 AI 部分已经具备较完整的功能雏形：
 - 私密 query 不会原样发给外部搜索服务。已完成第一轮并通过测试：隐私 query 会被跳过，公开 query 会先改写再发送。
 - 后台 embedding 任务不会全部共用一个 user 限流桶。已完成第一轮：内部 embedding 限流使用 source/family/user 业务维度。
 - AI 链路 timeout 有统一配置说明。已部分完成：embedding provider timeout 已收敛；全链路 timeout budget 仍待继续。
-- stream 与非 stream 链路的观测和错误语义一致。已部分完成：前端可正确解析 typed stream error / metadata event；backend stream client 和完整观测字段仍待继续。
+- stream 与非 stream 链路的观测和错误语义一致。已部分完成：前端可正确解析 typed stream error / metadata event；backend stream 代理已复用统一 RestTemplate client 并保留非 2xx 业务异常语义；完整观测字段仍待继续。
 
 ---
 
