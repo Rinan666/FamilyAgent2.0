@@ -1,4 +1,5 @@
 from fastapi import HTTPException
+from starlette.requests import Request
 import pytest
 
 from app.api import embedding
@@ -73,3 +74,31 @@ def test_embedding_router_requires_backend_token_verification():
 
 def test_qwen3_vl_embedding_allows_1536_dimensions():
     assert _dashscope_multimodal_dimension("qwen3-vl-embedding", 1536) == 1536
+
+
+@pytest.mark.asyncio
+async def test_embed_text_response_includes_observability_metadata(monkeypatch):
+    async def fake_embed(*, text: str, model: str, dimensions: int):
+        assert text == "家庭记忆"
+        assert model == "local/hash-embedding"
+        assert dimensions == 128
+        return [0.1] * 128
+
+    monkeypatch.setattr(embedding, "_embed", fake_embed)
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/ai/embedding/embed",
+        "headers": [(b"x-request-id", b"trace-123")],
+    }
+    http_request = Request(scope)
+
+    response = await embedding.embed_text(
+        EmbedRequest(text="家庭记忆", model="local/hash-embedding", dimensions=128),
+        http_request,
+    )
+
+    assert response["success"] is True
+    assert response["provider"] == "local"
+    assert response["latency_ms"] >= 0
+    assert response["request_id"] == "trace-123"

@@ -7,6 +7,7 @@ import com.familyagent.infra.ai.dto.MemoryExtractionResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -27,6 +28,7 @@ class AIServiceClientTest {
 
     private HttpServer server;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     @AfterEach
     void tearDown() {
@@ -43,7 +45,8 @@ class AIServiceClientTest {
                 new RestTemplateBuilder().requestFactory(() -> requestFactory).build(),
                 baseUrl(),
                 internalToken,
-                objectMapper);
+                objectMapper,
+                meterRegistry);
     }
 
     @Test
@@ -113,6 +116,33 @@ class AIServiceClientTest {
         assertEquals(1, response.getMemories().size());
         assertEquals("LEARNING", response.getMemories().get(0).getType());
         assertEquals(0.8, response.getMemories().get(0).getConfidence());
+    }
+
+    @Test
+    void embedText_shouldSendRequestIdAndRecordObservationMetric() throws Exception {
+        AtomicReference<String> requestId = new AtomicReference<>();
+        server = startServer("/ai/embedding/embed", exchange -> {
+            requestId.set(exchange.getRequestHeaders().getFirst("X-Request-Id"));
+            respond(exchange, "application/json", 200,
+                    "{\"success\":true,\"degraded\":false,\"provider\":\"local\",\"embedding\":[0.1,0.2],\"model\":\"local/test\",\"dimensions\":2,\"latency_ms\":12,\"request_id\":\"ai-service-request\",\"privacy_categories\":[]}");
+        });
+
+        AIServiceClient client = createClient("secret-token");
+
+        EmbeddingResponse response = client.embedText(EmbeddingRequest.builder()
+                .text("family memory")
+                .dimensions(1536)
+                .build());
+
+        assertTrue(requestId.get().startsWith("ai-"));
+        assertEquals("local", response.getProvider());
+        assertEquals(12L, response.getLatencyMs());
+        assertEquals("ai-service-request", response.getRequestId());
+        assertEquals(1, meterRegistry.find("familyagent.ai.client.request")
+                .tag("operation", "embedding")
+                .tag("success", "true")
+                .timer()
+                .count());
     }
 
     @Test

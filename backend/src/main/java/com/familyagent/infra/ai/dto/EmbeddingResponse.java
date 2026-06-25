@@ -23,6 +23,12 @@ public class EmbeddingResponse {
     @JsonProperty("errorCode")
     private String errorCode;
 
+    @JsonProperty("latency_ms")
+    private Long latencyMs;
+
+    @JsonProperty("request_id")
+    private String requestId;
+
     private String error;
 
     public static EmbeddingResponse unavailable() {

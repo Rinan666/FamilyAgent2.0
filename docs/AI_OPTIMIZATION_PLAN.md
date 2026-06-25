@@ -1,6 +1,6 @@
 # FamilyAgent AI 部分优化计划
 
-> 更新日期：2026-06-24  
+> 更新日期：2026-06-25  
 > 范围：`ai-service/`、`backend/src/main/java/com/familyagent/infra/ai/`、后端 `agent` / `memory` / `mirror` / `session` 中调用 AI 的链路  
 > 目标：优先修复 AI 安全边界、失败语义、Embedding 质量、跨服务契约和隐私风险，在不大改产品功能的前提下提升稳定性与可维护性
 
@@ -505,14 +505,14 @@ FamilyAgent 的 AI 部分已经具备较完整的功能雏形：
 2. 内部 embedding 限流从固定 `-100` 改成业务维度。已完成第一轮：AI service `EmbedRequest` 接收 `source_type` / `family_id` / `user_id`，内部限流 key 改为 `internal:{source_type}:family:{family_id}:user:{user_id}`。
 3. 统一 AI timeout budget。已部分完成：embedding LiteLLM / DashScope 调用统一使用 `ai_embedding_timeout_seconds`；整体端到端 timeout budget、backend stream timeout 和文档化配置仍待继续。
 4. stream 代理迁移或封装到统一 HTTP client。已完成第一轮：backend stream proxy 从手写 `HttpURLConnection` 迁移到注入的 `aiServiceRestTemplate.execute(...)`，复用统一 timeout / request factory 配置，并保留原始 SSE frame 透传与非 2xx 结构化失败语义。
-5. 增加 metrics/log 字段：provider、model、latency、degraded、errorCode、requestId。已部分完成：embedding response 已有 provider/model/dimensions/degraded；完整 latency、errorCode、requestId 和结构化日志/metrics 仍待继续。
+5. 增加 metrics/log 字段：provider、model、latency、degraded、errorCode、requestId。已完成第二轮：AI service embedding response 增加 `latency_ms` / `request_id` 并按 provider/model/dimensions/degraded/errorCode 记录结构化日志；backend `AIServiceClient` 为 embedding / memory extraction 注入 `X-Request-Id`、记录 Micrometer timer `familyagent.ai.client.request`，并在日志保留 provider/model/dimensions/degraded/errorCode/latencyMs。完整 stream 链路 requestId 透传和更多 metrics 标签仍待继续。
 
 验收标准：
 
 - 私密 query 不会原样发给外部搜索服务。已完成第一轮并通过测试：隐私 query 会被跳过，公开 query 会先改写再发送。
 - 后台 embedding 任务不会全部共用一个 user 限流桶。已完成第一轮：内部 embedding 限流使用 source/family/user 业务维度。
 - AI 链路 timeout 有统一配置说明。已部分完成：embedding provider timeout 已收敛；全链路 timeout budget 仍待继续。
-- stream 与非 stream 链路的观测和错误语义一致。已部分完成：前端可正确解析 typed stream error / metadata event；backend stream 代理已复用统一 RestTemplate client 并保留非 2xx 业务异常语义；完整观测字段仍待继续。
+- stream 与非 stream 链路的观测和错误语义一致。已进一步增强：前端可正确解析 typed stream error / metadata event；backend stream 代理已复用统一 RestTemplate client 并保留非 2xx 业务异常语义；embedding / memory extraction 已补 requestId、latency 和 Micrometer 计时，stream 全链路 requestId / latency metrics 仍待继续。
 
 ---
 

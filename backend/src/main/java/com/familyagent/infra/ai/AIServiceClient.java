@@ -9,6 +9,7 @@ import com.familyagent.infra.ai.dto.MemoryExtractionResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,7 +30,10 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 /**
  * AI service client for the Python FastAPI service.
@@ -52,15 +56,18 @@ public class AIServiceClient {
     private final String baseUrl;
     private final String internalToken;
     private final ObjectMapper objectMapper;
+    private final MeterRegistry meterRegistry;
 
     public AIServiceClient(@Qualifier("aiServiceRestTemplate") RestTemplate restTemplate,
                            @Value("${ai-service.base-url:http://localhost:8000}") String baseUrl,
                            @Value("${ai-service.internal-token:}") String internalToken,
-                           ObjectMapper objectMapper) {
+                           ObjectMapper objectMapper,
+                           MeterRegistry meterRegistry) {
         this.restTemplate = restTemplate;
         this.baseUrl = baseUrl;
         this.internalToken = internalToken;
         this.objectMapper = objectMapper;
+        this.meterRegistry = meterRegistry;
     }
 
     /**
@@ -149,15 +156,34 @@ public class AIServiceClient {
         return value.length() <= 500 ? value : value.substring(0, 500) + "...";
     }
 
+    private String newRequestId() {
+        return "ai-" + UUID.randomUUID();
+    }
+
+    private Duration elapsed(long startedAt) {
+        return Duration.ofNanos(System.nanoTime() - startedAt);
+    }
+
+    private void recordAiCall(String operation, boolean success, Duration duration) {
+        meterRegistry.timer(
+                "familyagent.ai.client.request",
+                "operation", operation,
+                "success", Boolean.toString(success)
+        ).record(duration.toNanos(), TimeUnit.NANOSECONDS);
+    }
+
     /**
      * Extract memory candidates from a finished Agent session.
      */
     @CircuitBreaker(name = "aiService", fallbackMethod = "fallbackExtractMemories")
     @Retry(name = "aiService")
     public MemoryExtractionResponse extractMemories(MemoryExtractionRequest request, String authorization) {
+        long startedAt = System.nanoTime();
+        String requestId = newRequestId();
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("X-Request-Id", requestId);
             if (authorization != null && !authorization.isBlank()) {
                 headers.set("Authorization", authorization);
             }
@@ -165,9 +191,16 @@ public class AIServiceClient {
 
             ResponseEntity<MemoryExtractionResponse> response = restTemplate.postForEntity(
                     baseUrl + "/ai/memory/extract", entity, MemoryExtractionResponse.class);
-            return response.getBody();
+            MemoryExtractionResponse body = response.getBody();
+            recordAiCall("memory_extract", true, elapsed(startedAt));
+            log.info("AI memory extraction completed: requestId={}, success={}, degraded={}",
+                    requestId,
+                    body != null && body.isSuccess(),
+                    body != null && body.isDegraded());
+            return body;
         } catch (Exception e) {
-            log.warn("Memory extraction transport failed: {}", e.getMessage());
+            recordAiCall("memory_extract", false, elapsed(startedAt));
+            log.warn("Memory extraction transport failed: requestId={}, error={}", requestId, e.getMessage());
             throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "AI service unavailable");
         }
     }
@@ -178,9 +211,12 @@ public class AIServiceClient {
     @CircuitBreaker(name = "aiService", fallbackMethod = "fallbackEmbedText")
     @Retry(name = "aiService")
     public EmbeddingResponse embedText(EmbeddingRequest request) {
+        long startedAt = System.nanoTime();
+        String requestId = newRequestId();
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("X-Request-Id", requestId);
             if (internalToken != null && !internalToken.isBlank()) {
                 headers.set(INTERNAL_SERVICE_TOKEN_HEADER, internalToken);
             }
@@ -188,9 +224,20 @@ public class AIServiceClient {
 
             ResponseEntity<EmbeddingResponse> response = restTemplate.postForEntity(
                     baseUrl + "/ai/embedding/embed", entity, EmbeddingResponse.class);
-            return response.getBody();
+            EmbeddingResponse body = response.getBody();
+            recordAiCall("embedding", body != null && body.isSuccess(), elapsed(startedAt));
+            log.info("AI embedding completed: requestId={}, provider={}, model={}, dimensions={}, latencyMs={}, degraded={}, errorCode={}",
+                    requestId,
+                    body != null ? body.getProvider() : null,
+                    body != null ? body.getModel() : null,
+                    body != null ? body.getDimensions() : null,
+                    body != null ? body.getLatencyMs() : null,
+                    body != null && body.isDegraded(),
+                    body != null ? body.getErrorCode() : null);
+            return body;
         } catch (Exception e) {
-            log.warn("Embedding service transport failed: {}", e.getMessage());
+            recordAiCall("embedding", false, elapsed(startedAt));
+            log.warn("Embedding service transport failed: requestId={}, error={}", requestId, e.getMessage());
             throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "AI service unavailable");
         }
     }

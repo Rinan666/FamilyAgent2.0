@@ -5,11 +5,13 @@ import asyncio
 import hashlib
 import logging
 import math
+import time
+import uuid
 from typing import Optional
 
 import httpx
 import litellm
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.config import settings
@@ -44,30 +46,67 @@ class EmbedResponse(BaseModel):
     dimensions: int
     embedding: list[float]
     privacy_categories: list[str] = Field(default_factory=list)
+    latency_ms: int
+    request_id: str
+    errorCode: Optional[str] = None
 
 
 @router.post("/embed", response_model=EmbedResponse)
-async def embed_text(request: EmbedRequest):
+async def embed_text(request: EmbedRequest, http_request: Request):
+    started_at = time.monotonic()
+    request_id = http_request.headers.get("X-Request-Id") or str(uuid.uuid4())
     text = sanitize_text(request.text, max_length=6000)
     guarded = redact_ai_bound_text(text, max_length=6000)
     model = request.model or settings.embedding_model
     dimensions = request.dimensions or settings.embedding_dimension
+    provider = _embedding_provider(model)
 
     try:
         vector = await _embed(text=guarded.text, model=model, dimensions=dimensions)
+        latency_ms = _elapsed_ms(started_at)
+        logger.info(
+            "Embedding generated: request_id=%s provider=%s model=%s dimensions=%s latency_ms=%s degraded=%s privacy_categories=%s",
+            request_id,
+            provider,
+            model,
+            len(vector),
+            latency_ms,
+            False,
+            guarded.categories,
+        )
         return {
             "success": True,
             "degraded": False,
-            "provider": _embedding_provider(model),
+            "provider": provider,
             "model": model,
             "dimensions": len(vector),
             "embedding": vector,
             "privacy_categories": guarded.categories,
+            "latency_ms": latency_ms,
+            "request_id": request_id,
         }
-    except HTTPException:
+    except HTTPException as e:
+        logger.warning(
+            "Embedding generation failed: request_id=%s provider=%s model=%s dimensions=%s latency_ms=%s errorCode=%s status_code=%s",
+            request_id,
+            provider,
+            model,
+            dimensions,
+            _elapsed_ms(started_at),
+            _embedding_error_code(e),
+            e.status_code,
+        )
         raise
     except Exception as e:
-        logger.warning("Embedding generation failed: %s", e)
+        logger.warning(
+            "Embedding generation failed: request_id=%s provider=%s model=%s dimensions=%s latency_ms=%s errorCode=EMBEDDING_GENERATION_FAILED error=%s",
+            request_id,
+            provider,
+            model,
+            dimensions,
+            _elapsed_ms(started_at),
+            e,
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -79,6 +118,16 @@ def _embedding_provider(model: str) -> str:
     if "/" in model:
         return model.split("/", 1)[0]
     return "litellm"
+
+
+def _embedding_error_code(exc: HTTPException) -> str:
+    if exc.status_code == 503:
+        return "EMBEDDING_PROVIDER_UNAVAILABLE"
+    return "EMBEDDING_GENERATION_FAILED"
+
+
+def _elapsed_ms(started_at: float) -> int:
+    return max(0, round((time.monotonic() - started_at) * 1000))
 
 
 async def _embed(text: str, model: str, dimensions: int) -> list[float]:
