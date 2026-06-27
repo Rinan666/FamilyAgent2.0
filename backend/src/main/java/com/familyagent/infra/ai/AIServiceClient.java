@@ -2,6 +2,7 @@ package com.familyagent.infra.ai;
 
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
+import com.familyagent.infra.ai.dto.AgentChatStreamPayload;
 import com.familyagent.infra.ai.dto.EmbeddingRequest;
 import com.familyagent.infra.ai.dto.EmbeddingResponse;
 import com.familyagent.infra.ai.dto.MemoryExtractionRequest;
@@ -48,23 +49,24 @@ public class AIServiceClient {
     private static final int STREAM_BUFFER_SIZE = 1024;
     private static final String INTERNAL_SERVICE_TOKEN_HEADER = "X-Internal-Service-Token";
     private static final String REQUEST_ID_HEADER = "X-Request-Id";
-    private static final String STREAM_ERROR_UNAVAILABLE = """
-            data: {"type":"error","error":true,"code":"AI_STREAM_UNAVAILABLE","message":"AI service unavailable, please retry later.","retryable":true,"degraded":false}
-
-            """;
+    private static final String ERROR_NONE = "NONE";
+    private static final String ERROR_AI_SERVICE = "AI_SERVICE_ERROR";
 
     private final RestTemplate restTemplate;
+    private final RestTemplate streamRestTemplate;
     private final String baseUrl;
     private final String internalToken;
     private final ObjectMapper objectMapper;
     private final MeterRegistry meterRegistry;
 
     public AIServiceClient(@Qualifier("aiServiceRestTemplate") RestTemplate restTemplate,
+                           @Qualifier("aiServiceStreamRestTemplate") RestTemplate streamRestTemplate,
                            @Value("${ai-service.base-url:http://localhost:8000}") String baseUrl,
                            @Value("${ai-service.internal-token:}") String internalToken,
                            ObjectMapper objectMapper,
                            MeterRegistry meterRegistry) {
         this.restTemplate = restTemplate;
+        this.streamRestTemplate = streamRestTemplate;
         this.baseUrl = baseUrl;
         this.internalToken = internalToken;
         this.objectMapper = objectMapper;
@@ -75,10 +77,11 @@ public class AIServiceClient {
      * Proxy FamilyAgent chat SSE streams from the AI service.
      */
     @CircuitBreaker(name = "aiService", fallbackMethod = "fallbackProxyChatStream")
-    public void proxyChatStream(Map<String, Object> request, OutputStream downstream, String authorization, String requestId) {
+    public void proxyChatStream(AgentChatStreamPayload request, OutputStream downstream, String authorization, String requestId) {
         long startedAt = System.nanoTime();
         String effectiveRequestId = normalizeRequestId(requestId);
         boolean success = false;
+        String errorCode = ERROR_NONE;
         try {
             String jsonBody = objectMapper.writeValueAsString(request);
             URI uri = URI.create(baseUrl + "/ai/agent/chat/stream");
@@ -91,7 +94,7 @@ public class AIServiceClient {
             }
             HttpEntity<String> entity = new HttpEntity<>(jsonBody, headers);
 
-            restTemplate.execute(uri, HttpMethod.POST, httpRequest -> writeStreamRequest(httpRequest, entity, jsonBody), response -> {
+            streamRestTemplate.execute(uri, HttpMethod.POST, httpRequest -> writeStreamRequest(httpRequest, entity, jsonBody), response -> {
                 if (!response.getStatusCode().is2xxSuccessful()) {
                     String errorBody = readResponseBody(response);
                     log.warn("AI service stream response error: requestId={}, status={}, body={}",
@@ -106,16 +109,19 @@ public class AIServiceClient {
             });
             success = true;
         } catch (BusinessException e) {
+            errorCode = ERROR_AI_SERVICE;
             throw e;
         } catch (HttpStatusCodeException e) {
+            errorCode = ERROR_AI_SERVICE;
             log.warn("AI service stream response error: requestId={}, status={}, body={}",
                     effectiveRequestId, e.getStatusCode().value(), truncateForLog(e.getResponseBodyAsString()));
             throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "AI service unavailable, please retry later.");
         } catch (Exception e) {
+            errorCode = "AI_STREAM_INTERRUPTED";
             log.error("FamilyAgent chat SSE proxy failed: requestId={}", effectiveRequestId, e);
             throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "AI service unavailable, please retry later.");
         } finally {
-            recordAiCall("chat_stream", success, elapsed(startedAt));
+            recordAiCall("chat_stream", success, errorCode, null, null, false, elapsed(startedAt));
         }
     }
 
@@ -199,11 +205,44 @@ public class AIServiceClient {
     }
 
     private void recordAiCall(String operation, boolean success, Duration duration) {
+        recordAiCall(operation, success, ERROR_NONE, null, null, false, duration);
+    }
+
+    private void recordAiCall(
+            String operation,
+            boolean success,
+            String errorCode,
+            String provider,
+            String model,
+            boolean degraded,
+            Duration duration
+    ) {
         meterRegistry.timer(
                 "familyagent.ai.client.request",
                 "operation", operation,
-                "success", Boolean.toString(success)
+                "success", Boolean.toString(success),
+                "errorCode", tagValue(errorCode),
+                "provider", tagValue(provider),
+                "model", tagValue(model),
+                "degraded", Boolean.toString(degraded)
         ).record(duration.toNanos(), TimeUnit.NANOSECONDS);
+    }
+
+    private String tagValue(String value) {
+        if (value == null || value.isBlank()) {
+            return "none";
+        }
+        return value.length() <= 80 ? value : value.substring(0, 80);
+    }
+
+    private String metricErrorCode(boolean success, String errorCode) {
+        if (success) {
+            return ERROR_NONE;
+        }
+        if (errorCode == null || errorCode.isBlank()) {
+            return "AI_BUSINESS_FAILURE";
+        }
+        return errorCode;
     }
 
     /**
@@ -226,14 +265,31 @@ public class AIServiceClient {
             ResponseEntity<MemoryExtractionResponse> response = restTemplate.postForEntity(
                     baseUrl + "/ai/memory/extract", entity, MemoryExtractionResponse.class);
             MemoryExtractionResponse body = response.getBody();
-            recordAiCall("memory_extract", true, elapsed(startedAt));
+            boolean bodySuccess = body != null && body.isSuccess();
+            recordAiCall(
+                    "memory_extract",
+                    bodySuccess,
+                    metricErrorCode(bodySuccess, body != null ? body.getErrorCode() : "AI_EMPTY_RESPONSE"),
+                    null,
+                    null,
+                    body != null && body.isDegraded(),
+                    elapsed(startedAt)
+            );
             log.info("AI memory extraction completed: requestId={}, success={}, degraded={}",
                     requestId,
                     body != null && body.isSuccess(),
                     body != null && body.isDegraded());
             return body;
         } catch (Exception e) {
-            recordAiCall("memory_extract", false, elapsed(startedAt));
+            recordAiCall(
+                    "memory_extract",
+                    false,
+                    ERROR_AI_SERVICE,
+                    null,
+                    null,
+                    false,
+                    elapsed(startedAt)
+            );
             log.warn("Memory extraction transport failed: requestId={}, error={}", requestId, e.getMessage());
             throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "AI service unavailable");
         }
@@ -259,8 +315,18 @@ public class AIServiceClient {
             ResponseEntity<EmbeddingResponse> response = restTemplate.postForEntity(
                     baseUrl + "/ai/embedding/embed", entity, EmbeddingResponse.class);
             EmbeddingResponse body = response.getBody();
-            recordAiCall("embedding", body != null && body.isSuccess(), elapsed(startedAt));
-            log.info("AI embedding completed: requestId={}, provider={}, model={}, dimensions={}, latencyMs={}, degraded={}, errorCode={}",
+            boolean bodySuccess = body != null && body.isSuccess();
+            recordAiCall(
+                    "embedding",
+                    bodySuccess,
+                    metricErrorCode(bodySuccess, body != null ? body.getErrorCode() : "AI_EMPTY_RESPONSE"),
+                    body != null ? body.getProvider() : null,
+                    body != null ? body.getModel() : null,
+                    body != null && body.isDegraded(),
+                    elapsed(startedAt)
+            );
+            log.info(
+                    "AI embedding completed: requestId={}, provider={}, model={}, dimensions={}, latencyMs={}, degraded={}, errorCode={}",
                     requestId,
                     body != null ? body.getProvider() : null,
                     body != null ? body.getModel() : null,
@@ -270,7 +336,15 @@ public class AIServiceClient {
                     body != null ? body.getErrorCode() : null);
             return body;
         } catch (Exception e) {
-            recordAiCall("embedding", false, elapsed(startedAt));
+            recordAiCall(
+                    "embedding",
+                    false,
+                    ERROR_AI_SERVICE,
+                    null,
+                    null,
+                    false,
+                    elapsed(startedAt)
+            );
             log.warn("Embedding service transport failed: requestId={}, error={}", requestId, e.getMessage());
             throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "AI service unavailable");
         }
@@ -301,7 +375,13 @@ public class AIServiceClient {
         return MemoryExtractionResponse.unavailable();
     }
 
-    private void fallbackProxyChatStream(Map<String, Object> request, OutputStream downstream, String authorization, String requestId, Exception ex) {
+    private void fallbackProxyChatStream(
+            AgentChatStreamPayload request,
+            OutputStream downstream,
+            String authorization,
+            String requestId,
+            Exception ex
+    ) {
         String effectiveRequestId = normalizeRequestId(requestId);
         log.warn("AI chat stream fallback triggered: requestId={}, error={}", effectiveRequestId, ex.getMessage());
         try {

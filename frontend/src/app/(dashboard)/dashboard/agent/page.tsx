@@ -7,7 +7,7 @@ import { Bot, Loader2, Menu, Plus, Send, Sparkles, Square } from 'lucide-react';
 import AgentContextPanel from '@/components/agent/AgentContextPanel';
 import AgentMessageList from '@/components/agent/AgentMessageList';
 import AgentSessionDrawer from '@/components/agent/AgentSessionDrawer';
-import { buildPersonaProfileContext, personaSwitchMessage } from '@/components/agent/personaContext';
+import { personaSwitchMessage } from '@/components/agent/personaContext';
 import {
   normalizeTargetSelection,
   selectionFromRequestedTargetUserId,
@@ -36,7 +36,7 @@ import {
 import VoiceInputButton from '@/components/voice/VoiceInputButton';
 import { useChat, type SessionSavedMemory, type UseChatRequestConfig } from '@/hooks/useChat';
 import { useViewerRole } from '@/hooks/useViewerRole';
-import { normalizeAssistantMetadata, withTimeout } from '@/hooks/chat/useChatHelpers';
+import { normalizeAssistantMetadata } from '@/hooks/chat/useChatHelpers';
 import { useAuthStore } from '@/stores/authStore';
 import { useChatStore } from '@/stores/chatStore';
 import { cn, generateId } from '@/lib/utils';
@@ -63,7 +63,6 @@ import type {
   FamilyMember,
   MirrorContextResponse,
   MirrorSourceRef,
-  PersonaMaterial,
   PersonaMember,
 } from '@/types';
 
@@ -196,7 +195,6 @@ let cachedAgentMembersByFamilyId: Record<number, FamilyMember[]> = {};
 let cachedAgentPersonasByFamilyId: Record<number, PersonaMember[]> = {};
 let cachedAgentSessionsByFamilyId: Record<number, ChatSessionSummary[]> = {};
 let cachedMirrorContextByFamilyTarget: Record<string, MirrorContextResponse> = {};
-const PERSONA_MATERIALS_TIMEOUT_MS = 800;
 
 function buildTargetSwitchMessage(
   nextMode: AgentMode,
@@ -426,11 +424,6 @@ export default function AgentPage() {
     return context;
   }, []);
 
-  const loadPersonaMaterials = useCallback(async (familyId: number, personaId: number) => {
-    const materials = await familyApi.listPersonaMaterials(familyId, personaId);
-    return Array.isArray(materials) ? materials : [];
-  }, []);
-
   useEffect(() => {
     if (mode !== 'mirror' || !activeFamilyId || !mirrorTargetUserId || responseMode === 'quick') {
       setMirrorContext(null);
@@ -468,33 +461,18 @@ export default function AgentPage() {
     defaultRecall: () => Promise<{ context: string; metadata?: NonNullable<ChatMessage['metadata']> }>;
   }) => {
     if (mode === 'persona' && targetPersona) {
-      const personaMaterials = activeFamilyId
-        ? await withTimeout(
-            loadPersonaMaterials(activeFamilyId, targetPersona.id),
-            [] as PersonaMaterial[],
-            PERSONA_MATERIALS_TIMEOUT_MS,
-          ).catch(() => [] as PersonaMaterial[])
-        : [];
-      const personaContext = buildPersonaProfileContext(targetPersona, personaMaterials);
-      const recalled: { context: string; metadata?: NonNullable<ChatMessage['metadata']> } = responseMode === 'quick'
-        ? { context: '' }
-        : await defaultRecall();
       const metadata: NonNullable<ChatMessage['metadata']> = {
-        ...(recalled.metadata || {}),
         agentMode: 'persona',
         responseMode,
         targetPersonaId: targetPersona.id,
         targetPersonaName: targetPersona.name,
         targetMemberName: targetPersona.name,
-        sourceSummary: recalled.context
-          ? `基于精神成员档案、${personaMaterials.length} 张材料卡，并参考当前家庭可见经验沉淀。`
-          : `基于精神成员档案和 ${personaMaterials.length} 张材料卡。当前未附加家庭经验沉淀。`,
+        sourceSummary: responseMode === 'quick'
+          ? '由后端基于精神成员档案生成快速上下文。'
+          : '由后端基于精神成员档案、材料卡和当前家庭可见经验沉淀生成上下文。',
       };
       return {
-        context: [
-          personaContext,
-          recalled.context ? `家庭可见参考资料：\n${recalled.context}` : '',
-        ].filter(Boolean).join('\n\n'),
+        context: '',
         metadata,
       };
     }
@@ -506,7 +484,7 @@ export default function AgentPage() {
         targetMemberName: targetLabel,
       };
       return {
-        context: `镜像参考对象：${targetLabel}。当前为快速模式，未加载完整镜像资料；回答必须说明资料有限，不代表本人真实想法。`,
+        context: '',
         metadata: quickMetadata,
       };
     }
@@ -517,17 +495,17 @@ export default function AgentPage() {
       const context = await refreshMirrorContext(activeFamilyId, mirrorTargetUserId, query);
       setContextError('');
       return {
-        context: context.memoryContext || '',
+        context: '',
         metadata: buildMirrorAnswerMetadata(context, targetMember),
       };
     } catch (error) {
       setContextError(error instanceof Error ? `镜像上下文刷新失败，已使用当前资料：${error.message}` : '镜像上下文刷新失败，已使用当前资料。');
       return {
-        context: mirrorContext?.memoryContext || '',
+        context: '',
         metadata: buildMirrorAnswerMetadata(mirrorContext, targetMember),
       };
     }
-  }, [activeFamilyId, loadPersonaMaterials, mirrorContext, mirrorTargetUserId, mode, refreshMirrorContext, responseMode, targetLabel, targetMember, targetPersona]);
+  }, [activeFamilyId, mirrorContext, mirrorTargetUserId, mode, refreshMirrorContext, responseMode, targetLabel, targetMember, targetPersona]);
 
   const prepareRequest = useCallback(async ({ defaultRequest }: {
     message: string;
@@ -540,6 +518,7 @@ export default function AgentPage() {
         ...defaultRequest,
         subject: 'PersonaMemberAgent',
         contextLabel: 'persona_member',
+        targetPersonaId: targetPersona.id,
         targetRole: 'MEMBER' as const,
       };
     }
@@ -550,6 +529,7 @@ export default function AgentPage() {
       ...defaultRequest,
       subject: 'MirrorAgent',
       contextLabel: 'mirror_agent',
+      targetUserId: targetMember.userId,
       targetRole: 'MEMBER' as const,
     };
   }, [mode, targetMember, targetPersona]);

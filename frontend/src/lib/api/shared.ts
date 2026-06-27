@@ -395,6 +395,7 @@ export function sseStreamRequest(
   onAbort?: () => void,
 ): AIStreamHandle {
   const controller = new AbortController();
+  let sawTerminalEvent = false;
 
   const handleSseLine = (rawLine: string): boolean => {
     const line = rawLine.replace(/\r$/, '');
@@ -407,10 +408,12 @@ export function sseStreamRequest(
     try {
       const payload = JSON.parse(data) as AIStreamEvent;
       if (payload.type === 'done' || payload.done) {
+        sawTerminalEvent = true;
         onDone();
         return true;
       }
       if (payload.type === 'error' || payload.error) {
+        sawTerminalEvent = true;
         onError(streamErrorMessage(payload));
         return true;
       }
@@ -472,6 +475,11 @@ export function sseStreamRequest(
         }
       }
 
+      if (!sawTerminalEvent) {
+        onError('AI stream ended before a completion event. Please retry.');
+        return;
+      }
+
       onDone();
     } catch (error) {
       if (controller.signal.aborted) {
@@ -487,4 +495,3 @@ export function sseStreamRequest(
     completed,
   };
 }
-

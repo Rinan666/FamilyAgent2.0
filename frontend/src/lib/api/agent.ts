@@ -6,6 +6,9 @@ export const agentApi = {
   streamChat: (
     body: {
       message: string;
+      familyId?: number | null;
+      targetUserId?: number | null;
+      targetPersonaId?: number | null;
       history?: { role: string; content: string }[];
       subject?: string;
       contextLabel?: string;
@@ -23,6 +26,9 @@ export const agentApi = {
     onAbort?: () => void,
   ) => sseStreamRequest('/agent/chat/stream', {
     member_message: body.message,
+    family_id: body.familyId || null,
+    target_user_id: body.targetUserId || null,
+    target_persona_id: body.targetPersonaId || null,
     history: body.history || [],
     subject: body.subject || 'FamilyAgent',
     knowledge_point: body.contextLabel || '',

@@ -93,4 +93,30 @@ describe('sseStreamRequest', () => {
 
     expect(metadataEvents).toEqual([{ web_search: { needed: true, used: false }, requestId: 'chat-test-request' }]);
   });
+
+  it('reports an interrupted stream when EOF arrives before done or error', async () => {
+    const events: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      streamFromChunks([
+        ': connected\n\n',
+        'data: {"type":"content","content":"partial answer","requestId":"chat-test-request"}\n\n',
+      ]),
+      { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+    )));
+
+    const handle = sseStreamRequest(
+      '/agent/chat/stream',
+      { member_message: 'hi' },
+      (chunk) => events.push(`chunk:${chunk}`),
+      () => events.push('done'),
+      (error) => events.push(`error:${error}`),
+    );
+
+    await handle.completed;
+
+    expect(events).toEqual([
+      'chunk:partial answer',
+      'error:AI stream ended before a completion event. Please retry.',
+    ]);
+  });
 });

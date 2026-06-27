@@ -3,6 +3,7 @@
 > 更新日期：2026-06-25  
 > 范围：`ai-service/`、`backend/src/main/java/com/familyagent/infra/ai/`、后端 `agent` / `memory` / `mirror` / `session` 中调用 AI 的链路  
 > 目标：优先修复 AI 安全边界、失败语义、Embedding 质量、跨服务契约和隐私风险，在不大改产品功能的前提下提升稳定性与可维护性
+> 当前状态：核心治理项已完成，本计划可收口；剩余 Resilience4j AOP 集成测试和生产 timeout 阈值校准作为后续常规增强项跟进。
 
 ---
 
@@ -264,7 +265,7 @@ FamilyAgent 的 AI 部分已经具备较完整的功能雏形：
 
 影响：
 
-- 第一轮迁移后，backend stream proxy 已复用统一 request factory / timeout 配置，并保留原始 SSE 透传、header 传递和非 2xx 错误映射。
+- 第一轮迁移后，backend stream proxy 已复用统一 request factory / timeout 配置，并保留原始 SSE 透传、header 传递和非 2xx 错误映射；第二轮已进一步拆分为 stream 专用 `aiServiceStreamRestTemplate`。
 - metrics、trace、完整观测字段仍需在统一 client 层继续补齐。
 
 优化方向：
@@ -281,23 +282,21 @@ FamilyAgent 的 AI 部分已经具备较完整的功能雏形：
 
 问题：
 
-- Backend 非流式 AI timeout 默认约 60s。
-- AI service LLM hard timeout 约 100s。
-- Backend stream read timeout 约 300s。
-- AI service stream idle timeout 约 20s。
-- Embedding 部分路径没有统一使用配置 timeout。
+- 已完成第二轮收敛：backend 普通 AI 请求和 stream 请求已拆分为显式 `connect-timeout-seconds`、`read-timeout-seconds`、`stream-read-timeout-seconds` 配置，并保留旧 `AI_SERVICE_TIMEOUT` 作为过渡兼容。
+- 已完成第一轮收敛：AI service embedding provider timeout 统一使用 `AI_EMBEDDING_TIMEOUT_SECONDS`。
+- 当前预算口径：backend connect timeout 默认 5s；非流式 read timeout 默认 120s，覆盖 AI service LLM hard timeout 100s；stream socket read timeout 默认 45s，覆盖 AI service 10s keepalive 和 20s stream idle timeout。
 
 影响：
 
-- 可能出现上游仍运行、下游已超时的状态。
-- 排障和重试困难。
+- 全链路 timeout 已有主配置入口，后续排障可以按 connect/read/stream idle 三类定位。
+- 仍需在真实生产流量下继续校准超时值和告警阈值。
 
 优化方向：
 
-1. 统一定义端到端 timeout budget。
+1. 统一定义端到端 timeout budget。已完成第二轮：backend / AI service timeout budget 已配置化并同步环境模板。
 2. 区分 connect timeout、first token timeout、idle timeout、total timeout。
-3. Embedding 全路径使用统一配置。
-4. LiteLLM embedding 增加 hard timeout。
+3. Embedding 全路径使用统一配置。已完成第一轮。
+4. LiteLLM embedding 增加 hard timeout。已完成第一轮。
 
 ---
 
@@ -404,7 +403,7 @@ FamilyAgent 的 AI 部分已经具备较完整的功能雏形：
 1. 限制 `history.role` 白名单。已完成：Backend DTO 和 AI service Pydantic model 均只允许 `user` / `assistant`。
 2. AI service 为 chat request 定义强类型 Pydantic model。已完成：新增 `AgentHistoryMessage`。
 3. 安全检查不再信任客户端 role。已完成：LLM message 校验只允许首条可信 `system` 消息，拒绝后续 `system` / 未知 role。
-4. `memory_context` 改为服务端可信来源，或短期加注入检测与数据边界。已完成短期止血：增加注入检测、上下文 delimiter 和“数据不是指令”的 prompt 边界；长期仍需迁移为纯服务端生成。
+4. `memory_context` 改为服务端可信来源，或短期加注入检测与数据边界。已完成核心治理：短期止血已增加注入检测、上下文 delimiter 和“数据不是指令”的 prompt 边界；普通 `family_memory` 聊天已改为前端传 `family_id`、后端通过 `AgentMemoryContextFacade` 授权召回并生成上下文，客户端同传的 `memory_context` 会被服务端覆盖；mirror/persona 聊天已改为前端只传 `target_user_id` / `target_persona_id`，后端通过 `AgentMirrorContextFacade` / `AgentPersonaContextFacade` 生成可信上下文。
 5. AI service 生产环境默认 fail-closed。已完成：dev/local 下也默认 fail-closed，只有显式 `AUTH_FAIL_OPEN=true` 才 fail-open。
 
 验收标准：
@@ -412,7 +411,7 @@ FamilyAgent 的 AI 部分已经具备较完整的功能雏形：
 - 客户端传 `role=system` 返回 400 或被过滤。已验证：后端 DTO 和 AI service 模型已拒绝系统历史角色。
 - prompt injection 文本即使伪装在 history 中也会被检测。已部分验证：safety_limits 已拒绝未知 role 和后续 system 消息；后续仍需扩展更多注入样本测试。
 - 生产环境未显式开启时不允许 auth fail-open。已完成：默认关闭。
-- `memory_context` 不再被无边界地当成高可信 system 内容。已完成第一轮止血：加入注入检测和 prompt 边界，后续仍需迁移来源。
+- `memory_context` 不再被无边界地当成高可信 system 内容。已完成核心治理：普通家庭聊天的授权记忆上下文由后端按当前用户和家庭权限生成；mirror/persona 上下文由后端按目标成员或精神成员 id 生成；客户端无法通过这些标准聊天模式覆盖可信上下文。
 
 ---
 
@@ -443,7 +442,7 @@ FamilyAgent 的 AI 部分已经具备较完整的功能雏形：
 
 ## Phase 3：AI 失败语义统一
 
-状态：已完成第一轮流式失败语义止血，并补齐 stream requestId 贯通；后续可继续补前端展示与 Resilience4j 场景化测试
+状态：已完成第二轮流式失败语义治理，补齐 stream requestId 贯通，并修复前端 EOF 未收到 done/error 时误判成功的问题；后续可继续补 Resilience4j 场景化测试
 
 时间：2026-07-08 到 2026-07-15
 
@@ -455,12 +454,12 @@ FamilyAgent 的 AI 部分已经具备较完整的功能雏形：
 2. 区分 `done`、`error`、`degraded`。已完成第二轮：AI service 成功结束输出 `type=done` + `done=true` + `degraded=false` + `requestId`，失败输出 `type=error` + `requestId`；embedding fallback 继续显式 `degraded=false`。
 3. `AIServiceClient` transport failure 不再内部吞异常。已完成第一轮：embedding / memory extraction transport failure 抛出业务异常，交由 retry/circuit breaker/fallback 统一处理。
 4. Resilience4j fallback 统一返回明确业务错误。已完成第一轮：非流式 fallback 返回 `success=false` + `errorCode=AI_SERVICE_UNAVAILABLE`，流式 fallback 返回结构化 SSE error event。
-5. 增加 stream 失败、非 200、中断、超时测试。已完成第二批：AI service 覆盖 stream 成功/失败 event 和 `requestId`，backend 覆盖 stream 非 200 不伪装为 assistant 文本并验证 `X-Request-Id` 透传，frontend 覆盖 typed error / metadata / done 解析；后续可补中断和超时专项测试。
+5. 增加 stream 失败、非 200、中断、超时测试。已完成第三批：AI service 覆盖 stream 成功/失败 event 和 `requestId`，backend 覆盖 stream 非 200 不伪装为 assistant 文本并验证 `X-Request-Id` 透传，frontend 覆盖 typed error / metadata / done 解析，并在 EOF 未收到 `done` / `error` 时触发错误而不是调用成功回调；后续可补更底层的 socket read timeout 专项测试。
 
 验收标准：
 
 - LLM provider 失败不会被当作普通 assistant 回答。已完成：LLM stream fallback 不再 yield 道歉文本，最终由结构化 error event 暴露。
-- 前端/后端能识别 error stream event。已完成后端/AI service 契约与前端 typed stream event 解析，并完成 `requestId` 贯通；前端错误展示和持久化策略仍可继续增强。
+- 前端/后端能识别 error stream event。已完成后端/AI service 契约与前端 typed stream event 解析，并完成 `requestId` 贯通；前端在 stream EOF 未收到 terminal event 时也会暴露错误，避免把半截回答误持久化为成功结果。
 - Resilience4j retry/fallback 测试可证明生效。已完成 fallback 契约收敛，后续可补带 Spring AOP 的 retry/circuit breaker 集成测试。
 - 日志中可区分 transport failure、provider failure、business failure。已部分完成：backend transport failure 日志已单独标识，stream failure 日志已携带 `requestId` 且不记录敏感上下文，AI service provider failure 仍保留 LLM/embedding 日志；后续可进一步标准化字段。
 
@@ -468,7 +467,7 @@ FamilyAgent 的 AI 部分已经具备较完整的功能雏形：
 
 ## Phase 4：AI 契约强类型化
 
-状态：已完成第一轮契约增强，chat stream event schema 和更深层 memory response Pydantic 仍待继续收敛
+状态：已完成第四轮契约增强，backend chat stream proxy payload 已从裸 `Map` 收敛为强类型 DTO，AI service stream `content` / `metadata` / `done` / `error` 事件已收敛为 Pydantic 事件模型，deprecated memory extraction request/response 已补 Pydantic 契约与角色白名单
 
 时间：2026-07-15 到 2026-07-29
 
@@ -477,23 +476,23 @@ FamilyAgent 的 AI 部分已经具备较完整的功能雏形：
 工作项：
 
 1. 优先强类型化 embedding request/response。已完成第一轮：AI service 新增 `EmbedResponse` Pydantic response model 并返回 `provider`；backend 新增 `EmbeddingRequest` / `EmbeddingResponse` DTO，`AIServiceClient.embedText()`、记忆索引和向量召回查询均改用强类型契约。
-2. 强类型化 memory extraction request/response。已完成第一轮：backend `MemoryExtractionRequest` / `MemoryExtractionResponse` DTO 已新增，`AIServiceClient.extractMemories()` 已切换为强类型契约；AI service 侧仍使用过渡型 request model。
-3. 为 chat stream request 定义稳定 DTO/Pydantic schema。已部分完成：backend `AgentChatStreamRequest` 和 AI service `AgentChatRequest` 已约束 history role 与主要字段，后续可继续收敛 stream event schema。
+2. 强类型化 memory extraction request/response。已完成第二轮：backend `MemoryExtractionRequest` / `MemoryExtractionResponse` DTO 已新增，`AIServiceClient.extractMemories()` 已切换为强类型契约；AI service deprecated `/ai/memory/extract` 已补 `ExtractMemoryRequest` message role 白名单和 `ExtractMemoryResponse` Pydantic response model，返回显式 `deprecated`、`degraded`、`errorCode` 字段。
+3. 为 chat stream request 定义稳定 DTO/Pydantic schema。已进一步完成：backend `AgentChatStreamRequest` 负责外部请求校验，新增 `AgentChatStreamPayload` 作为 backend 到 AI service 的强类型代理契约；AI service `AgentChatRequest` 已约束 history role 与主要字段，stream `content` / `metadata` / `done` / `error` 输出已通过 Pydantic 事件模型生成。
 4. JSON schema 增加严格约束。已完成第一轮：save-plan、organized draft、persona material draft 和 weekly report schema 已开启 `strict` / `additionalProperties: false`，并补充 enum、长度、数组数量和数值范围约束。
 5. 保留兼容转换层，避免破坏现有调用。
 
 验收标准：
 
-- AIServiceClient 关键方法不再以裸 Map 作为主契约。已部分完成：embedding 主链路已强类型化；memory extraction client 已新增强类型 request/response DTO；chat stream proxy 仍保留 Map 过渡。
-- Python AI service 入参/出参有 Pydantic 类型约束。已部分完成：chat request 和 embedding response 已有 Pydantic 类型约束，memory LLM response schema 已严格化。
+- AIServiceClient 关键方法不再以裸 Map 作为主契约。已进一步完成：embedding 主链路已强类型化；memory extraction client 已新增强类型 request/response DTO；chat stream proxy payload 已切换为 `AgentChatStreamPayload`，仅 health check 保留兼容型 Map 返回。
+- Python AI service 入参/出参有 Pydantic 类型约束。已进一步完成：chat request、chat stream events、embedding response 和 deprecated memory extraction response 已有 Pydantic 类型约束，memory LLM response schema 已严格化。
 - schema 禁止无关额外字段。已完成第一轮：核心 memory LLM schema 已添加 `additionalProperties: false` 并通过契约测试固定。
-- 契约测试覆盖核心 response。已部分完成：embedding provider metadata、强类型响应解析、降级/异常向量拒绝已有测试覆盖；memory response schema 严格模式和 backend memory extraction typed response 已增加测试。
+- 契约测试覆盖核心 response。已进一步完成：embedding provider metadata、强类型响应解析、降级/异常向量拒绝已有测试覆盖；memory response schema 严格模式、backend memory extraction typed response、AI service deprecated memory extraction typed response 已增加测试。
 
 ---
 
 ## Phase 5：隐私、限流、超时和观测治理
 
-状态：已完成第一轮 Web Search 隐私治理、内部 embedding 限流身份治理、前端 stream error 解析增强、backend stream HTTP client 封装迁移和 stream requestId 贯通；timeout budget 和完整观测字段仍待继续
+状态：已完成第二轮 Web Search 隐私治理、内部 embedding 限流身份治理、前端 stream error 解析增强、backend stream HTTP client 封装迁移、stream requestId 贯通、timeout budget 配置化和 backend client metrics 标签增强；生产阈值校准仍需继续
 
 时间：2026-07-29 到 2026-08-12
 
@@ -503,16 +502,16 @@ FamilyAgent 的 AI 部分已经具备较完整的功能雏形：
 
 1. Web Search 增加 query rewrite / PII stripping。已完成第一轮：外部搜索前会改写公开 query、移除常见 PII；含手机号、地址、家庭记忆等隐私标记的 query 默认跳过外部搜索，并补充回归测试。
 2. 内部 embedding 限流从固定 `-100` 改成业务维度。已完成第一轮：AI service `EmbedRequest` 接收 `source_type` / `family_id` / `user_id`，内部限流 key 改为 `internal:{source_type}:family:{family_id}:user:{user_id}`。
-3. 统一 AI timeout budget。已部分完成：embedding LiteLLM / DashScope 调用统一使用 `ai_embedding_timeout_seconds`；整体端到端 timeout budget、backend stream timeout 和文档化配置仍待继续。
+3. 统一 AI timeout budget。已完成第二轮：embedding LiteLLM / DashScope 调用统一使用 `ai_embedding_timeout_seconds`；backend 普通请求和 stream 请求拆分为 `AI_SERVICE_CONNECT_TIMEOUT_SECONDS`、`AI_SERVICE_READ_TIMEOUT_SECONDS`、`AI_SERVICE_STREAM_READ_TIMEOUT_SECONDS`，默认预算为 5s / 120s / 45s，并同步 `.env.example`、`.env.docker.example`、dev/prod application 配置。后续只需根据生产延迟分布校准阈值。
 4. stream 代理迁移或封装到统一 HTTP client。已完成第一轮：backend stream proxy 从手写 `HttpURLConnection` 迁移到注入的 `aiServiceRestTemplate.execute(...)`，复用统一 timeout / request factory 配置，并保留原始 SSE frame 透传与非 2xx 结构化失败语义。
-5. 增加 metrics/log 字段：provider、model、latency、degraded、errorCode、requestId。已完成第三轮：AI service embedding response 增加 `latency_ms` / `request_id` 并按 provider/model/dimensions/degraded/errorCode 记录结构化日志；backend `AIServiceClient` 为 embedding / memory extraction 注入 `X-Request-Id`、记录 Micrometer timer `familyagent.ai.client.request`，并在日志保留 provider/model/dimensions/degraded/errorCode/latencyMs；stream 链路已完成 `X-Request-Id` 从前端/后端到 AI service 的透传，typed `metadata` / `content` / `done` / `error` event 均携带 `requestId`，AI service stream `done` / `error` event 增加 `latencyMs`，backend `chat_stream` 已记录 Micrometer timer。更多 stream metrics 标签仍待继续。
+5. 增加 metrics/log 字段：provider、model、latency、degraded、errorCode、requestId。已完成第四轮：AI service embedding response 增加 `latency_ms` / `request_id` 并按 provider/model/dimensions/degraded/errorCode 记录结构化日志；backend `AIServiceClient` 为 embedding / memory extraction 注入 `X-Request-Id`、记录 Micrometer timer `familyagent.ai.client.request`，并在日志保留 provider/model/dimensions/degraded/errorCode/latencyMs；stream 链路已完成 `X-Request-Id` 从前端/后端到 AI service 的透传，typed `metadata` / `content` / `done` / `error` event 均携带 `requestId`，AI service stream `done` / `error` event 增加 `latencyMs`，backend `chat_stream` 已记录 Micrometer timer，并补齐 `errorCode`、`provider`、`model`、`degraded` 低基数标签。`requestId` 保持在日志和事件中，不进入 metrics tag，避免高基数指标污染。
 
 验收标准：
 
 - 私密 query 不会原样发给外部搜索服务。已完成第一轮并通过测试：隐私 query 会被跳过，公开 query 会先改写再发送。
 - 后台 embedding 任务不会全部共用一个 user 限流桶。已完成第一轮：内部 embedding 限流使用 source/family/user 业务维度。
-- AI 链路 timeout 有统一配置说明。已部分完成：embedding provider timeout 已收敛；全链路 timeout budget 仍待继续。
-- stream 与非 stream 链路的观测和错误语义一致。已进一步增强：前端可正确解析 typed stream error / metadata / done event；backend stream 代理已复用统一 RestTemplate client 并保留非 2xx 业务异常语义；embedding / memory extraction 已补 requestId、latency 和 Micrometer 计时；stream 已补 `X-Request-Id` 透传、typed event requestId、AI service `latencyMs` 和 backend `chat_stream` timer，更多 metrics 标签仍待继续。
+- AI 链路 timeout 有统一配置说明。已完成第二轮：backend connect/read/stream read timeout 与 AI service hard/idle/embedding timeout 已统一进环境模板和配置文件。
+- stream 与非 stream 链路的观测和错误语义一致。已进一步增强：前端可正确解析 typed stream error / metadata / done event；backend stream 代理已复用统一 RestTemplate client 并保留非 2xx 业务异常语义；embedding / memory extraction 已补 requestId、latency 和 Micrometer 计时；stream 已补 `X-Request-Id` 透传、typed event requestId、AI service `latencyMs`、backend `chat_stream` timer，以及 `errorCode`、`provider`、`model`、`degraded` metrics 标签。
 
 ---
 
@@ -578,7 +577,7 @@ FamilyAgent 的 AI 部分已经具备较完整的功能雏形：
 满足以下条件，可认为本轮 AI 优化有效：
 
 1. 用户可控输入不能提升为 system 指令。
-2. 授权记忆上下文只来自服务端可信检索结果。
+2. 普通家庭聊天、mirror 聊天和 persona 聊天的授权上下文均来自服务端可信检索或服务端档案结果。
 3. AI provider 失败不会被伪装成普通成功回答。
 4. Embedding 降级或失败不会污染长期向量索引。
 5. Backend 与 AI service 的核心契约有强类型 DTO/Pydantic schema。

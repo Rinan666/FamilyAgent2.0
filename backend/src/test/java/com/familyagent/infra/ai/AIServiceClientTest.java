@@ -1,5 +1,6 @@
 package com.familyagent.infra.ai;
 
+import com.familyagent.infra.ai.dto.AgentChatStreamPayload;
 import com.familyagent.infra.ai.dto.EmbeddingRequest;
 import com.familyagent.infra.ai.dto.EmbeddingResponse;
 import com.familyagent.infra.ai.dto.MemoryExtractionRequest;
@@ -17,7 +18,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -42,6 +43,7 @@ class AIServiceClientTest {
         requestFactory.setConnectTimeout(10_000);
         requestFactory.setReadTimeout(5_000);
         return new AIServiceClient(
+                new RestTemplateBuilder().requestFactory(() -> requestFactory).build(),
                 new RestTemplateBuilder().requestFactory(() -> requestFactory).build(),
                 baseUrl(),
                 internalToken,
@@ -119,6 +121,36 @@ class AIServiceClientTest {
     }
 
     @Test
+    void extractMemories_shouldParseSnakeCaseErrorCodeAndRecordBusinessFailure() throws Exception {
+        server = startServer("/ai/memory/extract", exchange -> {
+            respond(exchange, "application/json", 200,
+                    "{\"success\":false,\"deprecated\":true,\"degraded\":false,\"memories\":[],\"error_code\":\"MEMORY_EXTRACT_DEPRECATED\",\"message\":\"deprecated\"}");
+        });
+
+        AIServiceClient client = createClient("secret-token");
+
+        MemoryExtractionResponse response = client.extractMemories(MemoryExtractionRequest.builder()
+                .sessionId(7L)
+                .subject("FamilyAgent")
+                .messages(java.util.List.of(MemoryExtractionRequest.Message.builder()
+                        .role("user")
+                        .content("孩子做应用题先复述题意会更稳定")
+                        .build()))
+                .summary("应用题学习策略")
+                .build(), "Bearer demo-token");
+
+        assertEquals(false, response.isSuccess());
+        assertEquals("MEMORY_EXTRACT_DEPRECATED", response.getErrorCode());
+        assertEquals(1, meterRegistry.find("familyagent.ai.client.request")
+                .tag("operation", "memory_extract")
+                .tag("success", "false")
+                .tag("errorCode", "MEMORY_EXTRACT_DEPRECATED")
+                .tag("degraded", "false")
+                .timer()
+                .count());
+    }
+
+    @Test
     void embedText_shouldSendRequestIdAndRecordObservationMetric() throws Exception {
         AtomicReference<String> requestId = new AtomicReference<>();
         server = startServer("/ai/embedding/embed", exchange -> {
@@ -160,13 +192,22 @@ class AIServiceClientTest {
         AIServiceClient client = createClient("secret-token");
         ByteArrayOutputStream downstream = new ByteArrayOutputStream();
 
-        client.proxyChatStream(Map.of("member_message", "tell me one thing"), downstream, "Bearer demo-token", "chat-test-request");
+        client.proxyChatStream(streamPayload("tell me one thing"), downstream, "Bearer demo-token", "chat-test-request");
 
         assertEquals("text/event-stream", acceptHeader.get());
         assertEquals("Bearer demo-token", authorizationHeader.get());
         assertEquals("chat-test-request", requestIdHeader.get());
         assertEquals(": connected\n\ndata: {\"content\":\"hello\"}\n\ndata: {\"done\":true}\n\n",
                 downstream.toString(StandardCharsets.UTF_8));
+        assertEquals(1, meterRegistry.find("familyagent.ai.client.request")
+                .tag("operation", "chat_stream")
+                .tag("success", "true")
+                .tag("errorCode", "NONE")
+                .tag("provider", "none")
+                .tag("model", "none")
+                .tag("degraded", "false")
+                .timer()
+                .count());
     }
 
     @Test
@@ -179,9 +220,24 @@ class AIServiceClientTest {
         ByteArrayOutputStream downstream = new ByteArrayOutputStream();
 
         assertThrows(RuntimeException.class, () ->
-                client.proxyChatStream(Map.of("member_message", "tell me one thing"), downstream, "Bearer demo-token", "chat-error-request"));
+                client.proxyChatStream(streamPayload("tell me one thing"), downstream, "Bearer demo-token", "chat-error-request"));
 
         assertEquals("", downstream.toString(StandardCharsets.UTF_8));
+    }
+
+    private AgentChatStreamPayload streamPayload(String message) {
+        return new AgentChatStreamPayload(
+                message,
+                List.of(),
+                "FamilyAgent",
+                "family_memory",
+                "",
+                "MEMBER",
+                "MEMBER",
+                "think",
+                "",
+                ""
+        );
     }
 
     private HttpServer startServer(String path, ExchangeHandler handler) throws IOException {

@@ -1,5 +1,6 @@
 package com.familyagent.infra.ai.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
@@ -16,6 +17,7 @@ public class MemoryExtractionResponse {
     private List<ExtractedMemory> memories;
     private String message;
 
+    @JsonAlias("error_code")
     @JsonProperty("errorCode")
     private String errorCode;
 

@@ -4,7 +4,11 @@ import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.infra.ai.AIServiceClient;
+import com.familyagent.infra.ai.dto.AgentChatStreamPayload;
+import com.familyagent.module.family.facade.AgentPersonaContextFacade;
 import com.familyagent.module.agent.dto.AgentChatStreamRequest;
+import com.familyagent.module.memory.facade.AgentMemoryContextFacade;
+import com.familyagent.module.mirror.facade.AgentMirrorContextFacade;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,7 +30,6 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -43,12 +46,10 @@ public class AgentChatController {
     private static final int MAX_CHAT_REQUEST_BYTES = 32 * 1024;
     private static final DateTimeFormatter HOUR_KEY_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH");
     private static final String REQUEST_ID_HEADER = "X-Request-Id";
-    private static final String STREAM_ERROR_UNAVAILABLE = """
-            data: {"type":"error","error":true,"code":"AI_STREAM_UNAVAILABLE","message":"AI service unavailable, please retry later.","retryable":true,"degraded":false}
-
-            """;
-
     private final AIServiceClient aiServiceClient;
+    private final AgentMemoryContextFacade memoryContextFacade;
+    private final AgentMirrorContextFacade mirrorContextFacade;
+    private final AgentPersonaContextFacade personaContextFacade;
     private final RedissonClient redissonClient;
     private final ObjectMapper objectMapper;
 
@@ -60,7 +61,7 @@ public class AgentChatController {
                        HttpServletResponse response) throws IOException {
         Long userId = CurrentUserGuard.currentUserId();
         String effectiveRequestId = normalizeRequestId(requestId);
-        Map<String, Object> aiPayload = request.toAiPayload();
+        AgentChatStreamPayload aiPayload = request.toAiPayload(resolveMemoryContext(request, userId));
         enforceRequestSize(aiPayload);
         String hourKey = "quota:chat:user:" + userId + ":" + LocalDateTime.now().format(HOUR_KEY_FMT);
         RAtomicLong counter = redissonClient.getAtomicLong(hourKey);
@@ -102,6 +103,37 @@ public class AgentChatController {
         }
     }
 
+    private String resolveMemoryContext(AgentChatStreamRequest request, Long userId) {
+        if (request.shouldUseServerMirrorContext()) {
+            return mirrorContextFacade.buildMirrorAgentContext(
+                    request.getFamilyId(),
+                    request.getTargetUserId(),
+                    request.getMemberMessage());
+        }
+        if (request.shouldUseServerPersonaContext()) {
+            String personaContext = personaContextFacade.buildPersonaAgentContext(
+                    request.getFamilyId(),
+                    request.getTargetPersonaId());
+            if (!request.isThinkMode()) {
+                return personaContext;
+            }
+            String familyContext = buildFamilyMemoryContext(request, userId);
+            return familyContext.isBlank() ? personaContext : personaContext + "\n\nfamily_visible_reference:\n" + familyContext;
+        }
+        if (!request.shouldUseServerFamilyMemoryContext()) {
+            return request.getMemoryContext();
+        }
+        return buildFamilyMemoryContext(request, userId);
+    }
+
+    private String buildFamilyMemoryContext(AgentChatStreamRequest request, Long userId) {
+        return memoryContextFacade.buildFamilyAgentContext(
+                request.getFamilyId(),
+                userId,
+                request.getMemberMessage(),
+                request.userHistoryContents());
+    }
+
     private String normalizeRequestId(String requestId) {
         if (requestId == null || requestId.isBlank()) {
             return "chat-" + UUID.randomUUID();
@@ -110,9 +142,9 @@ public class AgentChatController {
         return trimmed.length() <= 128 ? trimmed : trimmed.substring(0, 128);
     }
 
-    private void enforceRequestSize(Map<String, Object> request) {
+    private void enforceRequestSize(AgentChatStreamPayload request) {
         try {
-            int bytes = objectMapper.writeValueAsBytes(request == null ? Map.of() : request).length;
+            int bytes = objectMapper.writeValueAsBytes(request).length;
             if (bytes > MAX_CHAT_REQUEST_BYTES) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, "Chat request is too large");
             }

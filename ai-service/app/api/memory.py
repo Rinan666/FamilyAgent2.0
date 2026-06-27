@@ -14,6 +14,7 @@ from app.api.memory_contracts import (
 )
 from app.api.memory_models import (
     ExtractMemoryRequest,
+    ExtractMemoryResponse,
     OrganizeDraftRequest,
     PersonaMaterialDraftRequest,
     SaveToolPlanRequest,
@@ -74,14 +75,16 @@ def get_family_skill_registry_item(name: str):
     }
 
 
-@router.post("/extract")
+@router.post("/extract", response_model=ExtractMemoryResponse)
 async def extract_memories(request: ExtractMemoryRequest):
-    return {
-        "success": True,
-        "deprecated": True,
-        "memories": [],
-        "message": "学习记忆功能已下线；请使用家族记忆、每日记录或成长观察。",
-    }
+    return ExtractMemoryResponse(
+        success=True,
+        deprecated=True,
+        degraded=False,
+        memories=[],
+        message="学习记忆功能已下线；请使用家族记忆、每日记录或成长观察。",
+        errorCode=None,
+    )
 
 
 @router.post("/save-plan")

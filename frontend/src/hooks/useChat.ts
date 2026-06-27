@@ -29,6 +29,9 @@ type MemoryContextResult = {
 
 export type UseChatRequestConfig = {
   message: string;
+  familyId?: number | null;
+  targetUserId?: number | null;
+  targetPersonaId?: number | null;
   subject?: string;
   contextLabel?: string;
   memoryContext?: string;
@@ -259,6 +262,7 @@ export function useChat(options: UseChatOptions = {}) {
 
     const defaultRequest: UseChatRequestConfig = {
       message,
+      familyId: activeFamilyId,
       subject,
       contextLabel,
       memoryContext: memoryContext.context,
@@ -283,10 +287,15 @@ export function useChat(options: UseChatOptions = {}) {
     const handle = agentApi.streamChat(
       {
         message: requestConfig.message,
+        familyId: requestConfig.familyId ?? activeFamilyId,
+        targetUserId: requestConfig.targetUserId,
+        targetPersonaId: requestConfig.targetPersonaId,
         history,
         subject: requestConfig.subject || subject,
         contextLabel: requestConfig.contextLabel || contextLabel,
-        memoryContext: requestConfig.memoryContext || '',
+        memoryContext: shouldOmitClientMemoryContext(requestConfig, activeFamilyId, contextLabel)
+          ? ''
+          : requestConfig.memoryContext || '',
         viewerRole,
         targetRole: requestConfig.targetRole || targetRole,
         responseMode: requestConfig.responseMode || responseMode,
@@ -344,6 +353,7 @@ export function useChat(options: UseChatOptions = {}) {
     activeStreamRef.current = handle;
     void persistUserMessageTask;
   }, [
+    activeFamilyId,
     addMessage,
     appendToLastMessage,
     clearActiveStream,
@@ -375,4 +385,18 @@ export function useChat(options: UseChatOptions = {}) {
     discardStreaming,
     reset,
   };
+}
+
+function shouldOmitClientMemoryContext(
+  requestConfig: UseChatRequestConfig,
+  activeFamilyId: number | null | undefined,
+  defaultContextLabel: string,
+) {
+  const contextLabel = requestConfig.contextLabel || defaultContextLabel;
+  const hasFamilyId = Boolean(requestConfig.familyId ?? activeFamilyId);
+  if (!hasFamilyId) return false;
+  if (contextLabel === 'family_memory') return requestConfig.responseMode !== 'quick';
+  if (contextLabel === 'mirror_agent') return Boolean(requestConfig.targetUserId);
+  if (contextLabel === 'persona_member') return Boolean(requestConfig.targetPersonaId);
+  return false;
 }

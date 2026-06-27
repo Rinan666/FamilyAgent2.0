@@ -7,11 +7,11 @@ import logging
 import time
 import uuid
 from contextlib import suppress
-from typing import Any, Literal
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.agents.family_agent import family_agent
 from app.middleware.auth import verify_token
@@ -61,14 +61,40 @@ class AgentChatRequest(BaseModel):
     client_timezone: str = Field(default="", description="Client timezone")
 
 
+class StreamContentEvent(BaseModel):
+    type: Literal["content"] = "content"
+    content: str
+    requestId: str
+
+
+class StreamDoneEvent(BaseModel):
+    type: Literal["done"] = "done"
+    done: bool = True
+    degraded: bool = False
+    requestId: str
+    latencyMs: int | None = None
+
+
+class StreamErrorEvent(BaseModel):
+    type: Literal["error"] = "error"
+    error: bool = True
+    code: str
+    message: str
+    retryable: bool
+    degraded: bool = False
+    requestId: str
+    latencyMs: int | None = None
+
+
+class StreamMetadataEvent(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    type: Literal["metadata"] = "metadata"
+    requestId: str
+
+
 def _sse_data(payload: dict) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-
-
-def _stream_event(event_type: str, **fields: Any) -> dict:
-    payload = {"type": event_type}
-    payload.update(fields)
-    return payload
 
 
 def _request_id_from_header(value: str | None) -> str:
@@ -77,11 +103,22 @@ def _request_id_from_header(value: str | None) -> str:
     return value.strip()[:128]
 
 
-def _with_request_id(payload: dict, request_id: str) -> dict:
-    if request_id and "requestId" not in payload:
-        payload = dict(payload)
-        payload["requestId"] = request_id
-    return payload
+def _event_payload(event: BaseModel) -> dict:
+    return event.model_dump(exclude_none=True)
+
+
+def _metadata_event(payload: dict, request_id: str) -> dict:
+    metadata = dict(payload)
+    metadata["type"] = "metadata"
+    metadata["requestId"] = request_id
+    return _event_payload(StreamMetadataEvent(**metadata))
+
+
+def _content_event(content: object, request_id: str) -> dict:
+    return _event_payload(StreamContentEvent(
+        content=content if isinstance(content, str) else "",
+        requestId=request_id,
+    ))
 
 
 def _stream_error_event(
@@ -92,25 +129,21 @@ def _stream_error_event(
     request_id: str = "",
     latency_ms: int | None = None,
 ) -> dict:
-    payload = _stream_event(
-        "error",
-        error=True,
+    return _event_payload(StreamErrorEvent(
         code=code,
         message=message,
         retryable=retryable,
-        degraded=False,
         requestId=request_id,
-    )
-    if latency_ms is not None:
-        payload["latencyMs"] = latency_ms
-    return payload
+        latencyMs=latency_ms,
+    ))
 
 
 def _stream_done_event(*, degraded: bool = False, request_id: str = "", latency_ms: int | None = None) -> dict:
-    payload = _stream_event("done", done=True, degraded=degraded, requestId=request_id)
-    if latency_ms is not None:
-        payload["latencyMs"] = latency_ms
-    return payload
+    return _event_payload(StreamDoneEvent(
+        degraded=degraded,
+        requestId=request_id,
+        latencyMs=latency_ms,
+    ))
 
 
 def _sse_comment(comment: str) -> str:
@@ -167,11 +200,11 @@ async def stream_chat(request: AgentChatRequest, http_request: Request):
                     client_timezone=request.client_timezone,
                 ):
                     if isinstance(chunk, dict) and chunk.get("type") == "metadata":
-                        await queue.put(_with_request_id(chunk, request_id))
+                        await queue.put(_metadata_event(chunk, request_id))
                     elif isinstance(chunk, dict):
-                        await queue.put(_stream_event("content", content=chunk.get("content", ""), requestId=request_id))
+                        await queue.put(_content_event(chunk.get("content", ""), request_id))
                     else:
-                        await queue.put(_stream_event("content", content=chunk, requestId=request_id))
+                        await queue.put(_content_event(chunk, request_id))
 
                 await queue.put(_stream_done_event(request_id=request_id, latency_ms=stream_latency_ms()))
             except Exception:
