@@ -179,8 +179,8 @@ export function useChat(options: UseChatOptions = {}) {
       const context = formatMemoryContext({
         libraryItems: [],
         familyMemories: familyRecall?.memories || [],
-        diaryEntries: [],
-        growthRecords: [],
+        diaryEntries: familyRecall?.diaries || [],
+        growthRecords: familyRecall?.growthRecords || [],
         sessionSavedMemories: getSessionSavedMemories?.() || [],
         retrievalMode: familyRecall?.retrievalMode,
         embeddingReadyCount: familyRecall?.embeddingReadyCount,

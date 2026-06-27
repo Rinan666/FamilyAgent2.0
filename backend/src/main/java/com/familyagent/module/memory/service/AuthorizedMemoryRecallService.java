@@ -15,7 +15,6 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 @Service
@@ -23,15 +22,6 @@ import java.util.Map;
 public class AuthorizedMemoryRecallService {
 
     private static final int CANDIDATE_MULTIPLIER = 5;
-    private static final List<String> FAMILY_RELEVANCE_TERMS = List.of(
-            "family", "diary", "memory", "growth", "parent", "child", "study",
-            "tooth", "teeth", "dental", "screen", "sleep", "health", "exercise", "emotion",
-            "家族", "家庭", "家人", "家里", "我家", "我们家", "家长", "爸", "妈", "爷", "奶", "外公", "外婆",
-            "孩子", "儿子", "女儿", "孙", "长辈", "亲子", "关系", "沟通", "日记", "记录",
-            "记忆", "经验", "沉淀", "传承", "故事", "成长", "观察", "情绪", "焦虑", "压力",
-            "学习", "作业", "考试", "升学", "志愿", "学校", "选择", "复盘", "后悔", "健康",
-            "牙", "刷牙", "视力", "睡眠", "运动", "体态", "手机", "屏幕", "习惯", "陪伴",
-            "教育", "保存", "记下来", "想起来");
 
     private final DiaryEntryRepository diaryRepository;
     private final MemoryEntryRepository memoryRepository;
@@ -40,6 +30,7 @@ public class AuthorizedMemoryRecallService {
     private final FamilyService familyService;
     private final AuthorizedMemoryRecallSocialSupport socialSupport;
     private final AuthorizedMemoryRecallRankingService rankingService;
+    private final AuthorizedMemoryRecallQueryPolicy queryPolicy;
 
     public AuthorizedMemoryRecallResult recallForFamily(
             Long familyId,
@@ -81,8 +72,8 @@ public class AuthorizedMemoryRecallService {
             String scene,
             int diaryLimit,
             int memoryLimit) {
-        String normalizedQuery = normalize(query);
-        if (!shouldRecallFamilyContext(normalizedQuery, scene)) {
+        String normalizedQuery = queryPolicy.normalize(query);
+        if (!queryPolicy.shouldRecallFamilyContext(normalizedQuery, scene)) {
             return emptyRecall(normalizedQuery, "SKIPPED_UNRELATED_QUERY");
         }
 
@@ -97,8 +88,8 @@ public class AuthorizedMemoryRecallService {
             String query,
             int diaryLimit,
             int memoryLimit) {
-        String normalizedQuery = normalize(query);
-        if (!shouldRecallFamilyContext(normalizedQuery, null)) {
+        String normalizedQuery = queryPolicy.normalize(query);
+        if (!queryPolicy.shouldRecallFamilyContext(normalizedQuery, null)) {
             return emptyRecall(normalizedQuery, "SKIPPED_UNRELATED_QUERY");
         }
 
@@ -107,13 +98,22 @@ public class AuthorizedMemoryRecallService {
     }
 
     private RecallCandidates loadFamilyCandidates(Long familyId, Long viewerUserId, int diaryLimit, int memoryLimit) {
+        int diaryCandidateLimit = Math.max(diaryLimit * CANDIDATE_MULTIPLIER, diaryLimit);
         int memoryCandidateLimit = Math.max(memoryLimit * CANDIDATE_MULTIPLIER, memoryLimit);
+        List<DiaryEntry> diaryCandidates = diaryRepository.findVisibleByFamily(
+                familyId,
+                viewerUserId,
+                diaryCandidateLimit);
         List<MemoryEntry> memoryCandidates = memoryRepository.findActiveFamilyMemories(
                 familyId,
                 viewerUserId,
                 memoryCandidateLimit);
-        socialSupport.attachSocialWeights(memoryCandidates, List.of(), viewerUserId);
-        return new RecallCandidates(List.of(), memoryCandidates, List.of());
+        List<GrowthGuardRecord> growthCandidates = growthRecordRepository.findVisibleByFamily(
+                familyId,
+                viewerUserId,
+                memoryCandidateLimit);
+        socialSupport.attachSocialWeights(memoryCandidates, growthCandidates, viewerUserId);
+        return new RecallCandidates(diaryCandidates, memoryCandidates, growthCandidates);
     }
 
     private RecallCandidates loadMirrorCandidates(
@@ -202,28 +202,6 @@ public class AuthorizedMemoryRecallService {
         metadata.put("mirrorSourceType", sourceType);
         entry.setMetadata(metadata);
         return entry;
-    }
-
-    private static String normalize(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value.toLowerCase(Locale.ROOT)
-                .replaceAll("[\\p{Punct}，。！？；：“”‘’（）【】《》]", " ")
-                .replaceAll("\\s+", " ")
-                .trim();
-    }
-
-    private static boolean shouldRecallFamilyContext(String normalizedQuery, String scene) {
-        if ("FAMILY_AGENT".equalsIgnoreCase(scene == null ? "" : scene.trim())) {
-            return true;
-        }
-        if (normalizedQuery == null || normalizedQuery.isBlank()) {
-            return true;
-        }
-        String compactQuery = normalizedQuery.replace(" ", "");
-        return FAMILY_RELEVANCE_TERMS.stream().anyMatch(term ->
-                normalizedQuery.contains(term) || compactQuery.contains(term));
     }
 
     private static AuthorizedMemoryRecallResult emptyRecall(String query, String retrievalMode) {
