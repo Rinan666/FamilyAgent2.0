@@ -4,10 +4,12 @@ Primary FamilyAgent chat routes.
 import asyncio
 import json
 import logging
+import time
+import uuid
 from contextlib import suppress
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 
@@ -27,6 +29,7 @@ from app.utils.sanitizer import sanitize_text
 
 logger = logging.getLogger("familyagent.ai.api.agent")
 SSE_KEEPALIVE_SECONDS = 10.0
+REQUEST_ID_HEADER = "x-request-id"
 
 router = APIRouter(dependencies=[
     Depends(verify_token),
@@ -68,24 +71,46 @@ def _stream_event(event_type: str, **fields: Any) -> dict:
     return payload
 
 
+def _request_id_from_header(value: str | None) -> str:
+    if not value or not value.strip():
+        return f"ai-{uuid.uuid4()}"
+    return value.strip()[:128]
+
+
+def _with_request_id(payload: dict, request_id: str) -> dict:
+    if request_id and "requestId" not in payload:
+        payload = dict(payload)
+        payload["requestId"] = request_id
+    return payload
+
+
 def _stream_error_event(
     *,
     code: str = "AI_STREAM_UNAVAILABLE",
     message: str = "AI service unavailable, please retry later.",
     retryable: bool = True,
+    request_id: str = "",
+    latency_ms: int | None = None,
 ) -> dict:
-    return _stream_event(
+    payload = _stream_event(
         "error",
         error=True,
         code=code,
         message=message,
         retryable=retryable,
         degraded=False,
+        requestId=request_id,
     )
+    if latency_ms is not None:
+        payload["latencyMs"] = latency_ms
+    return payload
 
 
-def _stream_done_event(*, degraded: bool = False) -> dict:
-    return _stream_event("done", done=True, degraded=degraded)
+def _stream_done_event(*, degraded: bool = False, request_id: str = "", latency_ms: int | None = None) -> dict:
+    payload = _stream_event("done", done=True, degraded=degraded, requestId=request_id)
+    if latency_ms is not None:
+        payload["latencyMs"] = latency_ms
+    return payload
 
 
 def _sse_comment(comment: str) -> str:
@@ -107,8 +132,9 @@ async def _stream_sse_events(queue: asyncio.Queue[dict]):
 
 
 @router.post("/chat/stream")
-async def stream_chat(request: AgentChatRequest):
+async def stream_chat(request: AgentChatRequest, http_request: Request):
     """Primary SSE endpoint for FamilyAgent chat."""
+    request_id = _request_id_from_header(http_request.headers.get(REQUEST_ID_HEADER))
     member_message = sanitize_text(request.member_message)
     enforce_input_guard(member_message)
     memory_context = redact_with_note(request.memory_context).text
@@ -121,6 +147,10 @@ async def stream_chat(request: AgentChatRequest):
 
     async def generate():
         queue: asyncio.Queue[dict] = asyncio.Queue()
+        started_at = time.monotonic()
+
+        def stream_latency_ms() -> int:
+            return max(0, round((time.monotonic() - started_at) * 1000))
 
         async def produce():
             try:
@@ -137,16 +167,17 @@ async def stream_chat(request: AgentChatRequest):
                     client_timezone=request.client_timezone,
                 ):
                     if isinstance(chunk, dict) and chunk.get("type") == "metadata":
-                        await queue.put(chunk)
+                        await queue.put(_with_request_id(chunk, request_id))
                     elif isinstance(chunk, dict):
-                        await queue.put(_stream_event("content", content=chunk.get("content", "")))
+                        await queue.put(_stream_event("content", content=chunk.get("content", ""), requestId=request_id))
                     else:
-                        await queue.put(_stream_event("content", content=chunk))
+                        await queue.put(_stream_event("content", content=chunk, requestId=request_id))
 
-                await queue.put(_stream_done_event())
+                await queue.put(_stream_done_event(request_id=request_id, latency_ms=stream_latency_ms()))
             except Exception:
-                logger.exception("FamilyAgent stream failed")
-                await queue.put(_stream_error_event())
+                latency_ms = stream_latency_ms()
+                logger.exception("FamilyAgent stream failed: requestId=%s latencyMs=%s", request_id, latency_ms)
+                await queue.put(_stream_error_event(request_id=request_id, latency_ms=latency_ms))
 
         task = asyncio.create_task(produce())
         try:
@@ -165,5 +196,6 @@ async def stream_chat(request: AgentChatRequest):
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
+            "X-Request-Id": request_id,
         },
     )

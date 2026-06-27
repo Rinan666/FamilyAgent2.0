@@ -32,6 +32,8 @@ type AIStreamEvent = {
   message?: unknown;
   retryable?: unknown;
   degraded?: unknown;
+  requestId?: unknown;
+  latencyMs?: unknown;
   web_search?: unknown;
 };
 // ============================================

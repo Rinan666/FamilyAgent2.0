@@ -47,6 +47,7 @@ public class AIServiceClient {
 
     private static final int STREAM_BUFFER_SIZE = 1024;
     private static final String INTERNAL_SERVICE_TOKEN_HEADER = "X-Internal-Service-Token";
+    private static final String REQUEST_ID_HEADER = "X-Request-Id";
     private static final String STREAM_ERROR_UNAVAILABLE = """
             data: {"type":"error","error":true,"code":"AI_STREAM_UNAVAILABLE","message":"AI service unavailable, please retry later.","retryable":true,"degraded":false}
 
@@ -74,13 +75,17 @@ public class AIServiceClient {
      * Proxy FamilyAgent chat SSE streams from the AI service.
      */
     @CircuitBreaker(name = "aiService", fallbackMethod = "fallbackProxyChatStream")
-    public void proxyChatStream(Map<String, Object> request, OutputStream downstream, String authorization) {
+    public void proxyChatStream(Map<String, Object> request, OutputStream downstream, String authorization, String requestId) {
+        long startedAt = System.nanoTime();
+        String effectiveRequestId = normalizeRequestId(requestId);
+        boolean success = false;
         try {
             String jsonBody = objectMapper.writeValueAsString(request);
             URI uri = URI.create(baseUrl + "/ai/agent/chat/stream");
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             headers.setAccept(java.util.List.of(MediaType.TEXT_EVENT_STREAM));
+            headers.set(REQUEST_ID_HEADER, effectiveRequestId);
             if (authorization != null && !authorization.isBlank()) {
                 headers.set("Authorization", authorization);
             }
@@ -89,7 +94,8 @@ public class AIServiceClient {
             restTemplate.execute(uri, HttpMethod.POST, httpRequest -> writeStreamRequest(httpRequest, entity, jsonBody), response -> {
                 if (!response.getStatusCode().is2xxSuccessful()) {
                     String errorBody = readResponseBody(response);
-                    log.warn("AI service response error: status={}, body={}", response.getStatusCode().value(), truncateForLog(errorBody));
+                    log.warn("AI service stream response error: requestId={}, status={}, body={}",
+                            effectiveRequestId, response.getStatusCode().value(), truncateForLog(errorBody));
                     throw new BusinessException(
                             ErrorCode.AI_SERVICE_ERROR,
                             "AI service unavailable, please retry later."
@@ -98,14 +104,18 @@ public class AIServiceClient {
                 copyStream(response.getBody(), downstream);
                 return null;
             });
+            success = true;
         } catch (BusinessException e) {
             throw e;
         } catch (HttpStatusCodeException e) {
-            log.warn("AI service response error: status={}, body={}", e.getStatusCode().value(), truncateForLog(e.getResponseBodyAsString()));
+            log.warn("AI service stream response error: requestId={}, status={}, body={}",
+                    effectiveRequestId, e.getStatusCode().value(), truncateForLog(e.getResponseBodyAsString()));
             throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "AI service unavailable, please retry later.");
         } catch (Exception e) {
-            log.error("FamilyAgent chat SSE proxy failed", e);
+            log.error("FamilyAgent chat SSE proxy failed: requestId={}", effectiveRequestId, e);
             throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "AI service unavailable, please retry later.");
+        } finally {
+            recordAiCall("chat_stream", success, elapsed(startedAt));
         }
     }
 
@@ -158,6 +168,30 @@ public class AIServiceClient {
 
     private String newRequestId() {
         return "ai-" + UUID.randomUUID();
+    }
+
+    private String normalizeRequestId(String requestId) {
+        if (requestId == null || requestId.isBlank()) {
+            return newRequestId();
+        }
+        String trimmed = requestId.trim();
+        return trimmed.length() <= 128 ? trimmed : trimmed.substring(0, 128);
+    }
+
+    private String streamErrorEvent(String requestId) {
+        String safeRequestId = normalizeRequestId(requestId);
+        return "data: {\"type\":\"error\",\"error\":true,\"code\":\"AI_STREAM_UNAVAILABLE\","
+                + "\"message\":\"AI service unavailable, please retry later.\",\"retryable\":true,"
+                + "\"degraded\":false,\"requestId\":\"" + escapeJson(safeRequestId) + "\"}\n\n";
+    }
+
+    private String escapeJson(String value) {
+        String text = value == null ? "" : value;
+        return text
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\r", "\\r")
+                .replace("\n", "\\n");
     }
 
     private Duration elapsed(long startedAt) {
@@ -267,10 +301,11 @@ public class AIServiceClient {
         return MemoryExtractionResponse.unavailable();
     }
 
-    private void fallbackProxyChatStream(Map<String, Object> request, OutputStream downstream, String authorization, Exception ex) {
-        log.warn("AI chat stream fallback triggered: {}", ex.getMessage());
+    private void fallbackProxyChatStream(Map<String, Object> request, OutputStream downstream, String authorization, String requestId, Exception ex) {
+        String effectiveRequestId = normalizeRequestId(requestId);
+        log.warn("AI chat stream fallback triggered: requestId={}, error={}", effectiveRequestId, ex.getMessage());
         try {
-            downstream.write(STREAM_ERROR_UNAVAILABLE.getBytes(StandardCharsets.UTF_8));
+            downstream.write(streamErrorEvent(effectiveRequestId).getBytes(StandardCharsets.UTF_8));
             downstream.flush();
         } catch (IOException ignored) {
             // downstream already closed

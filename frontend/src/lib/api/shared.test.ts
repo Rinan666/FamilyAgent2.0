@@ -52,7 +52,7 @@ describe('sseStreamRequest', () => {
     const events: string[] = [];
     vi.stubGlobal('fetch', vi.fn(async () => new Response(
       streamFromChunks([
-        'data: {"type":"error","error":true,"code":"AI_STREAM_UNAVAILABLE","message":"AI service unavailable, please retry later.","retryable":true,"degraded":false}\n\n',
+        'data: {"type":"error","error":true,"code":"AI_STREAM_UNAVAILABLE","message":"AI service unavailable, please retry later.","retryable":true,"degraded":false,"requestId":"chat-test-request"}\n\n',
       ]),
       { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
     )));
@@ -74,8 +74,8 @@ describe('sseStreamRequest', () => {
     const metadataEvents: Record<string, unknown>[] = [];
     vi.stubGlobal('fetch', vi.fn(async () => new Response(
       streamFromChunks([
-        'data: {"type":"metadata","web_search":{"needed":true,"used":false}}\n\n',
-        'data: {"type":"done","done":true}\n\n',
+        'data: {"type":"metadata","web_search":{"needed":true,"used":false},"requestId":"chat-test-request"}\n\n',
+        'data: {"type":"done","done":true,"requestId":"chat-test-request"}\n\n',
       ]),
       { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
     )));
@@ -91,6 +91,6 @@ describe('sseStreamRequest', () => {
 
     await handle.completed;
 
-    expect(metadataEvents).toEqual([{ web_search: { needed: true, used: false } }]);
+    expect(metadataEvents).toEqual([{ web_search: { needed: true, used: false }, requestId: 'chat-test-request' }]);
   });
 });

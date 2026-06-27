@@ -27,6 +27,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -41,6 +42,7 @@ public class AgentChatController {
     private static final int MAX_CHATS_PER_HOUR = 20;
     private static final int MAX_CHAT_REQUEST_BYTES = 32 * 1024;
     private static final DateTimeFormatter HOUR_KEY_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH");
+    private static final String REQUEST_ID_HEADER = "X-Request-Id";
     private static final String STREAM_ERROR_UNAVAILABLE = """
             data: {"type":"error","error":true,"code":"AI_STREAM_UNAVAILABLE","message":"AI service unavailable, please retry later.","retryable":true,"degraded":false}
 
@@ -54,8 +56,10 @@ public class AgentChatController {
     @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public void stream(@Valid @RequestBody AgentChatStreamRequest request,
                        @RequestHeader(value = "Authorization", required = false) String authorization,
+                       @RequestHeader(value = REQUEST_ID_HEADER, required = false) String requestId,
                        HttpServletResponse response) throws IOException {
         Long userId = CurrentUserGuard.currentUserId();
+        String effectiveRequestId = normalizeRequestId(requestId);
         Map<String, Object> aiPayload = request.toAiPayload();
         enforceRequestSize(aiPayload);
         String hourKey = "quota:chat:user:" + userId + ":" + LocalDateTime.now().format(HOUR_KEY_FMT);
@@ -74,9 +78,10 @@ public class AgentChatController {
         response.setHeader("Cache-Control", "no-cache");
         response.setHeader("Connection", "keep-alive");
         response.setHeader("X-Accel-Buffering", "no");
+        response.setHeader(REQUEST_ID_HEADER, effectiveRequestId);
 
         try (OutputStream outputStream = response.getOutputStream()) {
-            aiServiceClient.proxyChatStream(aiPayload, outputStream, authorization);
+            aiServiceClient.proxyChatStream(aiPayload, outputStream, authorization, effectiveRequestId);
         } catch (BusinessException e) {
             if (!response.isCommitted()) {
                 response.resetBuffer();
@@ -92,9 +97,17 @@ public class AgentChatController {
                 return;
             }
 
-            log.warn("FamilyAgent chat stream failed after response committed: {}", e.getMessage());
-            writeErrorEvent(response.getOutputStream(), e.getMessage());
+            log.warn("FamilyAgent chat stream failed after response committed: requestId={}, error={}", effectiveRequestId, e.getMessage());
+            writeErrorEvent(response.getOutputStream(), effectiveRequestId);
         }
+    }
+
+    private String normalizeRequestId(String requestId) {
+        if (requestId == null || requestId.isBlank()) {
+            return "chat-" + UUID.randomUUID();
+        }
+        String trimmed = requestId.trim();
+        return trimmed.length() <= 128 ? trimmed : trimmed.substring(0, 128);
     }
 
     private void enforceRequestSize(Map<String, Object> request) {
@@ -108,13 +121,28 @@ public class AgentChatController {
         }
     }
 
-    private void writeErrorEvent(OutputStream outputStream, String message) {
+    private void writeErrorEvent(OutputStream outputStream, String requestId) {
         try {
-            outputStream.write(STREAM_ERROR_UNAVAILABLE.getBytes(StandardCharsets.UTF_8));
+            outputStream.write(streamErrorEvent(requestId).getBytes(StandardCharsets.UTF_8));
             outputStream.flush();
         } catch (IOException ioException) {
             log.warn("Failed to send downstream SSE error event", ioException);
         }
+    }
+
+    private String streamErrorEvent(String requestId) {
+        return "data: {\"type\":\"error\",\"error\":true,\"code\":\"AI_STREAM_UNAVAILABLE\","
+                + "\"message\":\"AI service unavailable, please retry later.\",\"retryable\":true,"
+                + "\"degraded\":false,\"requestId\":\"" + escapeJson(normalizeRequestId(requestId)) + "\"}\n\n";
+    }
+
+    private String escapeJson(String value) {
+        String text = value == null ? "" : value;
+        return text
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\r", "\\r")
+                .replace("\n", "\\n");
     }
 
     private String toJsonString(String value) {

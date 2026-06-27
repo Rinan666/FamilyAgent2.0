@@ -6,6 +6,15 @@ from pydantic import ValidationError
 from app.api import agent
 
 
+class _Request:
+    def __init__(self, request_id: str):
+        self.headers = {"x-request-id": request_id}
+
+
+def _request(request_id: str) -> _Request:
+    return _Request(request_id)
+
+
 def test_agent_chat_request_rejects_system_history_role():
     with pytest.raises(ValidationError):
         agent.AgentChatRequest(
@@ -43,7 +52,7 @@ async def test_stream_chat_redacts_internal_errors(monkeypatch):
 
     monkeypatch.setattr(agent.family_agent, "chat_stream", broken_chat_stream)
 
-    response = await agent.stream_chat(agent.AgentChatRequest(member_message="hello"))
+    response = await agent.stream_chat(agent.AgentChatRequest(member_message="hello"), _request("agent-test-request"))
     chunks = []
     async for chunk in response.body_iterator:
         chunks.append(chunk.decode("utf-8") if isinstance(chunk, bytes) else chunk)
@@ -51,14 +60,15 @@ async def test_stream_chat_redacts_internal_errors(monkeypatch):
     body = "".join(chunks)
     events = _parse_sse_data(body)
 
-    assert events[-1] == {
-        "type": "error",
-        "error": True,
-        "code": "AI_STREAM_UNAVAILABLE",
-        "message": "AI service unavailable, please retry later.",
-        "retryable": True,
-        "degraded": False,
-    }
+    assert events[-1]["type"] == "error"
+    assert events[-1]["error"] is True
+    assert events[-1]["code"] == "AI_STREAM_UNAVAILABLE"
+    assert events[-1]["message"] == "AI service unavailable, please retry later."
+    assert events[-1]["retryable"] is True
+    assert events[-1]["degraded"] is False
+    assert events[-1]["requestId"] == "agent-test-request"
+    assert isinstance(events[-1]["latencyMs"], int)
+    assert events[-1]["latencyMs"] >= 0
     assert "secret upstream stack detail" not in body
 
 
@@ -70,15 +80,20 @@ async def test_stream_chat_emits_typed_content_and_done_events(monkeypatch):
 
     monkeypatch.setattr(agent.family_agent, "chat_stream", successful_chat_stream)
 
-    response = await agent.stream_chat(agent.AgentChatRequest(member_message="hello"))
+    response = await agent.stream_chat(agent.AgentChatRequest(member_message="hello"), _request("agent-test-request"))
     chunks = []
     async for chunk in response.body_iterator:
         chunks.append(chunk.decode("utf-8") if isinstance(chunk, bytes) else chunk)
 
     events = _parse_sse_data("".join(chunks))
 
-    assert events == [
-        {"type": "metadata", "response_mode": "think"},
-        {"type": "content", "content": "hello"},
-        {"type": "done", "done": True, "degraded": False},
+    assert events[:2] == [
+        {"type": "metadata", "response_mode": "think", "requestId": "agent-test-request"},
+        {"type": "content", "content": "hello", "requestId": "agent-test-request"},
     ]
+    assert events[2]["type"] == "done"
+    assert events[2]["done"] is True
+    assert events[2]["degraded"] is False
+    assert events[2]["requestId"] == "agent-test-request"
+    assert isinstance(events[2]["latencyMs"], int)
+    assert events[2]["latencyMs"] >= 0

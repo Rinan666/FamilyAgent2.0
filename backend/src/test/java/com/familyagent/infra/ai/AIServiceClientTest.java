@@ -149,19 +149,22 @@ class AIServiceClientTest {
     void proxyChatStream_shouldForwardRawSseFramesAndHeaders() throws Exception {
         AtomicReference<String> acceptHeader = new AtomicReference<>();
         AtomicReference<String> authorizationHeader = new AtomicReference<>();
+        AtomicReference<String> requestIdHeader = new AtomicReference<>();
         server = startServer("/ai/agent/chat/stream", exchange -> {
             acceptHeader.set(exchange.getRequestHeaders().getFirst("Accept"));
             authorizationHeader.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            requestIdHeader.set(exchange.getRequestHeaders().getFirst("X-Request-Id"));
             respond(exchange, "text/event-stream", 200, ": connected\n\ndata: {\"content\":\"hello\"}\n\ndata: {\"done\":true}\n\n");
         });
 
         AIServiceClient client = createClient("secret-token");
         ByteArrayOutputStream downstream = new ByteArrayOutputStream();
 
-        client.proxyChatStream(Map.of("member_message", "tell me one thing"), downstream, "Bearer demo-token");
+        client.proxyChatStream(Map.of("member_message", "tell me one thing"), downstream, "Bearer demo-token", "chat-test-request");
 
         assertEquals("text/event-stream", acceptHeader.get());
         assertEquals("Bearer demo-token", authorizationHeader.get());
+        assertEquals("chat-test-request", requestIdHeader.get());
         assertEquals(": connected\n\ndata: {\"content\":\"hello\"}\n\ndata: {\"done\":true}\n\n",
                 downstream.toString(StandardCharsets.UTF_8));
     }
@@ -176,7 +179,7 @@ class AIServiceClientTest {
         ByteArrayOutputStream downstream = new ByteArrayOutputStream();
 
         assertThrows(RuntimeException.class, () ->
-                client.proxyChatStream(Map.of("member_message", "tell me one thing"), downstream, "Bearer demo-token"));
+                client.proxyChatStream(Map.of("member_message", "tell me one thing"), downstream, "Bearer demo-token", "chat-error-request"));
 
         assertEquals("", downstream.toString(StandardCharsets.UTF_8));
     }
