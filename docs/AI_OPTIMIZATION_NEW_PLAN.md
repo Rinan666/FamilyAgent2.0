@@ -201,7 +201,33 @@ AI 安全地基已经比较稳，但还没有形成真正的 Harness：
 
 ### Phase 1：轻型 Agent Harness 骨架
 
-状态：当前推荐立即执行。
+状态：进行中，约 75%。推荐第一刀已完成，尚未把现有 Agent 业务入口迁入统一 executor。
+
+最近进度：
+
+- 2026-06-29：完成后端轻型 harness 第一刀，提交 `12f5d61c Add lightweight agent harness foundation`。
+- 2026-06-29：拆分 `AgentToolExecutor` 协作职责，提交 `be5dd77b Split agent tool executor collaborators`。
+
+已完成：
+
+1. `AgentTool`。
+2. `AgentToolDescriptor`。
+3. `AgentToolRegistry`。
+4. `AgentToolExecutor`。
+5. `AgentToolPermissionGate`。
+6. `AgentToolInputValidator`。
+7. `AgentToolErrorMapper`。
+8. `AgentToolDescriptorFactory`。
+9. `AgentToolCallRequest` / `AgentToolCallResult`。
+10. `agent_tool_calls` 最小审计表。
+11. `recall_family_memory` 只读工具。
+12. 工具权限拒绝、输入错误、未知工具、审计摘要、只读工具 Facade 调用测试。
+
+待完成：
+
+1. 让至少一个实际 Agent 调用入口通过 `AgentToolExecutor` 调用 `recall_family_memory`，而不是只存在可调用骨架。
+2. 为“工具不能绕过 registry 执行”补更明确的工程约束，例如只暴露 executor 给上层 use case，工具实现不被 Controller / Service 直接注入调用。
+3. 根据实际接入路径补充集成级测试，验证真实调用链必经 permission gate 与 audit。
 
 目标：建立 Agent 工具声明、注册、权限、执行和审计的最小闭环。
 
@@ -287,11 +313,11 @@ AI 安全地基已经比较稳，但还没有形成真正的 Harness：
 
 验收标准：
 
-- 工具不能绕过 registry 执行。
-- 工具执行前必经 permission gate。
-- 每次工具调用都有审计记录。
-- 只读工具失败返回结构化错误，不伪装成普通 assistant 文本。
-- 不破坏当前可信上下文与授权召回边界。
+- [进行中] 工具不能绕过 registry 执行。基础 registry / executor 已完成，但真实业务入口尚未迁入 executor。
+- [已完成] 工具执行前必经 permission gate。已有 `AgentToolExecutorTest` 覆盖拒绝路径。
+- [已完成] 每次 executor 工具调用都有审计记录。已有 `AgentToolAuditServiceTest` 覆盖不落原始隐私输入。
+- [已完成] 只读工具失败返回结构化错误，不伪装成普通 assistant 文本。已有未知工具、输入错误、权限拒绝、执行异常映射。
+- [已完成] 不破坏当前可信上下文与授权召回边界。`recall_family_memory` 复用 `AgentMemoryContextFacade`。
 
 ---
 
