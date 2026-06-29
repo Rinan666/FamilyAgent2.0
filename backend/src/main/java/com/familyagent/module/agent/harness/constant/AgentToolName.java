@@ -1,0 +1,15 @@
+package com.familyagent.module.agent.harness.constant;
+
+public enum AgentToolName {
+    RECALL_FAMILY_MEMORY("recall_family_memory");
+
+    private final String value;
+
+    AgentToolName(String value) {
+        this.value = value;
+    }
+
+    public String value() {
+        return value;
+    }
+}

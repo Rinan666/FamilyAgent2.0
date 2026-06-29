@@ -2,6 +2,7 @@ package com.familyagent.module.agent.harness.tool;
 
 import com.familyagent.module.agent.harness.AgentRunContext;
 import com.familyagent.module.agent.harness.constant.AgentToolConfirmationRequirement;
+import com.familyagent.module.agent.harness.constant.AgentToolName;
 import com.familyagent.module.agent.harness.constant.AgentToolSideEffect;
 import com.familyagent.module.agent.harness.dto.RecallFamilyMemoryInput;
 import com.familyagent.module.agent.harness.dto.RecallFamilyMemoryOutput;
@@ -43,7 +44,7 @@ class RecallFamilyMemoryToolTest {
         RecallFamilyMemoryOutput output = tool.execute(context, input);
 
         assertEquals("family_memory_hits:\n1. bedtime", output.context());
-        assertEquals(RecallFamilyMemoryTool.NAME, tool.descriptor().name());
+        assertEquals(AgentToolName.RECALL_FAMILY_MEMORY.value(), tool.descriptor().name());
         assertEquals(AgentToolSideEffect.READ_ONLY, tool.descriptor().sideEffect());
         assertEquals(AgentToolConfirmationRequirement.NOT_REQUIRED, tool.descriptor().confirmationRequirement());
         verify(memoryContextFacade).buildFamilyAgentContext(

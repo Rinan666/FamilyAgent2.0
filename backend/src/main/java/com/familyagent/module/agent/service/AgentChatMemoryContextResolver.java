@@ -1,0 +1,68 @@
+package com.familyagent.module.agent.service;
+
+import com.familyagent.module.agent.dto.AgentChatStreamRequest;
+import com.familyagent.module.agent.harness.AgentRunContext;
+import com.familyagent.module.agent.harness.AgentToolExecutor;
+import com.familyagent.module.agent.harness.constant.AgentToolName;
+import com.familyagent.module.agent.harness.dto.AgentToolCallRequest;
+import com.familyagent.module.agent.harness.dto.AgentToolCallResult;
+import com.familyagent.module.agent.harness.dto.RecallFamilyMemoryInput;
+import com.familyagent.module.agent.harness.dto.RecallFamilyMemoryOutput;
+import com.familyagent.module.family.facade.AgentPersonaContextFacade;
+import com.familyagent.module.mirror.facade.AgentMirrorContextFacade;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+/**
+ * Resolves trusted memory context for Agent chat requests.
+ */
+@Component
+@RequiredArgsConstructor
+public class AgentChatMemoryContextResolver {
+
+    private final AgentToolExecutor toolExecutor;
+    private final AgentMirrorContextFacade mirrorContextFacade;
+    private final AgentPersonaContextFacade personaContextFacade;
+
+    public String resolve(AgentChatStreamRequest request, Long viewerUserId, String requestId) {
+        if (request.shouldUseServerMirrorContext()) {
+            return mirrorContextFacade.buildMirrorAgentContext(
+                    request.getFamilyId(),
+                    request.getTargetUserId(),
+                    request.getMemberMessage());
+        }
+        if (request.shouldUseServerPersonaContext()) {
+            String personaContext = personaContextFacade.buildPersonaAgentContext(
+                    request.getFamilyId(),
+                    request.getTargetPersonaId());
+            if (!request.isThinkMode()) {
+                return personaContext;
+            }
+            String familyContext = buildFamilyMemoryContext(request, viewerUserId, requestId);
+            return familyContext.isBlank() ? personaContext : personaContext + "\n\nfamily_visible_reference:\n" + familyContext;
+        }
+        if (!request.shouldUseServerFamilyMemoryContext()) {
+            return request.getMemoryContext();
+        }
+        return buildFamilyMemoryContext(request, viewerUserId, requestId);
+    }
+
+    private String buildFamilyMemoryContext(AgentChatStreamRequest request, Long viewerUserId, String requestId) {
+        AgentRunContext context = new AgentRunContext(
+                requestId,
+                request.getFamilyId(),
+                viewerUserId,
+                null,
+                request.getKnowledgePoint(),
+                request.getSubject(),
+                "family_memory");
+        RecallFamilyMemoryInput input = new RecallFamilyMemoryInput(
+                request.getMemberMessage(),
+                request.userHistoryContents());
+        AgentToolCallResult<RecallFamilyMemoryOutput> result = toolExecutor.execute(new AgentToolCallRequest<>(
+                AgentToolName.RECALL_FAMILY_MEMORY.value(),
+                context,
+                input));
+        return result.success() && result.data() != null ? result.data().context() : "";
+    }
+}
