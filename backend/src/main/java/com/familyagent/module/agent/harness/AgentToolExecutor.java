@@ -1,7 +1,6 @@
 package com.familyagent.module.agent.harness;
 
 import com.familyagent.common.exception.BusinessException;
-import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.agent.harness.constant.AgentToolCallStatus;
 import com.familyagent.module.agent.harness.constant.AgentToolConfirmationRequirement;
 import com.familyagent.module.agent.harness.constant.AgentToolErrorCode;
@@ -23,6 +22,9 @@ public class AgentToolExecutor {
     private final AgentToolRegistry registry;
     private final AgentToolPermissionGate permissionGate;
     private final AgentToolAuditService auditService;
+    private final AgentToolInputValidator inputValidator;
+    private final AgentToolErrorMapper errorMapper;
+    private final AgentToolDescriptorFactory descriptorFactory;
 
     @Transactional
     public <I, O> AgentToolCallResult<O> execute(AgentToolCallRequest<I> request) {
@@ -37,7 +39,7 @@ public class AgentToolExecutor {
         try {
             rawTool = registry.require(request.toolName());
         } catch (BusinessException e) {
-            auditService.record(request.context(), unknownDescriptor(request.toolName()), request.input(),
+            auditService.record(request.context(), descriptorFactory.unknown(request.toolName()), request.input(),
                     AgentToolCallStatus.FAILED,
                     AgentToolErrorCode.TOOL_NOT_FOUND.code());
             return AgentToolCallResult.failure(
@@ -49,7 +51,7 @@ public class AgentToolExecutor {
 
         AgentToolDescriptor descriptor = rawTool.descriptor();
         try {
-            validateInput(rawTool, request.input());
+            inputValidator.validate(rawTool, request.input());
             permissionGate.assertAllowed(request.context(), descriptor, request.input());
             if (descriptor.confirmationRequirement() == AgentToolConfirmationRequirement.REQUIRED) {
                 auditService.record(request.context(), descriptor, request.input(),
@@ -68,10 +70,8 @@ public class AgentToolExecutor {
             auditService.record(request.context(), descriptor, request.input(), AgentToolCallStatus.SUCCEEDED, null);
             return AgentToolCallResult.success(output);
         } catch (BusinessException e) {
-            String errorCode = businessErrorCode(e);
-            AgentToolCallStatus status = e.getCode() == ErrorCode.FORBIDDEN.getCode()
-                    ? AgentToolCallStatus.DENIED
-                    : AgentToolCallStatus.FAILED;
+            String errorCode = errorMapper.errorCode(e);
+            AgentToolCallStatus status = errorMapper.status(e);
             auditService.record(request.context(), descriptor, request.input(), status, errorCode);
             return AgentToolCallResult.failure(status, errorCode, e.getMessage(), false);
         } catch (RuntimeException e) {
@@ -85,34 +85,5 @@ public class AgentToolExecutor {
                     "Agent tool execution failed",
                     true);
         }
-    }
-
-    private void validateInput(AgentTool<?, ?> tool, Object input) {
-        if (input == null || !tool.inputType().isInstance(input)) {
-            throw new BusinessException(
-                    AgentToolErrorCode.INVALID_INPUT.businessCode(),
-                    "Agent tool input type is invalid");
-        }
-    }
-
-    private String businessErrorCode(BusinessException e) {
-        if (e.getCode() == AgentToolErrorCode.INVALID_INPUT.businessCode()) {
-            return AgentToolErrorCode.INVALID_INPUT.code();
-        }
-        if (e.getCode() == ErrorCode.FORBIDDEN.getCode()) {
-            return AgentToolErrorCode.PERMISSION_DENIED.code();
-        }
-        return "BUSINESS_" + e.getCode();
-    }
-
-    private AgentToolDescriptor unknownDescriptor(String toolName) {
-        return new AgentToolDescriptor(
-                toolName,
-                "Unknown Agent tool",
-                Object.class,
-                Object.class,
-                com.familyagent.module.agent.harness.constant.AgentToolSideEffect.READ_ONLY,
-                AgentToolConfirmationRequirement.NOT_REQUIRED,
-                com.familyagent.module.agent.harness.constant.AgentToolPrivacyLevel.INTERNAL_ONLY);
     }
 }

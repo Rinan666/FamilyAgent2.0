@@ -31,6 +31,9 @@ class AgentToolExecutorTest {
     @Mock private AgentToolRegistry registry;
     @Mock private AgentToolPermissionGate permissionGate;
     @Mock private AgentToolAuditService auditService;
+    private final AgentToolInputValidator inputValidator = new AgentToolInputValidator();
+    private final AgentToolErrorMapper errorMapper = new AgentToolErrorMapper();
+    private final AgentToolDescriptorFactory descriptorFactory = new AgentToolDescriptorFactory();
 
     private final AgentRunContext context = new AgentRunContext(
             "req-1",
@@ -46,7 +49,7 @@ class AgentToolExecutorTest {
         EchoTool tool = new EchoTool();
         EchoInput input = new EchoInput("hello");
         doReturn(tool).when(registry).require(EchoTool.NAME);
-        AgentToolExecutor executor = new AgentToolExecutor(registry, permissionGate, auditService);
+        AgentToolExecutor executor = executor();
 
         AgentToolCallResult<EchoOutput> result = executor.execute(new AgentToolCallRequest<>(
                 EchoTool.NAME,
@@ -67,7 +70,7 @@ class AgentToolExecutorTest {
         doThrow(new BusinessException(ErrorCode.FORBIDDEN, "denied"))
                 .when(permissionGate)
                 .assertAllowed(context, tool.descriptor(), input);
-        AgentToolExecutor executor = new AgentToolExecutor(registry, permissionGate, auditService);
+        AgentToolExecutor executor = executor();
 
         AgentToolCallResult<EchoOutput> result = executor.execute(new AgentToolCallRequest<>(
                 EchoTool.NAME,
@@ -89,7 +92,7 @@ class AgentToolExecutorTest {
     void execute_invalidInput_returnsStructuredFailureAndWritesAudit() {
         EchoTool tool = new EchoTool();
         doReturn(tool).when(registry).require(EchoTool.NAME);
-        AgentToolExecutor executor = new AgentToolExecutor(registry, permissionGate, auditService);
+        AgentToolExecutor executor = executor();
 
         AgentToolCallResult<EchoOutput> result = executor.execute(new AgentToolCallRequest<>(
                 EchoTool.NAME,
@@ -111,7 +114,7 @@ class AgentToolExecutorTest {
     void execute_unknownTool_returnsStructuredFailureAndWritesAudit() {
         when(registry.require("missing"))
                 .thenThrow(new BusinessException(ErrorCode.NOT_FOUND, "missing"));
-        AgentToolExecutor executor = new AgentToolExecutor(registry, permissionGate, auditService);
+        AgentToolExecutor executor = executor();
 
         AgentToolCallResult<EchoOutput> result = executor.execute(new AgentToolCallRequest<>(
                 "missing",
@@ -128,6 +131,16 @@ class AgentToolExecutorTest {
                 eq(AgentToolCallStatus.FAILED),
                 eq(AgentToolErrorCode.TOOL_NOT_FOUND.code()));
         assertEquals("missing", descriptorCaptor.getValue().name());
+    }
+
+    private AgentToolExecutor executor() {
+        return new AgentToolExecutor(
+                registry,
+                permissionGate,
+                auditService,
+                inputValidator,
+                errorMapper,
+                descriptorFactory);
     }
 
     private record EchoInput(String value) {
