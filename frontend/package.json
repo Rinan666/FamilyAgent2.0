@@ -35,9 +35,12 @@
     "autoprefixer": "^10.4.0",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.9",
-    "postcss": "^8.4.0",
+    "postcss": "8.5.15",
     "prettier": "^3.2.0",
     "typescript": "^5.4.0",
     "vitest": "^4.1.9"
+  },
+  "overrides": {
+    "postcss": "$postcss"
   }
 }
