@@ -86,3 +86,4 @@ resilience4j:
         retryExceptions:
           - java.io.IOException
           - org.springframework.web.client.ResourceAccessException
+          - com.familyagent.common.exception.BusinessException

@@ -248,8 +248,8 @@ public class AIServiceClient {
     /**
      * Extract memory candidates from a finished Agent session.
      */
-    @CircuitBreaker(name = "aiService", fallbackMethod = "fallbackExtractMemories")
-    @Retry(name = "aiService")
+    @CircuitBreaker(name = "aiService")
+    @Retry(name = "aiService", fallbackMethod = "fallbackExtractMemories")
     public MemoryExtractionResponse extractMemories(MemoryExtractionRequest request, String authorization) {
         long startedAt = System.nanoTime();
         String requestId = newRequestId();
@@ -298,8 +298,8 @@ public class AIServiceClient {
     /**
      * Generate an embedding vector for backend-owned memory indexing.
      */
-    @CircuitBreaker(name = "aiService", fallbackMethod = "fallbackEmbedText")
-    @Retry(name = "aiService")
+    @CircuitBreaker(name = "aiService")
+    @Retry(name = "aiService", fallbackMethod = "fallbackEmbedText")
     public EmbeddingResponse embedText(EmbeddingRequest request) {
         long startedAt = System.nanoTime();
         String requestId = newRequestId();
