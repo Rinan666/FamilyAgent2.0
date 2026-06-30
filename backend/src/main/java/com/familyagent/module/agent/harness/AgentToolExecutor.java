@@ -6,6 +6,7 @@ import com.familyagent.module.agent.harness.constant.AgentToolCallStatus;
 import com.familyagent.module.agent.harness.constant.AgentToolErrorCode;
 import com.familyagent.module.agent.harness.dto.AgentToolCallRequest;
 import com.familyagent.module.agent.harness.dto.AgentToolCallResult;
+import com.familyagent.module.agent.harness.entity.AgentToolConfirmationRecord;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,7 @@ public class AgentToolExecutor {
     private final AgentToolAuditService auditService;
     private final AgentToolInputValidator inputValidator;
     private final AgentConfirmationPolicy confirmationPolicy;
+    private final AgentToolConfirmationService confirmationService;
     private final AgentToolErrorMapper errorMapper;
     private final AgentToolDescriptorFactory descriptorFactory;
 
@@ -57,14 +59,15 @@ public class AgentToolExecutor {
             AgentConfirmationStatus confirmationStatus = confirmationPolicy.evaluate(
                     request.context(), descriptor, request.input());
             if (confirmationStatus == AgentConfirmationStatus.REQUIRED) {
+                AgentToolConfirmationRecord confirmation = confirmationService.createRequired(
+                        request.context(), descriptor, request.input());
                 auditService.record(request.context(), descriptor, request.input(),
                         AgentToolCallStatus.CONFIRMATION_REQUIRED,
                         AgentToolErrorCode.CONFIRMATION_REQUIRED.code());
-                return AgentToolCallResult.failure(
-                        AgentToolCallStatus.CONFIRMATION_REQUIRED,
+                return AgentToolCallResult.confirmationRequired(
                         AgentToolErrorCode.CONFIRMATION_REQUIRED.code(),
                         "Agent tool requires confirmation",
-                        false);
+                        confirmation.getId());
             }
 
             @SuppressWarnings("unchecked")

@@ -17,7 +17,9 @@ import static org.mockito.Mockito.verify;
 class AgentToolAuditServiceTest {
 
     private final AgentToolCallRecordRepository repository = mock(AgentToolCallRecordRepository.class);
-    private final AgentToolAuditService auditService = new AgentToolAuditService(repository);
+    private final AgentToolAuditService auditService = new AgentToolAuditService(
+            repository,
+            new AgentToolInputSummarizer());
 
     @Test
     void record_writesMinimalNonRawInputSummary() {

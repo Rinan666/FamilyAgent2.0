@@ -10,6 +10,7 @@ import com.familyagent.module.agent.harness.constant.AgentToolPrivacyLevel;
 import com.familyagent.module.agent.harness.constant.AgentToolSideEffect;
 import com.familyagent.module.agent.harness.dto.AgentToolCallRequest;
 import com.familyagent.module.agent.harness.dto.AgentToolCallResult;
+import com.familyagent.module.agent.harness.entity.AgentToolConfirmationRecord;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -33,6 +34,7 @@ class AgentToolExecutorTest {
     @Mock private AgentToolPermissionGate permissionGate;
     @Mock private AgentToolAuditService auditService;
     @Mock private AgentConfirmationPolicy confirmationPolicy;
+    @Mock private AgentToolConfirmationService confirmationService;
     private final AgentToolInputValidator inputValidator = new AgentToolInputValidator();
     private final AgentToolErrorMapper errorMapper = new AgentToolErrorMapper();
     private final AgentToolDescriptorFactory descriptorFactory = new AgentToolDescriptorFactory();
@@ -99,6 +101,10 @@ class AgentToolExecutorTest {
         doReturn(tool).when(registry).require(EchoTool.NAME);
         when(confirmationPolicy.evaluate(context, tool.descriptor(), input))
                 .thenReturn(AgentConfirmationStatus.REQUIRED);
+        AgentToolConfirmationRecord confirmation = new AgentToolConfirmationRecord();
+        confirmation.setId(55L);
+        when(confirmationService.createRequired(context, tool.descriptor(), input))
+                .thenReturn(confirmation);
         AgentToolExecutor executor = executor();
 
         AgentToolCallResult<EchoOutput> result = executor.execute(new AgentToolCallRequest<>(
@@ -109,6 +115,8 @@ class AgentToolExecutorTest {
         assertFalse(result.success());
         assertEquals(AgentToolCallStatus.CONFIRMATION_REQUIRED, result.status());
         assertEquals(AgentToolErrorCode.CONFIRMATION_REQUIRED.code(), result.errorCode());
+        assertEquals(55L, result.confirmationId());
+        verify(confirmationService).createRequired(context, tool.descriptor(), input);
         verify(auditService).record(
                 context,
                 tool.descriptor(),
@@ -169,6 +177,7 @@ class AgentToolExecutorTest {
                 auditService,
                 inputValidator,
                 confirmationPolicy,
+                confirmationService,
                 errorMapper,
                 descriptorFactory);
     }

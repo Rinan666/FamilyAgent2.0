@@ -370,7 +370,7 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
 
 ### Phase 2：写入工具与确认门
 
-状态：进行中。已完成确认状态与确认策略骨架，下一步再接入持久化确认记录和首个写入工具。
+状态：进行中。已完成确认状态、确认策略和持久化确认记录骨架，下一步接入首个写入工具。
 
 目标：把写日记、写家庭记忆、写成长观察纳入统一工具执行器。
 
@@ -380,6 +380,9 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
 - 2026-06-30：新增 `AgentConfirmationPolicy`，将确认判断从 `AgentToolExecutor` 拆为独立 Spring 协作类，executor 继续只负责编排流程。
 - 2026-06-30：`AgentToolExecutor` 已通过 confirmation policy 返回结构化 `CONFIRMATION_REQUIRED`，不会直接执行需要确认的工具。
 - 2026-06-30：新增 `AgentConfirmationPolicyTest`，并补充 executor confirmation-required 测试。
+- 2026-06-30：新增 `agent_tool_confirmations` 表、`AgentToolConfirmationRecord`、Repository 与 `AgentToolConfirmationService`，确认记录包含 `idempotencyKey`、状态、过期时间和脱敏输入摘要。
+- 2026-06-30：抽出 `AgentToolInputSummarizer`，审计记录与确认记录共用脱敏摘要逻辑，避免写入原始家庭隐私内容。
+- 2026-06-30：executor 在确认策略返回 `REQUIRED` 时会创建 pending confirmation，并在结构化结果中返回 `confirmationId`，仍不会执行写入工具。
 
 工作项：
 
@@ -390,7 +393,7 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
    - `APPROVED`
    - `REJECTED`
    - `EXPIRED`
-3. 新增 `AgentToolConfirmation` DTO 或表。
+3. [已完成] 新增 `AgentToolConfirmation` DTO 或表。
 4. 接入写入工具：
    - `create_diary_entry`
    - `create_family_memory`
