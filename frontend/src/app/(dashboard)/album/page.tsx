@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image as ImageIcon, Images, RefreshCw, Trash2, Upload, UserRound, UsersRound, X } from 'lucide-react';
+import { AI_PROXY_ROUTES, aiProxyUrl } from '@/lib/api/aiProxyBoundary';
 import { photoApi } from '@/lib/api/photos';
 import { useViewerRole } from '@/hooks/useViewerRole';
 import {
@@ -118,7 +119,7 @@ function validateImageFiles(files: File[], minFiles = 1) {
 async function clusterByUrls(urls: string[], photoIds: number[]): Promise<PhotoClusterResult> {
   const token = getToken();
 
-  const res = await fetch('/ai-proxy/dip/faces/cluster-by-urls', {
+  const res = await fetch(aiProxyUrl(AI_PROXY_ROUTES.DIP_FACES_CLUSTER_BY_URLS), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

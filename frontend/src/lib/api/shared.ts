@@ -15,6 +15,7 @@ import type {
   ChatSessionMessagePage,
   ChatSessionSummary,
 } from '@/types';
+import { aiProxyUrl, type AiProxyRoute } from './aiProxyBoundary';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
 export type AIStreamHandle = {
@@ -324,9 +325,9 @@ export function sessionMessageItemToChatMessage(item: ChatSessionMessageItem): C
     metadata: item.metadata as ChatMessage['metadata'],
   };
 }
-export async function aiRequest<T>(path: string, body: unknown): Promise<T> {
+export async function aiRequest<T>(path: AiProxyRoute, body: unknown): Promise<T> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-  const res = await fetch(`/ai-proxy${path}`, {
+  const res = await fetch(aiProxyUrl(path), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json;charset=UTF-8',
@@ -345,12 +346,12 @@ export async function aiRequest<T>(path: string, body: unknown): Promise<T> {
 }
 
 // File upload requests proxied to the Python AI service.
-export async function aiFileRequest<T>(path: string, file: File): Promise<T> {
+export async function aiFileRequest<T>(path: AiProxyRoute, file: File): Promise<T> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
   const formData = new FormData();
   formData.append('file', file);
 
-  const res = await fetch(`/ai-proxy${path}`, {
+  const res = await fetch(aiProxyUrl(path), {
     method: 'POST',
     headers: {
       ...(token ? { Authorization: token } : {}),

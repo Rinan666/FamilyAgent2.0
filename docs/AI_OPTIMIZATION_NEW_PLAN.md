@@ -116,6 +116,7 @@ AI 安全地基已经比较稳，但还没有形成真正的 Harness：
 10. requestId 可以串起请求，但不能描述一次 Agent run 内部的 tool / skill / LLM 轨迹。
 11. Eval 还没有成为 AI 变更门禁。
 12. prompt、schema、skill 定义缺少统一版本化和回归报告。
+13. Python AI service 入口还没有完全收敛。后端业务链路主要通过 `AIServiceClient` 调用 Python AI service，但前端仍存在 `/ai-proxy/*` 直连代理；Agent、家庭记忆、写入、权限相关能力必须避免绕过 Java Backend。
 
 ---
 
@@ -165,6 +166,16 @@ AI 安全地基已经比较稳，但还没有形成真正的 Harness：
 - 稳定契约优先强类型 DTO / VO / record。
 - 不把新逻辑继续堆进热点大 Service。
 
+### 4.4 AI service 入口收敛
+
+Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业务主控后端。
+
+- 后端业务 AI 能力统一通过 `AIServiceClient` 访问 Python AI service。
+- Agent、家庭记忆、日记、成长观察、权限、确认、审计相关能力不得通过前端 `/ai-proxy/*` 绕过 Java Backend。
+- Python AI runtime 可以负责 prompt、model、planning、tool-call proposal、trace、eval，但真实业务工具执行必须回到 Backend Agent Harness。
+- 前端 `/ai-proxy/*` 只能作为临时或明确标注的非业务主权路径；若能力涉及家庭数据、权限、写入或审计，必须迁入 Java Backend API。
+- 纯媒体处理、文件分析等能力如果暂时保留直连代理，必须单独登记边界、权限假设和迁移策略，避免与 Agent Harness 混用。
+
 ---
 
 ## 5. 分阶段计划
@@ -208,6 +219,7 @@ AI 安全地基已经比较稳，但还没有形成真正的 Harness：
 - 2026-06-29：完成后端轻型 harness 第一刀，提交 `12f5d61c Add lightweight agent harness foundation`。
 - 2026-06-29：拆分 `AgentToolExecutor` 协作职责，提交 `be5dd77b Split agent tool executor collaborators`。
 - 2026-06-29：将 `AgentChatController` 的 family-memory 上下文解析迁入 `AgentToolExecutor -> recall_family_memory`，并集中工具名、隐藏工具实现类。
+- 2026-06-29：明确 Python AI service 入口收敛原则：业务 AI 调用走 `AIServiceClient`，Agent / 家庭数据 / 写入 / 审计能力不得经前端 `/ai-proxy/*` 绕过 Backend Harness。
 
 已完成：
 
@@ -316,6 +328,43 @@ AI 安全地基已经比较稳，但还没有形成真正的 Harness：
 - [已完成] 每次 executor 工具调用都有审计记录。已有 `AgentToolAuditServiceTest` 覆盖不落原始隐私输入。
 - [已完成] 只读工具失败返回结构化错误，不伪装成普通 assistant 文本。已有未知工具、输入错误、权限拒绝、执行异常映射。
 - [已完成] 不破坏当前可信上下文与授权召回边界。`recall_family_memory` 复用 `AgentMemoryContextFacade`。
+
+---
+
+### Phase 1.5：AI service 入口收敛与双层 Harness 边界
+
+状态：已完成。前端 `/ai-proxy/*` 已有显式边界、清单、源码调用集中化和防回退测试；Phase 2 可以在该边界上继续推进写入工具与确认门。
+
+最近进度：
+
+- 2026-06-30：新增 `/ai-proxy/*` 共享边界模块 `frontend/src/lib/api/aiProxyBoundary.ts`，将允许路由集中为 `AI_PROXY_ROUTES` 与 `aiProxyUrl()`。
+- 2026-06-30：Next.js `/ai-proxy/[...path]` 代理已接入同一 boundary resolver，未登记路径、Agent / family / memory 写入 / diary / growth / session / tool 等 Backend-owned 前缀默认返回 `403`。
+- 2026-06-30：前端现有 `/ai-proxy` 调用点已改为共享常量；源码中不再直接散落 `/ai-proxy/...` 调用字符串。
+- 2026-06-30：新增 `docs/AI_PROXY_BOUNDARY_INVENTORY.md`，记录当前 allowlist、Backend-owned 前缀、迁移目标和源码调用点。
+- 2026-06-30：新增 `aiProxyBoundary.test.ts`，覆盖 AI runtime 草稿路由放行、媒体处理放行、Agent / family / memory 写入绕过 Backend 被拒、未知路径默认拒绝。
+- 2026-06-30：补充源码扫描防回退测试，确保前端新增 `/ai-proxy/...` 调用必须集中到 `AI_PROXY_ROUTES` 与 `aiProxyUrl()`。
+- 2026-06-30：盘点 Python AI service 当前入口，并在 `docs/AI_PROXY_BOUNDARY_INVENTORY.md` 中标注 Agent、Embedding、Memory、DIP、Health 路由分类与前端代理结论。
+
+目标：避免 Python AI service、前端代理和 Java Backend 同时形成多套 AI 入口，确保 Backend Agent Harness 与未来 Python AI Runtime Harness 分工清晰。
+
+工作项：
+
+1. 盘点所有 `/ai-proxy/*` 前端调用，按能力分为：
+   - 业务主权路径：Agent、家庭记忆、日记、成长观察、权限、写入、审计。
+   - AI runtime 路径：prompt、LLM、embedding、rerank、eval、trace。
+   - 非业务主权路径：纯媒体处理、文件分析、临时开发工具。
+2. 业务主权路径必须迁入 Java Backend API，再由后端通过 `AIServiceClient` 调 Python AI service。
+3. `AIServiceClient` 继续作为后端访问 Python AI service 的唯一正式客户端边界，不把 Python URL、timeout、fallback、requestId、metrics 分散到业务 Service。
+4. Python AI Runtime Harness 只负责模型运行与工具调用建议；真实工具执行、权限、确认、审计、事务、幂等由 Backend Agent Harness 承担。
+5. 为暂时保留的 `/ai-proxy/*` 能力补充边界说明，明确是否允许访问家庭数据、是否需要鉴权、是否需要迁移到后端。
+6. 新增或调整测试，至少覆盖 Agent / 家庭数据能力不能绕过 Backend Harness 的关键入口。
+
+验收标准：
+
+- [已完成] Agent、Memory、Diary、Growth 等家庭业务 AI 能力没有新增前端直连 Python AI service 的路径。
+- [已完成] 现有 `/ai-proxy/*` 路径有清单、分类和迁移结论。
+- [已完成] 新增 Python AI service 能力时，计划中能明确判断它属于 AI runtime 还是后端业务工具执行。
+- [已完成] Backend Harness 与 Python AI Runtime Harness 的职责边界在文档和代码入口上保持一致。
 
 ---
 
