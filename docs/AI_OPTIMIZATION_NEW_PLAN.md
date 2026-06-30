@@ -370,7 +370,7 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
 
 ### Phase 2：写入工具与确认门
 
-状态：进行中。已完成确认状态、确认策略和持久化确认记录骨架，下一步接入首个写入工具。
+状态：进行中。已完成确认状态、确认策略、持久化确认记录骨架和首个写入工具声明，下一步实现确认审批/拒绝闭环。
 
 目标：把写日记、写家庭记忆、写成长观察纳入统一工具执行器。
 
@@ -383,6 +383,7 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
 - 2026-06-30：新增 `agent_tool_confirmations` 表、`AgentToolConfirmationRecord`、Repository 与 `AgentToolConfirmationService`，确认记录包含 `idempotencyKey`、状态、过期时间和脱敏输入摘要。
 - 2026-06-30：抽出 `AgentToolInputSummarizer`，审计记录与确认记录共用脱敏摘要逻辑，避免写入原始家庭隐私内容。
 - 2026-06-30：executor 在确认策略返回 `REQUIRED` 时会创建 pending confirmation，并在结构化结果中返回 `confirmationId`，仍不会执行写入工具。
+- 2026-06-30：新增 `create_diary_entry` 工具、强类型 `CreateDiaryEntryInput` / `CreateDiaryEntryOutput`，并通过 `AgentDiaryEntryFacade` 隔离 diary 模块 Service；该写入工具默认 `REQUIRED`，经 executor 调用时只生成确认记录。
 
 工作项：
 
@@ -395,7 +396,7 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
    - `EXPIRED`
 3. [已完成] 新增 `AgentToolConfirmation` DTO 或表。
 4. 接入写入工具：
-   - `create_diary_entry`
+   - [已接入确认门] `create_diary_entry`
    - `create_family_memory`
    - `create_growth_guard_record`
 5. 前端保存确认弹窗改为消费统一 confirmation contract。
