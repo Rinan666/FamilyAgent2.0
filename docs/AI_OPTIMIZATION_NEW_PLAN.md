@@ -370,12 +370,21 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
 
 ### Phase 2：写入工具与确认门
 
+状态：进行中。已完成确认状态与确认策略骨架，下一步再接入持久化确认记录和首个写入工具。
+
 目标：把写日记、写家庭记忆、写成长观察纳入统一工具执行器。
+
+最近进度：
+
+- 2026-06-30：新增 `AgentConfirmationStatus`，先定义 `NOT_REQUIRED`、`REQUIRED`、`APPROVED`、`REJECTED`、`EXPIRED` 五种确认状态。
+- 2026-06-30：新增 `AgentConfirmationPolicy`，将确认判断从 `AgentToolExecutor` 拆为独立 Spring 协作类，executor 继续只负责编排流程。
+- 2026-06-30：`AgentToolExecutor` 已通过 confirmation policy 返回结构化 `CONFIRMATION_REQUIRED`，不会直接执行需要确认的工具。
+- 2026-06-30：新增 `AgentConfirmationPolicyTest`，并补充 executor confirmation-required 测试。
 
 工作项：
 
-1. 定义 `AgentConfirmationPolicy`。
-2. 定义确认状态：
+1. [已完成] 定义 `AgentConfirmationPolicy`。
+2. [已完成] 定义确认状态：
    - `NOT_REQUIRED`
    - `REQUIRED`
    - `APPROVED`

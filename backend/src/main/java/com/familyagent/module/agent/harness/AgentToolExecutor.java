@@ -1,8 +1,8 @@
 package com.familyagent.module.agent.harness;
 
 import com.familyagent.common.exception.BusinessException;
+import com.familyagent.module.agent.harness.constant.AgentConfirmationStatus;
 import com.familyagent.module.agent.harness.constant.AgentToolCallStatus;
-import com.familyagent.module.agent.harness.constant.AgentToolConfirmationRequirement;
 import com.familyagent.module.agent.harness.constant.AgentToolErrorCode;
 import com.familyagent.module.agent.harness.dto.AgentToolCallRequest;
 import com.familyagent.module.agent.harness.dto.AgentToolCallResult;
@@ -23,6 +23,7 @@ public class AgentToolExecutor {
     private final AgentToolPermissionGate permissionGate;
     private final AgentToolAuditService auditService;
     private final AgentToolInputValidator inputValidator;
+    private final AgentConfirmationPolicy confirmationPolicy;
     private final AgentToolErrorMapper errorMapper;
     private final AgentToolDescriptorFactory descriptorFactory;
 
@@ -53,7 +54,9 @@ public class AgentToolExecutor {
         try {
             inputValidator.validate(rawTool, request.input());
             permissionGate.assertAllowed(request.context(), descriptor, request.input());
-            if (descriptor.confirmationRequirement() == AgentToolConfirmationRequirement.REQUIRED) {
+            AgentConfirmationStatus confirmationStatus = confirmationPolicy.evaluate(
+                    request.context(), descriptor, request.input());
+            if (confirmationStatus == AgentConfirmationStatus.REQUIRED) {
                 auditService.record(request.context(), descriptor, request.input(),
                         AgentToolCallStatus.CONFIRMATION_REQUIRED,
                         AgentToolErrorCode.CONFIRMATION_REQUIRED.code());

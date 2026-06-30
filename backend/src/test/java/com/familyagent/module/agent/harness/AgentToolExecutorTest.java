@@ -2,6 +2,7 @@ package com.familyagent.module.agent.harness;
 
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
+import com.familyagent.module.agent.harness.constant.AgentConfirmationStatus;
 import com.familyagent.module.agent.harness.constant.AgentToolCallStatus;
 import com.familyagent.module.agent.harness.constant.AgentToolConfirmationRequirement;
 import com.familyagent.module.agent.harness.constant.AgentToolErrorCode;
@@ -31,6 +32,7 @@ class AgentToolExecutorTest {
     @Mock private AgentToolRegistry registry;
     @Mock private AgentToolPermissionGate permissionGate;
     @Mock private AgentToolAuditService auditService;
+    @Mock private AgentConfirmationPolicy confirmationPolicy;
     private final AgentToolInputValidator inputValidator = new AgentToolInputValidator();
     private final AgentToolErrorMapper errorMapper = new AgentToolErrorMapper();
     private final AgentToolDescriptorFactory descriptorFactory = new AgentToolDescriptorFactory();
@@ -49,6 +51,8 @@ class AgentToolExecutorTest {
         EchoTool tool = new EchoTool();
         EchoInput input = new EchoInput("hello");
         doReturn(tool).when(registry).require(EchoTool.NAME);
+        when(confirmationPolicy.evaluate(context, tool.descriptor(), input))
+                .thenReturn(AgentConfirmationStatus.NOT_REQUIRED);
         AgentToolExecutor executor = executor();
 
         AgentToolCallResult<EchoOutput> result = executor.execute(new AgentToolCallRequest<>(
@@ -86,6 +90,31 @@ class AgentToolExecutorTest {
                 input,
                 AgentToolCallStatus.DENIED,
                 AgentToolErrorCode.PERMISSION_DENIED.code());
+    }
+
+    @Test
+    void execute_confirmationRequired_returnsStructuredPendingAndWritesAudit() {
+        EchoTool tool = new EchoTool();
+        EchoInput input = new EchoInput("hello");
+        doReturn(tool).when(registry).require(EchoTool.NAME);
+        when(confirmationPolicy.evaluate(context, tool.descriptor(), input))
+                .thenReturn(AgentConfirmationStatus.REQUIRED);
+        AgentToolExecutor executor = executor();
+
+        AgentToolCallResult<EchoOutput> result = executor.execute(new AgentToolCallRequest<>(
+                EchoTool.NAME,
+                context,
+                input));
+
+        assertFalse(result.success());
+        assertEquals(AgentToolCallStatus.CONFIRMATION_REQUIRED, result.status());
+        assertEquals(AgentToolErrorCode.CONFIRMATION_REQUIRED.code(), result.errorCode());
+        verify(auditService).record(
+                context,
+                tool.descriptor(),
+                input,
+                AgentToolCallStatus.CONFIRMATION_REQUIRED,
+                AgentToolErrorCode.CONFIRMATION_REQUIRED.code());
     }
 
     @Test
@@ -139,6 +168,7 @@ class AgentToolExecutorTest {
                 permissionGate,
                 auditService,
                 inputValidator,
+                confirmationPolicy,
                 errorMapper,
                 descriptorFactory);
     }
