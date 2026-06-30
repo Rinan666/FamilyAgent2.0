@@ -370,7 +370,7 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
 
 ### Phase 2：写入工具与确认门
 
-状态：进行中。已完成确认状态、确认策略、持久化确认记录骨架和首个写入工具声明，下一步实现确认审批/拒绝闭环。
+状态：进行中。已完成确认状态、确认策略、持久化确认记录、确认审批/拒绝状态流转和首个写入工具声明，下一步把确认结果接入前端统一 confirmation contract。
 
 目标：把写日记、写家庭记忆、写成长观察纳入统一工具执行器。
 
@@ -384,6 +384,7 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
 - 2026-06-30：抽出 `AgentToolInputSummarizer`，审计记录与确认记录共用脱敏摘要逻辑，避免写入原始家庭隐私内容。
 - 2026-06-30：executor 在确认策略返回 `REQUIRED` 时会创建 pending confirmation，并在结构化结果中返回 `confirmationId`，仍不会执行写入工具。
 - 2026-06-30：新增 `create_diary_entry` 工具、强类型 `CreateDiaryEntryInput` / `CreateDiaryEntryOutput`，并通过 `AgentDiaryEntryFacade` 隔离 diary 模块 Service；该写入工具默认 `REQUIRED`，经 executor 调用时只生成确认记录。
+- 2026-06-30：新增 `AgentConfirmationDecision` 和确认决策流转，支持 approve / reject / expired / duplicate terminal confirmation 幂等处理，错误用户不能处理他人的 confirmation。
 
 工作项：
 
@@ -405,8 +406,8 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
 验收标准：
 
 - Agent 不能直接执行写入工具，除非确认策略允许。
-- 用户拒绝确认时不写库。
-- 用户重复确认不会重复写入。
+- [已完成状态门] 用户拒绝确认时不写库。
+- [已完成状态门] 用户重复确认不会重复写入。
 - 每次写入工具记录 idempotency key。
 - 写入来源能追溯到 tool call record。
 

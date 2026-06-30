@@ -1,5 +1,8 @@
 package com.familyagent.module.agent.harness;
 
+import com.familyagent.common.exception.BusinessException;
+import com.familyagent.common.response.ErrorCode;
+import com.familyagent.module.agent.harness.constant.AgentConfirmationDecision;
 import com.familyagent.module.agent.harness.constant.AgentConfirmationStatus;
 import com.familyagent.module.agent.harness.entity.AgentToolConfirmationRecord;
 import com.familyagent.module.agent.harness.repository.AgentToolConfirmationRecordRepository;
@@ -38,6 +41,44 @@ public class AgentToolConfirmationService {
         record.setIdempotencyKey(idempotencyKey(context, descriptor, record.getInputSummary()));
         record.setExpiresAt(LocalDateTime.now(Clock.systemDefaultZone()).plus(DEFAULT_TTL));
         repository.insert(record);
+        return record;
+    }
+
+    public AgentToolConfirmationRecord decide(
+            Long confirmationId,
+            Long viewerUserId,
+            AgentConfirmationDecision decision) {
+        AgentToolConfirmationRecord record = repository.selectById(confirmationId);
+        if (record == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "Agent tool confirmation not found");
+        }
+        if (viewerUserId == null || !viewerUserId.equals(record.getViewerUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "Agent tool confirmation belongs to another user");
+        }
+
+        AgentConfirmationStatus current = AgentConfirmationStatus.valueOf(record.getStatus());
+        if (current != AgentConfirmationStatus.REQUIRED) {
+            return record;
+        }
+
+        LocalDateTime now = LocalDateTime.now(Clock.systemDefaultZone());
+        if (!record.getExpiresAt().isAfter(now)) {
+            return transition(record, AgentConfirmationStatus.EXPIRED, now);
+        }
+
+        AgentConfirmationStatus next = decision == AgentConfirmationDecision.APPROVE
+                ? AgentConfirmationStatus.APPROVED
+                : AgentConfirmationStatus.REJECTED;
+        return transition(record, next, now);
+    }
+
+    private AgentToolConfirmationRecord transition(
+            AgentToolConfirmationRecord record,
+            AgentConfirmationStatus next,
+            LocalDateTime decidedAt) {
+        record.setStatus(next.name());
+        record.setDecidedAt(decidedAt);
+        repository.updateById(record);
         return record;
     }
 
