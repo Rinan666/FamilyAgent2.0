@@ -31,6 +31,20 @@ public class AgentToolExecutor {
 
     @Transactional
     public <I, O> AgentToolCallResult<O> execute(AgentToolCallRequest<I> request) {
+        return executeInternal(request, true, null);
+    }
+
+    @Transactional
+    public <I, O> AgentToolCallResult<O> executeConfirmed(
+            AgentToolCallRequest<I> request,
+            Long confirmationId) {
+        return executeInternal(request, false, confirmationId);
+    }
+
+    private <I, O> AgentToolCallResult<O> executeInternal(
+            AgentToolCallRequest<I> request,
+            boolean evaluateConfirmation,
+            Long confirmationId) {
         if (request == null) {
             return AgentToolCallResult.failure(
                     AgentToolCallStatus.FAILED,
@@ -42,9 +56,10 @@ public class AgentToolExecutor {
         try {
             rawTool = registry.require(request.toolName());
         } catch (BusinessException e) {
-            auditService.record(request.context(), descriptorFactory.unknown(request.toolName()), request.input(),
+            recordAudit(request.context(), descriptorFactory.unknown(request.toolName()), request.input(),
                     AgentToolCallStatus.FAILED,
-                    AgentToolErrorCode.TOOL_NOT_FOUND.code());
+                    AgentToolErrorCode.TOOL_NOT_FOUND.code(),
+                    confirmationId);
             return AgentToolCallResult.failure(
                     AgentToolCallStatus.FAILED,
                     AgentToolErrorCode.TOOL_NOT_FOUND.code(),
@@ -56,9 +71,8 @@ public class AgentToolExecutor {
         try {
             inputValidator.validate(rawTool, request.input());
             permissionGate.assertAllowed(request.context(), descriptor, request.input());
-            AgentConfirmationStatus confirmationStatus = confirmationPolicy.evaluate(
-                    request.context(), descriptor, request.input());
-            if (confirmationStatus == AgentConfirmationStatus.REQUIRED) {
+            if (evaluateConfirmation && confirmationPolicy.evaluate(
+                    request.context(), descriptor, request.input()) == AgentConfirmationStatus.REQUIRED) {
                 AgentToolConfirmationRecord confirmation = confirmationService.createRequired(
                         request.context(), descriptor, request.input());
                 auditService.record(request.context(), descriptor, request.input(),
@@ -73,23 +87,44 @@ public class AgentToolExecutor {
             @SuppressWarnings("unchecked")
             AgentTool<I, O> tool = (AgentTool<I, O>) rawTool;
             O output = tool.execute(request.context(), request.input());
-            auditService.record(request.context(), descriptor, request.input(), AgentToolCallStatus.SUCCEEDED, null);
+            recordAudit(
+                    request.context(),
+                    descriptor,
+                    request.input(),
+                    AgentToolCallStatus.SUCCEEDED,
+                    null,
+                    confirmationId);
             return AgentToolCallResult.success(output);
         } catch (BusinessException e) {
             String errorCode = errorMapper.errorCode(e);
             AgentToolCallStatus status = errorMapper.status(e);
-            auditService.record(request.context(), descriptor, request.input(), status, errorCode);
+            recordAudit(request.context(), descriptor, request.input(), status, errorCode, confirmationId);
             return AgentToolCallResult.failure(status, errorCode, e.getMessage(), false);
         } catch (RuntimeException e) {
             log.warn("Agent tool execution failed: toolName={}", descriptor.name(), e);
-            auditService.record(request.context(), descriptor, request.input(),
+            recordAudit(request.context(), descriptor, request.input(),
                     AgentToolCallStatus.FAILED,
-                    AgentToolErrorCode.EXECUTION_FAILED.code());
+                    AgentToolErrorCode.EXECUTION_FAILED.code(),
+                    confirmationId);
             return AgentToolCallResult.failure(
                     AgentToolCallStatus.FAILED,
                     AgentToolErrorCode.EXECUTION_FAILED.code(),
                     "Agent tool execution failed",
                     true);
         }
+    }
+
+    private void recordAudit(
+            AgentRunContext context,
+            AgentToolDescriptor descriptor,
+            Object input,
+            AgentToolCallStatus status,
+            String errorCode,
+            Long confirmationId) {
+        if (confirmationId == null) {
+            auditService.record(context, descriptor, input, status, errorCode);
+            return;
+        }
+        auditService.record(context, descriptor, input, status, errorCode, confirmationId);
     }
 }

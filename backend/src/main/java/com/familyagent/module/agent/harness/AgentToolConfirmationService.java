@@ -26,6 +26,7 @@ public class AgentToolConfirmationService {
 
     private final AgentToolConfirmationRecordRepository repository;
     private final AgentToolInputSummarizer inputSummarizer;
+    private final AgentToolConfirmationPayloadCodec payloadCodec;
 
     public AgentToolConfirmationRecord createRequired(
             AgentRunContext context,
@@ -36,9 +37,15 @@ public class AgentToolConfirmationService {
         record.setFamilyId(context.familyId());
         record.setViewerUserId(context.viewerUserId());
         record.setRequestId(inputSummarizer.trim(context.requestId(), REQUEST_ID_LIMIT));
+        record.setSessionId(context.sessionId());
+        record.setAgentMode(inputSummarizer.trim(context.agentMode(), 80));
+        record.setSubject(inputSummarizer.trim(context.subject(), 200));
+        record.setContextLabel(inputSummarizer.trim(context.contextLabel(), 200));
         record.setInputSummary(inputSummarizer.summarize(input));
+        String inputPayload = payloadCodec.encode(descriptor, input);
+        record.setInputPayload(inputPayload);
         record.setStatus(AgentConfirmationStatus.REQUIRED.name());
-        record.setIdempotencyKey(idempotencyKey(context, descriptor, record.getInputSummary()));
+        record.setIdempotencyKey(idempotencyKey(context, descriptor, sha256(inputPayload)));
         record.setExpiresAt(LocalDateTime.now(Clock.systemDefaultZone()).plus(DEFAULT_TTL));
         repository.insert(record);
         return record;

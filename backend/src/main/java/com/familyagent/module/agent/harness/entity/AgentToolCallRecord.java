@@ -19,6 +19,7 @@ public class AgentToolCallRecord {
     private String toolName;
     private Long familyId;
     private Long viewerUserId;
+    private Long confirmationId;
     private String requestId;
     private String inputSummary;
     private String status;

@@ -24,6 +24,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -123,6 +124,23 @@ class AgentToolExecutorTest {
                 input,
                 AgentToolCallStatus.CONFIRMATION_REQUIRED,
                 AgentToolErrorCode.CONFIRMATION_REQUIRED.code());
+    }
+
+    @Test
+    void executeConfirmed_success_skipsConfirmationPolicyAndLinksAuditRecord() {
+        EchoTool tool = new EchoTool();
+        EchoInput input = new EchoInput("hello");
+        doReturn(tool).when(registry).require(EchoTool.NAME);
+        AgentToolExecutor executor = executor();
+
+        AgentToolCallResult<EchoOutput> result = executor.executeConfirmed(new AgentToolCallRequest<>(
+                EchoTool.NAME,
+                context,
+                input), 55L);
+
+        assertTrue(result.success());
+        verify(confirmationPolicy, never()).evaluate(any(), any(), any());
+        verify(auditService).record(context, tool.descriptor(), input, AgentToolCallStatus.SUCCEEDED, null, 55L);
     }
 
     @Test

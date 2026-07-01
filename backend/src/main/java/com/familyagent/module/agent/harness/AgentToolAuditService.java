@@ -24,10 +24,21 @@ public class AgentToolAuditService {
             Object input,
             AgentToolCallStatus status,
             String errorCode) {
+        record(context, descriptor, input, status, errorCode, null);
+    }
+
+    public void record(
+            AgentRunContext context,
+            AgentToolDescriptor descriptor,
+            Object input,
+            AgentToolCallStatus status,
+            String errorCode,
+            Long confirmationId) {
         AgentToolCallRecord record = new AgentToolCallRecord();
         record.setToolName(descriptor == null ? null : descriptor.name());
         record.setFamilyId(context == null ? null : context.familyId());
         record.setViewerUserId(context == null ? null : context.viewerUserId());
+        record.setConfirmationId(confirmationId);
         record.setRequestId(context == null ? null : inputSummarizer.trim(context.requestId(), 128));
         record.setInputSummary(inputSummarizer.summarize(input));
         record.setStatus(status.name());

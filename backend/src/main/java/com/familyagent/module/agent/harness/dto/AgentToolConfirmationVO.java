@@ -10,9 +10,13 @@ public record AgentToolConfirmationVO(
         Long familyId,
         Long viewerUserId,
         String requestId,
+        String inputSummary,
         String status,
+        String executionStatus,
+        String executionErrorCode,
         LocalDateTime expiresAt,
         LocalDateTime decidedAt,
+        LocalDateTime executedAt,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {
@@ -24,9 +28,13 @@ public record AgentToolConfirmationVO(
                 record.getFamilyId(),
                 record.getViewerUserId(),
                 record.getRequestId(),
+                record.getInputSummary(),
                 record.getStatus(),
+                record.getExecutionStatus(),
+                record.getExecutionErrorCode(),
                 record.getExpiresAt(),
                 record.getDecidedAt(),
+                record.getExecutedAt(),
                 record.getCreatedAt(),
                 record.getUpdatedAt());
     }

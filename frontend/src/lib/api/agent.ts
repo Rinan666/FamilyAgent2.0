@@ -1,10 +1,14 @@
 import { request, sseStreamRequest } from './shared';
 import type { ViewerRole } from '@/lib/roles';
-import type { AgentConfirmationDecision, AgentResponseMode, AgentToolConfirmation } from '@/types';
+import type {
+  AgentConfirmationDecision,
+  AgentResponseMode,
+  AgentToolConfirmationDecisionResult,
+} from '@/types';
 
 export const agentApi = {
   decideToolConfirmation: (confirmationId: number, decision: AgentConfirmationDecision) =>
-    request<AgentToolConfirmation>(`/agent/tool-confirmations/${confirmationId}/decision`, {
+    request<AgentToolConfirmationDecisionResult>(`/agent/tool-confirmations/${confirmationId}/decision`, {
       method: 'POST',
       body: JSON.stringify({ decision }),
     }),

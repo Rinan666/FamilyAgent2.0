@@ -20,11 +20,19 @@ public class AgentToolConfirmationRecord {
     private Long familyId;
     private Long viewerUserId;
     private String requestId;
+    private Long sessionId;
+    private String agentMode;
+    private String subject;
+    private String contextLabel;
     private String idempotencyKey;
     private String inputSummary;
+    private String inputPayload;
     private String status;
+    private String executionStatus;
+    private String executionErrorCode;
     private LocalDateTime expiresAt;
     private LocalDateTime decidedAt;
+    private LocalDateTime executedAt;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

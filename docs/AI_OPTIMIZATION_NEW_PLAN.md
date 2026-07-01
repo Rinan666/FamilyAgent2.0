@@ -370,7 +370,7 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
 
 ### Phase 2：写入工具与确认门
 
-状态：进行中。已完成确认状态、确认策略、持久化确认记录、确认审批/拒绝 API 契约和首个写入工具声明，下一步把具体页面确认弹窗改为消费统一 confirmation contract。
+状态：进行中。已完成确认状态、确认策略、持久化确认记录、确认审批/拒绝 API 契约、首个写入工具声明，以及 approve 后的后端幂等执行闭环；下一步把具体页面确认弹窗改为消费统一 confirmation contract。
 
 目标：把写日记、写家庭记忆、写成长观察纳入统一工具执行器。
 
@@ -381,11 +381,14 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
 - 2026-06-30：`AgentToolExecutor` 已通过 confirmation policy 返回结构化 `CONFIRMATION_REQUIRED`，不会直接执行需要确认的工具。
 - 2026-06-30：新增 `AgentConfirmationPolicyTest`，并补充 executor confirmation-required 测试。
 - 2026-06-30：新增 `agent_tool_confirmations` 表、`AgentToolConfirmationRecord`、Repository 与 `AgentToolConfirmationService`，确认记录包含 `idempotencyKey`、状态、过期时间和脱敏输入摘要。
-- 2026-06-30：抽出 `AgentToolInputSummarizer`，审计记录与确认记录共用脱敏摘要逻辑，避免写入原始家庭隐私内容。
+- 2026-06-30：抽出 `AgentToolInputSummarizer`，审计记录与确认展示共用脱敏摘要逻辑，避免在日志、审计摘要和前端确认列表中暴露原始家庭隐私内容。
 - 2026-06-30：executor 在确认策略返回 `REQUIRED` 时会创建 pending confirmation，并在结构化结果中返回 `confirmationId`，仍不会执行写入工具。
 - 2026-06-30：新增 `create_diary_entry` 工具、强类型 `CreateDiaryEntryInput` / `CreateDiaryEntryOutput`，并通过 `AgentDiaryEntryFacade` 隔离 diary 模块 Service；该写入工具默认 `REQUIRED`，经 executor 调用时只生成确认记录。
 - 2026-06-30：新增 `AgentConfirmationDecision` 和确认决策流转，支持 approve / reject / expired / duplicate terminal confirmation 幂等处理，错误用户不能处理他人的 confirmation。
 - 2026-06-30：新增 `/api/agent/tool-confirmations/{confirmationId}/decision`，并同步前端 `agentApi.decideToolConfirmation` 与 `AgentToolConfirmation` / `AgentConfirmationDecision` / `AgentConfirmationStatus` 类型。
+- 2026-07-01：扩展 confirmation 记录，保存仅供后端确认执行使用的受控 typed payload、最小 run context、执行状态和 `executedAt`；确认 approve 后通过 `AgentToolConfirmationDecisionService -> AgentToolExecutor.executeConfirmed` 重新走权限、校验、审计和工具执行。
+- 2026-07-01：`agent_tool_calls` 增加 `confirmation_id`，approve 后的真实写入 tool call 可追溯到 confirmation；重复 terminal confirmation 不会再次执行写入工具。
+- 2026-07-01：确认决策 API 响应扩展为 `AgentToolConfirmationDecisionResult`，同时返回 confirmation 与可选 `toolResult`，前端类型和 `agentApi.decideToolConfirmation` 已同步。
 
 工作项：
 
@@ -398,7 +401,7 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
    - `EXPIRED`
 3. [已完成] 新增 `AgentToolConfirmation` DTO 或表。
 4. 接入写入工具：
-   - [已接入确认门] `create_diary_entry`
+   - [已接入确认门与 approve 执行闭环] `create_diary_entry`
    - `create_family_memory`
    - `create_growth_guard_record`
 5. [契约已完成，页面待接入] 前端保存确认弹窗改为消费统一 confirmation contract。
@@ -406,11 +409,11 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
 
 验收标准：
 
-- Agent 不能直接执行写入工具，除非确认策略允许。
-- [已完成状态门] 用户拒绝确认时不写库。
-- [已完成状态门] 用户重复确认不会重复写入。
-- 每次写入工具记录 idempotency key。
-- 写入来源能追溯到 tool call record。
+- [已完成] Agent 不能直接执行写入工具，除非确认策略允许。
+- [已完成] 用户拒绝确认时不写库。
+- [已完成] 用户重复确认不会重复写入。
+- [已完成] 每次写入工具记录 idempotency key。
+- [已完成] 写入来源能追溯到 tool call record。
 
 ---
 
