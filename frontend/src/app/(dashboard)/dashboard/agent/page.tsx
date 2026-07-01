@@ -86,7 +86,7 @@ function buildSessionMetadata(
 }
 
 function savedMemoryHref(familyId?: number | null) {
-  return `/dashboard/family?tab=library${familyId ? `&familyId=${familyId}` : ''}`;
+  return `/dashboard/memory-library${familyId ? `?familyId=${familyId}` : ''}`;
 }
 
 function savedMemoryFromPlan(plan: AgentSaveToolPlan, savedAt: string): SessionSavedMemory | null {

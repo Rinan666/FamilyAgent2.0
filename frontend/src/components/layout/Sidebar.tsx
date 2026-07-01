@@ -1,9 +1,9 @@
-'use client';
+﻿'use client';
 
 import { type FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { BookHeart, ChevronUp, Images, Search, Settings, Sparkles, Users, X } from 'lucide-react';
+import { BookHeart, ChevronLeft, Images, Menu, Search, Settings, Sparkles, Users, X } from 'lucide-react';
 import type { ViewerRole } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 
@@ -16,11 +16,11 @@ type NavItem = {
 };
 
 const navItems: readonly NavItem[] = [
-  { href: '/dashboard/agent', label: '家庭助手', icon: Sparkles, roles: ['MEMBER', 'ADMIN'] },
-  { href: '/dashboard/diary', label: '日记', icon: BookHeart, roles: ['MEMBER', 'ADMIN'] },
-  { href: '/album', label: '相册', icon: Images, roles: ['MEMBER', 'ADMIN'] },
-  { href: '/dashboard/family', label: '家庭空间', icon: Users, roles: ['MEMBER', 'ADMIN'] },
-  { href: '/dashboard/settings', label: '设置', icon: Settings, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/dashboard/agent', label: '瀹跺涵鍔╂墜', icon: Sparkles, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/dashboard/memory-library', label: '记忆库', icon: BookHeart, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/album', label: '鐩稿唽', icon: Images, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/dashboard/family', label: '瀹跺涵绌洪棿', icon: Users, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/dashboard/settings', label: '璁剧疆', icon: Settings, roles: ['MEMBER', 'ADMIN'] },
 ] as const;
 
 interface SidebarProps {
@@ -90,18 +90,17 @@ export default function Sidebar({ viewerRole = 'MEMBER', isPlatformAdmin = false
   const [librarySearch, setLibrarySearch] = useState('');
 
   useEffect(() => {
-    if (!pathname.startsWith('/dashboard/family')) return;
+    if (!pathname.startsWith('/dashboard/memory-library')) return;
     setLibrarySearch(searchParams.get('q') || '');
   }, [pathname, searchParams]);
 
   const handleLibrarySearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const params = new URLSearchParams();
-    params.set('tab', 'library');
     const familyId = searchParams.get('familyId');
     if (familyId) params.set('familyId', familyId);
     if (librarySearch.trim()) params.set('q', librarySearch.trim());
-    router.push(`/dashboard/family?${params.toString()}`);
+    router.push(`/dashboard/memory-library?${params.toString()}`);
   };
 
   return (
@@ -194,22 +193,15 @@ export function MobileNavDrawer({
 
   return (
     <>
-      <div className="shrink-0 bg-white px-4 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-0.5 lg:hidden">
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="mx-auto flex h-5 w-10 items-center justify-center rounded-full transition"
-          style={{
-            backgroundColor: 'transparent',
-            boxShadow: 'none',
-            color: '#d6d3d1',
-          }}
-          aria-label="打开底部菜单"
-          aria-expanded={open}
-        >
-          <ChevronUp className="h-5 w-5" />
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="fixed right-1 top-1/2 z-40 inline-flex h-8 w-6 -translate-y-1/2 items-center justify-center text-stone-300 transition hover:text-stone-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200 lg:hidden"
+        aria-label="打开底部菜单"
+        aria-expanded={open}
+      >
+        <ChevronLeft className="h-6 w-6" strokeWidth={2.5} />
+      </button>
 
       {open && (
         <div className="fixed inset-0 z-50 lg:hidden">
@@ -258,5 +250,125 @@ export function MobileNavDrawer({
         </div>
       )}
     </>
+  );
+}
+
+export function MobilePageDrawer({
+  viewerRole = 'MEMBER',
+  isPlatformAdmin = false,
+  showLibrarySearch = false,
+}: {
+  viewerRole?: ViewerRole;
+  isPlatformAdmin?: boolean;
+  showLibrarySearch?: boolean;
+}) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [open, setOpen] = useState(false);
+  const [librarySearch, setLibrarySearch] = useState('');
+  const items = visibleNavItems(viewerRole, isPlatformAdmin);
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!showLibrarySearch) return;
+    setLibrarySearch(searchParams.get('q') || '');
+  }, [searchParams, showLibrarySearch]);
+
+  const handleLibrarySearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const params = new URLSearchParams();
+    const familyId = searchParams.get('familyId');
+    if (familyId) params.set('familyId', familyId);
+    if (librarySearch.trim()) params.set('q', librarySearch.trim());
+    setOpen(false);
+    router.push(`/dashboard/memory-library?${params.toString()}`);
+  };
+
+  return (
+    <div className="lg:hidden">
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-stone-200 bg-white text-stone-700 shadow-sm transition hover:bg-stone-50 hover:text-stone-950"
+        aria-label="鎵撳紑鍔熻兘鎶藉眽"
+        aria-expanded={open}
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-50">
+          <button
+            type="button"
+            className="absolute inset-0 bg-stone-950/24"
+            aria-label="鍏抽棴鍔熻兘鎶藉眽"
+            onClick={() => setOpen(false)}
+          />
+          <aside className="absolute inset-y-0 left-0 flex w-[min(20rem,86vw)] flex-col border-r border-stone-200 bg-white shadow-[18px_0_48px_rgba(24,39,32,0.18)]">
+            <div className="flex h-14 items-center justify-between border-b border-stone-200 px-4">
+              <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-stone-950">
+                <BookHeart className="h-4 w-4 shrink-0 text-emerald-700" />
+                <span className="truncate">FamilyAgent</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-stone-500 transition hover:bg-stone-100 hover:text-stone-950"
+                aria-label="鍏抽棴鍔熻兘鎶藉眽"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 space-y-4 overflow-y-auto p-4">
+              {showLibrarySearch && (
+                <form onSubmit={handleLibrarySearch}>
+                  <label className="relative block">
+                    <input
+                      value={librarySearch}
+                      onChange={(event) => setLibrarySearch(event.target.value)}
+                      placeholder="搜索家族记忆库"
+                      className="h-10 w-full rounded-md border border-stone-200 bg-stone-50 pl-3 pr-10 text-sm text-stone-800 outline-none transition placeholder:text-stone-400 focus:border-emerald-300 focus:bg-white focus:ring-2 focus:ring-emerald-100"
+                    />
+                    <button
+                      type="submit"
+                      className="absolute right-1 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-stone-500 transition hover:bg-stone-100 hover:text-stone-900"
+                      aria-label="搜索记忆库"
+                    >
+                      <Search className="h-4 w-4" />
+                    </button>
+                  </label>
+                </form>
+              )}
+
+              <nav className="space-y-1">
+                {items.map((item) => {
+                  const Icon = item.icon;
+                  const active = isActivePath(pathname, item.href);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setOpen(false)}
+                      className={cn(
+                        'flex h-11 min-w-0 items-center gap-3 rounded-md px-3 text-sm font-medium transition',
+                        active ? 'bg-stone-950 text-white' : 'text-stone-600 hover:bg-stone-100 hover:text-stone-950',
+                      )}
+                    >
+                      <Icon className={cn('h-5 w-5 shrink-0', active ? 'text-emerald-300' : 'text-stone-400')} />
+                      <span className="truncate">{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
+          </aside>
+        </div>
+      )}
+    </div>
   );
 }

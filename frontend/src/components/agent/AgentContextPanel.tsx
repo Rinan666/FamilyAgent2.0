@@ -259,7 +259,7 @@ export default function AgentContextPanel({
                     查看成员授权资料
                   </Link>
                   <Link
-                    href={`/dashboard/diary?familyId=${activeFamilyId}${mirrorContext?.targetMember?.userId ? `&relatedUserId=${mirrorContext.targetMember.userId}&relatedMemberName=${encodeURIComponent(targetLabel)}` : ''}`}
+                    href={`/dashboard/memory-library?compose=1&familyId=${activeFamilyId}${mirrorContext?.targetMember?.userId ? `&relatedUserId=${mirrorContext.targetMember.userId}&relatedMemberName=${encodeURIComponent(targetLabel)}` : ''}`}
                     className="block rounded-2xl border border-stone-200 bg-white px-3 py-2.5 text-stone-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800"
                   >
                     去补充相关记录

@@ -11,7 +11,6 @@ import com.familyagent.module.diary.repository.DiaryEntryRepository;
 import com.familyagent.module.family.service.FamilyService;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
-import com.familyagent.module.growth.service.GrowthGuardService;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
 import com.familyagent.module.memory.service.MemoryEmbeddingService;
@@ -46,7 +45,6 @@ public class MemoryLibraryMaintenanceService {
     private final DiaryEntryRepository diaryEntryRepository;
     private final MemoryEntryRepository memoryEntryRepository;
     private final GrowthGuardRecordRepository growthRecordRepository;
-    private final GrowthGuardService growthGuardService;
     private final MemoryEmbeddingService memoryEmbeddingService;
     private final JdbcTemplate jdbcTemplate;
 
@@ -104,8 +102,7 @@ public class MemoryLibraryMaintenanceService {
         if (entry == null || !familyId.equals(entry.getFamilyId()) || isArchivedMetadata(entry.getMetadata())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
-        MemoryLibrarySupport.ensureCreatorOrFamilyOwner(
-                familyService, familyId, entry.getUserId(), "Only the creator or family owner can archive this diary");
+        MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can archive this diary");
         Map<String, Object> metadata = MemoryLibrarySupport.mutableMap(entry.getMetadata());
         metadata.put("status", EntityStatus.ARCHIVED.name());
         metadata.put("archivedBy", CurrentUserGuard.currentUserId());
@@ -120,8 +117,7 @@ public class MemoryLibraryMaintenanceService {
         if (entry == null || !request.getFamilyId().equals(entry.getFamilyId()) || isArchivedMetadata(entry.getMetadata())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
-        MemoryLibrarySupport.ensureCreatorOrFamilyOwner(
-                familyService, request.getFamilyId(), entry.getUserId(), "Only the creator or family owner can edit this diary");
+        MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can edit this diary");
         String body = requiredBody(request.getBody());
         String type = normalize(request.getType(), "DAILY", DIARY_ENTRY_TYPES, "Diary entry type is not supported");
         String visibility = normalize(request.getVisibility(), entry.getVisibility(), MemoryScope.diaryNames(), "Diary visibility is not supported");
@@ -146,8 +142,7 @@ public class MemoryLibraryMaintenanceService {
         if (entry == null || !familyId.equals(entry.getFamilyId()) || !isArchivedMetadata(entry.getMetadata())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
-        MemoryLibrarySupport.ensureCreatorOrFamilyOwner(
-                familyService, familyId, entry.getUserId(), "Only the creator or family owner can restore this diary");
+        MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can restore this diary");
         Map<String, Object> metadata = MemoryLibrarySupport.mutableMap(entry.getMetadata());
         metadata.put("status", EntityStatus.ACTIVE.name());
         metadata.put("restoredBy", CurrentUserGuard.currentUserId());
@@ -162,8 +157,7 @@ public class MemoryLibraryMaintenanceService {
         if (entry == null || !familyId.equals(entry.getFamilyId()) || !isArchivedMetadata(entry.getMetadata())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
-        MemoryLibrarySupport.ensureCreatorOrFamilyOwner(
-                familyService, familyId, entry.getUserId(), "Only the creator or family owner can delete this diary");
+        MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can delete this diary");
         deleteEmbeddings("DIARY", diaryId);
         diaryEntryRepository.deleteById(diaryId);
     }
@@ -173,8 +167,7 @@ public class MemoryLibraryMaintenanceService {
         if (entry == null || !familyId.equals(entry.getFamilyId()) || !EntityStatus.ACTIVE.name().equals(entry.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
-        MemoryLibrarySupport.ensureCreatorOrFamilyOwner(
-                familyService, familyId, entry.getUserId(), "Only the creator or family owner can archive this memory");
+        MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can archive this memory");
         Map<String, Object> metadata = MemoryLibrarySupport.mutableMap(entry.getMetadata());
         metadata.put("archivedBy", CurrentUserGuard.currentUserId());
         metadata.put("archivedAt", LocalDateTime.now().toString());
@@ -189,8 +182,7 @@ public class MemoryLibraryMaintenanceService {
         if (entry == null || !request.getFamilyId().equals(entry.getFamilyId()) || !EntityStatus.ACTIVE.name().equals(entry.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
-        MemoryLibrarySupport.ensureCreatorOrFamilyOwner(
-                familyService, request.getFamilyId(), entry.getUserId(), "Only the creator or family owner can edit this memory");
+        MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can edit this memory");
         String body = requiredBody(request.getBody());
         String type = normalize(request.getType(), entry.getType(), MemoryType.names(), "Memory type is not supported");
         String visibility = normalize(request.getVisibility(), entry.getScope(), MemoryScope.familyNames(), "Memory visibility is not supported");
@@ -220,8 +212,7 @@ public class MemoryLibraryMaintenanceService {
         if (entry == null || !familyId.equals(entry.getFamilyId()) || !EntityStatus.ARCHIVED.name().equals(entry.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
-        MemoryLibrarySupport.ensureCreatorOrFamilyOwner(
-                familyService, familyId, entry.getUserId(), "Only the creator or family owner can restore this memory");
+        MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can restore this memory");
         Map<String, Object> metadata = MemoryLibrarySupport.mutableMap(entry.getMetadata());
         metadata.put("restoredBy", CurrentUserGuard.currentUserId());
         metadata.put("restoredAt", LocalDateTime.now().toString());
@@ -241,8 +232,7 @@ public class MemoryLibraryMaintenanceService {
                 || (!EntityStatus.ARCHIVED.name().equals(entry.getStatus()) && !activeLegacyAiSummary)) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
-        MemoryLibrarySupport.ensureCreatorOrFamilyOwner(
-                familyService, familyId, entry.getUserId(), "Only the creator or family owner can delete this memory");
+        MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can delete this memory");
         deleteEmbeddings("MEMORY", memoryId);
         memoryEntryRepository.deleteById(memoryId);
     }
@@ -252,7 +242,9 @@ public class MemoryLibraryMaintenanceService {
         if (record == null || !familyId.equals(record.getFamilyId()) || !EntityStatus.ACTIVE.name().equals(record.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
-        growthGuardService.archiveRecord(recordId);
+        MemoryLibrarySupport.ensureCreator(record.getCreatedBy(), "Only the creator can archive this growth record");
+        record.setStatus(EntityStatus.ARCHIVED.name());
+        growthRecordRepository.updateById(record);
     }
 
     private void updateGrowthRecord(MemoryLibraryUpdateRequest request, Long recordId) {
@@ -260,8 +252,7 @@ public class MemoryLibraryMaintenanceService {
         if (record == null || !request.getFamilyId().equals(record.getFamilyId()) || !EntityStatus.ACTIVE.name().equals(record.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
-        MemoryLibrarySupport.ensureCreatorOrFamilyOwner(
-                familyService, request.getFamilyId(), record.getCreatedBy(), "Only the creator or family owner can edit this growth record");
+        MemoryLibrarySupport.ensureCreator(record.getCreatedBy(), "Only the creator can edit this growth record");
         String category = normalize(request.getType(), record.getCategory(), GROWTH_CATEGORIES, "Growth category is not supported");
         String visibility = normalize(request.getVisibility(), record.getVisibility(), MemoryScope.familyNames(), "Growth visibility is not supported");
         Map<String, Object> metadata = editMetadata(record.getMetadata());
@@ -289,8 +280,7 @@ public class MemoryLibraryMaintenanceService {
         if (record == null || !familyId.equals(record.getFamilyId()) || !EntityStatus.ARCHIVED.name().equals(record.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
-        MemoryLibrarySupport.ensureCreatorOrFamilyOwner(
-                familyService, familyId, record.getCreatedBy(), "Only the creator or family owner can restore this growth record");
+        MemoryLibrarySupport.ensureCreator(record.getCreatedBy(), "Only the creator can restore this growth record");
         record.setStatus(EntityStatus.ACTIVE.name());
         growthRecordRepository.updateById(record);
     }
@@ -300,8 +290,7 @@ public class MemoryLibraryMaintenanceService {
         if (record == null || !familyId.equals(record.getFamilyId()) || !EntityStatus.ARCHIVED.name().equals(record.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
-        MemoryLibrarySupport.ensureCreatorOrFamilyOwner(
-                familyService, familyId, record.getCreatedBy(), "Only the creator or family owner can delete this growth record");
+        MemoryLibrarySupport.ensureCreator(record.getCreatedBy(), "Only the creator can delete this growth record");
         deleteEmbeddings("GROWTH_OBSERVATION", recordId);
         growthRecordRepository.deleteById(recordId);
     }

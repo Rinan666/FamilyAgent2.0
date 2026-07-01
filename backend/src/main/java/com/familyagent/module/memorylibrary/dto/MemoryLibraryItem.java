@@ -15,6 +15,7 @@ public class MemoryLibraryItem {
     private String title;
     private String body;
     private Long familyId;
+    private Long authorUserId;
     private Long memberUserId;
     private String memberName;
     private String visibility;

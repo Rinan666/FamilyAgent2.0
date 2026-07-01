@@ -155,7 +155,7 @@ export interface FamilyCreationQuota {
   remainingFamilies: number;
 }
 
-export type FamilyTab = 'library' | 'members' | 'personas';
+export type FamilyTab = 'members' | 'personas';
 
 export interface PersonaMember {
   id: number;
@@ -501,6 +501,7 @@ export interface MemoryLibraryItem {
   title: string;
   body: string;
   familyId: number;
+  authorUserId?: number;
   memberUserId?: number;
   memberName: string;
   visibility: string;

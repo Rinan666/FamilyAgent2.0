@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { CheckCircle, ChevronDown, Lock, RefreshCw, Save, Sparkles, Users } from 'lucide-react';
-import { familyApi, memoryApi, writeMemoryApi } from '@/lib/api';
+import { familyApi, memoryApi, memoryLibraryApi, writeMemoryApi } from '@/lib/api';
 import { useViewerRole } from '@/hooks/useViewerRole';
 import { useAuthStore } from '@/stores/authStore';
 import VoiceInputButton from '@/components/voice/VoiceInputButton';
@@ -18,6 +18,7 @@ import type {
   DiaryVisibility,
   FamilyMember,
   GrowthGuardCategory,
+  MemoryLibraryItem,
   MemoryEntryType,
   MemoryScope,
   WriteCategory,
@@ -113,6 +114,7 @@ const validMemoryTypes = new Set<MemoryEntryType>([
   'HEALTH_REMINDER',
   'GROWTH_RISK',
   'VALUE',
+  'PLAN',
 ]);
 
 const validGrowthCategories = new Set<GrowthGuardCategory>([
@@ -187,7 +189,43 @@ function successLabel(category: WriteCategory) {
   return '记录已保存到记忆库';
 }
 
-export default function DiaryPage() {
+function updatedSuccessLabel(category: WriteCategory) {
+  if (category === 'EXPERIENCE') return '经验已更新';
+  if (category === 'OBSERVATION') return '观察已更新';
+  return '记录已更新';
+}
+
+function categoryFromLibraryItem(item?: MemoryLibraryItem | null): WriteCategory {
+  if (item?.sourceType === 'FAMILY_EXPERIENCE') return 'EXPERIENCE';
+  if (item?.sourceType === 'GROWTH_OBSERVATION') return 'OBSERVATION';
+  return 'RECORD';
+}
+
+function editTypeFromState(
+  category: WriteCategory,
+  diaryEntryType: DiaryEntryType,
+  memoryType: MemoryEntryType,
+  growthCategory: GrowthGuardCategory,
+) {
+  if (category === 'EXPERIENCE') return memoryType;
+  if (category === 'OBSERVATION') return growthCategory;
+  return diaryEntryType;
+}
+
+function titleFromFirstLine(value: string) {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean)
+    ?.slice(0, 120) || '';
+}
+
+interface DiaryComposerProps {
+  editItem?: MemoryLibraryItem | null;
+  onSaved?: () => void;
+}
+
+export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps) {
   const searchParams = useSearchParams();
   const user = useAuthStore((state) => state.user);
   const {
@@ -216,6 +254,7 @@ export default function DiaryPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  const isEditingExisting = Boolean(editItem);
   const hydratedDraftKeyRef = useRef('');
   const suppressDraftSaveRef = useRef(false);
   const writeCategoryAppliedKeyRef = useRef('');
@@ -348,7 +387,9 @@ export default function DiaryPage() {
 
   useEffect(() => {
     const nextFamilyId = (
-      requestedFamilyId && families.some((family) => family.id === requestedFamilyId)
+      editItem?.familyId && families.some((family) => family.id === editItem.familyId)
+        ? editItem.familyId
+        : requestedFamilyId && families.some((family) => family.id === requestedFamilyId)
         ? requestedFamilyId
         : activeFamilyId && families.some((family) => family.id === activeFamilyId)
           ? activeFamilyId
@@ -358,7 +399,7 @@ export default function DiaryPage() {
     if (nextFamilyId && activeFamilyId !== nextFamilyId) {
       setActiveFamilyId(nextFamilyId);
     }
-  }, [activeFamilyId, families, requestedFamilyId, setActiveFamilyId]);
+  }, [activeFamilyId, editItem?.familyId, families, requestedFamilyId, setActiveFamilyId]);
 
   useEffect(() => {
     if (!selectedFamilyId) {
@@ -379,6 +420,7 @@ export default function DiaryPage() {
   }, [selectedFamilyId]);
 
   useEffect(() => {
+    if (isEditingExisting) return;
     const initialCategory = requestedWriteCategory === 'OBSERVATION' || requestedGrowthCategory
       ? 'OBSERVATION'
       : requestedWriteCategory === 'EXPERIENCE' || requestedMemoryType
@@ -393,9 +435,32 @@ export default function DiaryPage() {
     setMemoryType(defaultMemoryTypeForQuery(requestedMemoryType));
     setGrowthCategory(defaultGrowthCategoryForQuery(requestedGrowthCategory));
     if (requestedTargetUserId) setRelatedUserId(requestedTargetUserId);
-  }, [requestedGrowthCategory, requestedMemoryType, requestedTargetUserId, requestedWriteCategory]);
+  }, [isEditingExisting, requestedGrowthCategory, requestedMemoryType, requestedTargetUserId, requestedWriteCategory]);
 
   useEffect(() => {
+    if (!editItem) return;
+    const nextCategory = categoryFromLibraryItem(editItem);
+    setCategory(nextCategory);
+    setSelectedFamilyId(editItem.familyId);
+    if (activeFamilyId !== editItem.familyId) {
+      setActiveFamilyId(editItem.familyId);
+    }
+    setContent(editItem.body || '');
+    setTitle(editItem.title || titleFromFirstLine(editItem.body || ''));
+    setTagText((editItem.tags || []).join(' '));
+    setVisibility((normalizeVisibility(editItem.visibility) || defaultVisibilityForCategory(nextCategory)) as DiaryVisibility);
+    setRelatedUserId(editItem.memberUserId || undefined);
+    setDiaryEntryType(nextCategory === 'RECORD' ? (editItem.type as DiaryEntryType) || 'DAILY' : 'DAILY');
+    setMemoryType(nextCategory === 'EXPERIENCE' ? defaultMemoryTypeForQuery(editItem.type) : 'ELDER_ADVICE');
+    setGrowthCategory(nextCategory === 'OBSERVATION' ? defaultGrowthCategoryForQuery(editItem.type) : 'OTHER');
+    setGrowthSeverity(3);
+    setDraftStatus('正在编辑已有内容');
+    setError('');
+    setSuccess('');
+  }, [activeFamilyId, editItem, setActiveFamilyId]);
+
+  useEffect(() => {
+    if (isEditingExisting) return;
     const key = draftKey(user?.id, selectedFamilyId, requestedTargetUserId || null);
     hydratedDraftKeyRef.current = key;
     suppressDraftSaveRef.current = true;
@@ -441,9 +506,10 @@ export default function DiaryPage() {
     } finally {
       suppressDraftSaveRef.current = false;
     }
-  }, [requestedGrowthCategory, requestedTargetUserId, selectedFamilyId, user?.id]);
+  }, [isEditingExisting, requestedGrowthCategory, requestedTargetUserId, selectedFamilyId, user?.id]);
 
   useEffect(() => {
+    if (isEditingExisting) return;
     if (!selectedFamilyId) return;
     if (!requestedPrefill.title && !requestedPrefill.content && !requestedPrefill.tags && !requestedPrefill.visibility) return;
     const key = `${selectedFamilyId}:${requestedPrefill.title}:${requestedPrefill.content}:${requestedPrefill.tags}:${requestedPrefill.visibility || ''}`;
@@ -456,9 +522,10 @@ export default function DiaryPage() {
     setTagText(requestedPrefill.tags);
     setVisibility(requestedPrefill.visibility || 'FAMILY_VISIBLE');
     setDraftStatus('已根据上下文填入内容，可继续修改后保存');
-  }, [requestedPrefill, selectedFamilyId]);
+  }, [isEditingExisting, requestedPrefill, selectedFamilyId]);
 
   useEffect(() => {
+    if (isEditingExisting) return;
     const key = draftKey(user?.id, selectedFamilyId, requestedTargetUserId || relatedUserId || null);
     if (!key || typeof window === 'undefined' || hydratedDraftKeyRef.current !== key) return;
     if (suppressDraftSaveRef.current) {
@@ -470,7 +537,7 @@ export default function DiaryPage() {
       persistDraftNow(hasDraftContent ? '草稿已自动保存在本地' : '');
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [hasDraftContent, persistDraftNow, relatedUserId, requestedTargetUserId, selectedFamilyId, user?.id]);
+  }, [hasDraftContent, isEditingExisting, persistDraftNow, relatedUserId, requestedTargetUserId, selectedFamilyId, user?.id]);
 
   const applyTemplate = useCallback((template: StarterTemplate) => {
     setCategory(template.category);
@@ -584,11 +651,28 @@ export default function DiaryPage() {
 
     try {
       const tags = formatTags(tagText);
+      const contentText = content.trim();
+      const resolvedTitle = title.trim() || titleFromFirstLine(contentText);
+      if (editItem) {
+        await memoryLibraryApi.updateItem({
+          familyId: selectedFamilyId,
+          itemId: editItem.id,
+          title: resolvedTitle || undefined,
+          body: contentText,
+          type: editTypeFromState(category, diaryEntryType, memoryType, growthCategory),
+          visibility,
+          tags,
+        });
+        flashSuccess(updatedSuccessLabel(category));
+        onSaved?.();
+        return;
+      }
+
       await writeMemoryApi.create({
         familyId: selectedFamilyId,
         writeCategory: category,
-        content: content.trim(),
-        title: title.trim() || undefined,
+        content: contentText,
+        title: resolvedTitle || undefined,
         tags,
         visibility: category === 'OBSERVATION' ? visibility as MemoryScope : visibility,
         relatedUserId: relatedUserId || undefined,
@@ -611,6 +695,7 @@ export default function DiaryPage() {
       }
       clearForm(category);
       flashSuccess(successLabel(category));
+      onSaved?.();
     } catch (err) {
       persistDraftNow('保存失败，草稿已保留');
       setError(err instanceof Error ? err.message : '保存失败，请稍后再试');
@@ -622,10 +707,12 @@ export default function DiaryPage() {
     clearForm,
     content,
     diaryEntryType,
+    editItem,
     flashSuccess,
     growthCategory,
     growthSeverity,
     memoryType,
+    onSaved,
     persistDraftNow,
     relatedMemberLabel,
     relatedUserId,
@@ -727,7 +814,7 @@ export default function DiaryPage() {
               <span className="min-w-0 truncate text-xs text-stone-400">
                 {draftStatus || '草稿会自动保存在本地'}
               </span>
-              {hasDraftContent && (
+              {hasDraftContent && !isEditingExisting && (
                 <button
                   type="button"
                   onClick={clearDraft}
@@ -744,7 +831,9 @@ export default function DiaryPage() {
                 aria-label={primaryActionLabel(category)}
               >
                 {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                <span className="hidden sm:inline">{saving ? '正在保存...' : primaryActionLabel(category)}</span>
+                <span className="hidden sm:inline">
+                  {saving ? '正在保存...' : isEditingExisting ? '保存修改' : primaryActionLabel(category)}
+                </span>
               </button>
             </div>
           </div>
@@ -800,11 +889,14 @@ export default function DiaryPage() {
                 <button
                   key={item.value}
                   type="button"
-                  onClick={() => handleCategoryChange(item.value)}
+                  onClick={() => {
+                    if (!isEditingExisting) handleCategoryChange(item.value);
+                  }}
+                  disabled={isEditingExisting && category !== item.value}
                   className={`h-7 rounded px-2 text-xs font-medium transition ${
                     category === item.value
                       ? 'bg-stone-950 text-white'
-                      : 'text-stone-500 hover:bg-stone-100 hover:text-stone-900'
+                      : 'text-stone-500 hover:bg-stone-100 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-40'
                   }`}
                 >
                   {item.label}

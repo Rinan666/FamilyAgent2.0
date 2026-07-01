@@ -42,6 +42,11 @@ class MemoryLibrarySupport {
         throw new BusinessException(ErrorCode.FORBIDDEN, message);
     }
 
+    static void ensureCreator(Long creatorUserId, String message) {
+        if (CurrentUserGuard.currentUserId().equals(creatorUserId)) return;
+        throw new BusinessException(ErrorCode.FORBIDDEN, message);
+    }
+
     @SuppressWarnings("unchecked")
     static Map<String, Object> mutableMap(Object metadata) {
         if (metadata instanceof Map<?, ?> map) return new HashMap<>((Map<String, Object>) map);
