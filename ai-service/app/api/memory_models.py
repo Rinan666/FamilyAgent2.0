@@ -1,36 +1,5 @@
 """Request models for the family memory API."""
-from typing import Literal, Optional
-
 from pydantic import BaseModel, Field
-
-
-class ExtractMemoryMessage(BaseModel):
-    role: Literal["user", "assistant"] = "user"
-    content: str = Field(default="", max_length=4000)
-
-
-class ExtractMemoryRequest(BaseModel):
-    session_id: int
-    subject: str = ""
-    messages: list[ExtractMemoryMessage] = Field(default_factory=list, max_length=100)
-    summary: str = ""
-
-
-class ExtractedMemory(BaseModel):
-    type: str = ""
-    content: str = ""
-    summary: str = ""
-    importance: int = Field(default=1, ge=1, le=5)
-    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
-
-
-class ExtractMemoryResponse(BaseModel):
-    success: bool
-    deprecated: bool = True
-    degraded: bool = False
-    memories: list[ExtractedMemory] = Field(default_factory=list)
-    message: str = ""
-    errorCode: Optional[str] = None
 
 
 class SaveToolPlanRequest(BaseModel):

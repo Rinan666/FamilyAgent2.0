@@ -46,7 +46,7 @@ Unknown routes are denied by default until they are explicitly classified.
 | --- | --- | --- |
 | `/ai/agent/chat/stream` | Backend-owned Agent runtime | Denied through `/ai-proxy`; frontend must use Java Backend `/api/agent/chat/stream`. |
 | `/ai/embedding/embed` | Backend-owned AI infrastructure | Denied through `/ai-proxy`; Backend uses `AIServiceClient`. |
-| `/ai/memory/extract` | Backend-owned memory capability | Denied through `/ai-proxy`; Backend uses `AIServiceClient`. |
+| `/ai/memory/extract` | Removed memory capability | Denied through `/ai-proxy`; route removed from Python AI service and Backend client. |
 | `/ai/memory/save-plan` | AI runtime draft planning | Temporarily allowed; final writes remain Backend-owned. |
 | `/ai/memory/organize-draft` | AI runtime draft generation | Temporarily allowed; final writes remain Backend-owned. |
 | `/ai/memory/persona-material-draft` | AI runtime draft generation | Temporarily allowed; final writes remain Backend-owned. |

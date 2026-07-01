@@ -3,8 +3,6 @@ package com.familyagent.infra.ai;
 import com.familyagent.infra.ai.dto.AgentChatStreamPayload;
 import com.familyagent.infra.ai.dto.EmbeddingRequest;
 import com.familyagent.infra.ai.dto.EmbeddingResponse;
-import com.familyagent.infra.ai.dto.MemoryExtractionRequest;
-import com.familyagent.infra.ai.dto.MemoryExtractionResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -89,65 +87,6 @@ class AIServiceClientTest {
 
         assertEquals(null, receivedToken.get());
         assertEquals(true, response.isSuccess());
-    }
-
-    @Test
-    void extractMemories_shouldParseTypedResponseAndSendAuthorization() throws Exception {
-        AtomicReference<String> authorizationHeader = new AtomicReference<>();
-        server = startServer("/ai/memory/extract", exchange -> {
-            authorizationHeader.set(exchange.getRequestHeaders().getFirst("Authorization"));
-            respond(exchange, "application/json", 200,
-                    "{\"success\":true,\"deprecated\":true,\"degraded\":false,\"memories\":[{\"type\":\"LEARNING\",\"content\":\"孩子先复述题意再画图更稳定。\",\"summary\":\"应用题策略\",\"importance\":4,\"confidence\":0.8}],\"message\":\"ok\"}");
-        });
-
-        AIServiceClient client = createClient("secret-token");
-
-        MemoryExtractionResponse response = client.extractMemories(MemoryExtractionRequest.builder()
-                .sessionId(7L)
-                .subject("FamilyAgent")
-                .messages(java.util.List.of(MemoryExtractionRequest.Message.builder()
-                        .role("user")
-                        .content("孩子做应用题先复述题意会更稳定")
-                        .build()))
-                .summary("应用题学习策略")
-                .build(), "Bearer demo-token");
-
-        assertEquals("Bearer demo-token", authorizationHeader.get());
-        assertEquals(true, response.isSuccess());
-        assertEquals(true, response.isDeprecated());
-        assertEquals(1, response.getMemories().size());
-        assertEquals("LEARNING", response.getMemories().get(0).getType());
-        assertEquals(0.8, response.getMemories().get(0).getConfidence());
-    }
-
-    @Test
-    void extractMemories_shouldParseSnakeCaseErrorCodeAndRecordBusinessFailure() throws Exception {
-        server = startServer("/ai/memory/extract", exchange -> {
-            respond(exchange, "application/json", 200,
-                    "{\"success\":false,\"deprecated\":true,\"degraded\":false,\"memories\":[],\"error_code\":\"MEMORY_EXTRACT_DEPRECATED\",\"message\":\"deprecated\"}");
-        });
-
-        AIServiceClient client = createClient("secret-token");
-
-        MemoryExtractionResponse response = client.extractMemories(MemoryExtractionRequest.builder()
-                .sessionId(7L)
-                .subject("FamilyAgent")
-                .messages(java.util.List.of(MemoryExtractionRequest.Message.builder()
-                        .role("user")
-                        .content("孩子做应用题先复述题意会更稳定")
-                        .build()))
-                .summary("应用题学习策略")
-                .build(), "Bearer demo-token");
-
-        assertEquals(false, response.isSuccess());
-        assertEquals("MEMORY_EXTRACT_DEPRECATED", response.getErrorCode());
-        assertEquals(1, meterRegistry.find("familyagent.ai.client.request")
-                .tag("operation", "memory_extract")
-                .tag("success", "false")
-                .tag("errorCode", "MEMORY_EXTRACT_DEPRECATED")
-                .tag("degraded", "false")
-                .timer()
-                .count());
     }
 
     @Test
