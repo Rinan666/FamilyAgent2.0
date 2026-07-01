@@ -5,8 +5,6 @@ import com.familyagent.common.response.ErrorCode;
 import com.familyagent.infra.ai.dto.AgentChatStreamPayload;
 import com.familyagent.infra.ai.dto.EmbeddingRequest;
 import com.familyagent.infra.ai.dto.EmbeddingResponse;
-import com.familyagent.infra.ai.dto.MemoryExtractionRequest;
-import com.familyagent.infra.ai.dto.MemoryExtractionResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
@@ -246,56 +244,6 @@ public class AIServiceClient {
     }
 
     /**
-     * Extract memory candidates from a finished Agent session.
-     */
-    @CircuitBreaker(name = "aiService")
-    @Retry(name = "aiService", fallbackMethod = "fallbackExtractMemories")
-    public MemoryExtractionResponse extractMemories(MemoryExtractionRequest request, String authorization) {
-        long startedAt = System.nanoTime();
-        String requestId = newRequestId();
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.set("X-Request-Id", requestId);
-            if (authorization != null && !authorization.isBlank()) {
-                headers.set("Authorization", authorization);
-            }
-            HttpEntity<MemoryExtractionRequest> entity = new HttpEntity<>(request, headers);
-
-            ResponseEntity<MemoryExtractionResponse> response = restTemplate.postForEntity(
-                    baseUrl + "/ai/memory/extract", entity, MemoryExtractionResponse.class);
-            MemoryExtractionResponse body = response.getBody();
-            boolean bodySuccess = body != null && body.isSuccess();
-            recordAiCall(
-                    "memory_extract",
-                    bodySuccess,
-                    metricErrorCode(bodySuccess, body != null ? body.getErrorCode() : "AI_EMPTY_RESPONSE"),
-                    null,
-                    null,
-                    body != null && body.isDegraded(),
-                    elapsed(startedAt)
-            );
-            log.info("AI memory extraction completed: requestId={}, success={}, degraded={}",
-                    requestId,
-                    body != null && body.isSuccess(),
-                    body != null && body.isDegraded());
-            return body;
-        } catch (Exception e) {
-            recordAiCall(
-                    "memory_extract",
-                    false,
-                    ERROR_AI_SERVICE,
-                    null,
-                    null,
-                    false,
-                    elapsed(startedAt)
-            );
-            log.warn("Memory extraction transport failed: requestId={}, error={}", requestId, e.getMessage());
-            throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "AI service unavailable");
-        }
-    }
-
-    /**
      * Generate an embedding vector for backend-owned memory indexing.
      */
     @CircuitBreaker(name = "aiService")
@@ -368,11 +316,6 @@ public class AIServiceClient {
     private EmbeddingResponse fallbackEmbedText(EmbeddingRequest request, Exception ex) {
         log.warn("AI embedding fallback triggered: {}", ex.getMessage());
         return EmbeddingResponse.unavailable();
-    }
-
-    private MemoryExtractionResponse fallbackExtractMemories(MemoryExtractionRequest request, String authorization, Exception ex) {
-        log.warn("AI memory extraction fallback triggered: {}", ex.getMessage());
-        return MemoryExtractionResponse.unavailable();
     }
 
     private void fallbackProxyChatStream(

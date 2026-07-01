@@ -4,6 +4,7 @@ import com.familyagent.module.agent.harness.AgentRunContext;
 import com.familyagent.module.agent.harness.AgentTool;
 import com.familyagent.module.agent.harness.AgentToolDescriptor;
 import com.familyagent.module.agent.harness.constant.AgentToolConfirmationRequirement;
+import com.familyagent.module.agent.harness.constant.AgentToolName;
 import com.familyagent.module.agent.harness.constant.AgentToolPrivacyLevel;
 import com.familyagent.module.agent.harness.constant.AgentToolSideEffect;
 import com.familyagent.module.agent.harness.dto.RecallFamilyMemoryInput;
@@ -14,12 +15,10 @@ import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
-public class RecallFamilyMemoryTool implements AgentTool<RecallFamilyMemoryInput, RecallFamilyMemoryOutput> {
-
-    public static final String NAME = "recall_family_memory";
+class RecallFamilyMemoryTool implements AgentTool<RecallFamilyMemoryInput, RecallFamilyMemoryOutput> {
 
     private static final AgentToolDescriptor DESCRIPTOR = new AgentToolDescriptor(
-            NAME,
+            AgentToolName.RECALL_FAMILY_MEMORY.value(),
             "Recall authorized family memory context for a FamilyAgent request",
             RecallFamilyMemoryInput.class,
             RecallFamilyMemoryOutput.class,

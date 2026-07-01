@@ -655,6 +655,40 @@ export interface WeeklyGrowthReport {
 }
 
 export type SkillRunStatus = 'PLANNED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELED' | string;
+export type AgentConfirmationDecision = 'APPROVE' | 'REJECT';
+export type AgentConfirmationStatus = 'NOT_REQUIRED' | 'REQUIRED' | 'APPROVED' | 'REJECTED' | 'EXPIRED' | string;
+
+export interface AgentToolConfirmation {
+  id: number;
+  toolName: string;
+  familyId: number;
+  viewerUserId: number;
+  requestId?: string;
+  inputSummary?: string;
+  status: AgentConfirmationStatus;
+  executionStatus?: string;
+  executionErrorCode?: string;
+  expiresAt: string;
+  decidedAt?: string;
+  executedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface AgentToolExecutionResult<T = unknown> {
+  success: boolean;
+  data?: T | null;
+  status: string;
+  errorCode?: string | null;
+  message?: string | null;
+  confirmationId?: number | null;
+  retryable: boolean;
+}
+
+export interface AgentToolConfirmationDecisionResult {
+  confirmation: AgentToolConfirmation;
+  toolResult?: AgentToolExecutionResult | null;
+}
 
 export interface SkillRun {
   id: number;

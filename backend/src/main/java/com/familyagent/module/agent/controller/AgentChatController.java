@@ -5,10 +5,8 @@ import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.infra.ai.AIServiceClient;
 import com.familyagent.infra.ai.dto.AgentChatStreamPayload;
-import com.familyagent.module.family.facade.AgentPersonaContextFacade;
 import com.familyagent.module.agent.dto.AgentChatStreamRequest;
-import com.familyagent.module.memory.facade.AgentMemoryContextFacade;
-import com.familyagent.module.mirror.facade.AgentMirrorContextFacade;
+import com.familyagent.module.agent.service.AgentChatMemoryContextResolver;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
@@ -47,9 +45,7 @@ public class AgentChatController {
     private static final DateTimeFormatter HOUR_KEY_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH");
     private static final String REQUEST_ID_HEADER = "X-Request-Id";
     private final AIServiceClient aiServiceClient;
-    private final AgentMemoryContextFacade memoryContextFacade;
-    private final AgentMirrorContextFacade mirrorContextFacade;
-    private final AgentPersonaContextFacade personaContextFacade;
+    private final AgentChatMemoryContextResolver memoryContextResolver;
     private final RedissonClient redissonClient;
     private final ObjectMapper objectMapper;
 
@@ -61,7 +57,8 @@ public class AgentChatController {
                        HttpServletResponse response) throws IOException {
         Long userId = CurrentUserGuard.currentUserId();
         String effectiveRequestId = normalizeRequestId(requestId);
-        AgentChatStreamPayload aiPayload = request.toAiPayload(resolveMemoryContext(request, userId));
+        AgentChatStreamPayload aiPayload = request.toAiPayload(
+                memoryContextResolver.resolve(request, userId, effectiveRequestId));
         enforceRequestSize(aiPayload);
         String hourKey = "quota:chat:user:" + userId + ":" + LocalDateTime.now().format(HOUR_KEY_FMT);
         RAtomicLong counter = redissonClient.getAtomicLong(hourKey);
@@ -101,37 +98,6 @@ public class AgentChatController {
             log.warn("FamilyAgent chat stream failed after response committed: requestId={}, error={}", effectiveRequestId, e.getMessage());
             writeErrorEvent(response.getOutputStream(), effectiveRequestId);
         }
-    }
-
-    private String resolveMemoryContext(AgentChatStreamRequest request, Long userId) {
-        if (request.shouldUseServerMirrorContext()) {
-            return mirrorContextFacade.buildMirrorAgentContext(
-                    request.getFamilyId(),
-                    request.getTargetUserId(),
-                    request.getMemberMessage());
-        }
-        if (request.shouldUseServerPersonaContext()) {
-            String personaContext = personaContextFacade.buildPersonaAgentContext(
-                    request.getFamilyId(),
-                    request.getTargetPersonaId());
-            if (!request.isThinkMode()) {
-                return personaContext;
-            }
-            String familyContext = buildFamilyMemoryContext(request, userId);
-            return familyContext.isBlank() ? personaContext : personaContext + "\n\nfamily_visible_reference:\n" + familyContext;
-        }
-        if (!request.shouldUseServerFamilyMemoryContext()) {
-            return request.getMemoryContext();
-        }
-        return buildFamilyMemoryContext(request, userId);
-    }
-
-    private String buildFamilyMemoryContext(AgentChatStreamRequest request, Long userId) {
-        return memoryContextFacade.buildFamilyAgentContext(
-                request.getFamilyId(),
-                userId,
-                request.getMemberMessage(),
-                request.userHistoryContents());
     }
 
     private String normalizeRequestId(String requestId) {

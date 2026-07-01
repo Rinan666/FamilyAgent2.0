@@ -11,11 +11,12 @@ public record AgentToolCallResult<O>(
         AgentToolCallStatus status,
         String errorCode,
         String message,
+        Long confirmationId,
         boolean retryable
 ) {
 
     public static <O> AgentToolCallResult<O> success(O data) {
-        return new AgentToolCallResult<>(true, data, AgentToolCallStatus.SUCCEEDED, null, null, false);
+        return new AgentToolCallResult<>(true, data, AgentToolCallStatus.SUCCEEDED, null, null, null, false);
     }
 
     public static <O> AgentToolCallResult<O> failure(
@@ -23,6 +24,20 @@ public record AgentToolCallResult<O>(
             String errorCode,
             String message,
             boolean retryable) {
-        return new AgentToolCallResult<>(false, null, status, errorCode, message, retryable);
+        return new AgentToolCallResult<>(false, null, status, errorCode, message, null, retryable);
+    }
+
+    public static <O> AgentToolCallResult<O> confirmationRequired(
+            String errorCode,
+            String message,
+            Long confirmationId) {
+        return new AgentToolCallResult<>(
+                false,
+                null,
+                AgentToolCallStatus.CONFIRMATION_REQUIRED,
+                errorCode,
+                message,
+                confirmationId,
+                false);
     }
 }

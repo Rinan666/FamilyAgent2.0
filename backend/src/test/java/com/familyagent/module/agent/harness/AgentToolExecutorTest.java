@@ -2,6 +2,7 @@ package com.familyagent.module.agent.harness;
 
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
+import com.familyagent.module.agent.harness.constant.AgentConfirmationStatus;
 import com.familyagent.module.agent.harness.constant.AgentToolCallStatus;
 import com.familyagent.module.agent.harness.constant.AgentToolConfirmationRequirement;
 import com.familyagent.module.agent.harness.constant.AgentToolErrorCode;
@@ -9,6 +10,7 @@ import com.familyagent.module.agent.harness.constant.AgentToolPrivacyLevel;
 import com.familyagent.module.agent.harness.constant.AgentToolSideEffect;
 import com.familyagent.module.agent.harness.dto.AgentToolCallRequest;
 import com.familyagent.module.agent.harness.dto.AgentToolCallResult;
+import com.familyagent.module.agent.harness.entity.AgentToolConfirmationRecord;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -22,6 +24,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -31,6 +34,11 @@ class AgentToolExecutorTest {
     @Mock private AgentToolRegistry registry;
     @Mock private AgentToolPermissionGate permissionGate;
     @Mock private AgentToolAuditService auditService;
+    @Mock private AgentConfirmationPolicy confirmationPolicy;
+    @Mock private AgentToolConfirmationService confirmationService;
+    private final AgentToolInputValidator inputValidator = new AgentToolInputValidator();
+    private final AgentToolErrorMapper errorMapper = new AgentToolErrorMapper();
+    private final AgentToolDescriptorFactory descriptorFactory = new AgentToolDescriptorFactory();
 
     private final AgentRunContext context = new AgentRunContext(
             "req-1",
@@ -46,7 +54,9 @@ class AgentToolExecutorTest {
         EchoTool tool = new EchoTool();
         EchoInput input = new EchoInput("hello");
         doReturn(tool).when(registry).require(EchoTool.NAME);
-        AgentToolExecutor executor = new AgentToolExecutor(registry, permissionGate, auditService);
+        when(confirmationPolicy.evaluate(context, tool.descriptor(), input))
+                .thenReturn(AgentConfirmationStatus.NOT_REQUIRED);
+        AgentToolExecutor executor = executor();
 
         AgentToolCallResult<EchoOutput> result = executor.execute(new AgentToolCallRequest<>(
                 EchoTool.NAME,
@@ -67,7 +77,7 @@ class AgentToolExecutorTest {
         doThrow(new BusinessException(ErrorCode.FORBIDDEN, "denied"))
                 .when(permissionGate)
                 .assertAllowed(context, tool.descriptor(), input);
-        AgentToolExecutor executor = new AgentToolExecutor(registry, permissionGate, auditService);
+        AgentToolExecutor executor = executor();
 
         AgentToolCallResult<EchoOutput> result = executor.execute(new AgentToolCallRequest<>(
                 EchoTool.NAME,
@@ -86,10 +96,58 @@ class AgentToolExecutorTest {
     }
 
     @Test
+    void execute_confirmationRequired_returnsStructuredPendingAndWritesAudit() {
+        EchoTool tool = new EchoTool();
+        EchoInput input = new EchoInput("hello");
+        doReturn(tool).when(registry).require(EchoTool.NAME);
+        when(confirmationPolicy.evaluate(context, tool.descriptor(), input))
+                .thenReturn(AgentConfirmationStatus.REQUIRED);
+        AgentToolConfirmationRecord confirmation = new AgentToolConfirmationRecord();
+        confirmation.setId(55L);
+        when(confirmationService.createRequired(context, tool.descriptor(), input))
+                .thenReturn(confirmation);
+        AgentToolExecutor executor = executor();
+
+        AgentToolCallResult<EchoOutput> result = executor.execute(new AgentToolCallRequest<>(
+                EchoTool.NAME,
+                context,
+                input));
+
+        assertFalse(result.success());
+        assertEquals(AgentToolCallStatus.CONFIRMATION_REQUIRED, result.status());
+        assertEquals(AgentToolErrorCode.CONFIRMATION_REQUIRED.code(), result.errorCode());
+        assertEquals(55L, result.confirmationId());
+        verify(confirmationService).createRequired(context, tool.descriptor(), input);
+        verify(auditService).record(
+                context,
+                tool.descriptor(),
+                input,
+                AgentToolCallStatus.CONFIRMATION_REQUIRED,
+                AgentToolErrorCode.CONFIRMATION_REQUIRED.code());
+    }
+
+    @Test
+    void executeConfirmed_success_skipsConfirmationPolicyAndLinksAuditRecord() {
+        EchoTool tool = new EchoTool();
+        EchoInput input = new EchoInput("hello");
+        doReturn(tool).when(registry).require(EchoTool.NAME);
+        AgentToolExecutor executor = executor();
+
+        AgentToolCallResult<EchoOutput> result = executor.executeConfirmed(new AgentToolCallRequest<>(
+                EchoTool.NAME,
+                context,
+                input), 55L);
+
+        assertTrue(result.success());
+        verify(confirmationPolicy, never()).evaluate(any(), any(), any());
+        verify(auditService).record(context, tool.descriptor(), input, AgentToolCallStatus.SUCCEEDED, null, 55L);
+    }
+
+    @Test
     void execute_invalidInput_returnsStructuredFailureAndWritesAudit() {
         EchoTool tool = new EchoTool();
         doReturn(tool).when(registry).require(EchoTool.NAME);
-        AgentToolExecutor executor = new AgentToolExecutor(registry, permissionGate, auditService);
+        AgentToolExecutor executor = executor();
 
         AgentToolCallResult<EchoOutput> result = executor.execute(new AgentToolCallRequest<>(
                 EchoTool.NAME,
@@ -111,7 +169,7 @@ class AgentToolExecutorTest {
     void execute_unknownTool_returnsStructuredFailureAndWritesAudit() {
         when(registry.require("missing"))
                 .thenThrow(new BusinessException(ErrorCode.NOT_FOUND, "missing"));
-        AgentToolExecutor executor = new AgentToolExecutor(registry, permissionGate, auditService);
+        AgentToolExecutor executor = executor();
 
         AgentToolCallResult<EchoOutput> result = executor.execute(new AgentToolCallRequest<>(
                 "missing",
@@ -128,6 +186,18 @@ class AgentToolExecutorTest {
                 eq(AgentToolCallStatus.FAILED),
                 eq(AgentToolErrorCode.TOOL_NOT_FOUND.code()));
         assertEquals("missing", descriptorCaptor.getValue().name());
+    }
+
+    private AgentToolExecutor executor() {
+        return new AgentToolExecutor(
+                registry,
+                permissionGate,
+                auditService,
+                inputValidator,
+                confirmationPolicy,
+                confirmationService,
+                errorMapper,
+                descriptorFactory);
     }
 
     private record EchoInput(String value) {

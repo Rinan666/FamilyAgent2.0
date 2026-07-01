@@ -116,6 +116,7 @@ AI 安全地基已经比较稳，但还没有形成真正的 Harness：
 10. requestId 可以串起请求，但不能描述一次 Agent run 内部的 tool / skill / LLM 轨迹。
 11. Eval 还没有成为 AI 变更门禁。
 12. prompt、schema、skill 定义缺少统一版本化和回归报告。
+13. Python AI service 入口还没有完全收敛。后端业务链路主要通过 `AIServiceClient` 调用 Python AI service，但前端仍存在 `/ai-proxy/*` 直连代理；Agent、家庭记忆、写入、权限相关能力必须避免绕过 Java Backend。
 
 ---
 
@@ -165,6 +166,16 @@ AI 安全地基已经比较稳，但还没有形成真正的 Harness：
 - 稳定契约优先强类型 DTO / VO / record。
 - 不把新逻辑继续堆进热点大 Service。
 
+### 4.4 AI service 入口收敛
+
+Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业务主控后端。
+
+- 后端业务 AI 能力统一通过 `AIServiceClient` 访问 Python AI service。
+- Agent、家庭记忆、日记、成长观察、权限、确认、审计相关能力不得通过前端 `/ai-proxy/*` 绕过 Java Backend。
+- Python AI runtime 可以负责 prompt、model、planning、tool-call proposal、trace、eval，但真实业务工具执行必须回到 Backend Agent Harness。
+- 前端 `/ai-proxy/*` 只能作为临时或明确标注的非业务主权路径；若能力涉及家庭数据、权限、写入或审计，必须迁入 Java Backend API。
+- 纯媒体处理、文件分析等能力如果暂时保留直连代理，必须单独登记边界、权限假设和迁移策略，避免与 Agent Harness 混用。
+
 ---
 
 ## 5. 分阶段计划
@@ -201,7 +212,32 @@ AI 安全地基已经比较稳，但还没有形成真正的 Harness：
 
 ### Phase 1：轻型 Agent Harness 骨架
 
-状态：当前推荐立即执行。
+状态：已完成。轻型 Agent Harness 最小闭环已接入真实 family-memory Agent 入口。
+
+最近进度：
+
+- 2026-06-29：完成后端轻型 harness 第一刀，提交 `12f5d61c Add lightweight agent harness foundation`。
+- 2026-06-29：拆分 `AgentToolExecutor` 协作职责，提交 `be5dd77b Split agent tool executor collaborators`。
+- 2026-06-29：将 `AgentChatController` 的 family-memory 上下文解析迁入 `AgentToolExecutor -> recall_family_memory`，并集中工具名、隐藏工具实现类。
+- 2026-06-29：明确 Python AI service 入口收敛原则：业务 AI 调用走 `AIServiceClient`，Agent / 家庭数据 / 写入 / 审计能力不得经前端 `/ai-proxy/*` 绕过 Backend Harness。
+
+已完成：
+
+1. `AgentTool`。
+2. `AgentToolDescriptor`。
+3. `AgentToolRegistry`。
+4. `AgentToolExecutor`。
+5. `AgentToolPermissionGate`。
+6. `AgentToolInputValidator`。
+7. `AgentToolErrorMapper`。
+8. `AgentToolDescriptorFactory`。
+9. `AgentToolCallRequest` / `AgentToolCallResult`。
+10. `agent_tool_calls` 最小审计表。
+11. `recall_family_memory` 只读工具。
+12. 工具权限拒绝、输入错误、未知工具、审计摘要、只读工具 Facade 调用测试。
+13. `AgentChatMemoryContextResolver` 已让真实 family-memory Agent 入口通过 `AgentToolExecutor` 调用 `recall_family_memory`。
+14. `RecallFamilyMemoryTool` 已改为包内可见，上层通过 `AgentToolName.RECALL_FAMILY_MEMORY` 走 executor，降低直接注入工具实现的风险。
+15. 已补 `AgentChatMemoryContextResolverTest` 验证真实入口使用 tool executor，且不再信任客户端 `memoryContext`。
 
 目标：建立 Agent 工具声明、注册、权限、执行和审计的最小闭环。
 
@@ -287,42 +323,99 @@ AI 安全地基已经比较稳，但还没有形成真正的 Harness：
 
 验收标准：
 
-- 工具不能绕过 registry 执行。
-- 工具执行前必经 permission gate。
-- 每次工具调用都有审计记录。
-- 只读工具失败返回结构化错误，不伪装成普通 assistant 文本。
-- 不破坏当前可信上下文与授权召回边界。
+- [已完成] 工具不能绕过 registry 执行。真实 family-memory Agent 入口已迁入 executor，工具实现类包内可见，上层只使用集中工具名。
+- [已完成] 工具执行前必经 permission gate。已有 `AgentToolExecutorTest` 覆盖拒绝路径。
+- [已完成] 每次 executor 工具调用都有审计记录。已有 `AgentToolAuditServiceTest` 覆盖不落原始隐私输入。
+- [已完成] 只读工具失败返回结构化错误，不伪装成普通 assistant 文本。已有未知工具、输入错误、权限拒绝、执行异常映射。
+- [已完成] 不破坏当前可信上下文与授权召回边界。`recall_family_memory` 复用 `AgentMemoryContextFacade`。
+
+---
+
+### Phase 1.5：AI service 入口收敛与双层 Harness 边界
+
+状态：已完成。前端 `/ai-proxy/*` 已有显式边界、清单、源码调用集中化和防回退测试；Phase 2 可以在该边界上继续推进写入工具与确认门。
+
+最近进度：
+
+- 2026-06-30：新增 `/ai-proxy/*` 共享边界模块 `frontend/src/lib/api/aiProxyBoundary.ts`，将允许路由集中为 `AI_PROXY_ROUTES` 与 `aiProxyUrl()`。
+- 2026-06-30：Next.js `/ai-proxy/[...path]` 代理已接入同一 boundary resolver，未登记路径、Agent / family / memory 写入 / diary / growth / session / tool 等 Backend-owned 前缀默认返回 `403`。
+- 2026-06-30：前端现有 `/ai-proxy` 调用点已改为共享常量；源码中不再直接散落 `/ai-proxy/...` 调用字符串。
+- 2026-06-30：新增 `docs/AI_PROXY_BOUNDARY_INVENTORY.md`，记录当前 allowlist、Backend-owned 前缀、迁移目标和源码调用点。
+- 2026-06-30：新增 `aiProxyBoundary.test.ts`，覆盖 AI runtime 草稿路由放行、媒体处理放行、Agent / family / memory 写入绕过 Backend 被拒、未知路径默认拒绝。
+- 2026-06-30：补充源码扫描防回退测试，确保前端新增 `/ai-proxy/...` 调用必须集中到 `AI_PROXY_ROUTES` 与 `aiProxyUrl()`。
+- 2026-06-30：盘点 Python AI service 当前入口，并在 `docs/AI_PROXY_BOUNDARY_INVENTORY.md` 中标注 Agent、Embedding、Memory、DIP、Health 路由分类与前端代理结论。
+
+目标：避免 Python AI service、前端代理和 Java Backend 同时形成多套 AI 入口，确保 Backend Agent Harness 与未来 Python AI Runtime Harness 分工清晰。
+
+工作项：
+
+1. 盘点所有 `/ai-proxy/*` 前端调用，按能力分为：
+   - 业务主权路径：Agent、家庭记忆、日记、成长观察、权限、写入、审计。
+   - AI runtime 路径：prompt、LLM、embedding、rerank、eval、trace。
+   - 非业务主权路径：纯媒体处理、文件分析、临时开发工具。
+2. 业务主权路径必须迁入 Java Backend API，再由后端通过 `AIServiceClient` 调 Python AI service。
+3. `AIServiceClient` 继续作为后端访问 Python AI service 的唯一正式客户端边界，不把 Python URL、timeout、fallback、requestId、metrics 分散到业务 Service。
+4. Python AI Runtime Harness 只负责模型运行与工具调用建议；真实工具执行、权限、确认、审计、事务、幂等由 Backend Agent Harness 承担。
+5. 为暂时保留的 `/ai-proxy/*` 能力补充边界说明，明确是否允许访问家庭数据、是否需要鉴权、是否需要迁移到后端。
+6. 新增或调整测试，至少覆盖 Agent / 家庭数据能力不能绕过 Backend Harness 的关键入口。
+
+验收标准：
+
+- [已完成] Agent、Memory、Diary、Growth 等家庭业务 AI 能力没有新增前端直连 Python AI service 的路径。
+- [已完成] 现有 `/ai-proxy/*` 路径有清单、分类和迁移结论。
+- [已完成] 新增 Python AI service 能力时，计划中能明确判断它属于 AI runtime 还是后端业务工具执行。
+- [已完成] Backend Harness 与 Python AI Runtime Harness 的职责边界在文档和代码入口上保持一致。
 
 ---
 
 ### Phase 2：写入工具与确认门
 
+状态：进行中。已完成确认状态、确认策略、持久化确认记录、确认审批/拒绝 API 契约、首个写入工具声明，以及 approve 后的后端幂等执行闭环；下一步把具体页面确认弹窗改为消费统一 confirmation contract。
+
 目标：把写日记、写家庭记忆、写成长观察纳入统一工具执行器。
+
+最近进度：
+
+- 2026-06-30：新增 `AgentConfirmationStatus`，先定义 `NOT_REQUIRED`、`REQUIRED`、`APPROVED`、`REJECTED`、`EXPIRED` 五种确认状态。
+- 2026-06-30：新增 `AgentConfirmationPolicy`，将确认判断从 `AgentToolExecutor` 拆为独立 Spring 协作类，executor 继续只负责编排流程。
+- 2026-06-30：`AgentToolExecutor` 已通过 confirmation policy 返回结构化 `CONFIRMATION_REQUIRED`，不会直接执行需要确认的工具。
+- 2026-06-30：新增 `AgentConfirmationPolicyTest`，并补充 executor confirmation-required 测试。
+- 2026-06-30：新增 `agent_tool_confirmations` 表、`AgentToolConfirmationRecord`、Repository 与 `AgentToolConfirmationService`，确认记录包含 `idempotencyKey`、状态、过期时间和脱敏输入摘要。
+- 2026-06-30：抽出 `AgentToolInputSummarizer`，审计记录与确认展示共用脱敏摘要逻辑，避免在日志、审计摘要和前端确认列表中暴露原始家庭隐私内容。
+- 2026-06-30：executor 在确认策略返回 `REQUIRED` 时会创建 pending confirmation，并在结构化结果中返回 `confirmationId`，仍不会执行写入工具。
+- 2026-06-30：新增 `create_diary_entry` 工具、强类型 `CreateDiaryEntryInput` / `CreateDiaryEntryOutput`，并通过 `AgentDiaryEntryFacade` 隔离 diary 模块 Service；该写入工具默认 `REQUIRED`，经 executor 调用时只生成确认记录。
+- 2026-06-30：新增 `AgentConfirmationDecision` 和确认决策流转，支持 approve / reject / expired / duplicate terminal confirmation 幂等处理，错误用户不能处理他人的 confirmation。
+- 2026-06-30：新增 `/api/agent/tool-confirmations/{confirmationId}/decision`，并同步前端 `agentApi.decideToolConfirmation` 与 `AgentToolConfirmation` / `AgentConfirmationDecision` / `AgentConfirmationStatus` 类型。
+- 2026-07-01：扩展 confirmation 记录，保存仅供后端确认执行使用的受控 typed payload、最小 run context、执行状态和 `executedAt`；确认 approve 后通过 `AgentToolConfirmationDecisionService -> AgentToolExecutor.executeConfirmed` 重新走权限、校验、审计和工具执行。
+- 2026-07-01：`agent_tool_calls` 增加 `confirmation_id`，approve 后的真实写入 tool call 可追溯到 confirmation；重复 terminal confirmation 不会再次执行写入工具。
+- 2026-07-01：确认决策 API 响应扩展为 `AgentToolConfirmationDecisionResult`，同时返回 confirmation 与可选 `toolResult`，前端类型和 `agentApi.decideToolConfirmation` 已同步。
+- 2026-07-01：新增 `create_family_memory` 写入工具、强类型 `CreateFamilyMemoryInput` / `CreateFamilyMemoryOutput`，并通过 `AgentFamilyMemoryFacade` 隔离 memory 模块 Service；该工具默认进入统一确认门，approve 后才执行真实写入。
+- 2026-07-01：新增 `create_growth_guard_record` 写入工具、强类型 `CreateGrowthGuardRecordInput` / `CreateGrowthGuardRecordOutput`，并通过 `AgentGrowthGuardRecordFacade` 隔离 growth 模块 Service；工具层要求 `targetUserId` 必填，真实 care authorization 继续由 growth 模块内规则裁决。
 
 工作项：
 
-1. 定义 `AgentConfirmationPolicy`。
-2. 定义确认状态：
+1. [已完成] 定义 `AgentConfirmationPolicy`。
+2. [已完成] 定义确认状态：
    - `NOT_REQUIRED`
    - `REQUIRED`
    - `APPROVED`
    - `REJECTED`
    - `EXPIRED`
-3. 新增 `AgentToolConfirmation` DTO 或表。
+3. [已完成] 新增 `AgentToolConfirmation` DTO 或表。
 4. 接入写入工具：
-   - `create_diary_entry`
-   - `create_family_memory`
-   - `create_growth_guard_record`
-5. 前端保存确认弹窗改为消费统一 confirmation contract。
+   - [已接入确认门与 approve 执行闭环] `create_diary_entry`
+   - [已接入确认门与 approve 执行闭环] `create_family_memory`
+   - [已接入确认门与 approve 执行闭环] `create_growth_guard_record`
+5. [契约已完成，页面待接入] 前端保存确认弹窗改为消费统一 confirmation contract。
 6. 现有 save-plan 可以先作为上游决策，不强行迁移 LLM prompt。
 
 验收标准：
 
-- Agent 不能直接执行写入工具，除非确认策略允许。
-- 用户拒绝确认时不写库。
-- 用户重复确认不会重复写入。
-- 每次写入工具记录 idempotency key。
-- 写入来源能追溯到 tool call record。
+- [已完成] Agent 不能直接执行写入工具，除非确认策略允许。
+- [已完成] 用户拒绝确认时不写库。
+- [已完成] 用户重复确认不会重复写入。
+- [已完成] 每次写入工具记录 idempotency key。
+- [已完成] 写入来源能追溯到 tool call record。
 
 ---
 
