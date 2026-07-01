@@ -390,6 +390,7 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
 - 2026-07-01：`agent_tool_calls` 增加 `confirmation_id`，approve 后的真实写入 tool call 可追溯到 confirmation；重复 terminal confirmation 不会再次执行写入工具。
 - 2026-07-01：确认决策 API 响应扩展为 `AgentToolConfirmationDecisionResult`，同时返回 confirmation 与可选 `toolResult`，前端类型和 `agentApi.decideToolConfirmation` 已同步。
 - 2026-07-01：新增 `create_family_memory` 写入工具、强类型 `CreateFamilyMemoryInput` / `CreateFamilyMemoryOutput`，并通过 `AgentFamilyMemoryFacade` 隔离 memory 模块 Service；该工具默认进入统一确认门，approve 后才执行真实写入。
+- 2026-07-01：新增 `create_growth_guard_record` 写入工具、强类型 `CreateGrowthGuardRecordInput` / `CreateGrowthGuardRecordOutput`，并通过 `AgentGrowthGuardRecordFacade` 隔离 growth 模块 Service；工具层要求 `targetUserId` 必填，真实 care authorization 继续由 growth 模块内规则裁决。
 
 工作项：
 
@@ -404,7 +405,7 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
 4. 接入写入工具：
    - [已接入确认门与 approve 执行闭环] `create_diary_entry`
    - [已接入确认门与 approve 执行闭环] `create_family_memory`
-   - `create_growth_guard_record`
+   - [已接入确认门与 approve 执行闭环] `create_growth_guard_record`
 5. [契约已完成，页面待接入] 前端保存确认弹窗改为消费统一 confirmation contract。
 6. 现有 save-plan 可以先作为上游决策，不强行迁移 LLM prompt。
 
