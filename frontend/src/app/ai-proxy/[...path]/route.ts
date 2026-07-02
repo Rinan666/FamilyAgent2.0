@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server';
+import { resolveAiProxyBoundary } from '@/lib/api/aiProxyBoundary';
 
 const DEFAULT_AI_SERVICE_URL = process.env.NODE_ENV === 'production'
   ? 'http://ai-service:8000'
@@ -18,6 +19,17 @@ function plainTextSnippet(text: string): string {
 }
 
 async function proxyToAi(request: NextRequest, path: string[]): Promise<NextResponse> {
+  const boundary = resolveAiProxyBoundary(path);
+  if (!boundary.allowed) {
+    return NextResponse.json({
+      success: false,
+      detail: boundary.detail,
+      category: boundary.category,
+      route: boundary.route,
+      migrationTarget: boundary.migrationTarget,
+    }, { status: 403 });
+  }
+
   const targetUrl = `${AI_SERVICE_URL}/ai/${path.join('/')}`;
 
   const headers: Record<string, string> = {

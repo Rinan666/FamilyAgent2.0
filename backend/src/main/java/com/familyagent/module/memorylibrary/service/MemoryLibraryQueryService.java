@@ -97,6 +97,7 @@ public class MemoryLibraryQueryService {
                 .title(rs.getString("title"))
                 .body(rs.getString("body"))
                 .familyId(rs.getLong("family_id"))
+                .authorUserId(rs.getLong("author_user_id"))
                 .memberUserId(rs.getLong("member_user_id"))
                 .memberName(rs.getString("member_name"))
                 .visibility(rs.getString("visibility"))

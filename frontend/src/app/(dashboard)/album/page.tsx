@@ -4,17 +4,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image as ImageIcon, Images, RefreshCw, Trash2, Upload, UserRound, UsersRound, X } from 'lucide-react';
+import { AI_PROXY_ROUTES, aiProxyUrl } from '@/lib/api/aiProxyBoundary';
 import { photoApi } from '@/lib/api/photos';
 import { useViewerRole } from '@/hooks/useViewerRole';
 import {
   WorkbenchAlert,
-  WorkbenchBadge,
   WorkbenchButton,
-  WorkbenchHero,
   WorkbenchPage,
   WorkbenchSurface,
-  WorkbenchTabs,
 } from '@/components/layout/Workbench';
+import { MobilePageDrawer } from '@/components/layout/Sidebar';
 import type { PhotoClusterResult, PhotoFaceMeta, PhotoItem, PhotoScope } from '@/types';
 
 type Stage = 'idle' | 'uploading' | 'clustering' | 'done';
@@ -121,7 +120,7 @@ function validateImageFiles(files: File[], minFiles = 1) {
 async function clusterByUrls(urls: string[], photoIds: number[]): Promise<PhotoClusterResult> {
   const token = getToken();
 
-  const res = await fetch('/ai-proxy/dip/faces/cluster-by-urls', {
+  const res = await fetch(aiProxyUrl(AI_PROXY_ROUTES.DIP_FACES_CLUSTER_BY_URLS), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -506,7 +505,7 @@ function ClusterResultSummary({
 }
 
 export default function AlbumPage() {
-  const { activeFamilyId, activeFamily } = useViewerRole();
+  const { activeFamilyId, activeFamily, viewerRole } = useViewerRole();
   const [activeTab, setActiveTab] = useState<TabKey>('personal');
   const [personalPhotos, setPersonalPhotos] = useState<PhotoItem[]>([]);
   const [familyPhotos, setFamilyPhotos] = useState<PhotoItem[]>([]);
@@ -682,24 +681,37 @@ export default function AlbumPage() {
 
   return (
     <WorkbenchPage>
-      <WorkbenchHero
-        badge={<WorkbenchBadge icon={<Images className="h-3.5 w-3.5" />}>相册</WorkbenchBadge>}
-        title="照片空间"
-        description={activeFamily?.name || '个人与家庭照片空间'}
-        aside={isLoadingPhotos ? (
-          <span className="inline-flex items-center gap-2 rounded-md bg-stone-100 px-3 py-2 text-sm text-stone-500">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-2">
+          <MobilePageDrawer viewerRole={viewerRole} />
+          <nav className="flex min-w-0 gap-1 overflow-x-auto rounded-md bg-stone-100 p-1">
+            {tabs.map((tab) => {
+              const active = activeTab === tab.value;
+              return (
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() => setActiveTab(tab.value)}
+                  className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium transition ${
+                    active
+                      ? 'bg-stone-950 text-white shadow-sm'
+                      : 'text-stone-600 hover:bg-white hover:text-stone-950'
+                  }`}
+                >
+                  {tab.icon}
+                  {tab.label}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+        {isLoadingPhotos && (
+          <span className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-stone-100 px-3 text-sm text-stone-500 sm:shrink-0">
             <RefreshCw className="h-4 w-4 animate-spin" />
             加载中
           </span>
-        ) : null}
-      />
-
-      <WorkbenchTabs
-        items={tabs}
-        value={activeTab}
-        onChange={setActiveTab}
-        className="grid-cols-3"
-      />
+        )}
+      </div>
 
       {listError && <WorkbenchAlert tone="danger">{listError}</WorkbenchAlert>}
 

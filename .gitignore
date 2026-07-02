@@ -57,6 +57,7 @@ Desktop.ini
 # --- Runtime ---
 .service-pids.txt
 .codex-runtime-pids.txt
+desktop/
 
 # --- Docker ---
 docker-compose.override.yml
@@ -81,6 +82,7 @@ coverage/
 jacoco.exec
 
 # --- Docs ---
+works/
 *_PLAN.md
 项目类图-精简重构版.md
 CLAUDE.md

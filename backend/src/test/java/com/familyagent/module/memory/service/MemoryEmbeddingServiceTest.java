@@ -2,6 +2,7 @@ package com.familyagent.module.memory.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.familyagent.infra.ai.AIServiceClient;
+import com.familyagent.infra.ai.dto.EmbeddingResponse;
 import com.familyagent.module.diary.repository.DiaryEntryRepository;
 import com.familyagent.module.family.service.FamilyService;
 import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
@@ -14,6 +15,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.lang.reflect.Method;
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -79,10 +82,14 @@ class MemoryEmbeddingServiceTest {
     }
 
     @Test
-    void index_shouldPersistFailureMetadataAsJsonWhenEmbeddingCallFails() throws Exception {
+    void index_shouldRejectDegradedEmbeddingResponse() throws Exception {
         when(jdbcTemplate.queryForObject(any(String.class), eq(Long.class), anyLong(), anyLong(), any(), anyLong(), any()))
                 .thenReturn(123L);
-        when(aiServiceClient.embedText(any())).thenThrow(new RuntimeException("Connection refused"));
+        when(aiServiceClient.embedText(any())).thenReturn(embeddingResponse(
+                true,
+                true,
+                List.of(0.1, 0.2),
+                "test-model"));
 
         MemoryEmbeddingService service = new MemoryEmbeddingService(
                 aiServiceClient,
@@ -99,14 +106,82 @@ class MemoryEmbeddingServiceTest {
         index.setAccessible(true);
         index.invoke(service, "DIARY", 44L, 11L, 34L, "manual diary text");
 
-        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<Object> arg1Captor = ArgumentCaptor.forClass(Object.class);
-        ArgumentCaptor<Object> arg2Captor = ArgumentCaptor.forClass(Object.class);
-        verify(jdbcTemplate, times(1)).update(sqlCaptor.capture(), arg1Captor.capture(), arg2Captor.capture());
+        verify(jdbcTemplate).update(
+                org.mockito.ArgumentMatchers.contains("SET status = 'FAILED'"),
+                org.mockito.ArgumentMatchers.any(),
+                eq(123L));
+    }
 
-        String sql = sqlCaptor.getValue();
-        assertTrue(sql.contains("metadata = ?::jsonb"));
-        assertEquals("{\"error\":\"Connection refused\"}", arg1Captor.getValue());
-        assertEquals(123L, arg2Captor.getValue());
+    @Test
+    void index_shouldRejectEmbeddingDimensionMismatch() throws Exception {
+        when(jdbcTemplate.queryForObject(any(String.class), eq(Long.class), anyLong(), anyLong(), any(), anyLong(), any()))
+                .thenReturn(123L);
+        when(aiServiceClient.embedText(any())).thenReturn(embeddingResponse(
+                true,
+                false,
+                List.of(0.1, 0.2),
+                "test-model"));
+
+        MemoryEmbeddingService service = new MemoryEmbeddingService(
+                aiServiceClient,
+                jdbcTemplate,
+                objectMapper,
+                diaryRepository,
+                memoryRepository,
+                growthRecordRepository,
+                familyService,
+                asyncProcessor);
+
+        Method index = MemoryEmbeddingService.class.getDeclaredMethod(
+                "index", String.class, Long.class, Long.class, Long.class, String.class);
+        index.setAccessible(true);
+        index.invoke(service, "DIARY", 44L, 11L, 34L, "manual diary text");
+
+        verify(jdbcTemplate).update(
+                org.mockito.ArgumentMatchers.contains("SET status = 'FAILED'"),
+                org.mockito.ArgumentMatchers.any(),
+                eq(123L));
+    }
+
+    @Test
+    void index_shouldRejectNonFiniteEmbeddingValues() throws Exception {
+        when(jdbcTemplate.queryForObject(any(String.class), eq(Long.class), anyLong(), anyLong(), any(), anyLong(), any()))
+                .thenReturn(123L);
+        when(aiServiceClient.embedText(any())).thenReturn(embeddingResponse(
+                true,
+                false,
+                List.of(0.1, Double.NaN),
+                "test-model"));
+
+        MemoryEmbeddingService service = new MemoryEmbeddingService(
+                aiServiceClient,
+                jdbcTemplate,
+                objectMapper,
+                diaryRepository,
+                memoryRepository,
+                growthRecordRepository,
+                familyService,
+                asyncProcessor);
+
+        Method index = MemoryEmbeddingService.class.getDeclaredMethod(
+                "index", String.class, Long.class, Long.class, Long.class, String.class);
+        index.setAccessible(true);
+        index.invoke(service, "DIARY", 44L, 11L, 34L, "manual diary text");
+
+        verify(jdbcTemplate).update(
+                org.mockito.ArgumentMatchers.contains("SET status = 'FAILED'"),
+                org.mockito.ArgumentMatchers.any(),
+                eq(123L));
+    }
+
+    private static EmbeddingResponse embeddingResponse(boolean success, boolean degraded, List<Double> embedding, String model) {
+        EmbeddingResponse response = new EmbeddingResponse();
+        response.setSuccess(success);
+        response.setDegraded(degraded);
+        response.setEmbedding(embedding);
+        response.setModel(model);
+        response.setDimensions(embedding == null ? null : embedding.size());
+        response.setPrivacyCategories(List.of());
+        return response;
     }
 }

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
+  Archive,
   CalendarDays,
   CheckCircle,
   Database,
@@ -115,6 +116,9 @@ export default function SettingsPage() {
     && deleteAllData
     && deleteConfirmationMatches
     && !deletingFamily;
+  const memoryArchiveHref = activeFamilyId
+    ? `/dashboard/memory-library?view=archived&familyId=${activeFamilyId}`
+    : '/dashboard/memory-library?view=archived';
 
   useEffect(() => {
     setBirthDate(birthDateFromUser(user));
@@ -393,6 +397,17 @@ export default function SettingsPage() {
                 <span>{platformRoleLabel(user?.role)}</span>
               </div>
             </div>
+          </WorkbenchSurface>
+
+          <WorkbenchSurface className="space-y-3">
+            <WorkbenchSectionTitle title="记忆库" />
+            <Link
+              href={memoryArchiveHref}
+              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800"
+            >
+              <Archive className="h-4 w-4" />
+              归档箱
+            </Link>
           </WorkbenchSurface>
 
           {isPlatformAdmin(user) && (

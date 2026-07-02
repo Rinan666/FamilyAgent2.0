@@ -1,4 +1,7 @@
-FROM maven:3.9.9-eclipse-temurin-17 AS build
+ARG MAVEN_IMAGE=docker.m.daocloud.io/library/maven:3.9.9-eclipse-temurin-17
+ARG JAVA_RUNTIME_IMAGE=docker.m.daocloud.io/library/eclipse-temurin:17-jre-jammy
+
+FROM ${MAVEN_IMAGE} AS build
 
 WORKDIR /workspace
 
@@ -9,7 +12,7 @@ RUN mvn -B dependency:go-offline -s /root/.m2/settings.xml
 COPY src ./src
 RUN mvn -B -DskipTests package -DfinalName=app -s /root/.m2/settings.xml
 
-FROM eclipse-temurin:17-jre-jammy AS runtime
+FROM ${JAVA_RUNTIME_IMAGE} AS runtime
 
 WORKDIR /app
 
