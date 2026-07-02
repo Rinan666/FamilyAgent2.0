@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { CheckCircle, ChevronDown, Lock, RefreshCw, Save, Sparkles, Users } from 'lucide-react';
 import { familyApi, memoryApi, memoryLibraryApi, writeMemoryApi } from '@/lib/api';
 import { useViewerRole } from '@/hooks/useViewerRole';
@@ -218,6 +219,29 @@ function titleFromFirstLine(value: string) {
     .map((line) => line.trim())
     .find(Boolean)
     ?.slice(0, 120) || '';
+}
+
+function contentWithTitleFirstLine(content: string, title?: string) {
+  const normalizedTitle = title?.trim();
+  if (!normalizedTitle) return content;
+
+  const trimmedContent = content.trim();
+  if (!trimmedContent) return normalizedTitle;
+  if (titleFromFirstLine(trimmedContent) === normalizedTitle) return trimmedContent;
+  return `${normalizedTitle}\n\n${trimmedContent}`;
+}
+
+function splitEditorContent(value: string) {
+  const lines = value.replace(/\r\n/g, '\n').split('\n');
+  const titleIndex = lines.findIndex((line) => line.trim());
+  if (titleIndex < 0) return { title: '', body: '' };
+
+  const firstLineTitle = lines[titleIndex].trim().slice(0, 120);
+  const body = lines.slice(titleIndex + 1).join('\n').trim();
+  return {
+    title: firstLineTitle,
+    body: body || value.trim(),
+  };
 }
 
 interface DiaryComposerProps {
@@ -581,8 +605,10 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
         target: relatedMemberLabel,
       });
       const draft = result.data;
-      setTitle(draft.title || title);
-      setContent(draft.content || content);
+      const organizedContent = contentWithTitleFirstLine(draft.content || content, draft.title);
+      const organizedTitle = titleFromFirstLine(organizedContent) || draft.title?.trim() || title.trim();
+      setTitle(organizedTitle);
+      setContent(organizedContent);
       if (draft.tags?.length) setTagText(draft.tags.join(' '));
       if (category === 'RECORD') {
         setDiaryEntryType(
@@ -652,13 +678,15 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
     try {
       const tags = formatTags(tagText);
       const contentText = content.trim();
-      const resolvedTitle = title.trim() || titleFromFirstLine(contentText);
+      const editorContent = splitEditorContent(contentText);
+      const resolvedTitle = editorContent.title || title.trim() || titleFromFirstLine(contentText);
+      const bodyText = editorContent.body || contentText;
       if (editItem) {
         await memoryLibraryApi.updateItem({
           familyId: selectedFamilyId,
           itemId: editItem.id,
           title: resolvedTitle || undefined,
-          body: contentText,
+          body: bodyText,
           type: editTypeFromState(category, diaryEntryType, memoryType, growthCategory),
           visibility,
           tags,
@@ -671,7 +699,7 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
       await writeMemoryApi.create({
         familyId: selectedFamilyId,
         writeCategory: category,
-        content: contentText,
+        content: bodyText,
         title: resolvedTitle || undefined,
         tags,
         visibility: category === 'OBSERVATION' ? visibility as MemoryScope : visibility,
@@ -784,41 +812,72 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
             className="min-h-[28rem] w-full resize-none border-0 bg-white px-5 py-5 text-base leading-8 text-stone-800 outline-none placeholder:text-stone-400 sm:px-7 sm:py-6"
           />
 
-          <div className="flex flex-col gap-3 px-3 pb-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowTemplates((current) => !current)}
-                className="inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium text-stone-500 transition hover:bg-stone-100 hover:text-stone-900"
-              >
-                不会开头
-                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showTemplates ? 'rotate-180' : ''}`} />
-              </button>
+          <div className="flex flex-col gap-3 px-3 pb-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-4">
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <DropdownMenu.Root open={showTemplates} onOpenChange={setShowTemplates}>
+                <DropdownMenu.Trigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-3 text-sm font-medium text-stone-500 transition hover:bg-stone-100 hover:text-stone-900"
+                  >
+                    不会开头
+                    <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showTemplates ? 'rotate-180' : ''}`} />
+                  </button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content
+                    align="start"
+                    side="top"
+                    sideOffset={8}
+                    avoidCollisions={false}
+                    collisionPadding={12}
+                    className="z-[70] w-72 max-w-[calc(100vw-3rem)] rounded-md border border-emerald-100 bg-emerald-50 p-3 shadow-xl"
+                  >
+                    <p className="mb-2 text-xs font-medium text-emerald-800">
+                      {'\u4ece\u4e00\u53e5\u5f00\u5934\u5f00\u59cb'}
+                    </p>
+                    <div className="grid grid-cols-1 gap-2">
+                      {visibleTemplates.map((template) => (
+                        <DropdownMenu.Item key={template.id} asChild>
+                          <button
+                            type="button"
+                            onClick={() => applyTemplate(template)}
+                            className="w-full rounded-md border border-emerald-100 bg-white px-3 py-2 text-left text-xs font-medium text-emerald-800 outline-none transition hover:bg-emerald-100 focus:bg-emerald-100"
+                          >
+                            {template.label}
+                          </button>
+                        </DropdownMenu.Item>
+                      ))}
+                    </div>
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
               <VoiceInputButton onTranscript={(text) => {
                 setContent((current) => (current.trim() ? `${current.trim()}\n${text}` : text));
               }}
               disabled={saving || organizing}
+              className="shrink-0"
               />
               <button
                 type="button"
                 onClick={() => void handleOrganize()}
                 disabled={!content.trim() || saving || organizing}
-                className="inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-3 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {organizing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                 帮我整理
               </button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 sm:justify-end">
-              <span className="min-w-0 truncate text-xs text-stone-400">
+            <div className="flex min-w-0 flex-wrap items-center gap-3 sm:flex-1 sm:justify-end">
+              <span className="min-w-0 max-w-full truncate text-xs text-stone-400 sm:flex-1 sm:text-right">
                 {draftStatus || '草稿会自动保存在本地'}
               </span>
               {hasDraftContent && !isEditingExisting && (
                 <button
                   type="button"
                   onClick={clearDraft}
-                  className="text-xs font-medium text-stone-400 transition hover:text-red-600"
+                  className="shrink-0 whitespace-nowrap text-xs font-medium text-stone-400 transition hover:text-red-600"
                 >
                   清空草稿
                 </button>
@@ -827,7 +886,7 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
                 type="button"
                 onClick={() => void handleSave()}
                 disabled={!selectedFamilyId || !content.trim() || saving}
-                className="inline-flex h-10 min-w-10 items-center justify-center gap-2 rounded-md bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-300"
+                className="inline-flex h-10 min-w-10 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-300"
                 aria-label={primaryActionLabel(category)}
               >
                 {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -838,24 +897,6 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
             </div>
           </div>
         </div>
-
-        {showTemplates && (
-          <div className="rounded-md border border-emerald-100 bg-emerald-50 p-3">
-            <p className="mb-2 text-xs font-medium text-emerald-800">从一句开头开始</p>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {visibleTemplates.map((template) => (
-                <button
-                  key={template.id}
-                  type="button"
-                  onClick={() => applyTemplate(template)}
-                  className="rounded-md border border-emerald-100 bg-white px-3 py-2 text-left text-xs font-medium text-emerald-800 transition hover:bg-emerald-100"
-                >
-                  {template.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         {relatedMemberLabel && (
           <div className="rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
@@ -945,12 +986,6 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
                 ))}
               </select>
             </label>
-          )}
-
-          {title && (
-            <div className="rounded-md border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800 xl:col-span-2">
-              当前整理出的标题：{title}
-            </div>
           )}
 
           <div className="flex items-start gap-2 rounded-md bg-white px-3 py-2 text-xs leading-5 text-stone-500 md:col-span-2 xl:col-span-2">

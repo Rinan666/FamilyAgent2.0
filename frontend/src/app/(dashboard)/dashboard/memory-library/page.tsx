@@ -63,7 +63,7 @@ export default function MemoryLibraryPage() {
           <button
             type="button"
             className="absolute inset-0"
-            aria-label="关闭记录编辑"
+            aria-label="关闭记忆编辑"
             onClick={closeComposer}
           />
           <section className="relative mx-auto flex h-full max-w-6xl flex-col overflow-hidden rounded-md border border-white/60 bg-stone-50 shadow-2xl">
@@ -73,7 +73,7 @@ export default function MemoryLibraryPage() {
                 type="button"
                 onClick={closeComposer}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-md text-stone-500 transition hover:bg-stone-100 hover:text-stone-950"
-                aria-label="关闭记录编辑"
+                aria-label="关闭记忆编辑"
               >
                 <X className="h-4 w-4" />
               </button>

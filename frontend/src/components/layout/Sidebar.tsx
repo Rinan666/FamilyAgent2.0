@@ -16,11 +16,11 @@ type NavItem = {
 };
 
 const navItems: readonly NavItem[] = [
-  { href: '/dashboard/agent', label: '瀹跺涵鍔╂墜', icon: Sparkles, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/dashboard/agent', label: '家庭助手', icon: Sparkles, roles: ['MEMBER', 'ADMIN'] },
   { href: '/dashboard/memory-library', label: '记忆库', icon: BookHeart, roles: ['MEMBER', 'ADMIN'] },
-  { href: '/album', label: '鐩稿唽', icon: Images, roles: ['MEMBER', 'ADMIN'] },
-  { href: '/dashboard/family', label: '瀹跺涵绌洪棿', icon: Users, roles: ['MEMBER', 'ADMIN'] },
-  { href: '/dashboard/settings', label: '璁剧疆', icon: Settings, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/album', label: '相册', icon: Images, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/dashboard/family', label: '家庭空间', icon: Users, roles: ['MEMBER', 'ADMIN'] },
+  { href: '/dashboard/settings', label: '设置', icon: Settings, roles: ['MEMBER', 'ADMIN'] },
 ] as const;
 
 interface SidebarProps {
@@ -196,8 +196,8 @@ export function MobileNavDrawer({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed right-1 top-1/2 z-40 inline-flex h-8 w-6 -translate-y-1/2 items-center justify-center text-stone-300 transition hover:text-stone-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200 lg:hidden"
-        aria-label="打开底部菜单"
+        className="fixed right-0 top-1/2 z-40 inline-flex h-11 w-8 -translate-y-1/2 items-center justify-center rounded-l-md border border-r-0 border-stone-200 bg-white/95 text-stone-500 shadow-sm transition hover:text-stone-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200 lg:hidden"
+        aria-label="打开侧边菜单"
         aria-expanded={open}
       >
         <ChevronLeft className="h-6 w-6" strokeWidth={2.5} />
@@ -208,26 +208,26 @@ export function MobileNavDrawer({
           <button
             type="button"
             className="absolute inset-0 bg-stone-950/24"
-            aria-label="关闭底部菜单"
+            aria-label="关闭侧边菜单"
             onClick={() => setOpen(false)}
           />
-          <aside className="absolute inset-x-0 bottom-0 rounded-t-[20px] border-t border-stone-200 bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-18px_48px_rgba(24,39,32,0.18)]">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm font-semibold text-stone-900">
-                <span className="h-1.5 w-8 rounded-full bg-stone-300" aria-hidden />
+          <aside className="absolute inset-y-0 right-0 flex w-[min(20rem,86vw)] flex-col border-l border-stone-200 bg-white shadow-[-18px_0_48px_rgba(24,39,32,0.18)]">
+            <div className="flex h-14 items-center justify-between border-b border-stone-200 px-4">
+              <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-stone-900">
+                <BookHeart className="h-4 w-4 shrink-0 text-emerald-700" />
                 快捷入口
               </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-md text-stone-500 transition hover:bg-stone-100 hover:text-stone-950"
-                aria-label="关闭底部菜单"
+                aria-label="关闭侧边菜单"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <nav className="grid grid-cols-5 gap-1">
+            <nav className="flex-1 space-y-1 overflow-y-auto p-4">
               {items.map((item) => {
                 const Icon = item.icon;
                 const active = isActivePath(pathname, item.href);
@@ -235,13 +235,14 @@ export function MobileNavDrawer({
                   <Link
                     key={item.href}
                     href={item.href}
+                    onClick={() => setOpen(false)}
                     className={cn(
-                      'flex min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-[11px] font-medium transition',
-                      active ? 'bg-stone-950 text-white' : 'text-stone-500 hover:bg-stone-100 hover:text-stone-950',
+                      'flex h-11 min-w-0 items-center gap-3 rounded-md px-3 text-sm font-medium transition',
+                      active ? 'bg-stone-950 text-white' : 'text-stone-600 hover:bg-stone-100 hover:text-stone-950',
                     )}
                   >
                     <Icon className={cn('h-5 w-5 shrink-0', active ? 'text-emerald-300' : 'text-stone-400')} />
-                    <span className="max-w-full truncate">{item.label}</span>
+                    <span className="truncate">{item.label}</span>
                   </Link>
                 );
               })}
@@ -294,7 +295,7 @@ export function MobilePageDrawer({
         type="button"
         onClick={() => setOpen(true)}
         className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-stone-200 bg-white text-stone-700 shadow-sm transition hover:bg-stone-50 hover:text-stone-950"
-        aria-label="鎵撳紑鍔熻兘鎶藉眽"
+        aria-label="打开功能抽屉"
         aria-expanded={open}
       >
         <Menu className="h-5 w-5" />
@@ -305,7 +306,7 @@ export function MobilePageDrawer({
           <button
             type="button"
             className="absolute inset-0 bg-stone-950/24"
-            aria-label="鍏抽棴鍔熻兘鎶藉眽"
+            aria-label="关闭功能抽屉"
             onClick={() => setOpen(false)}
           />
           <aside className="absolute inset-y-0 left-0 flex w-[min(20rem,86vw)] flex-col border-r border-stone-200 bg-white shadow-[18px_0_48px_rgba(24,39,32,0.18)]">
@@ -318,7 +319,7 @@ export function MobilePageDrawer({
                 type="button"
                 onClick={() => setOpen(false)}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-md text-stone-500 transition hover:bg-stone-100 hover:text-stone-950"
-                aria-label="鍏抽棴鍔熻兘鎶藉眽"
+                aria-label="关闭功能抽屉"
               >
                 <X className="h-4 w-4" />
               </button>
