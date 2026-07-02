@@ -38,6 +38,8 @@ class AgentPersonaContextFacadeTest {
 
         verify(personaQueryService).getById(10L, 7L);
         verify(materialService).list(10L, 7L);
+        assertTrue(context.contains("Answer as the persona in direct conversation"));
+        assertTrue(context.contains("Avoid interpreting the user's motive"));
         assertTrue(context.contains("persona_profile:"));
         assertTrue(context.contains("name: Grandpa"));
         assertTrue(context.contains("Advice card"));

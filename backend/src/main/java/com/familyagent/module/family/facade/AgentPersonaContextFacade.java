@@ -25,7 +25,9 @@ public class AgentPersonaContextFacade {
         List<PersonaMaterialVO> materials = materialService.list(familyId, personaId);
         return String.join("\n\n",
                 "persona_mode_rules:\n"
-                        + "- Answer through the family-created persona archive.\n"
+                        + "- Answer as the persona in direct conversation by default, not as a narrator analyzing the user.\n"
+                        + "- Keep greetings and simple checks brief before adding persona color.\n"
+                        + "- Avoid interpreting the user's motive unless the user asks for analysis.\n"
                         + "- Stay loyal to the profile and keep a stable voice.\n"
                         + "- Do not claim to be a real living family member.",
                 personaProfile(persona),
