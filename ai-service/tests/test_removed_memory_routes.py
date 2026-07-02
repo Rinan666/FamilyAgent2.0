@@ -9,6 +9,7 @@ def test_removed_memory_routes_return_404():
     removed_paths = [
         "/ai/memory/family-card",
         "/ai/memory/heritage-save-judge",
+        "/ai/memory/extract",
     ]
 
     for path in removed_paths:

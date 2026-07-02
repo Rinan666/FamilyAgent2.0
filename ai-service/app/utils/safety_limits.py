@@ -78,14 +78,19 @@ def validate_text_budget(
 def validate_messages(messages: list[dict]) -> None:
     """Validate per-message and total prompt size for LLM chat calls."""
     total = 0
-    for message in messages:
+    for index, message in enumerate(messages):
+        role = message.get("role", "message")
+        if role not in {"system", "user", "assistant"}:
+            raise SafetyLimitError(f"Unsupported chat message role: {role}")
+        if role == "system" and index != 0:
+            raise SafetyLimitError("System messages are only allowed as the first trusted prompt message")
+
         content_size = total_text_chars(message.get("content", ""))
         total += content_size
-        if message.get("role") != "system":
+        if role != "system":
             validate_no_prompt_leak_attempt(str(message.get("content", "")))
             validate_no_role_hijack_attempt(str(message.get("content", "")))
         if content_size > settings.ai_max_message_chars:
-            role = message.get("role", "message")
             raise SafetyLimitError(
                 f"{role} content is too large: {content_size} chars, "
                 f"limit {settings.ai_max_message_chars}"
@@ -294,9 +299,25 @@ async def enforce_ai_rate_limit(request: Request):
     )
 
 
+async def _embedding_user_key(request: Request) -> str:
+    if not getattr(request.state, "internal_service", False):
+        return _user_key(request)
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+
+    source_type = str(payload.get("source_type") or "internal").strip()[:64] or "internal"
+    family_id = payload.get("family_id") or "unknown-family"
+    user_id = payload.get("user_id") or "system"
+    return f"internal:{source_type}:family:{family_id}:user:{user_id}"
+
+
 async def enforce_embedding_rate_limit(request: Request):
     """Separate, looser limiter for backend-triggered embedding rebuild work."""
-    user_key = _user_key(request)
+    user_key = await _embedding_user_key(request)
     ip = _client_ip(request)
     await check_rate_limit(
         f"embedding:user:{user_key}",

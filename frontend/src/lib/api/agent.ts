@@ -1,11 +1,23 @@
-import { sseStreamRequest } from './shared';
+import { request, sseStreamRequest } from './shared';
 import type { ViewerRole } from '@/lib/roles';
-import type { AgentResponseMode } from '@/types';
+import type {
+  AgentConfirmationDecision,
+  AgentResponseMode,
+  AgentToolConfirmationDecisionResult,
+} from '@/types';
 
 export const agentApi = {
+  decideToolConfirmation: (confirmationId: number, decision: AgentConfirmationDecision) =>
+    request<AgentToolConfirmationDecisionResult>(`/agent/tool-confirmations/${confirmationId}/decision`, {
+      method: 'POST',
+      body: JSON.stringify({ decision }),
+    }),
   streamChat: (
     body: {
       message: string;
+      familyId?: number | null;
+      targetUserId?: number | null;
+      targetPersonaId?: number | null;
       history?: { role: string; content: string }[];
       subject?: string;
       contextLabel?: string;
@@ -23,6 +35,9 @@ export const agentApi = {
     onAbort?: () => void,
   ) => sseStreamRequest('/agent/chat/stream', {
     member_message: body.message,
+    family_id: body.familyId || null,
+    target_user_id: body.targetUserId || null,
+    target_persona_id: body.targetPersonaId || null,
     history: body.history || [],
     subject: body.subject || 'FamilyAgent',
     knowledge_point: body.contextLabel || '',

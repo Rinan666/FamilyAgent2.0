@@ -1,6 +1,8 @@
 package com.familyagent.module.memory.service;
 
 import com.familyagent.infra.ai.AIServiceClient;
+import com.familyagent.infra.ai.dto.EmbeddingRequest;
+import com.familyagent.infra.ai.dto.EmbeddingResponse;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.memory.dto.RecallSourceSummary;
@@ -133,11 +135,26 @@ public class AuthorizedMemoryRecallRankingService {
         }
 
         try {
-            Map<String, Object> response = aiServiceClient.embedText(Map.of(
-                    "text", query,
-                    "dimensions", EMBEDDING_DIMENSIONS));
-            if (!Boolean.TRUE.equals(response.get("success")) || !(response.get("embedding") instanceof List<?> values)) {
+            EmbeddingResponse response = aiServiceClient.embedText(EmbeddingRequest.builder()
+                    .text(query)
+                    .dimensions(EMBEDDING_DIMENSIONS)
+                    .sourceType("RECALL_QUERY")
+                    .familyId(familyId)
+                    .build());
+            if (response == null || !response.isSuccess() || response.isDegraded()) {
                 return VectorRanking.empty();
+            }
+            List<Double> values = response.getEmbedding();
+            if (values == null || values.isEmpty()) {
+                return VectorRanking.empty();
+            }
+            if (values.size() != EMBEDDING_DIMENSIONS) {
+                return VectorRanking.empty();
+            }
+            for (Double value : values) {
+                if (value == null || !Double.isFinite(value)) {
+                    return VectorRanking.empty();
+                }
             }
             String vector = toVectorLiteral(values);
             List<Long> diaryIds = vectorRankIds(familyId, "DIARY", diaryCandidates.stream().map(DiaryEntry::getId).toList(), vector, diaryLimit);

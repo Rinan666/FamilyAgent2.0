@@ -37,10 +37,23 @@ public class ExternalClientConfig {
 
     @Bean
     public RestTemplate aiServiceRestTemplate(RestTemplateBuilder builder,
-                                              @Value("${ai-service.timeout:60}") int timeoutSeconds) {
-        int readTimeoutMillis = Math.max(1, timeoutSeconds) * 1000;
+                                              @Value("${ai-service.connect-timeout-seconds:5}") int connectTimeoutSeconds,
+                                              @Value("${ai-service.read-timeout-seconds:${ai-service.timeout:120}}") int readTimeoutSeconds) {
+        return aiRestTemplate(builder, connectTimeoutSeconds, readTimeoutSeconds);
+    }
+
+    @Bean
+    public RestTemplate aiServiceStreamRestTemplate(RestTemplateBuilder builder,
+                                                    @Value("${ai-service.connect-timeout-seconds:5}") int connectTimeoutSeconds,
+                                                    @Value("${ai-service.stream-read-timeout-seconds:45}") int readTimeoutSeconds) {
+        return aiRestTemplate(builder, connectTimeoutSeconds, readTimeoutSeconds);
+    }
+
+    private RestTemplate aiRestTemplate(RestTemplateBuilder builder, int connectTimeoutSeconds, int readTimeoutSeconds) {
+        int connectTimeoutMillis = Math.max(1, connectTimeoutSeconds) * 1000;
+        int readTimeoutMillis = Math.max(1, readTimeoutSeconds) * 1000;
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(Math.min(readTimeoutMillis, MAX_CONNECT_TIMEOUT_MILLIS));
+        requestFactory.setConnectTimeout(Math.min(connectTimeoutMillis, MAX_CONNECT_TIMEOUT_MILLIS));
         requestFactory.setReadTimeout(readTimeoutMillis);
         return builder
                 .requestFactory(() -> requestFactory)

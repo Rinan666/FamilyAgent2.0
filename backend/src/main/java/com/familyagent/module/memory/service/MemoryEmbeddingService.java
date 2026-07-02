@@ -2,6 +2,8 @@ package com.familyagent.module.memory.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.familyagent.infra.ai.AIServiceClient;
+import com.familyagent.infra.ai.dto.EmbeddingRequest;
+import com.familyagent.infra.ai.dto.EmbeddingResponse;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.repository.DiaryEntryRepository;
 import com.familyagent.module.family.service.FamilyService;
@@ -175,25 +177,45 @@ public class MemoryEmbeddingService {
         Long embeddingId = upsertPending(sourceType, sourceId, familyId, userId, contentHash);
 
         try {
-            Map<String, Object> response = aiServiceClient.embedText(Map.of(
-                    "text", text,
-                    "dimensions", EMBEDDING_DIMENSIONS));
-            if (!Boolean.TRUE.equals(response.get("success"))) {
-                markFailed(embeddingId, String.valueOf(response.getOrDefault("error", "embedding failed")));
+            EmbeddingResponse response = aiServiceClient.embedText(EmbeddingRequest.builder()
+                    .text(text)
+                    .dimensions(EMBEDDING_DIMENSIONS)
+                    .sourceType(sourceType)
+                    .familyId(familyId)
+                    .userId(userId)
+                    .build());
+            if (response == null || !response.isSuccess()) {
+                markFailed(embeddingId, response == null ? "embedding failed" : nonBlank(response.getError(), "embedding failed"));
                 return;
             }
 
-            Object rawEmbedding = response.get("embedding");
-            if (!(rawEmbedding instanceof List<?> values) || values.isEmpty()) {
+            if (response.isDegraded()) {
+                markFailed(embeddingId, nonBlank(response.getError(), "embedding degraded"));
+                return;
+            }
+
+            List<Double> values = response.getEmbedding();
+            if (values == null || values.isEmpty()) {
                 markFailed(embeddingId, "embedding response is empty");
                 return;
             }
+            if (values.size() != EMBEDDING_DIMENSIONS) {
+                markFailed(embeddingId, "embedding dimension mismatch: " + values.size());
+                return;
+            }
+            for (Double value : values) {
+                if (value == null || !Double.isFinite(value)) {
+                    markFailed(embeddingId, "embedding contains non-finite values");
+                    return;
+                }
+            }
 
             String vector = toVectorLiteral(values);
-            String model = String.valueOf(response.getOrDefault("model", ""));
+            String model = nonBlank(response.getModel(), "");
             String metadata = objectMapper.writeValueAsString(Map.of(
-                    "privacyCategories", response.getOrDefault("privacy_categories", List.of()),
-                    "dimensions", values.size()));
+                    "privacyCategories", response.getPrivacyCategories() == null ? List.of() : response.getPrivacyCategories(),
+                    "provider", nonBlank(response.getProvider(), ""),
+                    "dimensions", response.getDimensions() == null ? values.size() : response.getDimensions()));
             jdbcTemplate.update("""
                     UPDATE memory_embeddings
                     SET embedding_model = ?,
@@ -344,6 +366,10 @@ public class MemoryEmbeddingService {
             return String.valueOf(map.get(key));
         }
         return fallback;
+    }
+
+    private static String nonBlank(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
     }
 
     private static String safe(Object value) {

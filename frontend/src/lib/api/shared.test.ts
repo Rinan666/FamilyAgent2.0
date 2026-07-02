@@ -47,4 +47,76 @@ describe('sseStreamRequest', () => {
     }));
     expect(events).toEqual(['chunk:hello', 'chunk: world', 'done']);
   });
+
+  it('uses typed stream error message instead of boolean error flag', async () => {
+    const events: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      streamFromChunks([
+        'data: {"type":"error","error":true,"code":"AI_STREAM_UNAVAILABLE","message":"AI service unavailable, please retry later.","retryable":true,"degraded":false,"requestId":"chat-test-request"}\n\n',
+      ]),
+      { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+    )));
+
+    const handle = sseStreamRequest(
+      '/agent/chat/stream',
+      { member_message: 'hi' },
+      (chunk) => events.push(`chunk:${chunk}`),
+      () => events.push('done'),
+      (error) => events.push(`error:${error}`),
+    );
+
+    await handle.completed;
+
+    expect(events).toEqual(['error:AI service unavailable, please retry later.']);
+  });
+
+  it('normalizes top-level typed metadata events', async () => {
+    const metadataEvents: Record<string, unknown>[] = [];
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      streamFromChunks([
+        'data: {"type":"metadata","web_search":{"needed":true,"used":false},"requestId":"chat-test-request"}\n\n',
+        'data: {"type":"done","done":true,"requestId":"chat-test-request"}\n\n',
+      ]),
+      { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+    )));
+
+    const handle = sseStreamRequest(
+      '/agent/chat/stream',
+      { member_message: 'hi' },
+      () => undefined,
+      () => undefined,
+      () => undefined,
+      (metadata) => metadataEvents.push(metadata),
+    );
+
+    await handle.completed;
+
+    expect(metadataEvents).toEqual([{ web_search: { needed: true, used: false }, requestId: 'chat-test-request' }]);
+  });
+
+  it('reports an interrupted stream when EOF arrives before done or error', async () => {
+    const events: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      streamFromChunks([
+        ': connected\n\n',
+        'data: {"type":"content","content":"partial answer","requestId":"chat-test-request"}\n\n',
+      ]),
+      { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+    )));
+
+    const handle = sseStreamRequest(
+      '/agent/chat/stream',
+      { member_message: 'hi' },
+      (chunk) => events.push(`chunk:${chunk}`),
+      () => events.push('done'),
+      (error) => events.push(`error:${error}`),
+    );
+
+    await handle.completed;
+
+    expect(events).toEqual([
+      'chunk:partial answer',
+      'error:AI stream ended before a completion event. Please retry.',
+    ]);
+  });
 });

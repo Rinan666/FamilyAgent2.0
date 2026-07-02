@@ -13,7 +13,6 @@ from app.api.memory_contracts import (
     SAVE_TOOL_PLAN_SCHEMA,
 )
 from app.api.memory_models import (
-    ExtractMemoryRequest,
     OrganizeDraftRequest,
     PersonaMaterialDraftRequest,
     SaveToolPlanRequest,
@@ -71,16 +70,6 @@ def get_family_skill_registry_item(name: str):
     return {
         "success": True,
         "data": skill,
-    }
-
-
-@router.post("/extract")
-async def extract_memories(request: ExtractMemoryRequest):
-    return {
-        "success": True,
-        "deprecated": True,
-        "memories": [],
-        "message": "学习记忆功能已下线；请使用家族记忆、每日记录或成长观察。",
     }
 
 

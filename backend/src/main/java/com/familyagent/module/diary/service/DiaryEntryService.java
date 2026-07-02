@@ -61,6 +61,7 @@ public class DiaryEntryService {
 
         String visibility = normalizeVisibility(request.getVisibility());
         String diaryDate = resolveDiaryDate(request);
+        String incomingTitle = firstLineOrBlank(blankToNull(request.getTitle()), request.getContent());
         String incomingContent = localCompress("", request.getContent().trim(), SINGLE_ENTRY_MAX_CHARS);
         Map<String, Object> requestMetadata = buildMetadata(request, diaryDate);
         DiaryEntry existing = findEligibleMergeCandidate(request, userId, visibility, diaryDate, requestMetadata);
@@ -95,7 +96,7 @@ public class DiaryEntryService {
         entry.setUserId(userId);
         entry.setFamilyId(request.getFamilyId());
         entry.setRawText(incomingContent);
-        entry.setStructured(buildStructured(request.getEntryType(), request.getTitle(), incomingContent));
+        entry.setStructured(buildStructured(request.getEntryType(), incomingTitle, incomingContent));
         entry.setMood(blankToNull(request.getMood()));
         entry.setTags(request.getTags() == null ? new String[0] : request.getTags().toArray(String[]::new));
         entry.setVisibility(visibility);
@@ -185,7 +186,7 @@ public class DiaryEntryService {
         String trimmedContent = content.trim();
         Map<String, Object> structured = new HashMap<>();
         structured.put("entryType", normalizeEntryType(entryType));
-        structured.put("title", blankToNull(title));
+        structured.put("title", firstLineOrBlank(blankToNull(title), trimmedContent));
         structured.put("summary", trimmedContent.substring(0, Math.min(120, trimmedContent.length())));
         return structured;
     }
@@ -405,6 +406,18 @@ public class DiaryEntryService {
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private static String firstLineOrBlank(String preferredTitle, String content) {
+        if (preferredTitle != null) {
+            return preferredTitle;
+        }
+        return Arrays.stream(content.split("\\R"))
+                .map(String::trim)
+                .filter(line -> !line.isBlank())
+                .findFirst()
+                .map(line -> line.substring(0, Math.min(120, line.length())))
+                .orElse(null);
     }
 
     private static int asInt(Object value, int fallback) {

@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { BookHeart, Brain, Users } from 'lucide-react';
+import { BookHeart, Brain, LockKeyhole, UserRound, Users } from 'lucide-react';
 import AuthShell, {
-  authInputClassName,
+  authInputIconClassName,
+  authInputWithIconClassName,
   authLabelClassName,
   authPrimaryButtonClassName,
 } from '@/components/auth/AuthShell';
@@ -16,7 +17,7 @@ import { useAuthStore } from '@/stores/authStore';
 const highlights = [
   {
     icon: BookHeart,
-    title: '把日常留住',
+    title: '把日常留下来',
     description: '用日记、片段和观察，慢慢积累属于这个家庭的长期记忆。',
   },
   {
@@ -82,12 +83,12 @@ export default function LoginPage() {
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+          <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
             {error}
           </div>
         )}
         {notice && (
-          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
             {notice}
           </div>
         )}
@@ -96,34 +97,40 @@ export default function LoginPage() {
           <label htmlFor="login-username" className={authLabelClassName}>
             用户名
           </label>
-          <input
-            id="login-username"
-            name="username"
-            type="text"
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            className={authInputClassName}
-            placeholder="请输入用户名"
-            autoComplete="username"
-            required
-          />
+          <div className="relative">
+            <UserRound className={authInputIconClassName} />
+            <input
+              id="login-username"
+              name="username"
+              type="text"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              className={authInputWithIconClassName}
+              placeholder="请输入用户名"
+              autoComplete="username"
+              required
+            />
+          </div>
         </div>
 
         <div>
           <label htmlFor="login-password" className={authLabelClassName}>
             密码
           </label>
-          <input
-            id="login-password"
-            name="password"
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            className={authInputClassName}
-            placeholder="请输入密码"
-            autoComplete="current-password"
-            required
-          />
+          <div className="relative">
+            <LockKeyhole className={authInputIconClassName} />
+            <input
+              id="login-password"
+              name="password"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              className={authInputWithIconClassName}
+              placeholder="请输入密码"
+              autoComplete="current-password"
+              required
+            />
+          </div>
         </div>
 
         <button type="submit" disabled={loading} className={authPrimaryButtonClassName}>

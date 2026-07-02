@@ -46,6 +46,9 @@ logging:
 ai-service:
   base-url: ${AI_SERVICE_URL:http://localhost:8000}
   timeout: ${AI_SERVICE_TIMEOUT:60}
+  connect-timeout-seconds: ${AI_SERVICE_CONNECT_TIMEOUT_SECONDS:5}
+  read-timeout-seconds: ${AI_SERVICE_READ_TIMEOUT_SECONDS:120}
+  stream-read-timeout-seconds: ${AI_SERVICE_STREAM_READ_TIMEOUT_SECONDS:45}
   internal-token: ${AI_INTERNAL_SERVICE_TOKEN:familyagent-dev-internal-token}
 
 minio:
