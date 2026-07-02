@@ -1,25 +1,20 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
 import {
-  BookHeart,
   CheckCircle,
   ChevronDown,
   ChevronUp,
   Copy,
-  Crown,
-  Eye,
-  Pencil,
   Plus,
   RefreshCw,
-  User,
   UserPlus,
   Users,
-  X,
 } from 'lucide-react';
+import FamilyMemberCard from './FamilyMemberCard';
 import { familyApi } from '@/lib/api';
-import { type ViewerRole, familyRoleLabel } from '@/lib/roles';
+import { type ViewerRole } from '@/lib/roles';
+import { cn } from '@/lib/utils';
 import { notifyViewerRoleChanged } from '@/hooks/useViewerRole';
 import { useAuthStore } from '@/stores/authStore';
 import { useFamilyContextStore } from '@/stores/familyContextStore';
@@ -30,51 +25,6 @@ interface FamilyMembersPanelProps {
   families?: Family[];
   focusedFamilyId?: number | null;
   onFocusedFamilyChange?: (familyId: number | null) => void;
-}
-
-function memberAccountName(member: FamilyMember) {
-  return member.nickname?.trim() || member.username?.trim() || `用户 ${member.userId}`;
-}
-
-function memberDisplayName(member: FamilyMember) {
-  return member.relationshipLabel?.trim() || memberAccountName(member);
-}
-
-function memberBirthDate(member: FamilyMember) {
-  const value = member.birthDate
-    || (typeof member.metadata?.birthDate === 'string' ? member.metadata.birthDate : '')
-    || (typeof member.metadata?.birthday === 'string' ? member.metadata.birthday : '')
-    || (typeof member.metadata?.dateOfBirth === 'string' ? member.metadata.dateOfBirth : '');
-  return value ? value.slice(0, 10) : '';
-}
-
-function memberAge(member: FamilyMember) {
-  const birthDate = memberBirthDate(member);
-  if (birthDate) {
-    const date = new Date(birthDate);
-    if (!Number.isNaN(date.getTime())) {
-      const now = new Date();
-      let age = now.getFullYear() - date.getFullYear();
-      const monthDelta = now.getMonth() - date.getMonth();
-      if (monthDelta < 0 || (monthDelta === 0 && now.getDate() < date.getDate())) age -= 1;
-      if (age >= 0 && age <= 130) return age;
-    }
-  }
-
-  const year = Number(member.birthYear || member.metadata?.birthYear || member.metadata?.yearOfBirth);
-  if (Number.isFinite(year) && year > 1870 && year <= new Date().getFullYear()) {
-    return new Date().getFullYear() - year;
-  }
-
-  return null;
-}
-
-function memberProfileLine(member: FamilyMember) {
-  const birthDate = memberBirthDate(member);
-  const age = memberAge(member);
-  const birthText = birthDate ? `生日：${birthDate}` : '生日：未设置';
-  const ageText = age == null ? '年龄：未设置' : `年龄：${age}`;
-  return `${birthText} · ${ageText}`;
 }
 
 export default function FamilyMembersPanel({
@@ -390,26 +340,6 @@ export default function FamilyMembersPanel({
     }
   };
 
-  const roleBadge = (role?: string) => {
-    if ((role || '').toUpperCase() === 'OWNER') {
-      return {
-        icon: Crown,
-        label: familyRoleLabel(role),
-        className: 'bg-yellow-50 text-yellow-700',
-      };
-    }
-    return {
-      icon: User,
-      label: familyRoleLabel(role),
-      className: 'bg-stone-100 text-stone-600',
-    };
-  };
-
-  const isLegacyFamilyRole = (role?: string) => {
-    const normalized = (role || '').toUpperCase();
-    return normalized !== 'OWNER' && normalized !== 'MEMBER';
-  };
-
   if (!usingExternalFamilies && loadingFamilies) {
     return (
       <div className="flex h-40 items-center justify-center text-stone-400">
@@ -420,16 +350,14 @@ export default function FamilyMembersPanel({
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mx-auto max-w-6xl">
+      <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-stone-950">成员与权限</h2>
-          {canManageSpace && (
-            <p className="mt-1 text-sm text-stone-500">
-              已创建 {derivedCreationQuota.createdFamilies}/{derivedCreationQuota.maxFamilies} 个家族，
-              还可创建 {derivedCreationQuota.remainingFamilies} 个
-            </p>
-          )}
+          <h2 className="text-2xl font-semibold tracking-tight text-stone-950">成员与权限</h2>
+          <p className="mt-1 text-sm text-stone-500">
+            {visibleFamilies.length} 个家庭 · {currentVisibleMembers.length} 位成员
+            {canManageSpace && ` · 还可创建 ${derivedCreationQuota.remainingFamilies} 个`}
+          </p>
         </div>
 
         {canManageSpace && (
@@ -441,7 +369,7 @@ export default function FamilyMembersPanel({
                 setShowCreate(false);
                 setError('');
               }}
-              className="inline-flex items-center justify-center gap-1.5 rounded-md border border-stone-200 bg-white px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-50"
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md border border-stone-200 bg-white px-4 text-sm font-medium text-stone-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800"
             >
               <UserPlus className="h-4 w-4" />
               加入家庭
@@ -455,7 +383,7 @@ export default function FamilyMembersPanel({
                 setError('');
               }}
               disabled={derivedCreationQuota.remainingFamilies <= 0}
-              className="inline-flex items-center justify-center gap-1.5 rounded-md bg-stone-950 px-4 py-2 text-sm text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md bg-gradient-to-r from-emerald-800 to-teal-700 px-4 text-sm font-semibold text-white shadow-[0_10px_22px_rgba(13,148,136,0.18)] transition hover:from-emerald-700 hover:to-teal-600 disabled:cursor-not-allowed disabled:from-stone-200 disabled:to-stone-200 disabled:text-stone-500 disabled:shadow-none"
             >
               <Plus className="h-4 w-4" />
               创建家庭
@@ -468,7 +396,7 @@ export default function FamilyMembersPanel({
       {successMsg && <div className="mb-4 rounded-md border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{successMsg}</div>}
 
       {canManageSpace && showCreate && (
-        <div className="mb-6 rounded-md border border-stone-200 bg-white p-5">
+        <div className="mb-5 rounded-lg border border-stone-200 bg-white p-5 shadow-[0_1px_3px_rgba(24,39,32,0.05)]">
           <h3 className="mb-1 text-base font-semibold text-stone-950">创建新家庭</h3>
           <p className="mb-3 text-sm text-stone-500">
             还可创建 {derivedCreationQuota.remainingFamilies} 个家族空间
@@ -501,7 +429,7 @@ export default function FamilyMembersPanel({
               type="button"
               onClick={handleCreate}
               disabled={!newFamilyName.trim() || derivedCreationQuota.remainingFamilies <= 0}
-              className="rounded-md bg-stone-950 px-5 py-2 text-sm font-medium text-white transition hover:bg-stone-800 disabled:opacity-50"
+              className="rounded-md bg-emerald-700 px-5 py-2 text-sm font-medium text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
               创建
             </button>
@@ -510,7 +438,7 @@ export default function FamilyMembersPanel({
       )}
 
       {canManageSpace && showJoin && (
-        <div className="mb-6 rounded-md border border-stone-200 bg-white p-5">
+        <div className="mb-5 rounded-lg border border-stone-200 bg-white p-5 shadow-[0_1px_3px_rgba(24,39,32,0.05)]">
           <h3 className="mb-3 text-base font-semibold text-stone-950">使用邀请码加入</h3>
           <div className="flex flex-col gap-2 sm:flex-row">
             <input
@@ -526,7 +454,7 @@ export default function FamilyMembersPanel({
               type="button"
               onClick={handleJoin}
               disabled={inviteCode.trim().length < 8}
-              className="rounded-md bg-stone-950 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-stone-800 disabled:opacity-50"
+              className="rounded-md bg-emerald-700 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
               加入
             </button>
@@ -542,7 +470,7 @@ export default function FamilyMembersPanel({
       )}
 
       {visibleFamilies.length === 0 ? (
-        <div className="rounded-md border border-stone-200 bg-white p-12 text-center">
+        <div className="rounded-lg border border-dashed border-stone-300 bg-white p-12 text-center">
           <Users className="mx-auto mb-3 h-12 w-12 text-stone-200" />
           <h3 className="mb-1 text-lg font-medium text-stone-700">还没有家庭</h3>
           {canManageSpace && (
@@ -553,14 +481,14 @@ export default function FamilyMembersPanel({
                 setShowCreate(true);
               }}
               disabled={derivedCreationQuota.remainingFamilies <= 0}
-              className="rounded-md bg-stone-950 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
+              className="mt-4 rounded-md bg-emerald-700 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
             >
               创建第一个家庭
             </button>
           )}
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-5">
           {visibleFamilies.map((family) => {
             const isExpanded = expandedFamilyId === family.id;
             const memberList = members[family.id] || [];
@@ -569,216 +497,121 @@ export default function FamilyMembersPanel({
             const canManageRoles = canManageSpace && currentMember?.role === 'OWNER';
 
             return (
-              <div
+              <section
                 key={family.id}
-                className={`overflow-hidden rounded-md border bg-white ${
-                  currentFamilyId === family.id ? 'border-emerald-200 ring-1 ring-emerald-100' : 'border-stone-200'
-                }`}
+                className={cn(
+                  'overflow-hidden rounded-lg border bg-white shadow-[0_1px_3px_rgba(24,39,32,0.06)]',
+                  currentFamilyId === family.id ? 'border-emerald-200 ring-1 ring-emerald-100' : 'border-stone-200',
+                )}
               >
-                <div className="p-5">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-md bg-emerald-100 text-lg font-bold text-emerald-800">
+                <div className="bg-[#fafaf8] p-5">
+                  <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="flex min-w-0 items-start gap-4">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-emerald-900 text-lg font-semibold text-white shadow-sm">
                         {family.name.charAt(0)}
                       </div>
                       <div className="min-w-0">
-                        <h3 className="truncate text-lg font-semibold text-stone-950">{family.name}</h3>
-                        {family.description && <p className="mt-0.5 text-sm text-stone-500">{family.description}</p>}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="truncate text-xl font-semibold text-stone-950">{family.name}</h3>
+                          {currentFamilyId === family.id && (
+                            <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-100">
+                              当前家庭
+                            </span>
+                          )}
+                        </div>
+                        {family.description && (
+                          <p className="mt-1 max-w-2xl text-sm leading-6 text-stone-500">{family.description}</p>
+                        )}
+                        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-stone-500">
+                          <span>{memberList.length || currentVisibleMembers.length} / {family.maxMembers} 成员</span>
+                          <span>创建于 {new Date(family.createdAt).toLocaleDateString('zh-CN')}</span>
+                        </div>
                       </div>
                     </div>
-                    <div className="text-xs text-stone-400 sm:text-right">
-                      最多 {family.maxMembers} 位成员
-                    </div>
-                  </div>
 
-                  <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-stone-100 pt-3">
-                    {canManageSpace && family.inviteCode && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {canManageSpace && family.inviteCode && (
+                        <button
+                          type="button"
+                          onClick={() => { void copyInviteCode(family.inviteCode!); }}
+                          className="inline-flex h-9 items-center gap-1.5 rounded-md border border-stone-200 bg-white px-3 text-xs font-medium text-stone-600 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800"
+                        >
+                          {copiedCode === family.inviteCode ? (
+                            <>
+                              <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+                              已复制
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-3.5 w-3.5" />
+                              {family.inviteCode}
+                            </>
+                          )}
+                        </button>
+                      )}
+
                       <button
                         type="button"
-                        onClick={() => { void copyInviteCode(family.inviteCode!); }}
-                        className="inline-flex items-center gap-1 rounded-md bg-stone-50 px-3 py-1.5 text-xs text-stone-600 transition hover:bg-stone-100"
+                        onClick={() => { void handleExpand(family.id); }}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-md border border-stone-200 bg-white px-3 text-xs font-medium text-stone-600 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800"
                       >
-                        {copiedCode === family.inviteCode ? (
-                          <>
-                            <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
-                            已复制
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="h-3.5 w-3.5" />
-                            {family.inviteCode}
-                          </>
-                        )}
+                        {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                        {isExpanded ? '收起成员' : '查看成员'}
                       </button>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => { void handleExpand(family.id); }}
-                      className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs text-stone-500 transition hover:bg-stone-50 hover:text-stone-700"
-                    >
-                      {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                      {isExpanded ? '收起成员' : '查看成员'}
-                    </button>
-
-                    {currentFamilyId === family.id && (
-                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
-                        当前家庭
-                      </span>
-                    )}
-
-                    <span className="w-full text-xs text-stone-400 sm:ml-auto sm:w-auto">
-                      创建于 {new Date(family.createdAt).toLocaleDateString('zh-CN')}
-                    </span>
+                    </div>
                   </div>
                 </div>
 
                 {isExpanded && (
-                  <div className="border-t border-stone-100 bg-stone-50 px-5 py-4">
+                  <div className="border-t border-stone-100 bg-white px-5 py-5">
                     {isLoadingFamilyDetails ? (
-                      <div className="flex items-center text-sm text-stone-400">
+                      <div className="flex h-32 items-center justify-center text-sm text-stone-400">
                         <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                         正在加载成员...
                       </div>
                     ) : memberList.length === 0 ? (
-                      <p className="text-sm text-stone-400">这个家庭暂时还没有可展示的成员信息。</p>
+                      <p className="rounded-md border border-dashed border-stone-200 px-4 py-8 text-center text-sm text-stone-400">
+                        这个家庭暂时还没有可展示的成员信息。
+                      </p>
                     ) : (
-                      <div className="space-y-2">
-                        {memberList.map((member) => {
-                          const badge = roleBadge(member.role);
-                          const BadgeIcon = badge.icon;
-                          const updateKey = `${family.id}:${member.userId}`;
-                          const careKey = `${family.id}:${member.userId}:care`;
-                          const careAuthorized = hasCareAuthorization(family.id, member.userId);
-                          const isEditingRelationship = editingRelationshipKey === updateKey;
-                          const canEditRelationship = canManageSpace && member.userId !== currentUserId;
-                          const canNormalizeRole = canManageRoles && member.role !== 'OWNER' && isLegacyFamilyRole(member.role);
-
-                          return (
-                            <div
-                              key={member.id}
-                              className="flex flex-col gap-3 rounded-md border border-white bg-white px-3 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"
-                            >
-                              <div className="flex min-w-0 items-start gap-3">
-                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 bg-stone-50 text-sm font-medium text-stone-500">
-                                  {memberDisplayName(member).charAt(0).toUpperCase()}
-                                </div>
-
-                                {isEditingRelationship ? (
-                                  <form
-                                    className="flex min-w-0 flex-1 items-center gap-2"
-                                    onSubmit={(event) => {
-                                      event.preventDefault();
-                                      void handleUpdateRelationship(family.id, member);
-                                    }}
-                                  >
-                                    <input
-                                      name="relationshipLabel"
-                                      value={relationshipDraft}
-                                      maxLength={60}
-                                      autoFocus
-                                      onChange={(event) => setRelationshipDraft(event.target.value)}
-                                      placeholder="例如：妈妈、叔叔、小楠"
-                                      className="h-9 min-w-0 flex-1 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                                    />
-                                    <button
-                                      type="submit"
-                                      disabled={updatingRelationshipKey === updateKey || !relationshipDraft.trim()}
-                                      className="rounded-md px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
-                                    >
-                                      保存
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={cancelEditRelationship}
-                                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-stone-400 hover:bg-stone-100 hover:text-stone-600"
-                                      aria-label="取消编辑关系称呼"
-                                    >
-                                      <X className="h-4 w-4" />
-                                    </button>
-                                  </form>
-                                ) : (
-                                  <div className="min-w-0">
-                                    <div className="flex min-w-0 items-center gap-1.5">
-                                      <Link
-                                        href={`/dashboard/family/member?familyId=${family.id}&userId=${member.userId}`}
-                                        className="truncate text-sm font-medium text-stone-900 hover:text-emerald-700 hover:underline"
-                                      >
-                                        {memberDisplayName(member)}
-                                      </Link>
-                                      {canEditRelationship && (
-                                        <button
-                                          type="button"
-                                          onClick={() => startEditRelationship(family.id, member)}
-                                          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-stone-400 hover:bg-stone-100 hover:text-emerald-700"
-                                          aria-label="编辑关系称呼"
-                                        >
-                                          <Pencil className="h-3.5 w-3.5" />
-                                        </button>
-                                      )}
-                                    </div>
-                                    <p className="mt-1 text-xs text-stone-400">
-                                      {member.relationshipLabel?.trim() ? `${memberAccountName(member)} · ` : ''}
-                                      {memberProfileLine(member)}
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-
-                              <div className="flex shrink-0 flex-wrap items-center gap-2">
-                                <Link
-                                  href={`/dashboard/family/member?familyId=${family.id}&userId=${member.userId}`}
-                                  className="inline-flex h-8 items-center gap-1.5 rounded-md bg-stone-950 px-3 text-xs font-semibold text-white transition hover:bg-stone-800"
-                                >
-                                  <BookHeart className="h-3.5 w-3.5" />
-                                  成员记忆
-                                </Link>
-
-                                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${badge.className}`}>
-                                  <BadgeIcon className="h-3 w-3" />
-                                  {badge.label}
-                                </span>
-
-                                {canManageSpace && member.userId !== currentUserId && (
-                                  <button
-                                    type="button"
-                                    disabled={updatingCareKey === careKey}
-                                    onClick={() => { void handleToggleCareAuthorization(family.id, member); }}
-                                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium disabled:opacity-50 ${
-                                      careAuthorized
-                                        ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                                        : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
-                                    }`}
-                                  >
-                                    <Eye className="h-3 w-3" />
-                                    {careAuthorized ? '已开启照护' : '开启照护'}
-                                  </button>
-                                )}
-
-                                {canNormalizeRole && (
-                                  <button
-                                    type="button"
-                                    disabled={updatingRoleKey === updateKey}
-                                    onClick={() => { void handleUpdateRole(family.id, member, 'MEMBER'); }}
-                                    className="rounded-md border border-stone-200 bg-white px-2 py-1 text-xs text-stone-600 hover:border-emerald-200 hover:text-emerald-700 disabled:opacity-50"
-                                  >
-                                  规范为成员
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
+                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                        {memberList.map((member) => (
+                          <FamilyMemberCard
+                            key={member.id}
+                            familyId={family.id}
+                            member={member}
+                            currentUserId={currentUserId}
+                            canManageSpace={canManageSpace}
+                            canManageRoles={canManageRoles}
+                            editingRelationshipKey={editingRelationshipKey}
+                            relationshipDraft={relationshipDraft}
+                            updatingRelationshipKey={updatingRelationshipKey}
+                            updatingRoleKey={updatingRoleKey}
+                            updatingCareKey={updatingCareKey}
+                            careAuthorized={hasCareAuthorization(family.id, member.userId)}
+                            onStartEditRelationship={startEditRelationship}
+                            onRelationshipDraftChange={setRelationshipDraft}
+                            onCancelEditRelationship={cancelEditRelationship}
+                            onUpdateRelationship={(targetFamilyId, targetMember) => {
+                              void handleUpdateRelationship(targetFamilyId, targetMember);
+                            }}
+                            onUpdateRole={(targetFamilyId, targetMember, role) => {
+                              void handleUpdateRole(targetFamilyId, targetMember, role);
+                            }}
+                            onToggleCareAuthorization={(targetFamilyId, caregiver) => {
+                              void handleToggleCareAuthorization(targetFamilyId, caregiver);
+                            }}
+                          />
+                        ))}
                       </div>
                     )}
                   </div>
                 )}
-              </div>
+              </section>
             );
           })}
         </div>
       )}
-
     </div>
   );
 }

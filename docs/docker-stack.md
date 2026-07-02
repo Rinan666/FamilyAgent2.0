@@ -49,6 +49,21 @@ Check the values that Docker Compose will inject:
 docker compose --env-file .env.docker -f docker-compose.stack.yml config | grep -E 'DB_PASSWORD|REDIS_PASSWORD|RABBITMQ_PASSWORD|AI_INTERNAL_SERVICE_TOKEN|MINIO_ACCESS_KEY|MINIO_SECRET_KEY'
 ```
 
+## Image Mirror Overrides
+
+If the server cannot pull Docker Hub images and reports errors such as `403 Forbidden` from a registry mirror, override the images in `.env.docker` instead of editing Dockerfiles:
+
+```env
+DOCKER_POSTGRES_IMAGE=docker.m.daocloud.io/pgvector/pgvector:pg16
+DOCKER_REDIS_IMAGE=docker.m.daocloud.io/library/redis:7-alpine
+DOCKER_RABBITMQ_IMAGE=docker.m.daocloud.io/library/rabbitmq:3.13-management-alpine
+DOCKER_MINIO_IMAGE=docker.m.daocloud.io/minio/minio:latest
+DOCKER_MAVEN_IMAGE=docker.m.daocloud.io/library/maven:3.9.9-eclipse-temurin-17
+DOCKER_JAVA_RUNTIME_IMAGE=docker.m.daocloud.io/library/eclipse-temurin:17-jre-jammy
+DOCKER_PYTHON_IMAGE=docker.m.daocloud.io/library/python:3.12-slim
+DOCKER_NODE_IMAGE=docker.m.daocloud.io/library/node:22-alpine
+```
+
 ## Rebuild After Dependency Changes
 
 The stack builds images from the local repository. When `requirements.txt`, `package-lock.json`, Dockerfiles, or backend dependencies change, recreate the affected service instead of only restarting it:

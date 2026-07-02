@@ -1,14 +1,17 @@
 """
 Embedding API for backend-owned family memory indexing.
 """
+import asyncio
 import hashlib
 import logging
 import math
+import time
+import uuid
 from typing import Optional
 
 import httpx
 import litellm
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.config import settings
@@ -30,27 +33,101 @@ class EmbedRequest(BaseModel):
     text: str = Field(..., min_length=1)
     model: Optional[str] = None
     dimensions: Optional[int] = Field(default=None, ge=128, le=4096)
+    source_type: Optional[str] = Field(default=None, max_length=64)
+    family_id: Optional[int] = Field(default=None, ge=1)
+    user_id: Optional[int] = Field(default=None, ge=1)
 
 
-@router.post("/embed")
-async def embed_text(request: EmbedRequest):
+class EmbedResponse(BaseModel):
+    success: bool
+    degraded: bool = False
+    provider: str
+    model: str
+    dimensions: int
+    embedding: list[float]
+    privacy_categories: list[str] = Field(default_factory=list)
+    latency_ms: int
+    request_id: str
+    errorCode: Optional[str] = None
+
+
+@router.post("/embed", response_model=EmbedResponse)
+async def embed_text(request: EmbedRequest, http_request: Request):
+    started_at = time.monotonic()
+    request_id = http_request.headers.get("X-Request-Id") or str(uuid.uuid4())
     text = sanitize_text(request.text, max_length=6000)
     guarded = redact_ai_bound_text(text, max_length=6000)
     model = request.model or settings.embedding_model
     dimensions = request.dimensions or settings.embedding_dimension
+    provider = _embedding_provider(model)
 
     try:
         vector = await _embed(text=guarded.text, model=model, dimensions=dimensions)
+        latency_ms = _elapsed_ms(started_at)
+        logger.info(
+            "Embedding generated: request_id=%s provider=%s model=%s dimensions=%s latency_ms=%s degraded=%s privacy_categories=%s",
+            request_id,
+            provider,
+            model,
+            len(vector),
+            latency_ms,
+            False,
+            guarded.categories,
+        )
         return {
             "success": True,
+            "degraded": False,
+            "provider": provider,
             "model": model,
             "dimensions": len(vector),
             "embedding": vector,
             "privacy_categories": guarded.categories,
+            "latency_ms": latency_ms,
+            "request_id": request_id,
         }
+    except HTTPException as e:
+        logger.warning(
+            "Embedding generation failed: request_id=%s provider=%s model=%s dimensions=%s latency_ms=%s errorCode=%s status_code=%s",
+            request_id,
+            provider,
+            model,
+            dimensions,
+            _elapsed_ms(started_at),
+            _embedding_error_code(e),
+            e.status_code,
+        )
+        raise
     except Exception as e:
-        logger.warning("Embedding generation failed: %s", e)
+        logger.warning(
+            "Embedding generation failed: request_id=%s provider=%s model=%s dimensions=%s latency_ms=%s errorCode=EMBEDDING_GENERATION_FAILED error=%s",
+            request_id,
+            provider,
+            model,
+            dimensions,
+            _elapsed_ms(started_at),
+            e,
+        )
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _embedding_provider(model: str) -> str:
+    if model.startswith("local/"):
+        return "local"
+    if model.startswith("dashscope-multimodal/") or model.startswith("dashscope/"):
+        return "dashscope"
+    if "/" in model:
+        return model.split("/", 1)[0]
+    return "litellm"
+
+
+def _embedding_error_code(exc: HTTPException) -> str:
+    if exc.status_code == 503:
+        return "EMBEDDING_PROVIDER_UNAVAILABLE"
+    return "EMBEDDING_GENERATION_FAILED"
+
+
+def _elapsed_ms(started_at: float) -> int:
+    return max(0, round((time.monotonic() - started_at) * 1000))
 
 
 async def _embed(text: str, model: str, dimensions: int) -> list[float]:
@@ -66,21 +143,24 @@ async def _embed(text: str, model: str, dimensions: int) -> list[float]:
         return await _dashscope_embedding(text, model.removeprefix("dashscope/"), dimensions)
 
     try:
-        response = await litellm.aembedding(model=model, input=[text])
+        response = await asyncio.wait_for(
+            litellm.aembedding(model=model, input=[text]),
+            timeout=settings.ai_embedding_timeout_seconds,
+        )
         values = response["data"][0]["embedding"]
         return _fit_dimensions([float(item) for item in values], dimensions)
     except Exception as e:
-        logger.warning("LiteLLM embedding failed, using local fallback: %s", e)
-        return _hash_embedding(text, dimensions)
+        logger.warning("LiteLLM embedding failed: %s", e)
+        raise HTTPException(status_code=503, detail="Embedding provider unavailable")
 
 
 async def _dashscope_embedding(text: str, model: str, dimensions: int) -> list[float]:
     if not settings.dashscope_api_key:
-        logger.warning("DASHSCOPE_API_KEY is missing, using local fallback")
-        return _hash_embedding(text, dimensions)
+        logger.warning("DASHSCOPE_API_KEY is missing")
+        raise HTTPException(status_code=503, detail="Embedding provider is not configured")
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=settings.ai_embedding_timeout_seconds) as client:
             response = await client.post(
                 f"{settings.dashscope_base_url.rstrip('/')}/embeddings",
                 headers={
@@ -99,18 +179,18 @@ async def _dashscope_embedding(text: str, model: str, dimensions: int) -> list[f
             values = data["data"][0]["embedding"]
             return _fit_dimensions([float(item) for item in values], dimensions)
     except Exception as e:
-        logger.warning("DashScope embedding failed, using local fallback: %s", e)
-        return _hash_embedding(text, dimensions)
+        logger.warning("DashScope embedding failed: %s", e)
+        raise HTTPException(status_code=503, detail="Embedding provider unavailable")
 
 
 async def _dashscope_multimodal_embedding(text: str, model: str, dimensions: int) -> list[float]:
     if not settings.dashscope_api_key:
-        logger.warning("DASHSCOPE_API_KEY is missing, using local fallback")
-        return _hash_embedding(text, dimensions)
+        logger.warning("DASHSCOPE_API_KEY is missing")
+        raise HTTPException(status_code=503, detail="Embedding provider is not configured")
 
     request_dimension = _dashscope_multimodal_dimension(model, dimensions)
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=settings.ai_embedding_timeout_seconds) as client:
             response = await client.post(
                 settings.dashscope_multimodal_url,
                 headers={
@@ -134,8 +214,8 @@ async def _dashscope_multimodal_embedding(text: str, model: str, dimensions: int
             values = data["output"]["embeddings"][0]["embedding"]
             return _fit_dimensions([float(item) for item in values], dimensions)
     except Exception as e:
-        logger.warning("DashScope multimodal embedding failed, using local fallback: %s", e)
-        return _hash_embedding(text, dimensions)
+        logger.warning("DashScope multimodal embedding failed: %s", e)
+        raise HTTPException(status_code=503, detail="Embedding provider unavailable")
 
 
 def _dashscope_multimodal_dimension(model: str, dimensions: int) -> int:

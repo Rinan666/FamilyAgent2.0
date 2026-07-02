@@ -138,6 +138,26 @@ class DiaryEntryServiceTest {
     }
 
     @Test
+    void create_shouldUseFirstLineAsTitleWhenTitleIsBlank() {
+        DiaryEntryService service = new DiaryEntryService(diaryRepository, familyService, memoryEmbeddingService);
+        CreateDiaryEntryRequest request = manualRequest(Map.of("disableAutoMerge", true));
+        request.setTitle(null);
+        request.setContent("第一行标题\n第二行正文");
+
+        try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
+            stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
+
+            service.create(request);
+        }
+
+        ArgumentCaptor<DiaryEntry> captor = ArgumentCaptor.forClass(DiaryEntry.class);
+        verify(diaryRepository).insert(captor.capture());
+        DiaryEntry saved = captor.getValue();
+        Map<?, ?> structured = (Map<?, ?>) saved.getStructured();
+        assertEquals("第一行标题", structured.get("title"));
+    }
+
+    @Test
     void searchFamilyEntries_shouldClampPageAndForwardFilters() {
         DiaryEntryService service = new DiaryEntryService(diaryRepository, familyService, memoryEmbeddingService);
         DiaryEntry entry = existingDiary(201L, "晨练后聊了学校里的事");

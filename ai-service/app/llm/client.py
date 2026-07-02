@@ -144,7 +144,7 @@ class LLMClient:
                 ):
                     yield chunk
             else:
-                yield "抱歉，AI 服务暂时不可用，请稍后重试。"
+                raise RuntimeError("LLM stream provider unavailable") from exc
 
 
 llm_client = LLMClient()

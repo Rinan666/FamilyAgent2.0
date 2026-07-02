@@ -4,17 +4,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image as ImageIcon, Images, RefreshCw, Trash2, Upload, UserRound, UsersRound, X } from 'lucide-react';
+import { AI_PROXY_ROUTES, aiProxyUrl } from '@/lib/api/aiProxyBoundary';
 import { photoApi } from '@/lib/api/photos';
 import { useViewerRole } from '@/hooks/useViewerRole';
 import {
   WorkbenchAlert,
-  WorkbenchBadge,
   WorkbenchButton,
-  WorkbenchHero,
   WorkbenchPage,
   WorkbenchSurface,
-  WorkbenchTabs,
 } from '@/components/layout/Workbench';
+import { MobilePageDrawer } from '@/components/layout/Sidebar';
 import type { PhotoClusterResult, PhotoFaceMeta, PhotoItem, PhotoScope } from '@/types';
 
 type Stage = 'idle' | 'uploading' | 'clustering' | 'done';
@@ -119,7 +118,52 @@ function validateImageFiles(files: File[], minFiles = 1) {
 }
 
 async function clusterByUrls(urls: string[], photoIds: number[]): Promise<PhotoClusterResult> {
-  return photoApi.clusterByUrls(urls, photoIds);
+  const token = getToken();
+
+  const res = await fetch(aiProxyUrl(AI_PROXY_ROUTES.DIP_FACES_CLUSTER_BY_URLS), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: token } : {}),
+    },
+    body: JSON.stringify({ urls, photo_ids: photoIds }),
+  });
+  const responseText = await res.text();
+  let data: {
+    success?: boolean;
+    detail?: string;
+    message?: string;
+    groups?: unknown;
+    total_faces?: unknown;
+    silhouette_score?: unknown;
+    failed_photos?: unknown;
+  } | null = null;
+  try {
+    data = responseText ? JSON.parse(responseText) : null;
+  } catch {
+    data = null;
+  }
+  if (!res.ok || !data?.success) {
+    const detail = data?.detail || data?.message || responseText.trim();
+    throw new Error(detail ? `人脸聚类失败（HTTP ${res.status}）：${detail}` : `人脸聚类失败（HTTP ${res.status}）。`);
+  }
+  return {
+    groups: Array.isArray(data.groups) ? data.groups : [],
+    total_faces: Number(data.total_faces) || 0,
+    silhouette_score: typeof data.silhouette_score === 'number' ? data.silhouette_score : null,
+    failed_photos: Array.isArray(data.failed_photos)
+      ? data.failed_photos
+        .map((item: { photo_id?: unknown; file_index?: unknown; reason?: unknown; status_code?: unknown }) => ({
+          photo_id: Number(item.photo_id),
+          file_index: Number(item.file_index),
+          reason: typeof item.reason === 'string' ? item.reason : 'UNKNOWN',
+          status_code: typeof item.status_code === 'number' ? item.status_code : null,
+        }))
+        .filter((item: { photo_id: number; file_index: number }) => (
+          Number.isFinite(item.photo_id) && Number.isFinite(item.file_index)
+        ))
+      : [],
+  };
 }
 
 function summarizeClusterFailures(failures: PhotoClusterResult['failed_photos']): string {
@@ -461,7 +505,7 @@ function ClusterResultSummary({
 }
 
 export default function AlbumPage() {
-  const { activeFamilyId, activeFamily } = useViewerRole();
+  const { activeFamilyId, activeFamily, viewerRole } = useViewerRole();
   const [activeTab, setActiveTab] = useState<TabKey>('personal');
   const [personalPhotos, setPersonalPhotos] = useState<PhotoItem[]>([]);
   const [familyPhotos, setFamilyPhotos] = useState<PhotoItem[]>([]);
@@ -637,24 +681,37 @@ export default function AlbumPage() {
 
   return (
     <WorkbenchPage>
-      <WorkbenchHero
-        badge={<WorkbenchBadge icon={<Images className="h-3.5 w-3.5" />}>相册</WorkbenchBadge>}
-        title="照片空间"
-        description={activeFamily?.name || '个人与家庭照片空间'}
-        aside={isLoadingPhotos ? (
-          <span className="inline-flex items-center gap-2 rounded-md bg-stone-100 px-3 py-2 text-sm text-stone-500">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-2">
+          <MobilePageDrawer viewerRole={viewerRole} />
+          <nav className="flex min-w-0 gap-1 overflow-x-auto rounded-md bg-stone-100 p-1">
+            {tabs.map((tab) => {
+              const active = activeTab === tab.value;
+              return (
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() => setActiveTab(tab.value)}
+                  className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium transition ${
+                    active
+                      ? 'bg-stone-950 text-white shadow-sm'
+                      : 'text-stone-600 hover:bg-white hover:text-stone-950'
+                  }`}
+                >
+                  {tab.icon}
+                  {tab.label}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+        {isLoadingPhotos && (
+          <span className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-stone-100 px-3 text-sm text-stone-500 sm:shrink-0">
             <RefreshCw className="h-4 w-4 animate-spin" />
             加载中
           </span>
-        ) : null}
-      />
-
-      <WorkbenchTabs
-        items={tabs}
-        value={activeTab}
-        onChange={setActiveTab}
-        className="grid-cols-3"
-      />
+        )}
+      </div>
 
       {listError && <WorkbenchAlert tone="danger">{listError}</WorkbenchAlert>}
 

@@ -2,7 +2,7 @@
 
 services:
   postgres:
-    image: pgvector/pgvector:pg16
+    image: ${DOCKER_POSTGRES_IMAGE:-docker.m.daocloud.io/pgvector/pgvector:pg16}
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${DB_NAME:-familyagent}
@@ -21,7 +21,7 @@ services:
       - fa-network
 
   redis:
-    image: redis:7-alpine
+    image: ${DOCKER_REDIS_IMAGE:-docker.m.daocloud.io/library/redis:7-alpine}
     restart: unless-stopped
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
@@ -39,7 +39,7 @@ services:
       - fa-network
 
   rabbitmq:
-    image: rabbitmq:3.13-management-alpine
+    image: ${DOCKER_RABBITMQ_IMAGE:-docker.m.daocloud.io/library/rabbitmq:3.13-management-alpine}
     restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-fa_user}
@@ -58,7 +58,7 @@ services:
       - fa-network
 
   minio:
-    image: minio/minio:latest
+    image: ${DOCKER_MINIO_IMAGE:-docker.m.daocloud.io/minio/minio:latest}
     restart: unless-stopped
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
@@ -80,6 +80,8 @@ services:
   ai-service:
     build:
       context: ./ai-service
+      args:
+        PYTHON_IMAGE: ${DOCKER_PYTHON_IMAGE:-docker.m.daocloud.io/library/python:3.12-slim}
     restart: unless-stopped
     env_file:
       - ${STACK_ENV_FILE:-.env.docker}
@@ -110,6 +112,9 @@ services:
   backend:
     build:
       context: ./backend
+      args:
+        MAVEN_IMAGE: ${DOCKER_MAVEN_IMAGE:-docker.m.daocloud.io/library/maven:3.9.9-eclipse-temurin-17}
+        JAVA_RUNTIME_IMAGE: ${DOCKER_JAVA_RUNTIME_IMAGE:-docker.m.daocloud.io/library/eclipse-temurin:17-jre-jammy}
     restart: unless-stopped
     env_file:
       - ${STACK_ENV_FILE:-.env.docker}
