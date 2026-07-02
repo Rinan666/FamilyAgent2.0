@@ -86,9 +86,4 @@ resilience4j:
         retryExceptions:
           - java.io.IOException
           - org.springframework.web.client.ResourceAccessException
-
-wechat:
-  mini-app:
-    app-id: ${WECHAT_MINI_APP_APP_ID:}
-    app-secret: ${WECHAT_MINI_APP_APP_SECRET:}
-    timeout: ${WECHAT_MINI_APP_TIMEOUT_SECONDS:10}
+          - com.familyagent.common.exception.BusinessException

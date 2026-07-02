@@ -140,7 +140,7 @@ class Settings(BaseSettings):
             return False
         if self.auth_fail_open is not None:
             return self.auth_fail_open
-        return True
+        return False
 
     @property
     def is_development_env(self) -> bool:

@@ -3,9 +3,10 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { NotebookPen, ShieldCheck, Users } from 'lucide-react';
+import { LockKeyhole, NotebookPen, ShieldCheck, Ticket, UserRound, Users } from 'lucide-react';
 import AuthShell, {
-  authInputClassName,
+  authInputIconClassName,
+  authInputWithIconClassName,
   authLabelClassName,
   authPrimaryButtonClassName,
 } from '@/components/auth/AuthShell';
@@ -81,7 +82,7 @@ export default function RegisterPage() {
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+          <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
             {error}
           </div>
         )}
@@ -90,67 +91,79 @@ export default function RegisterPage() {
           <label htmlFor="register-username" className={authLabelClassName}>
             用户名
           </label>
-          <input
-            id="register-username"
-            name="username"
-            type="text"
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            className={authInputClassName}
-            placeholder="3 到 50 个字符"
-            required
-            minLength={3}
-            maxLength={50}
-          />
+          <div className="relative">
+            <UserRound className={authInputIconClassName} />
+            <input
+              id="register-username"
+              name="username"
+              type="text"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              className={authInputWithIconClassName}
+              placeholder="3 到 50 个字符"
+              required
+              minLength={3}
+              maxLength={50}
+            />
+          </div>
         </div>
 
         <div>
           <label htmlFor="register-invite-code" className={authLabelClassName}>
             邀请码
           </label>
-          <input
-            id="register-invite-code"
-            name="inviteCode"
-            type="text"
-            value={inviteCode}
-            onChange={(event) => setInviteCode(event.target.value.toUpperCase())}
-            className={`${authInputClassName} uppercase`}
-            placeholder="请输入邀请码"
-            required
-            maxLength={50}
-          />
+          <div className="relative">
+            <Ticket className={authInputIconClassName} />
+            <input
+              id="register-invite-code"
+              name="inviteCode"
+              type="text"
+              value={inviteCode}
+              onChange={(event) => setInviteCode(event.target.value.toUpperCase())}
+              className={`${authInputWithIconClassName} uppercase`}
+              placeholder="请输入邀请码"
+              required
+              maxLength={50}
+            />
+          </div>
         </div>
 
         <div>
           <label htmlFor="register-nickname" className={authLabelClassName}>
             昵称
           </label>
-          <input
-            id="register-nickname"
-            name="nickname"
-            type="text"
-            value={nickname}
-            onChange={(event) => setNickname(event.target.value)}
-            className={authInputClassName}
-            placeholder="可选，默认使用用户名"
-          />
+          <div className="relative">
+            <Users className={authInputIconClassName} />
+            <input
+              id="register-nickname"
+              name="nickname"
+              type="text"
+              value={nickname}
+              onChange={(event) => setNickname(event.target.value)}
+              className={authInputWithIconClassName}
+              placeholder="可选，默认使用用户名"
+            />
+          </div>
         </div>
 
         <div>
           <label htmlFor="register-password" className={authLabelClassName}>
             密码
           </label>
-          <input
-            id="register-password"
-            name="password"
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            className={authInputClassName}
-            placeholder="至少 6 个字符"
-            required
-            minLength={6}
-          />
+          <div className="relative">
+            <LockKeyhole className={authInputIconClassName} />
+            <input
+              id="register-password"
+              name="password"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              className={authInputWithIconClassName}
+              placeholder="至少 6 个字符"
+              required
+              minLength={6}
+            />
+          </div>
         </div>
 
         <button type="submit" disabled={loading} className={authPrimaryButtonClassName}>

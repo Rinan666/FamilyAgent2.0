@@ -1,8 +1,12 @@
 package com.familyagent.infra.ai;
 
+import com.familyagent.infra.ai.dto.AgentChatStreamPayload;
+import com.familyagent.infra.ai.dto.EmbeddingRequest;
+import com.familyagent.infra.ai.dto.EmbeddingResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -12,16 +16,18 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AIServiceClientTest {
 
     private HttpServer server;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     @AfterEach
     void tearDown() {
@@ -36,9 +42,11 @@ class AIServiceClientTest {
         requestFactory.setReadTimeout(5_000);
         return new AIServiceClient(
                 new RestTemplateBuilder().requestFactory(() -> requestFactory).build(),
+                new RestTemplateBuilder().requestFactory(() -> requestFactory).build(),
                 baseUrl(),
                 internalToken,
-                objectMapper);
+                objectMapper,
+                meterRegistry);
     }
 
     @Test
@@ -52,10 +60,13 @@ class AIServiceClientTest {
 
         AIServiceClient client = createClient("secret-token");
 
-        Map<String, Object> response = client.embedText(Map.of("text", "family memory", "dimensions", 1536));
+        EmbeddingResponse response = client.embedText(EmbeddingRequest.builder()
+                .text("family memory")
+                .dimensions(1536)
+                .build());
 
         assertEquals("secret-token", receivedToken.get());
-        assertEquals(Boolean.TRUE, response.get("success"));
+        assertEquals(true, response.isSuccess());
     }
 
     @Test
@@ -69,31 +80,106 @@ class AIServiceClientTest {
 
         AIServiceClient client = createClient(" ");
 
-        Map<String, Object> response = client.embedText(Map.of("text", "family memory", "dimensions", 1536));
+        EmbeddingResponse response = client.embedText(EmbeddingRequest.builder()
+                .text("family memory")
+                .dimensions(1536)
+                .build());
 
         assertEquals(null, receivedToken.get());
-        assertEquals(Boolean.TRUE, response.get("success"));
+        assertEquals(true, response.isSuccess());
+    }
+
+    @Test
+    void embedText_shouldSendRequestIdAndRecordObservationMetric() throws Exception {
+        AtomicReference<String> requestId = new AtomicReference<>();
+        server = startServer("/ai/embedding/embed", exchange -> {
+            requestId.set(exchange.getRequestHeaders().getFirst("X-Request-Id"));
+            respond(exchange, "application/json", 200,
+                    "{\"success\":true,\"degraded\":false,\"provider\":\"local\",\"embedding\":[0.1,0.2],\"model\":\"local/test\",\"dimensions\":2,\"latency_ms\":12,\"request_id\":\"ai-service-request\",\"privacy_categories\":[]}");
+        });
+
+        AIServiceClient client = createClient("secret-token");
+
+        EmbeddingResponse response = client.embedText(EmbeddingRequest.builder()
+                .text("family memory")
+                .dimensions(1536)
+                .build());
+
+        assertTrue(requestId.get().startsWith("ai-"));
+        assertEquals("local", response.getProvider());
+        assertEquals(12L, response.getLatencyMs());
+        assertEquals("ai-service-request", response.getRequestId());
+        assertEquals(1, meterRegistry.find("familyagent.ai.client.request")
+                .tag("operation", "embedding")
+                .tag("success", "true")
+                .timer()
+                .count());
     }
 
     @Test
     void proxyChatStream_shouldForwardRawSseFramesAndHeaders() throws Exception {
         AtomicReference<String> acceptHeader = new AtomicReference<>();
         AtomicReference<String> authorizationHeader = new AtomicReference<>();
+        AtomicReference<String> internalTokenHeader = new AtomicReference<>();
+        AtomicReference<String> requestIdHeader = new AtomicReference<>();
         server = startServer("/ai/agent/chat/stream", exchange -> {
             acceptHeader.set(exchange.getRequestHeaders().getFirst("Accept"));
             authorizationHeader.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            internalTokenHeader.set(exchange.getRequestHeaders().getFirst("X-Internal-Service-Token"));
+            requestIdHeader.set(exchange.getRequestHeaders().getFirst("X-Request-Id"));
             respond(exchange, "text/event-stream", 200, ": connected\n\ndata: {\"content\":\"hello\"}\n\ndata: {\"done\":true}\n\n");
         });
 
         AIServiceClient client = createClient("secret-token");
         ByteArrayOutputStream downstream = new ByteArrayOutputStream();
 
-        client.proxyChatStream(Map.of("member_message", "tell me one thing"), downstream, "Bearer demo-token");
+        client.proxyChatStream(streamPayload("tell me one thing"), downstream, "Bearer demo-token", "chat-test-request");
 
         assertEquals("text/event-stream", acceptHeader.get());
         assertEquals("Bearer demo-token", authorizationHeader.get());
+        assertEquals("secret-token", internalTokenHeader.get());
+        assertEquals("chat-test-request", requestIdHeader.get());
         assertEquals(": connected\n\ndata: {\"content\":\"hello\"}\n\ndata: {\"done\":true}\n\n",
                 downstream.toString(StandardCharsets.UTF_8));
+        assertEquals(1, meterRegistry.find("familyagent.ai.client.request")
+                .tag("operation", "chat_stream")
+                .tag("success", "true")
+                .tag("errorCode", "NONE")
+                .tag("provider", "none")
+                .tag("model", "none")
+                .tag("degraded", "false")
+                .timer()
+                .count());
+    }
+
+    @Test
+    void proxyChatStream_shouldThrowOnNon200InsteadOfWritingAssistantText() throws Exception {
+        server = startServer("/ai/agent/chat/stream", exchange -> {
+            respond(exchange, "application/json", 503, "{\"detail\":\"provider unavailable\"}");
+        });
+
+        AIServiceClient client = createClient("secret-token");
+        ByteArrayOutputStream downstream = new ByteArrayOutputStream();
+
+        assertThrows(RuntimeException.class, () ->
+                client.proxyChatStream(streamPayload("tell me one thing"), downstream, "Bearer demo-token", "chat-error-request"));
+
+        assertEquals("", downstream.toString(StandardCharsets.UTF_8));
+    }
+
+    private AgentChatStreamPayload streamPayload(String message) {
+        return new AgentChatStreamPayload(
+                message,
+                List.of(),
+                "FamilyAgent",
+                "family_memory",
+                "",
+                "MEMBER",
+                "MEMBER",
+                "think",
+                "",
+                ""
+        );
     }
 
     @Test

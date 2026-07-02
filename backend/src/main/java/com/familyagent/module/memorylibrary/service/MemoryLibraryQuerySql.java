@@ -25,6 +25,7 @@ class MemoryLibraryQuerySql {
               COALESCE(NULLIF(de.structured->>'title', ''), NULLIF(de.structured->>'summary', ''), LEFT(de.raw_text, 32), '未命名记录') AS title,
               de.raw_text AS body,
               de.family_id,
+              de.user_id AS author_user_id,
               de.user_id AS member_user_id,
               COALESCE(NULLIF(u.nickname, ''), NULLIF(u.username, ''), CONCAT('用户 ', de.user_id)) AS member_name,
               de.visibility,
@@ -104,13 +105,14 @@ class MemoryLibraryQuerySql {
               END, '观察') AS title,
               gr.content AS body,
               gr.family_id,
+              gr.created_by AS author_user_id,
               COALESCE(gr.target_user_id, gr.created_by) AS member_user_id,
               COALESCE(NULLIF(u.nickname, ''), NULLIF(u.username, ''), CONCAT('用户 ', COALESCE(gr.target_user_id, gr.created_by))) AS member_name,
               gr.visibility,
-              ARRAY_REMOVE(ARRAY[
-                gr.category,
-                gr.metadata->>'followUpStatus'
-              ], NULL) AS tags,
+              CASE WHEN jsonb_typeof(gr.metadata->'tags') = 'array'
+                THEN ARRAY(SELECT jsonb_array_elements_text(gr.metadata->'tags'))
+                ELSE ARRAY[]::TEXT[]
+              END AS tags,
               gr.metadata,
               gr.created_at,
               gr.updated_at,
@@ -192,13 +194,14 @@ class MemoryLibraryQuerySql {
               COALESCE(NULLIF(me.summary, ''), LEFT(me.content, 32), '未命名经验') AS title,
               me.content AS body,
               me.family_id,
+              me.user_id AS author_user_id,
               me.user_id AS member_user_id,
               COALESCE(NULLIF(u.nickname, ''), NULLIF(u.username, ''), CONCAT('用户 ', me.user_id)) AS member_name,
               me.scope AS visibility,
-              ARRAY_REMOVE(ARRAY[
-                CASE WHEN COALESCE(me.metadata->>'coreMemory', '') = 'true' THEN '核心记忆' ELSE NULL END,
-                me.type
-              ], NULL) AS tags,
+              CASE WHEN jsonb_typeof(me.metadata->'tags') = 'array'
+                THEN ARRAY(SELECT jsonb_array_elements_text(me.metadata->'tags'))
+                ELSE ARRAY[]::TEXT[]
+              END AS tags,
               me.metadata,
               me.created_at,
               me.updated_at,

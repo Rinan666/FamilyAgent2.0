@@ -15,11 +15,27 @@ import type {
   ChatSessionMessagePage,
   ChatSessionSummary,
 } from '@/types';
+import { aiProxyUrl, type AiProxyRoute } from './aiProxyBoundary';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
 export type AIStreamHandle = {
   abort: () => void;
   completed: Promise<void>;
+};
+
+type AIStreamEvent = {
+  type?: 'content' | 'metadata' | 'done' | 'error';
+  content?: unknown;
+  metadata?: Record<string, unknown>;
+  done?: boolean;
+  error?: boolean | string;
+  code?: unknown;
+  message?: unknown;
+  retryable?: unknown;
+  degraded?: unknown;
+  requestId?: unknown;
+  latencyMs?: unknown;
+  web_search?: unknown;
 };
 // ============================================
 export class ApiError extends Error {
@@ -309,9 +325,9 @@ export function sessionMessageItemToChatMessage(item: ChatSessionMessageItem): C
     metadata: item.metadata as ChatMessage['metadata'],
   };
 }
-export async function aiRequest<T>(path: string, body: unknown): Promise<T> {
+export async function aiRequest<T>(path: AiProxyRoute, body: unknown): Promise<T> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-  const res = await fetch(`/ai-proxy${path}`, {
+  const res = await fetch(aiProxyUrl(path), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json;charset=UTF-8',
@@ -330,12 +346,12 @@ export async function aiRequest<T>(path: string, body: unknown): Promise<T> {
 }
 
 // File upload requests proxied to the Python AI service.
-export async function aiFileRequest<T>(path: string, file: File): Promise<T> {
+export async function aiFileRequest<T>(path: AiProxyRoute, file: File): Promise<T> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
   const formData = new FormData();
   formData.append('file', file);
 
-  const res = await fetch(`/ai-proxy${path}`, {
+  const res = await fetch(aiProxyUrl(path), {
     method: 'POST',
     headers: {
       ...(token ? { Authorization: token } : {}),
@@ -353,6 +369,23 @@ export async function aiFileRequest<T>(path: string, file: File): Promise<T> {
   return data as T;
 }
 
+function streamErrorMessage(payload: AIStreamEvent) {
+  const message = typeof payload.message === 'string' ? payload.message.trim() : '';
+  const code = typeof payload.code === 'string' ? payload.code.trim() : '';
+  if (message) return message;
+  if (code === 'AI_STREAM_UNAVAILABLE') return 'AI 服务暂时不可用，请稍后再试。';
+  return aiErrorMessage(500, typeof payload.error === 'string' ? payload.error : undefined);
+}
+
+function streamMetadata(payload: AIStreamEvent): Record<string, unknown> | null {
+  if (payload.metadata && typeof payload.metadata === 'object') return payload.metadata;
+  if (payload.type === 'metadata') {
+    const { type, ...metadata } = payload as Record<string, unknown>;
+    return metadata;
+  }
+  return null;
+}
+
 export function sseStreamRequest(
   path: string,
   body: unknown,
@@ -363,6 +396,7 @@ export function sseStreamRequest(
   onAbort?: () => void,
 ): AIStreamHandle {
   const controller = new AbortController();
+  let sawTerminalEvent = false;
 
   const handleSseLine = (rawLine: string): boolean => {
     const line = rawLine.replace(/\r$/, '');
@@ -373,17 +407,20 @@ export function sseStreamRequest(
     if (!data) return false;
 
     try {
-      const payload = JSON.parse(data);
-      if (payload.done) {
+      const payload = JSON.parse(data) as AIStreamEvent;
+      if (payload.type === 'done' || payload.done) {
+        sawTerminalEvent = true;
         onDone();
         return true;
       }
-      if (payload.error) {
-        onError(aiErrorMessage(500, payload.error));
+      if (payload.type === 'error' || payload.error) {
+        sawTerminalEvent = true;
+        onError(streamErrorMessage(payload));
         return true;
       }
-      if (payload.metadata) onMetadata?.(payload.metadata);
-      if (payload.content) onChunk(payload.content);
+      const metadata = streamMetadata(payload);
+      if (metadata) onMetadata?.(metadata);
+      if (typeof payload.content === 'string' && payload.content) onChunk(payload.content);
     } catch {
       // skip malformed SSE payloads
     }
@@ -439,6 +476,11 @@ export function sseStreamRequest(
         }
       }
 
+      if (!sawTerminalEvent) {
+        onError('AI stream ended before a completion event. Please retry.');
+        return;
+      }
+
       onDone();
     } catch (error) {
       if (controller.signal.aborted) {
@@ -454,4 +496,3 @@ export function sseStreamRequest(
     completed,
   };
 }
-

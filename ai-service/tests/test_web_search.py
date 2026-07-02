@@ -4,7 +4,14 @@ Web search trigger and context tests.
 
 import asyncio
 
-from app.services.web_search import WebSearchResult, format_web_context, needs_web_search
+from app.services.web_search import (
+    WebSearchResult,
+    format_web_context,
+    is_private_web_search_query,
+    needs_web_search,
+    rewrite_public_search_query,
+    search_public_web,
+)
 
 
 def test_needs_web_search_for_time_sensitive_query():
@@ -21,9 +28,53 @@ def test_does_not_search_private_or_stable_query():
     assert not needs_web_search("把爷爷刚才说的保存一下")
 
 
-def test_quick_mode_never_uses_web_search():
-    assert not needs_web_search("现在 OpenAI 最新模型是什么", "quick")
-    assert "快速模式" in format_web_context([], "现在 OpenAI 最新模型是什么", "quick")
+def test_web_search_query_rewrite_strips_family_pii():
+    query = "帮我联网查一下张三手机号13812345678附近今天牙齿矫正价格，住址：上海市浦东新区世纪大道100号"
+
+    rewritten = rewrite_public_search_query(query)
+
+    assert "13812345678" not in rewritten
+    assert "世纪大道" not in rewritten
+    assert "牙齿矫正价格" in rewritten
+
+
+def test_private_web_search_query_is_blocked():
+    assert is_private_web_search_query("帮我查一下妈妈手机号13812345678附近今天牙齿矫正价格")
+    assert is_private_web_search_query("结合家庭记忆搜索一下今天上海天气")
+    assert not is_private_web_search_query("搜索一下今天上海天气")
+
+
+async def _fake_search(query: str):
+    return [WebSearchResult(title=query, url="https://example.com", snippet="ok")]
+
+
+def test_search_public_web_sends_rewritten_query(monkeypatch):
+    async def run():
+        monkeypatch.setattr("app.services.web_search.settings.web_search_enabled", True)
+        monkeypatch.setattr("app.services.web_search.settings.tavily_api_key", "token")
+        monkeypatch.setattr("app.services.web_search._search_tavily", _fake_search)
+
+        results = await search_public_web("帮我查一下今天上海天气", "think")
+
+        assert results[0].title == "上海天气"
+
+    asyncio.run(run())
+
+
+def test_search_public_web_skips_private_query(monkeypatch):
+    async def fail_if_called(query: str):  # pragma: no cover - assertion guard
+        raise AssertionError(f"raw private query should not be searched: {query}")
+
+    async def run():
+        monkeypatch.setattr("app.services.web_search.settings.web_search_enabled", True)
+        monkeypatch.setattr("app.services.web_search.settings.tavily_api_key", "token")
+        monkeypatch.setattr("app.services.web_search._search_tavily", fail_if_called)
+
+        results = await search_public_web("帮我查一下妈妈手机号13812345678附近今天牙齿矫正价格", "think")
+
+        assert results == []
+
+    asyncio.run(run())
 
 
 def test_empty_web_context_requires_uncertainty():

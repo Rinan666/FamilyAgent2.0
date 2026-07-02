@@ -16,6 +16,7 @@ from urllib.parse import quote_plus, urlparse
 import httpx
 
 from app.config import settings
+from app.utils.privacy_guard import redact_ai_bound_text
 
 logger = logging.getLogger("familyagent.ai.web_search")
 
@@ -37,6 +38,15 @@ PRIVATE_SAVE_OR_MEMORY_PATTERNS = [
     r"保存|存起来|记下来|记录一下|沉淀",
     r"刚才.*(说|讲|聊).*记",
 ]
+
+PRIVATE_WEB_SEARCH_BLOCK_PATTERNS = [
+    r"日记|聊天记录|家庭记忆|家族记忆|照护记录|病历|体检报告",
+    r"手机号|身份证|住址|地址|家住|住在|邮箱",
+]
+
+_SEARCH_FILLER_PATTERN = re.compile(
+    r"帮我|请|麻烦|联网|搜索一下|搜一下|搜搜|查一下|查查|帮我查|网上查|网上搜|最新|现在|今天|实时"
+)
 
 TIME_SENSITIVE_PATTERNS = [
     r"最新",
@@ -116,6 +126,31 @@ def needs_web_search(query: str, response_mode: str | None = "think") -> bool:
     return explicit_search or time_sensitive
 
 
+def rewrite_public_search_query(query: str) -> str:
+    """Strip private family details before a query is sent to an external search provider."""
+    normalized = _clean_text(query)[:240]
+    if not normalized:
+        return ""
+
+    guarded = redact_ai_bound_text(normalized, max_length=240)
+    public_query = guarded.text
+    public_query = re.sub(r"\[[^\]]+\]", " ", public_query)
+    public_query = _SEARCH_FILLER_PATTERN.sub(" ", public_query)
+    public_query = re.sub(r"\s+", " ", public_query).strip(" ，。！？,.?;；：:")
+    return public_query[:160]
+
+
+def is_private_web_search_query(query: str) -> bool:
+    """Return true when a query contains private markers that should not leave the service."""
+    normalized = (query or "").strip()
+    if not normalized:
+        return False
+    guarded = redact_ai_bound_text(normalized, max_length=240)
+    if guarded.has_findings:
+        return True
+    return any(re.search(pattern, normalized, re.IGNORECASE) for pattern in PRIVATE_WEB_SEARCH_BLOCK_PATTERNS)
+
+
 def format_web_context(results: list[WebSearchResult], query: str, response_mode: str | None = "think") -> str:
     if not is_thinking_mode(response_mode):
         return "- 本轮为快速模式，禁止联网搜索，只基于当前输入和已有上下文回答。"
@@ -145,11 +180,18 @@ async def search_public_web(query: str, response_mode: str | None = "think") -> 
     """Search public web results when enabled and needed."""
     if not settings.web_search_enabled or not needs_web_search(query, response_mode):
         return []
+    if is_private_web_search_query(query):
+        logger.info("Web search skipped because query contains private markers")
+        return []
+    public_query = rewrite_public_search_query(query)
+    if len(public_query) < 3:
+        logger.info("Web search skipped because query rewrite produced no public query")
+        return []
     try:
         if settings.tavily_api_key:
-            return await _search_tavily(query)
+            return await _search_tavily(public_query)
         if settings.web_search_provider.lower() == "duckduckgo":
-            return await _search_duckduckgo(query)
+            return await _search_duckduckgo(public_query)
     except Exception as exc:
         logger.warning("Web search failed: %s", exc)
     return []
