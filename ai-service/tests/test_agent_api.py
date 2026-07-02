@@ -35,6 +35,12 @@ def test_agent_chat_request_accepts_user_and_assistant_history_roles():
     assert [item.role for item in request.history] == ["user", "assistant"]
 
 
+def test_agent_router_accepts_internal_service_token():
+    dependencies = [item.dependency for item in agent.router.dependencies]
+
+    assert agent.verify_token_or_internal_service in dependencies
+
+
 def _parse_sse_data(body: str) -> list[dict]:
     events = []
     for block in body.split("\n\n"):

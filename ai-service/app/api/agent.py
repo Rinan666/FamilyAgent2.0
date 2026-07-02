@@ -14,7 +14,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.agents.family_agent import family_agent
-from app.middleware.auth import verify_token
+from app.middleware.auth import verify_token_or_internal_service
 from app.utils.input_guard import enforce_input_guard
 from app.utils.privacy_guard import redact_with_note
 from app.utils.safety_limits import (
@@ -32,7 +32,7 @@ SSE_KEEPALIVE_SECONDS = 10.0
 REQUEST_ID_HEADER = "x-request-id"
 
 router = APIRouter(dependencies=[
-    Depends(verify_token),
+    Depends(verify_token_or_internal_service),
     Depends(enforce_ai_rate_limit),
     Depends(enforce_ai_concurrency),
 ])

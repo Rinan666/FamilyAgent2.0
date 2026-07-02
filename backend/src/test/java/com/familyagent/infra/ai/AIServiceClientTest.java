@@ -120,10 +120,12 @@ class AIServiceClientTest {
     void proxyChatStream_shouldForwardRawSseFramesAndHeaders() throws Exception {
         AtomicReference<String> acceptHeader = new AtomicReference<>();
         AtomicReference<String> authorizationHeader = new AtomicReference<>();
+        AtomicReference<String> internalTokenHeader = new AtomicReference<>();
         AtomicReference<String> requestIdHeader = new AtomicReference<>();
         server = startServer("/ai/agent/chat/stream", exchange -> {
             acceptHeader.set(exchange.getRequestHeaders().getFirst("Accept"));
             authorizationHeader.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            internalTokenHeader.set(exchange.getRequestHeaders().getFirst("X-Internal-Service-Token"));
             requestIdHeader.set(exchange.getRequestHeaders().getFirst("X-Request-Id"));
             respond(exchange, "text/event-stream", 200, ": connected\n\ndata: {\"content\":\"hello\"}\n\ndata: {\"done\":true}\n\n");
         });
@@ -135,6 +137,7 @@ class AIServiceClientTest {
 
         assertEquals("text/event-stream", acceptHeader.get());
         assertEquals("Bearer demo-token", authorizationHeader.get());
+        assertEquals("secret-token", internalTokenHeader.get());
         assertEquals("chat-test-request", requestIdHeader.get());
         assertEquals(": connected\n\ndata: {\"content\":\"hello\"}\n\ndata: {\"done\":true}\n\n",
                 downstream.toString(StandardCharsets.UTF_8));

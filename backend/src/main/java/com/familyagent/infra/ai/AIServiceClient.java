@@ -87,6 +87,9 @@ public class AIServiceClient {
             headers.setContentType(MediaType.APPLICATION_JSON);
             headers.setAccept(java.util.List.of(MediaType.TEXT_EVENT_STREAM));
             headers.set(REQUEST_ID_HEADER, effectiveRequestId);
+            if (internalToken != null && !internalToken.isBlank()) {
+                headers.set(INTERNAL_SERVICE_TOKEN_HEADER, internalToken);
+            }
             if (authorization != null && !authorization.isBlank()) {
                 headers.set("Authorization", authorization);
             }
