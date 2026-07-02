@@ -82,8 +82,11 @@ coverage/
 jacoco.exec
 
 # --- Docs ---
-works/
-*_PLAN.md
+# Project-facing docs stay tracked under docs/product, docs/reference, docs/deployment.
+# Academic materials and draft plans stay ignored.
+docs/academic/
+docs/plans/
+docs/**/.claude/
 项目类图-精简重构版.md
 CLAUDE.md
 AGENTS.md
