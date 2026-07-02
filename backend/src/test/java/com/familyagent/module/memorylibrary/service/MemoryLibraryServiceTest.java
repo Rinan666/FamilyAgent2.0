@@ -9,7 +9,6 @@ import com.familyagent.module.diary.repository.DiaryEntryRepository;
 import com.familyagent.module.family.service.FamilyService;
 import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
 import com.familyagent.module.growth.repository.GrowthGuardStalenessVoteRepository;
-import com.familyagent.module.growth.service.GrowthGuardService;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
 import com.familyagent.module.memory.repository.MemoryEntryVoteRepository;
@@ -30,6 +29,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -45,7 +45,6 @@ class MemoryLibraryServiceTest {
     @Mock private FamilyService familyService;
     @Mock private DiaryEntryRepository diaryEntryRepository;
     @Mock private MemoryEntryRepository memoryEntryRepository;
-    @Mock private GrowthGuardService growthGuardService;
     @Mock private GrowthGuardRecordRepository growthRecordRepository;
     @Mock private MemoryEntryVoteRepository memoryEntryVoteRepository;
     @Mock private GrowthGuardStalenessVoteRepository growthGuardStalenessVoteRepository;
@@ -86,6 +85,8 @@ class MemoryLibraryServiceTest {
             verify(jdbcTemplate).queryForObject(countSql.capture(), eq(Long.class), countArgs.capture());
             verify(jdbcTemplate).query(listSql.capture(), any(org.springframework.jdbc.core.RowMapper.class), listArgs.capture());
 
+            assertTrue(listSql.getValue().contains("jsonb_typeof(me.metadata->'tags')"));
+            assertTrue(listSql.getValue().contains("jsonb_typeof(gr.metadata->'tags')"));
             assertPermissionSectionArgs(countArgs.getValue(), false);
             assertPermissionSectionArgs(listArgs.getValue(), true);
             assertEquals(countQuestionMarks(countSql.getValue()), countArgs.getValue().length);
@@ -153,7 +154,7 @@ class MemoryLibraryServiceTest {
     void deleteArchivedLibraryItem_deletesArchivedMemoryAndEmbeddings() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
                 familyService, diaryEntryRepository, memoryEntryRepository,
-                growthRecordRepository, growthGuardService, memoryEmbeddingService, jdbcTemplate);
+                growthRecordRepository, memoryEmbeddingService, jdbcTemplate);
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(101L);
@@ -178,7 +179,7 @@ class MemoryLibraryServiceTest {
     void deleteArchivedLibraryItem_rejectsActiveMemory() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
                 familyService, diaryEntryRepository, memoryEntryRepository,
-                growthRecordRepository, growthGuardService, memoryEmbeddingService, jdbcTemplate);
+                growthRecordRepository, memoryEmbeddingService, jdbcTemplate);
 
         MemoryEntry entry = new MemoryEntry();
         entry.setId(88L);
@@ -199,7 +200,7 @@ class MemoryLibraryServiceTest {
     void deleteArchivedLibraryItem_deletesActiveLegacyAiSummary() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
                 familyService, diaryEntryRepository, memoryEntryRepository,
-                growthRecordRepository, growthGuardService, memoryEmbeddingService, jdbcTemplate);
+                growthRecordRepository, memoryEmbeddingService, jdbcTemplate);
 
         MemoryEntry entry = new MemoryEntry();
         entry.setId(89L);
@@ -226,7 +227,7 @@ class MemoryLibraryServiceTest {
     void updateLibraryItem_updatesActiveMemoryAndSchedulesReindex() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
                 familyService, diaryEntryRepository, memoryEntryRepository,
-                growthRecordRepository, growthGuardService, memoryEmbeddingService, jdbcTemplate);
+                growthRecordRepository, memoryEmbeddingService, jdbcTemplate);
 
         MemoryEntry entry = new MemoryEntry();
         entry.setId(88L);
@@ -257,6 +258,7 @@ class MemoryLibraryServiceTest {
             assertEquals("Updated title", entry.getSummary());
             assertEquals("VALUE", entry.getType());
             assertEquals("CARE_VISIBLE", entry.getScope());
+            assertEquals(List.of("family", "shared"), ((java.util.Map<?, ?>) entry.getMetadata()).get("tags"));
             verify(memoryEntryRepository).updateById(entry);
             verify(memoryEmbeddingService).indexMemoryAfterCommit(entry);
         }
@@ -266,7 +268,7 @@ class MemoryLibraryServiceTest {
     void updateLibraryItem_rejectsArchivedMemory() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
                 familyService, diaryEntryRepository, memoryEntryRepository,
-                growthRecordRepository, growthGuardService, memoryEmbeddingService, jdbcTemplate);
+                growthRecordRepository, memoryEmbeddingService, jdbcTemplate);
 
         MemoryEntry entry = new MemoryEntry();
         entry.setId(88L);
@@ -284,6 +286,40 @@ class MemoryLibraryServiceTest {
                 () -> maintenanceService.updateItem(request));
 
         assertEquals(ErrorCode.NOT_FOUND.getCode(), exception.getCode());
+        verify(memoryEntryRepository, never()).updateById(entry);
+        verify(memoryEmbeddingService, never()).indexMemoryAfterCommit(any());
+    }
+
+    @Test
+    void updateLibraryItem_rejectsNonAuthorEvenWhenFamilyMember() {
+        MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
+                familyService, diaryEntryRepository, memoryEntryRepository,
+                growthRecordRepository, memoryEmbeddingService, jdbcTemplate);
+
+        MemoryEntry entry = new MemoryEntry();
+        entry.setId(88L);
+        entry.setFamilyId(10L);
+        entry.setUserId(101L);
+        entry.setStatus("ACTIVE");
+        entry.setType("ELDER_ADVICE");
+        entry.setScope("FAMILY_VISIBLE");
+        when(memoryEntryRepository.selectById(88L)).thenReturn(entry);
+
+        MemoryLibraryUpdateRequest request = new MemoryLibraryUpdateRequest();
+        request.setFamilyId(10L);
+        request.setItemId("memory-88");
+        request.setBody("Updated content");
+
+        try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
+            stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(202L);
+
+            BusinessException exception = assertThrows(BusinessException.class,
+                    () -> maintenanceService.updateItem(request));
+
+            assertEquals(ErrorCode.FORBIDDEN.getCode(), exception.getCode());
+        }
+
+        verify(familyService).checkMembership(10L);
         verify(memoryEntryRepository, never()).updateById(entry);
         verify(memoryEmbeddingService, never()).indexMemoryAfterCommit(any());
     }

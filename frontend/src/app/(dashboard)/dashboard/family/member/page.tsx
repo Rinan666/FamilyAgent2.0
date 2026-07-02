@@ -1,24 +1,26 @@
 'use client';
 
-import { type ReactNode, useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
   BookHeart,
+  CalendarDays,
   HeartPulse,
+  Home,
+  Layers,
   Loader2,
-  RefreshCw,
+  MessageCircle,
   ScrollText,
-  Shield,
-  Sparkles,
+  Settings,
   UserRound,
   Users,
 } from 'lucide-react';
-import SearchPaginationControls from '@/components/family/SearchPaginationControls';
 import { diaryApi, familyApi, growthGuardApi, memoryApi, mirrorApi } from '@/lib/api';
 import { useViewerRole } from '@/hooks/useViewerRole';
 import { familyRoleLabel } from '@/lib/roles';
+import { cn } from '@/lib/utils';
 import type {
   DiaryEntry,
   FamilyMember,
@@ -48,6 +50,10 @@ function memberDisplayName(member?: FamilyMember | null) {
 function memberAccountName(member?: FamilyMember | null) {
   if (!member) return '';
   return member.nickname?.trim() || member.username?.trim() || `用户 ${member.userId}`;
+}
+
+function memberInitial(member?: FamilyMember | null) {
+  return memberDisplayName(member).charAt(0).toUpperCase();
 }
 
 function memberBirthDate(member?: FamilyMember | null) {
@@ -80,12 +86,11 @@ function memberAge(member?: FamilyMember | null) {
   return null;
 }
 
-function memberProfileLine(member?: FamilyMember | null) {
-  const birthDate = memberBirthDate(member);
-  const age = memberAge(member);
-  const birthText = birthDate ? `生日：${birthDate}` : '生日：未设置';
-  const ageText = age == null ? '年龄：未设置' : `年龄：${age} 岁`;
-  return `${birthText} · ${ageText}`;
+function memberSignature(member?: FamilyMember | null) {
+  const value = member?.metadata?.signature || member?.metadata?.bio || member?.metadata?.statusText;
+  return typeof value === 'string' && value.trim()
+    ? value.trim()
+    : '个性签名即将支持由成员自行上传。';
 }
 
 function diaryTitle(entry: DiaryEntry) {
@@ -98,22 +103,26 @@ function diaryTitle(entry: DiaryEntry) {
 function memoryTitle(memory: MemoryEntry) {
   if (memory.summary?.trim()) return memory.summary.trim();
   if (typeof memory.metadata?.scenario === 'string' && memory.metadata.scenario.trim()) {
-    return `${memory.metadata.scenario.trim()}相关经验`;
+    return memory.metadata.scenario.trim();
   }
   return memory.content.trim().slice(0, 34) || '未命名经验';
 }
 
+function growthTitle(record: GrowthGuardRecord) {
+  return record.content.trim().slice(0, 34) || growthCategoryLabel(record.category);
+}
+
 function growthCategoryLabel(category?: string) {
   switch ((category || '').toUpperCase()) {
-    case 'POSTURE': return '体态';
-    case 'DENTAL': return '牙齿';
-    case 'VISION': return '视力';
-    case 'SLEEP': return '睡眠';
-    case 'EXERCISE': return '运动';
-    case 'SCREEN_TIME': return '屏幕';
-    case 'EMOTION': return '情绪';
-    case 'COMMUNICATION': return '沟通';
-    default: return '其他';
+    case 'POSTURE': return '体态观察';
+    case 'DENTAL': return '牙齿观察';
+    case 'VISION': return '视力观察';
+    case 'SLEEP': return '睡眠观察';
+    case 'EXERCISE': return '运动观察';
+    case 'SCREEN_TIME': return '屏幕观察';
+    case 'EMOTION': return '情绪观察';
+    case 'COMMUNICATION': return '沟通观察';
+    default: return '成长观察';
   }
 }
 
@@ -121,89 +130,122 @@ function shortDate(value?: string) {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleDateString('zh-CN');
+  return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
 }
 
-function pageBounds(pageResult: PageResult<unknown>) {
-  if (pageResult.total === 0) {
-    return { start: 0, end: 0 };
-  }
-  const start = (pageResult.page - 1) * pageResult.pageSize + 1;
-  const end = Math.min(pageResult.page * pageResult.pageSize, pageResult.total);
-  return { start, end };
-}
-
-type RecordSectionProps<T> = {
+type VideoRecordSectionProps<T> = {
   icon: ReactNode;
   title: string;
-  itemLabel: string;
-  searchPlaceholder: string;
-  query: string;
-  onQueryChange: (value: string) => void;
-  data: PageResult<T>;
+  total: number;
+  items: T[];
   loading: boolean;
   error: string;
-  onPageChange: (page: number) => void;
   emptyText: string;
-  renderItem: (item: T) => ReactNode;
+  activeTone: string;
+  currentPage: number;
+  pageCount: number;
+  onPageChange: (page: number) => void;
+  getKey: (item: T) => string | number;
+  getTitle: (item: T) => string;
+  getDate: (item: T) => string;
 };
 
-function RecordSection<T>({
+function VideoRecordSection<T>({
   icon,
   title,
-  itemLabel,
-  searchPlaceholder,
-  query,
-  onQueryChange,
-  data,
+  total,
+  items,
   loading,
   error,
-  onPageChange,
   emptyText,
-  renderItem,
-}: RecordSectionProps<T>) {
-  const { start, end } = pageBounds(data);
-
+  activeTone,
+  currentPage,
+  pageCount,
+  onPageChange,
+  getKey,
+  getTitle,
+  getDate,
+}: VideoRecordSectionProps<T>) {
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-5">
-      <div className="mb-4 flex items-center gap-2">
-        {icon}
-        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-        {loading && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
+    <section className="border-t border-stone-200 py-7">
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <h2 className="text-2xl font-semibold text-stone-950">{title}</h2>
+          <span className="text-lg text-stone-400">·</span>
+          <span className="text-lg text-stone-500">{total}</span>
+          {loading && <Loader2 className="h-4 w-4 animate-spin text-stone-400" />}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className={cn('h-9 rounded-md px-4 text-sm font-medium text-white', activeTone)}
+          >
+            最新发布
+          </button>
+          <button
+            type="button"
+            className="h-9 rounded-md bg-stone-100 px-4 text-sm font-medium text-stone-500"
+          >
+            家族记录
+          </button>
+        </div>
       </div>
 
-      <SearchPaginationControls
-        searchValue={query}
-        onSearchChange={onQueryChange}
-        searchPlaceholder={searchPlaceholder}
-        itemLabel={itemLabel}
-        currentPage={data.page}
-        pageCount={Math.max(data.totalPages, 1)}
-        onPageChange={onPageChange}
-        startIndex={start}
-        endIndex={end}
-        filteredTotal={data.total}
-        total={data.total}
-        className="mb-4"
-      />
-
       {error ? (
-        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
-          {error}
-        </div>
-      ) : loading && data.items.length === 0 ? (
-        <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-gray-200 text-sm text-gray-400">
+        <div className="rounded-md border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-600">{error}</div>
+      ) : loading && items.length === 0 ? (
+        <div className="flex h-36 items-center justify-center text-sm text-stone-400">
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          正在加载列表...
+          正在加载...
         </div>
-      ) : data.items.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-gray-200 px-3 py-8 text-center text-sm text-gray-400">
+      ) : items.length === 0 ? (
+        <div className="flex h-36 items-center justify-center rounded-md border border-dashed border-stone-200 text-sm text-stone-400">
           {emptyText}
-        </p>
-      ) : (
-        <div className="space-y-3">
-          {data.items.map((item) => renderItem(item))}
         </div>
+      ) : (
+        <>
+          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+            {items.map((item) => (
+              <article key={getKey(item)} className="group">
+                <div className="relative aspect-video overflow-hidden rounded-md bg-stone-100 shadow-sm">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(16,185,129,0.28),transparent_35%),linear-gradient(135deg,#f5f5f4,#e7e5e4)]" />
+                  <div className="absolute left-3 top-3 inline-flex items-center gap-1 rounded bg-stone-950/75 px-2 py-1 text-xs font-medium text-white">
+                    {icon}
+                    FamilyAgent
+                  </div>
+                  <div className="absolute bottom-2 right-2 rounded bg-stone-950/75 px-2 py-0.5 text-xs text-white">
+                    {getDate(item) || '未记录'}
+                  </div>
+                </div>
+                <h3 className="mt-2 line-clamp-2 text-sm font-medium leading-6 text-stone-950 group-hover:text-emerald-700">
+                  {getTitle(item)}
+                </h3>
+              </article>
+            ))}
+          </div>
+
+          {pageCount > 1 && (
+            <div className="mt-5 flex items-center gap-3 text-sm text-stone-500">
+              <button
+                type="button"
+                onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+                disabled={currentPage <= 1}
+                className="rounded-md border border-stone-200 px-3 py-1.5 disabled:opacity-40"
+              >
+                上一页
+              </button>
+              <span>{currentPage} / {pageCount}</span>
+              <button
+                type="button"
+                onClick={() => onPageChange(Math.min(pageCount, currentPage + 1))}
+                disabled={currentPage >= pageCount}
+                className="rounded-md border border-stone-200 px-3 py-1.5 disabled:opacity-40"
+              >
+                下一页
+              </button>
+            </div>
+          )}
+        </>
       )}
     </section>
   );
@@ -220,27 +262,20 @@ export default function FamilyMemberMemoryPage() {
   const [loadingData, setLoadingData] = useState(false);
   const [error, setError] = useState('');
 
-  const [diaryQuery, setDiaryQuery] = useState('');
   const [diaryPage, setDiaryPage] = useState(1);
   const [diaryResults, setDiaryResults] = useState<PageResult<DiaryEntry>>(createEmptyPage());
   const [loadingDiaries, setLoadingDiaries] = useState(false);
   const [diaryError, setDiaryError] = useState('');
 
-  const [memoryQuery, setMemoryQuery] = useState('');
   const [memoryPage, setMemoryPage] = useState(1);
   const [memoryResults, setMemoryResults] = useState<PageResult<MemoryEntry>>(createEmptyPage());
   const [loadingMemories, setLoadingMemories] = useState(false);
   const [memoryError, setMemoryError] = useState('');
 
-  const [growthQuery, setGrowthQuery] = useState('');
   const [growthPage, setGrowthPage] = useState(1);
   const [growthResults, setGrowthResults] = useState<PageResult<GrowthGuardRecord>>(createEmptyPage());
   const [loadingGrowthRecords, setLoadingGrowthRecords] = useState(false);
   const [growthError, setGrowthError] = useState('');
-
-  const deferredDiaryQuery = useDeferredValue(diaryQuery);
-  const deferredMemoryQuery = useDeferredValue(memoryQuery);
-  const deferredGrowthQuery = useDeferredValue(growthQuery);
 
   const requestedFamilyId = useMemo(() => {
     const value = Number(searchParams.get('familyId'));
@@ -334,18 +369,6 @@ export default function FamilyMemberMemoryPage() {
   }, [selectedFamilyId, targetUserId]);
 
   useEffect(() => {
-    setDiaryPage(1);
-  }, [selectedFamilyId, targetUserId, diaryQuery]);
-
-  useEffect(() => {
-    setMemoryPage(1);
-  }, [selectedFamilyId, targetUserId, memoryQuery]);
-
-  useEffect(() => {
-    setGrowthPage(1);
-  }, [selectedFamilyId, targetUserId, growthQuery]);
-
-  useEffect(() => {
     if (!selectedFamilyId || !targetUserId) {
       setDiaryResults(createEmptyPage());
       setDiaryError('');
@@ -359,16 +382,13 @@ export default function FamilyMemberMemoryPage() {
     diaryApi.searchFamilyEntries({
       familyId: selectedFamilyId,
       targetUserId,
-      keyword: deferredDiaryQuery,
       page: diaryPage,
       pageSize: PAGE_SIZE,
     })
       .then((pageResult) => {
         if (!active) return;
         setDiaryResults(pageResult);
-        if (pageResult.page !== diaryPage) {
-          setDiaryPage(pageResult.page);
-        }
+        if (pageResult.page !== diaryPage) setDiaryPage(pageResult.page);
       })
       .catch((err) => {
         if (!active) return;
@@ -382,7 +402,7 @@ export default function FamilyMemberMemoryPage() {
     return () => {
       active = false;
     };
-  }, [deferredDiaryQuery, diaryPage, selectedFamilyId, targetUserId]);
+  }, [diaryPage, selectedFamilyId, targetUserId]);
 
   useEffect(() => {
     if (!selectedFamilyId || !targetUserId) {
@@ -398,16 +418,13 @@ export default function FamilyMemberMemoryPage() {
     memoryApi.searchFamilyMemories({
       familyId: selectedFamilyId,
       targetUserId,
-      keyword: deferredMemoryQuery,
       page: memoryPage,
       pageSize: PAGE_SIZE,
     })
       .then((pageResult) => {
         if (!active) return;
         setMemoryResults(pageResult);
-        if (pageResult.page !== memoryPage) {
-          setMemoryPage(pageResult.page);
-        }
+        if (pageResult.page !== memoryPage) setMemoryPage(pageResult.page);
       })
       .catch((err) => {
         if (!active) return;
@@ -421,7 +438,7 @@ export default function FamilyMemberMemoryPage() {
     return () => {
       active = false;
     };
-  }, [deferredMemoryQuery, memoryPage, selectedFamilyId, targetUserId]);
+  }, [memoryPage, selectedFamilyId, targetUserId]);
 
   useEffect(() => {
     if (!selectedFamilyId || !targetUserId) {
@@ -437,16 +454,13 @@ export default function FamilyMemberMemoryPage() {
     growthGuardApi.searchFamilyRecords({
       familyId: selectedFamilyId,
       targetUserId,
-      keyword: deferredGrowthQuery,
       page: growthPage,
       pageSize: PAGE_SIZE,
     })
       .then((pageResult) => {
         if (!active) return;
         setGrowthResults(pageResult);
-        if (pageResult.page !== growthPage) {
-          setGrowthPage(pageResult.page);
-        }
+        if (pageResult.page !== growthPage) setGrowthPage(pageResult.page);
       })
       .catch((err) => {
         if (!active) return;
@@ -460,7 +474,7 @@ export default function FamilyMemberMemoryPage() {
     return () => {
       active = false;
     };
-  }, [deferredGrowthQuery, growthPage, selectedFamilyId, targetUserId]);
+  }, [growthPage, selectedFamilyId, targetUserId]);
 
   const selectedFamily = useMemo(
     () => families.find((family) => family.id === selectedFamilyId) || null,
@@ -481,7 +495,7 @@ export default function FamilyMemberMemoryPage() {
 
   if (loadingFamilies) {
     return (
-      <div className="flex h-60 items-center justify-center text-gray-400">
+      <div className="flex h-60 items-center justify-center text-stone-400">
         <Loader2 className="mr-2 h-5 w-5 animate-spin" />
         正在加载成员视图...
       </div>
@@ -490,12 +504,12 @@ export default function FamilyMemberMemoryPage() {
 
   if (families.length === 0) {
     return (
-      <div className="mx-auto max-w-3xl rounded-lg border border-gray-200 bg-white p-10 text-center">
-        <Users className="mx-auto mb-3 h-10 w-10 text-gray-300" />
-        <h1 className="text-lg font-semibold text-gray-900">还没有家族空间</h1>
+      <div className="mx-auto max-w-3xl rounded-md border border-stone-200 bg-white p-10 text-center">
+        <Users className="mx-auto mb-3 h-10 w-10 text-stone-300" />
+        <h1 className="text-lg font-semibold text-stone-950">还没有家族空间</h1>
         <Link
           href="/dashboard/family"
-          className="mt-5 inline-flex h-10 items-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
+          className="mt-5 inline-flex h-10 items-center rounded-md bg-stone-950 px-4 text-sm font-medium text-white hover:bg-stone-800"
         >
           前往家族空间
         </Link>
@@ -503,214 +517,201 @@ export default function FamilyMemberMemoryPage() {
     );
   }
 
+  const avatarUrl = targetMember?.avatarUrl;
+  const age = memberAge(targetMember);
+
   return (
-    <div className="mx-auto w-full max-w-6xl">
-      <div className="mb-4">
-        <Link
-          href={`/dashboard/family?tab=members${selectedFamilyId ? `&familyId=${selectedFamilyId}` : ''}`}
-          className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 hover:underline"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          返回家族成员
-        </Link>
-      </div>
+    <div className="mx-auto w-full max-w-[1500px]">
+      <Link
+        href={`/dashboard/family?tab=members${selectedFamilyId ? `&familyId=${selectedFamilyId}` : ''}`}
+        className="mb-4 inline-flex items-center gap-2 text-sm text-emerald-700 hover:text-emerald-800 hover:underline"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        返回家族成员
+      </Link>
 
       {error && (
-        <div className="mb-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+        <div className="mb-4 rounded-md border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-600">
           {error}
         </div>
       )}
 
-      <section className="mb-4 rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-purple-50 px-3 py-1 text-xs font-medium text-purple-700">
-              <Sparkles className="h-3.5 w-3.5" />
-              成员记忆
-            </div>
-            <h1 className="text-2xl font-bold text-gray-900">{memberDisplayName(targetMember)}</h1>
-          </div>
-
-          <div className="w-full max-w-xs rounded-xl border border-gray-100 bg-gray-50 p-4">
-            <p className="text-xs font-medium text-gray-500">当前家族</p>
-            <p className="mt-1 text-sm font-semibold text-gray-900">{selectedFamily?.name || '未选择'}</p>
-          </div>
-        </div>
-      </section>
-
       {loadingData ? (
-        <div className="flex h-60 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-400">
-          <RefreshCw className="mr-2 h-5 w-5 animate-spin" />
+        <div className="flex h-60 items-center justify-center rounded-md border border-stone-200 bg-white text-stone-400">
+          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
           正在整理成员资料...
         </div>
       ) : !targetMember ? (
-        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center">
-          <UserRound className="mx-auto mb-3 h-10 w-10 text-gray-300" />
-          <h2 className="text-lg font-semibold text-gray-900">没有找到对应成员</h2>
+        <div className="rounded-md border border-stone-200 bg-white p-10 text-center">
+          <UserRound className="mx-auto mb-3 h-10 w-10 text-stone-300" />
+          <h2 className="text-lg font-semibold text-stone-950">没有找到对应成员</h2>
         </div>
       ) : (
         <>
-          <section className="mb-4 grid grid-cols-1 gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-            <article className="rounded-2xl border border-gray-200 bg-white p-5">
-              <div className="flex items-start gap-4">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-purple-100 text-xl font-bold text-purple-700">
-                  {memberDisplayName(targetMember).charAt(0).toUpperCase()}
+          <section className="overflow-hidden rounded-md border border-stone-200 bg-white">
+            <div className="relative h-44 bg-[radial-gradient(circle_at_20%_20%,rgba(16,185,129,0.35),transparent_28%),linear-gradient(120deg,#57534e,#a8a29e_48%,#d6d3d1)]">
+              <div className="absolute inset-0 opacity-40 [background-image:linear-gradient(90deg,rgba(255,255,255,0.16)_1px,transparent_1px),linear-gradient(rgba(255,255,255,0.12)_1px,transparent_1px)] [background-size:42px_42px]" />
+              <div className="absolute bottom-5 left-6 flex items-end gap-5">
+                <div className="relative h-24 w-24 overflow-hidden rounded-full border-4 border-white bg-emerald-100 shadow-lg">
+                  {avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={avatarUrl} alt={memberDisplayName(targetMember)} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-3xl font-bold text-emerald-700">
+                      {memberInitial(targetMember)}
+                    </div>
+                  )}
                 </div>
-                <div className="min-w-0">
-                  <h2 className="text-xl font-semibold text-gray-900">{memberDisplayName(targetMember)}</h2>
-                  <p className="mt-1 text-sm text-gray-500">{memberAccountName(targetMember) || '家族成员账号'}</p>
-                  <p className="mt-2 text-sm text-gray-500">{memberProfileLine(targetMember)}</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-600">
-                      身份：{familyRoleLabel(targetMember.role)}
-                    </span>
-                    <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs text-blue-700">
-                      称呼：{targetMember.relationshipLabel?.trim() || '未设置'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </article>
-
-            <article className="rounded-2xl border border-gray-200 bg-white p-5">
-              <h2 className="text-base font-semibold text-gray-900">资料概况</h2>
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-xl bg-rose-50 px-4 py-3">
-                  <p className="text-2xl font-bold text-rose-700">{diaryResults.total}</p>
-                  <p className="text-xs text-rose-600">相关记录</p>
-                </div>
-                <div className="rounded-xl bg-amber-50 px-4 py-3">
-                  <p className="text-2xl font-bold text-amber-700">{memoryResults.total}</p>
-                  <p className="text-xs text-amber-600">相关经验</p>
-                </div>
-                <div className="rounded-xl bg-emerald-50 px-4 py-3">
-                  <p className="text-2xl font-bold text-emerald-700">{growthResults.total}</p>
-                  <p className="text-xs text-emerald-600">成长观察</p>
-                </div>
-                <div className="rounded-xl bg-purple-50 px-4 py-3">
-                  <p className="text-sm font-semibold text-purple-700">
-                    {mirrorContext?.sourceSummary?.trim() ? '已准备' : '有限'}
-                  </p>
-                  <p className="mt-1 text-xs text-purple-600">镜像上下文</p>
-                </div>
-              </div>
-            </article>
-          </section>
-
-          {mirrorContext?.sourceSummary && (
-            <section className="mb-4 rounded-2xl border border-purple-100 bg-purple-50 p-5">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-base font-semibold text-purple-900">镜像参考摘要</h2>
-                  <p className="mt-1 text-sm leading-6 text-purple-800">{mirrorContext.sourceSummary}</p>
-                </div>
-                <Link
-                  href={`/dashboard/agent${selectedFamilyId && targetUserId ? `?familyId=${selectedFamilyId}&targetUserId=${targetUserId}` : ''}`}
-                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-purple-600 px-4 text-sm font-medium text-white hover:bg-purple-700"
-                >
-                  查看镜像 Agent
-                </Link>
-              </div>
-            </section>
-          )}
-
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <RecordSection
-              icon={<BookHeart className="h-4 w-4 text-rose-500" />}
-              title="相关记录"
-              itemLabel="条记录"
-              searchPlaceholder="搜索标题、摘要或正文"
-              query={diaryQuery}
-              onQueryChange={setDiaryQuery}
-              data={diaryResults}
-              loading={loadingDiaries}
-              error={diaryError}
-              onPageChange={setDiaryPage}
-              emptyText="暂无该成员相关记录。"
-              renderItem={(entry) => (
-                <article key={entry.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                  <p className="text-sm font-medium text-gray-900">{diaryTitle(entry)}</p>
-                  <p className="mt-1 line-clamp-3 text-sm leading-6 text-gray-600">{entry.rawText}</p>
-                  <p className="mt-2 text-[11px] text-gray-400">{shortDate(entry.createdAt)}</p>
-                </article>
-              )}
-            />
-
-            <RecordSection
-              icon={<ScrollText className="h-4 w-4 text-amber-500" />}
-              title="相关经验"
-              itemLabel="条经验"
-              searchPlaceholder="搜索摘要、场景或正文"
-              query={memoryQuery}
-              onQueryChange={setMemoryQuery}
-              data={memoryResults}
-              loading={loadingMemories}
-              error={memoryError}
-              onPageChange={setMemoryPage}
-              emptyText="暂无该成员相关经验。"
-              renderItem={(memory) => (
-                <article key={memory.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                  <p className="text-sm font-medium text-gray-900">{memoryTitle(memory)}</p>
-                  <p className="mt-1 line-clamp-3 text-sm leading-6 text-gray-600">
-                    {memory.summary || memory.content}
-                  </p>
-                  <p className="mt-2 text-[11px] text-gray-400">{shortDate(memory.createdAt)}</p>
-                </article>
-              )}
-            />
-
-            <RecordSection
-              icon={<HeartPulse className="h-4 w-4 text-emerald-500" />}
-              title="成长观察"
-              itemLabel="条观察"
-              searchPlaceholder="搜索观察内容或类别"
-              query={growthQuery}
-              onQueryChange={setGrowthQuery}
-              data={growthResults}
-              loading={loadingGrowthRecords}
-              error={growthError}
-              onPageChange={setGrowthPage}
-              emptyText="暂无该成员成长观察。"
-              renderItem={(record) => (
-                <article key={record.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                <div className="pb-2 text-white drop-shadow">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
-                      {growthCategoryLabel(record.category)}
+                    <h1 className="text-3xl font-bold">{memberDisplayName(targetMember)}</h1>
+                    <span className="rounded bg-white/20 px-2 py-0.5 text-xs font-medium">
+                      {familyRoleLabel(targetMember.role)}
                     </span>
-                    <span className="text-[11px] text-gray-400">{shortDate(record.observedAt || record.createdAt)}</span>
                   </div>
-                  <p className="mt-2 line-clamp-3 text-sm leading-6 text-gray-600">{record.content}</p>
-                </article>
-              )}
-            />
-          </div>
-
-          <section className="mt-4 rounded-2xl border border-gray-200 bg-white p-5">
-            <div className="mb-3 flex items-center gap-2">
-              <Shield className="h-4 w-4 text-blue-600" />
-              <h2 className="text-base font-semibold text-gray-900">继续补充这位成员的资料</h2>
+                  <p className="mt-2 max-w-3xl text-sm font-medium text-white/90">{memberSignature(targetMember)}</p>
+                </div>
+              </div>
+              <div className="absolute bottom-6 right-6 hidden rounded-md bg-white/15 px-3 py-2 text-sm font-medium text-white ring-1 ring-white/25 backdrop-blur md:block">
+                视角：家族成员
+              </div>
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <Link
-                href={`/dashboard/diary${selectedFamilyId ? `?familyId=${selectedFamilyId}` : ''}`}
-                className="rounded-xl border border-gray-100 bg-gray-50 p-4 hover:border-emerald-200 hover:bg-emerald-50"
-              >
-                <p className="text-sm font-semibold text-gray-900">写日记</p>
-              </Link>
-              <Link
-                href={`/dashboard/diary${selectedFamilyId ? `?familyId=${selectedFamilyId}&writeCategory=EXPERIENCE` : '?writeCategory=EXPERIENCE'}`}
-                className="rounded-xl border border-gray-100 bg-gray-50 p-4 hover:border-emerald-200 hover:bg-emerald-50"
-              >
-                <p className="text-sm font-semibold text-gray-900">写经验日记</p>
-              </Link>
-              <Link
-                href={`/dashboard/diary?writeCategory=OBSERVATION${selectedFamilyId ? `&familyId=${selectedFamilyId}` : ''}${targetUserId ? `&relatedUserId=${targetUserId}` : ''}`}
-                className="rounded-xl border border-gray-100 bg-gray-50 p-4 hover:border-emerald-200 hover:bg-emerald-50"
-              >
-                <p className="text-sm font-semibold text-gray-900">写观察日记</p>
-              </Link>
+
+            <div className="flex flex-col gap-4 px-6 py-4 lg:flex-row lg:items-center lg:justify-between">
+              <nav className="flex flex-wrap items-center gap-8 text-sm font-medium">
+                <span className="inline-flex items-center gap-2 border-b-2 border-emerald-500 pb-3 text-emerald-700">
+                  <Home className="h-4 w-4" />
+                  主页
+                </span>
+                <span className="inline-flex items-center gap-2 pb-3 text-stone-500">
+                  <BookHeart className="h-4 w-4" />
+                  记录 {diaryResults.total}
+                </span>
+                <span className="inline-flex items-center gap-2 pb-3 text-stone-500">
+                  <Layers className="h-4 w-4" />
+                  经验 {memoryResults.total}
+                </span>
+                <span className="inline-flex items-center gap-2 pb-3 text-stone-500">
+                  <Settings className="h-4 w-4" />
+                  设置
+                </span>
+              </nav>
+              <div className="grid grid-cols-4 gap-5 text-center text-sm">
+                <div>
+                  <p className="text-stone-500">记录</p>
+                  <p className="mt-1 text-lg font-semibold text-stone-950">{diaryResults.total}</p>
+                </div>
+                <div>
+                  <p className="text-stone-500">经验</p>
+                  <p className="mt-1 text-lg font-semibold text-stone-950">{memoryResults.total}</p>
+                </div>
+                <div>
+                  <p className="text-stone-500">观察</p>
+                  <p className="mt-1 text-lg font-semibold text-stone-950">{growthResults.total}</p>
+                </div>
+                <div>
+                  <p className="text-stone-500">年龄</p>
+                  <p className="mt-1 text-lg font-semibold text-stone-950">{age ?? '-'}</p>
+                </div>
+              </div>
             </div>
           </section>
+
+          <div className="grid gap-8 pt-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
+            <main className="min-w-0">
+              <section className="mb-8 flex min-h-40 items-center justify-center rounded-md border border-stone-200 bg-white px-6 text-center">
+                <div>
+                  <MessageCircle className="mx-auto mb-3 h-10 w-10 text-emerald-500" />
+                  <p className="text-sm font-medium text-stone-500">
+                    头像和个性签名后端接入后，这里会展示成员自己的主页资料。
+                  </p>
+                  <Link
+                    href={`/dashboard/agent${selectedFamilyId && targetUserId ? `?familyId=${selectedFamilyId}&targetUserId=${targetUserId}` : ''}`}
+                    className="mt-4 inline-flex h-10 items-center rounded-md bg-emerald-600 px-4 text-sm font-medium text-white hover:bg-emerald-700"
+                  >
+                    进入镜像 Agent
+                  </Link>
+                </div>
+              </section>
+
+              <VideoRecordSection
+                icon={<BookHeart className="h-3.5 w-3.5" />}
+                title="记录"
+                total={diaryResults.total}
+                items={diaryResults.items}
+                loading={loadingDiaries}
+                error={diaryError}
+                emptyText="暂无该成员相关记录。"
+                activeTone="bg-sky-500"
+                currentPage={diaryResults.page}
+                pageCount={Math.max(diaryResults.totalPages, 1)}
+                onPageChange={setDiaryPage}
+                getKey={(entry) => entry.id}
+                getTitle={diaryTitle}
+                getDate={(entry) => shortDate(entry.createdAt)}
+              />
+
+              <VideoRecordSection
+                icon={<ScrollText className="h-3.5 w-3.5" />}
+                title="经验"
+                total={memoryResults.total}
+                items={memoryResults.items}
+                loading={loadingMemories}
+                error={memoryError}
+                emptyText="暂无该成员相关经验。"
+                activeTone="bg-amber-500"
+                currentPage={memoryResults.page}
+                pageCount={Math.max(memoryResults.totalPages, 1)}
+                onPageChange={setMemoryPage}
+                getKey={(memory) => memory.id}
+                getTitle={memoryTitle}
+                getDate={(memory) => shortDate(memory.createdAt)}
+              />
+
+              <VideoRecordSection
+                icon={<HeartPulse className="h-3.5 w-3.5" />}
+                title="成长观察"
+                total={growthResults.total}
+                items={growthResults.items}
+                loading={loadingGrowthRecords}
+                error={growthError}
+                emptyText="暂无该成员成长观察。"
+                activeTone="bg-emerald-500"
+                currentPage={growthResults.page}
+                pageCount={Math.max(growthResults.totalPages, 1)}
+                onPageChange={setGrowthPage}
+                getKey={(record) => record.id}
+                getTitle={growthTitle}
+                getDate={(record) => shortDate(record.observedAt || record.createdAt)}
+              />
+            </main>
+
+            <aside className="space-y-4">
+              <section className="rounded-md bg-stone-100 p-5">
+                <h2 className="text-lg font-semibold text-stone-950">资料</h2>
+                <div className="mt-4 space-y-3 text-sm text-stone-600">
+                  <p>账号：{memberAccountName(targetMember) || '-'}</p>
+                  <p>称呼：{targetMember.relationshipLabel?.trim() || '未设置'}</p>
+                  <p>生日：{memberBirthDate(targetMember) || '未设置'}</p>
+                  <p>当前家族：{selectedFamily?.name || '未选择'}</p>
+                </div>
+              </section>
+
+              <section className="rounded-md bg-stone-100 p-5">
+                <h2 className="text-lg font-semibold text-stone-950">公告</h2>
+                <p className="mt-4 text-sm leading-6 text-stone-500">
+                  这里预留给成员个人公告、个性签名和主页说明。
+                </p>
+              </section>
+
+              <section className="rounded-md bg-stone-100 p-5">
+                <h2 className="text-lg font-semibold text-stone-950">镜像参考</h2>
+                <p className="mt-4 text-sm leading-6 text-stone-500">
+                  {mirrorContext?.sourceSummary?.trim() || '暂无足够镜像上下文。'}
+                </p>
+              </section>
+            </aside>
+          </div>
         </>
       )}
     </div>

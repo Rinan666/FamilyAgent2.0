@@ -2,13 +2,6 @@
 from pydantic import BaseModel, Field
 
 
-class ExtractMemoryRequest(BaseModel):
-    session_id: int
-    subject: str = ""
-    messages: list[dict] = Field(default_factory=list)
-    summary: str = ""
-
-
 class SaveToolPlanRequest(BaseModel):
     message: str = Field(..., min_length=2)
     family_context: str = ""

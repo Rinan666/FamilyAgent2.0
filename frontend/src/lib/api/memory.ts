@@ -1,4 +1,5 @@
 import { aiRequest, request } from './shared';
+import { AI_PROXY_ROUTES } from './aiProxyBoundary';
 import type {
   AgentDraftScene,
   AgentOrganizedDraft,
@@ -46,7 +47,7 @@ export const memoryApi = {
     targetMemberName?: string;
     viewerRole?: string;
   }) =>
-    aiRequest<{ success: boolean; data: AgentSaveToolPlan }>('/memory/save-plan', {
+    aiRequest<{ success: boolean; data: AgentSaveToolPlan }>(AI_PROXY_ROUTES.MEMORY_SAVE_PLAN, {
       message: body.message,
       family_context: body.familyContext || '',
       conversation_context: body.conversationContext || [],
@@ -61,7 +62,7 @@ export const memoryApi = {
     currentVisibility?: string;
     target?: string;
   }) =>
-    aiRequest<{ success: boolean; data: AgentOrganizedDraft }>('/memory/organize-draft', {
+    aiRequest<{ success: boolean; data: AgentOrganizedDraft }>(AI_PROXY_ROUTES.MEMORY_ORGANIZE_DRAFT, {
       content: body.content,
       scene: body.scene,
       family_context: body.familyContext || '',
@@ -74,7 +75,7 @@ export const memoryApi = {
     profile: Partial<PersonaMaterialDraftProfile>;
     familyContext?: string;
   }) =>
-    aiRequest<{ success: boolean; data: PersonaMaterialDraft }>('/memory/persona-material-draft', {
+    aiRequest<{ success: boolean; data: PersonaMaterialDraft }>(AI_PROXY_ROUTES.MEMORY_PERSONA_MATERIAL_DRAFT, {
       content: body.content,
       profile: {
         name: body.profile.name || '',

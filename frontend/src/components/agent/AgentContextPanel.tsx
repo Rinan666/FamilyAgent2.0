@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { UserRound, X } from 'lucide-react';
+import { Check, House, Sparkles, UsersRound, X } from 'lucide-react';
 import type { AgentTargetSelection } from '@/components/agent/agentTarget';
 import type { ModeReadiness } from '@/components/agent/agentDisplay';
 import type { AgentMode, FamilyMember, MirrorContextResponse, PersonaMember } from '@/types';
@@ -9,7 +9,9 @@ import type { AgentMode, FamilyMember, MirrorContextResponse, PersonaMember } fr
 interface AgentContextPanelProps {
   open: boolean;
   mode: AgentMode;
+  familyName: string;
   targetLabel: string;
+  selfTargetLabel: string;
   targetSelection: AgentTargetSelection;
   selectorOptions: FamilyMember[];
   personaOptions: PersonaMember[];
@@ -30,10 +32,23 @@ function readinessToneClass(tone: ModeReadiness['tone']) {
   return 'bg-stone-200 text-stone-700';
 }
 
+function targetValue(selection: AgentTargetSelection) {
+  return typeof selection === 'number' ? String(selection) : selection;
+}
+
+function memberOptionLabel(member: FamilyMember) {
+  return member.username?.trim()
+    || member.nickname?.trim()
+    || member.relationshipLabel?.trim()
+    || `用户 ${member.userId}`;
+}
+
 export default function AgentContextPanel({
   open,
   mode,
+  familyName,
   targetLabel,
+  selfTargetLabel,
   targetSelection,
   selectorOptions,
   personaOptions,
@@ -47,6 +62,12 @@ export default function AgentContextPanel({
   onTargetChange,
 }: AgentContextPanelProps) {
   if (!open) return null;
+
+  const selectedValue = targetValue(targetSelection);
+  const familyMemberCount = selectorOptions.length + 1;
+  const handleTargetChange = (value: AgentTargetSelection) => {
+    onTargetChange(value);
+  };
 
   return (
     <div className="fixed inset-0 z-50">
@@ -75,60 +96,118 @@ export default function AgentContextPanel({
         <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
           <div className="rounded-[24px] border border-stone-200 bg-stone-50/80 p-4">
             <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-stone-900">
-              <UserRound className="h-4 w-4 text-emerald-700" />
-              当前对象
+              <House className="h-4 w-4 text-emerald-700" />
+              当前家族
             </div>
-            <p className="text-sm font-medium text-stone-900">{targetLabel}</p>
+            <p className="text-sm font-medium text-stone-900">{familyName}</p>
           </div>
 
           <div className="rounded-[24px] border border-stone-200 bg-white p-4">
-            <label htmlFor="agent-target-selector" className="text-sm font-semibold text-stone-900">
-              对话对象
-            </label>
-            <div className="mt-3 space-y-2">
-              <select
-                id="agent-target-selector"
-                value={typeof targetSelection === 'number' ? String(targetSelection) : targetSelection}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  if (value === 'NONE' || value === 'SELF') {
-                    onTargetChange(value);
-                    return;
-                  }
-                  if (value.startsWith('PERSONA:')) {
-                    onTargetChange(value as AgentTargetSelection);
-                    return;
-                  }
-                  onTargetChange(Number(value));
-                }}
-                className="h-11 w-full rounded-2xl border border-stone-200 bg-stone-50/80 px-3 text-sm text-stone-800 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-stone-900">说话对象</div>
+                <div className="mt-1 text-xs text-stone-500">当前：{targetLabel}</div>
+              </div>
+              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
+                {mode === 'persona' ? '精神成员' : mode === 'mirror' ? '镜像参考' : '家庭 Agent'}
+              </span>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <button
+                type="button"
+                onClick={() => handleTargetChange('NONE')}
+                className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition ${
+                  selectedValue === 'NONE'
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
+                    : 'border-stone-200 bg-stone-50/80 text-stone-700 hover:border-emerald-200 hover:bg-emerald-50/70'
+                }`}
               >
-                <option value="NONE">无</option>
-                <option value="SELF">镜像自己</option>
-                {selectorOptions.length > 0 && (
-                  <optgroup label="家庭成员">
-                    {selectorOptions.map((member) => (
-                      <option key={member.userId} value={member.userId}>
-                        {member.relationshipLabel || member.nickname || member.username || `用户 ${member.userId}`}
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-                {personaOptions.length > 0 && (
-                  <optgroup label="精神成员">
-                    {personaOptions.map((persona) => (
-                      <option key={persona.id} value={`PERSONA:${persona.id}`}>
-                        {persona.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
+                <span>
+                  <span className="block text-sm font-semibold">家庭 Agent</span>
+                  <span className="mt-1 block text-xs text-stone-500">不指定成员，使用当前家族上下文</span>
+                </span>
+                {selectedValue === 'NONE' && <Check className="h-4 w-4 shrink-0 text-emerald-700" />}
+              </button>
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 px-1 text-xs font-semibold text-stone-500">
+                  <UsersRound className="h-3.5 w-3.5" />
+                  家庭成员
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleTargetChange('SELF')}
+                  className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition ${
+                    selectedValue === 'SELF'
+                      ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
+                      : 'border-stone-200 bg-white text-stone-700 hover:border-emerald-200 hover:bg-emerald-50/70'
+                  }`}
+                >
+                  <span>
+                    <span className="block text-sm font-semibold">{selfTargetLabel}</span>
+                    <span className="mt-1 block text-xs text-stone-500">镜像自己</span>
+                  </span>
+                  {selectedValue === 'SELF' && <Check className="h-4 w-4 shrink-0 text-emerald-700" />}
+                </button>
+                {selectorOptions.map((member) => {
+                  const value = String(member.userId);
+                  return (
+                    <button
+                      key={member.userId}
+                      type="button"
+                      onClick={() => handleTargetChange(member.userId)}
+                      className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition ${
+                        selectedValue === value
+                          ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
+                          : 'border-stone-200 bg-white text-stone-700 hover:border-emerald-200 hover:bg-emerald-50/70'
+                      }`}
+                    >
+                      <span>
+                        <span className="block text-sm font-semibold">{memberOptionLabel(member)}</span>
+                        {member.relationshipLabel && member.relationshipLabel !== memberOptionLabel(member) && (
+                          <span className="mt-1 block text-xs text-stone-500">{member.relationshipLabel}</span>
+                        )}
+                      </span>
+                      {selectedValue === value && <Check className="h-4 w-4 shrink-0 text-emerald-700" />}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {personaOptions.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 px-1 text-xs font-semibold text-stone-500">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    精神成员
+                  </div>
+                  {personaOptions.map((persona) => {
+                    const value = `PERSONA:${persona.id}` as AgentTargetSelection;
+                    const stringValue = targetValue(value);
+                    return (
+                      <button
+                        key={persona.id}
+                        type="button"
+                        onClick={() => handleTargetChange(value)}
+                        className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition ${
+                          selectedValue === stringValue
+                            ? 'border-violet-300 bg-violet-50 text-violet-900'
+                            : 'border-stone-200 bg-white text-stone-700 hover:border-violet-200 hover:bg-violet-50/70'
+                        }`}
+                      >
+                        <span className="text-sm font-semibold">{persona.name}</span>
+                        {selectedValue === stringValue && <Check className="h-4 w-4 shrink-0 text-violet-700" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
               <div className="rounded-2xl bg-stone-50 px-3 py-2 text-xs text-stone-500">
                 {isLoadingMembers
                   ? '正在加载对话对象...'
-                  : selectorOptions.length + personaOptions.length > 0
-                    ? `可切换 ${selectorOptions.length} 位家庭成员、${personaOptions.length} 位精神成员`
+                  : familyMemberCount + personaOptions.length > 0
+                    ? `可切换 ${familyMemberCount} 位家庭成员、${personaOptions.length} 位精神成员`
                     : '当前没有其他可切换的对话对象'}
               </div>
             </div>
@@ -180,7 +259,7 @@ export default function AgentContextPanel({
                     查看成员授权资料
                   </Link>
                   <Link
-                    href={`/dashboard/diary?familyId=${activeFamilyId}${mirrorContext?.targetMember?.userId ? `&relatedUserId=${mirrorContext.targetMember.userId}&relatedMemberName=${encodeURIComponent(targetLabel)}` : ''}`}
+                    href={`/dashboard/memory-library?compose=1&familyId=${activeFamilyId}${mirrorContext?.targetMember?.userId ? `&relatedUserId=${mirrorContext.targetMember.userId}&relatedMemberName=${encodeURIComponent(targetLabel)}` : ''}`}
                     className="block rounded-2xl border border-stone-200 bg-white px-3 py-2.5 text-stone-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800"
                   >
                     去补充相关记录

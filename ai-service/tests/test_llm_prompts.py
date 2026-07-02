@@ -114,7 +114,16 @@ def test_build_family_agent_system_prompt_adds_persona_rules_for_persona_context
     assert "角色型成员" in prompt
     assert "忠于设定" in prompt
     assert "允许高沉浸角色表达" in prompt
+    assert "简单问候不要扩写成独白" in prompt
+    assert "不要写“你问……其实是在……”" in prompt
     assert "精神成员：外公" in prompt
+
+
+def test_persona_and_mirror_rules_avoid_third_person_motive_analysis():
+    assert "默认直接和用户对话" in PERSONA_MEMBER_MODE_RULES
+    assert "避免第三者旁白和动机解读" in PERSONA_MEMBER_MODE_RULES
+    assert "默认直接对用户说话" in MIRROR_AGENT_MODE_RULES
+    assert "不要写“你问……其实是在……”" in MIRROR_AGENT_MODE_RULES
 
 
 def test_memory_prompts_keep_human_quality_rules():

@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Bot, ChevronDown, History, Loader2, MoreHorizontal, Plus, Send, Sparkles, Square, UserRound } from 'lucide-react';
+import { Bot, Loader2, Menu, Plus, Send, Sparkles, Square } from 'lucide-react';
 import AgentContextPanel from '@/components/agent/AgentContextPanel';
 import AgentMessageList from '@/components/agent/AgentMessageList';
 import AgentSessionDrawer from '@/components/agent/AgentSessionDrawer';
-import { buildPersonaProfileContext, personaSwitchMessage } from '@/components/agent/personaContext';
+import { personaSwitchMessage } from '@/components/agent/personaContext';
 import {
   normalizeTargetSelection,
   selectionFromRequestedTargetUserId,
@@ -26,7 +26,6 @@ import {
   diaryTitle,
   getSessionTitle,
   memberName,
-  normalizeAgentSessionMetadata,
   parsePositiveNumber,
   readinessLevel,
   temporalLayerClass,
@@ -37,7 +36,7 @@ import {
 import VoiceInputButton from '@/components/voice/VoiceInputButton';
 import { useChat, type SessionSavedMemory, type UseChatRequestConfig } from '@/hooks/useChat';
 import { useViewerRole } from '@/hooks/useViewerRole';
-import { normalizeAssistantMetadata, withTimeout } from '@/hooks/chat/useChatHelpers';
+import { normalizeAssistantMetadata } from '@/hooks/chat/useChatHelpers';
 import { useAuthStore } from '@/stores/authStore';
 import { useChatStore } from '@/stores/chatStore';
 import { cn, generateId } from '@/lib/utils';
@@ -64,7 +63,6 @@ import type {
   FamilyMember,
   MirrorContextResponse,
   MirrorSourceRef,
-  PersonaMaterial,
   PersonaMember,
 } from '@/types';
 
@@ -88,7 +86,7 @@ function buildSessionMetadata(
 }
 
 function savedMemoryHref(familyId?: number | null) {
-  return `/dashboard/family?tab=library${familyId ? `&familyId=${familyId}` : ''}`;
+  return `/dashboard/memory-library${familyId ? `?familyId=${familyId}` : ''}`;
 }
 
 function savedMemoryFromPlan(plan: AgentSaveToolPlan, savedAt: string): SessionSavedMemory | null {
@@ -197,7 +195,6 @@ let cachedAgentMembersByFamilyId: Record<number, FamilyMember[]> = {};
 let cachedAgentPersonasByFamilyId: Record<number, PersonaMember[]> = {};
 let cachedAgentSessionsByFamilyId: Record<number, ChatSessionSummary[]> = {};
 let cachedMirrorContextByFamilyTarget: Record<string, MirrorContextResponse> = {};
-const PERSONA_MATERIALS_TIMEOUT_MS = 800;
 
 function buildTargetSwitchMessage(
   nextMode: AgentMode,
@@ -239,7 +236,7 @@ export default function AgentPage() {
   const sessionIdRef = useRef<number | null>(null);
   const activeSessionDetailRef = useRef<ChatSessionDetail | null>(null);
   const autoRestoreFamilyIdRef = useRef<number | null>(null);
-  const actionsMenuRef = useRef<HTMLDivElement | null>(null);
+  const inputTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const [input, setInput] = useState('');
   const [members, setMembers] = useState<FamilyMember[]>([]);
@@ -257,7 +254,6 @@ export default function AgentPage() {
   const [saveFeedback, setSaveFeedback] = useState<Record<string, SaveFeedback>>({});
   const [isSessionsOpen, setIsSessionsOpen] = useState(false);
   const [isContextOpen, setIsContextOpen] = useState(false);
-  const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [responseMode, setResponseMode] = useState<AgentResponseMode>('think');
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
 
@@ -283,18 +279,6 @@ export default function AgentPage() {
   }, [activeSessionDetail]);
 
   useEffect(() => {
-    if (!isActionsOpen) return;
-
-    const closeOnOutsidePointerDown = (event: PointerEvent) => {
-      if (actionsMenuRef.current?.contains(event.target as Node)) return;
-      setIsActionsOpen(false);
-    };
-
-    document.addEventListener('pointerdown', closeOnOutsidePointerDown);
-    return () => document.removeEventListener('pointerdown', closeOnOutsidePointerDown);
-  }, [isActionsOpen]);
-
-  useEffect(() => {
     if (requestedFamilyId && requestedFamilyId !== activeFamilyId) {
       setActiveFamilyId(requestedFamilyId);
     }
@@ -308,6 +292,10 @@ export default function AgentPage() {
     () => selectionTargetMember(targetSelection, members, mirrorTargetUserId, mirrorContext?.targetMember || null),
     [members, mirrorContext?.targetMember, mirrorTargetUserId, targetSelection],
   );
+  const selfMember = useMemo(
+    () => members.find((member) => member.userId === selfUserId) || null,
+    [members, selfUserId],
+  );
   const targetPersonaId = useMemo(
     () => selectionPersonaId(targetSelection),
     [targetSelection],
@@ -320,26 +308,21 @@ export default function AgentPage() {
     () => selectionMode(targetSelection, selfUserId),
     [selfUserId, targetSelection],
   );
+  const selfTargetLabel = useMemo(
+    () => selfMember?.username?.trim()
+      || user?.username?.trim()
+      || selfMember?.nickname?.trim()
+      || user?.nickname?.trim()
+      || (selfUserId ? `用户 ${selfUserId}` : '我'),
+    [selfMember, selfUserId, user?.nickname, user?.username],
+  );
   const targetLabel = useMemo(
-    () => selectionLabel(targetSelection, targetMember, targetPersona),
-    [targetMember, targetPersona, targetSelection],
+    () => targetSelection === 'SELF'
+      ? selfTargetLabel
+      : selectionLabel(targetSelection, targetMember, targetPersona),
+    [selfTargetLabel, targetMember, targetPersona, targetSelection],
   );
-  const inputPlaceholder = useMemo(() => {
-    const modeHint = responseMode === 'quick'
-      ? '当前为快速模式：更快，少检索上下文，适合简单问题。思考模式会先整理家庭记忆和身份资料，回答更完整但稍慢。'
-      : '当前为思考模式：会先整理家庭记忆和身份资料，回答更完整但稍慢。快速模式更快，少检索上下文，适合简单问题。';
-    const promptHint = mode === 'mirror'
-      ? `可以问 ${targetLabel} 的日常记录和成长观察里有什么线索...`
-      : mode === 'persona'
-        ? `可以向 ${targetLabel} 请教一个家庭问题...`
-        : '可以聊需要家庭经验沉淀来参考的问题...';
-    return `${modeHint}\n${promptHint}`;
-  }, [mode, responseMode, targetLabel]);
   const modeReadiness = useMemo(() => readinessLevel(mirrorContext), [mirrorContext]);
-  const activeSessionMetadata = useMemo(
-    () => normalizeAgentSessionMetadata(activeSessionDetail?.metadata),
-    [activeSessionDetail?.metadata],
-  );
 
   const upsertSession = useCallback((session: ChatSessionSummary) => {
     setSessions((current) => {
@@ -441,11 +424,6 @@ export default function AgentPage() {
     return context;
   }, []);
 
-  const loadPersonaMaterials = useCallback(async (familyId: number, personaId: number) => {
-    const materials = await familyApi.listPersonaMaterials(familyId, personaId);
-    return Array.isArray(materials) ? materials : [];
-  }, []);
-
   useEffect(() => {
     if (mode !== 'mirror' || !activeFamilyId || !mirrorTargetUserId || responseMode === 'quick') {
       setMirrorContext(null);
@@ -483,33 +461,18 @@ export default function AgentPage() {
     defaultRecall: () => Promise<{ context: string; metadata?: NonNullable<ChatMessage['metadata']> }>;
   }) => {
     if (mode === 'persona' && targetPersona) {
-      const personaMaterials = activeFamilyId
-        ? await withTimeout(
-            loadPersonaMaterials(activeFamilyId, targetPersona.id),
-            [] as PersonaMaterial[],
-            PERSONA_MATERIALS_TIMEOUT_MS,
-          ).catch(() => [] as PersonaMaterial[])
-        : [];
-      const personaContext = buildPersonaProfileContext(targetPersona, personaMaterials);
-      const recalled: { context: string; metadata?: NonNullable<ChatMessage['metadata']> } = responseMode === 'quick'
-        ? { context: '' }
-        : await defaultRecall();
       const metadata: NonNullable<ChatMessage['metadata']> = {
-        ...(recalled.metadata || {}),
         agentMode: 'persona',
         responseMode,
         targetPersonaId: targetPersona.id,
         targetPersonaName: targetPersona.name,
         targetMemberName: targetPersona.name,
-        sourceSummary: recalled.context
-          ? `基于精神成员档案、${personaMaterials.length} 张材料卡，并参考当前家庭可见经验沉淀。`
-          : `基于精神成员档案和 ${personaMaterials.length} 张材料卡。当前未附加家庭经验沉淀。`,
+        sourceSummary: responseMode === 'quick'
+          ? '由后端基于精神成员档案生成快速上下文。'
+          : '由后端基于精神成员档案、材料卡和当前家庭可见经验沉淀生成上下文。',
       };
       return {
-        context: [
-          personaContext,
-          recalled.context ? `家庭可见参考资料：\n${recalled.context}` : '',
-        ].filter(Boolean).join('\n\n'),
+        context: '',
         metadata,
       };
     }
@@ -521,7 +484,7 @@ export default function AgentPage() {
         targetMemberName: targetLabel,
       };
       return {
-        context: `镜像参考对象：${targetLabel}。当前为快速模式，未加载完整镜像资料；回答必须说明资料有限，不代表本人真实想法。`,
+        context: '',
         metadata: quickMetadata,
       };
     }
@@ -532,17 +495,17 @@ export default function AgentPage() {
       const context = await refreshMirrorContext(activeFamilyId, mirrorTargetUserId, query);
       setContextError('');
       return {
-        context: context.memoryContext || '',
+        context: '',
         metadata: buildMirrorAnswerMetadata(context, targetMember),
       };
     } catch (error) {
       setContextError(error instanceof Error ? `镜像上下文刷新失败，已使用当前资料：${error.message}` : '镜像上下文刷新失败，已使用当前资料。');
       return {
-        context: mirrorContext?.memoryContext || '',
+        context: '',
         metadata: buildMirrorAnswerMetadata(mirrorContext, targetMember),
       };
     }
-  }, [activeFamilyId, loadPersonaMaterials, mirrorContext, mirrorTargetUserId, mode, refreshMirrorContext, responseMode, targetLabel, targetMember, targetPersona]);
+  }, [activeFamilyId, mirrorContext, mirrorTargetUserId, mode, refreshMirrorContext, responseMode, targetLabel, targetMember, targetPersona]);
 
   const prepareRequest = useCallback(async ({ defaultRequest }: {
     message: string;
@@ -555,6 +518,7 @@ export default function AgentPage() {
         ...defaultRequest,
         subject: 'PersonaMemberAgent',
         contextLabel: 'persona_member',
+        targetPersonaId: targetPersona.id,
         targetRole: 'MEMBER' as const,
       };
     }
@@ -565,6 +529,7 @@ export default function AgentPage() {
       ...defaultRequest,
       subject: 'MirrorAgent',
       contextLabel: 'mirror_agent',
+      targetUserId: targetMember.userId,
       targetRole: 'MEMBER' as const,
     };
   }, [mode, targetMember, targetPersona]);
@@ -729,7 +694,6 @@ export default function AgentPage() {
     sessionSavedMemoriesRef.current = [];
     setIsSessionsOpen(false);
     setIsContextOpen(false);
-    setIsActionsOpen(false);
     autoRestoreFamilyIdRef.current = null;
 
     if (!activeFamilyId) {
@@ -756,6 +720,14 @@ export default function AgentPage() {
     routePromptAppliedRef.current = routePrompt;
     setInput(routePrompt);
   }, [routePrompt]);
+
+  useEffect(() => {
+    const textarea = inputTextareaRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = 'auto';
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 144)}px`;
+  }, [input]);
 
   const handleNewChat = useCallback(() => {
     discardStreaming();
@@ -1171,8 +1143,6 @@ export default function AgentPage() {
     );
   }
 
-  const visibleMessageCount = activeSessionDetail?.messageCount || messages.filter((message) => message.role !== 'system').length;
-  const archiveCount = activeSessionDetail?.archives?.length || 0;
   const currentSessionTitle = activeSessionDetail
     ? getSessionTitle(activeSessionDetail)
     : (mode === 'mirror'
@@ -1182,115 +1152,44 @@ export default function AgentPage() {
           : '新的家庭对话');
 
   return (
-    <div className="h-[calc(100dvh-6rem)] overflow-hidden px-0 py-0 lg:h-[calc(100dvh-2rem)]">
-      <div className="mx-auto flex h-full max-w-[1600px] min-h-0 flex-col gap-2">
-        {sessionError && (
-          <div className="shrink-0 rounded-md border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">
-            {sessionError}
-          </div>
-        )}
-
-        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-stone-200 bg-white">
-          <div className="sticky top-0 z-10 shrink-0 border-b border-stone-200 bg-white px-3 py-2 pr-16 md:px-4 md:pr-20">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="truncate text-base font-semibold text-stone-950">FamilyAgent</h1>
-                  <span className={cn(
-                    'rounded-full px-2.5 py-1 text-xs font-medium',
-                    mode === 'mirror'
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : mode === 'persona'
-                        ? 'bg-violet-100 text-violet-800'
-                        : 'bg-stone-200 text-stone-700',
-                  )}>
-                    {mode === 'mirror' ? '镜像参考' : mode === 'persona' ? '精神成员' : '家庭对话'}
-                  </span>
-                  <span className="text-xs text-stone-400">{activeFamily?.name}</span>
-                </div>
-                <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-stone-500">
-                  <span className="max-w-[18rem] truncate rounded bg-stone-100 px-2 py-0.5 text-stone-700">
-                    {currentSessionTitle}
-                  </span>
-                  <span className="inline-flex items-center gap-1 rounded bg-stone-100 px-2 py-0.5">
-                    <UserRound className="h-3.5 w-3.5" />
-                    {targetLabel}
-                  </span>
-                  <span className="rounded bg-stone-100 px-2 py-0.5">
-                    {responseMode === 'quick' ? '快速' : '思考'}
-                  </span>
-                  <span className="rounded bg-stone-100 px-2 py-0.5">{visibleMessageCount} 条消息</span>
-                  {!!archiveCount && (
-                    <span className="rounded bg-stone-100 px-2 py-0.5">{archiveCount} 段归档</span>
-                  )}
-                  {activeSessionMetadata.hasTargetSwitches && (
-                    <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-800">含对象切换</span>
-                  )}
-                </div>
-              </div>
-
-              <div ref={actionsMenuRef} className="absolute right-2 top-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setIsActionsOpen((current) => !current)}
-                  aria-label="打开助手操作"
-                  aria-expanded={isActionsOpen}
-                  className={cn(
-                    'inline-flex h-9 items-center justify-center gap-1 rounded-lg border px-2.5 text-xs font-medium shadow-sm transition',
-                    isActionsOpen
-                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                      : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50',
-                  )}
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                  <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', isActionsOpen && 'rotate-180')} />
-                </button>
-
-                {isActionsOpen && (
-                  <div className="absolute right-0 top-11 z-20 w-56 overflow-hidden rounded-md border border-stone-200 bg-white py-1 shadow-xl">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsSessionsOpen(true);
-                        setIsActionsOpen(false);
-                      }}
-                      className={cn(
-                        'flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm transition',
-                        isSessionsOpen ? 'bg-emerald-50 text-emerald-800' : 'text-stone-700 hover:bg-stone-50',
-                      )}
-                    >
-                      <History className="h-4 w-4" />
-                      <span className="min-w-0 flex-1 truncate">会话历史</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsContextOpen(true);
-                        setIsActionsOpen(false);
-                      }}
-                      className={cn(
-                        'flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm transition',
-                        isContextOpen ? 'bg-emerald-50 text-emerald-800' : 'text-stone-700 hover:bg-stone-50',
-                      )}
-                    >
-                      <Bot className="h-4 w-4" />
-                      <span className="min-w-0 flex-1 truncate">上下文</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleNewChat();
-                        setIsActionsOpen(false);
-                      }}
-                      className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-stone-700 transition hover:bg-stone-50"
-                    >
-                      <Plus className="h-4 w-4" />
-                      <span className="min-w-0 flex-1 truncate">新会话</span>
-                    </button>
-                  </div>
-                )}
-              </div>
+    <div className="h-[calc(100dvh-0.75rem)] overflow-hidden px-0 py-0 lg:h-[calc(100dvh-2rem)]">
+      <div className="mx-auto flex h-full max-w-[1600px] min-h-0 overflow-hidden bg-white">
+        <section className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
+          {sessionError && (
+            <div className="mx-3 mt-3 shrink-0 rounded-md border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700 lg:hidden">
+              {sessionError}
             </div>
+          )}
+
+          <div className="sticky top-0 z-10 shrink-0 bg-white/96 px-14 py-3.5 backdrop-blur">
+            <button
+              type="button"
+              onClick={() => setIsSessionsOpen(true)}
+              className="absolute left-3 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-stone-950 transition hover:bg-stone-100 hover:text-emerald-700 md:left-5"
+              aria-label="会话历史"
+              title="会话历史"
+            >
+              <Menu className="h-6 w-6" />
+            </button>
+            <h1 className="mx-auto max-w-[min(34rem,calc(100%-10rem))] truncate text-center text-base font-semibold leading-5 text-stone-950">
+              {currentSessionTitle}
+            </h1>
+            <p className="mt-1 text-center text-xs leading-4 text-stone-400">
+              {responseMode === 'think' ? '思考模式' : '快速模式'}
+            </p>
+            <p className="text-center text-xs leading-4 text-stone-400">
+              回答由 AI 生成，仅供参考
+            </p>
+            <button
+              type="button"
+              onClick={handleNewChat}
+              className="absolute right-3 top-1/2 inline-flex h-9 -translate-y-1/2 items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 text-sm font-medium text-stone-900 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 md:right-5"
+              aria-label="新会话"
+              title="新会话"
+            >
+              <Plus className="h-4 w-4" />
+              <span>新会话</span>
+            </button>
           </div>
 
           <AgentMessageList
@@ -1313,36 +1212,43 @@ export default function AgentPage() {
               }
               void handleSubmit();
             }}
-            className="shrink-0 border-t border-stone-200 bg-stone-50 px-2 py-2 md:px-3"
+            className="shrink-0 bg-white px-3 pb-3 pt-2 md:px-5 md:pb-5"
           >
-            <div className="mx-auto max-w-5xl rounded-md border border-stone-200 bg-white p-2">
-              <div className="hidden">
-                <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-stone-500">
-                  <span className="rounded-full bg-stone-100 px-2.5 py-1 font-medium text-stone-700">
-                    {mode === 'mirror' ? '镜像 AI' : mode === 'persona' ? targetLabel : 'FamilyAgent'}
-                  </span>
-                </div>
-              </div>
+            <div className="mx-auto max-w-4xl rounded-[26px] border border-stone-100 bg-white p-2.5 shadow-[0_12px_34px_rgba(24,39,32,0.12)] md:p-3">
               <textarea
+                ref={inputTextareaRef}
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
-                placeholder={inputPlaceholder}
+                placeholder="发消息或按住说话"
                 disabled={isStreaming}
-                rows={3}
-                className="min-h-[88px] max-h-40 w-full resize-none rounded-md border border-stone-100 bg-stone-50/70 px-3 py-2 text-sm leading-6 text-stone-900 outline-none transition placeholder:text-stone-500 focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-100 disabled:bg-stone-100"
+                rows={1}
+                className="max-h-36 min-h-12 w-full resize-none overflow-y-auto rounded-[20px] border-0 bg-white px-3 py-2 text-base leading-7 text-stone-900 outline-none transition placeholder:text-stone-400 disabled:bg-stone-50"
               />
 
-              <div className="mt-2 flex flex-col gap-2 px-1 pb-1 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0 space-y-2">
-                  <div className="inline-flex rounded-md bg-stone-100/90 p-1">
+              <div className="mt-1.5 flex items-center justify-between gap-2 px-1 pb-1 pt-1">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsContextOpen(true)}
+                    className={cn(
+                      'inline-flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition sm:px-3',
+                      isContextOpen
+                        ? 'border-blue-200 bg-blue-50 text-blue-700'
+                        : 'border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-300 hover:bg-blue-100',
+                    )}
+                  >
+                    <Bot className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">上下文</span>
+                  </button>
+                  <div className="inline-flex rounded-full bg-stone-100/90 p-1">
                     <button
                       type="button"
                       onClick={() => setResponseMode('quick')}
                       disabled={isStreaming}
                       className={cn(
-                        'inline-flex h-8 items-center rounded px-3 text-xs font-medium transition',
+                        'inline-flex h-7 items-center rounded-full px-3 text-xs font-medium transition',
                         responseMode === 'quick'
-                          ? 'bg-stone-950 text-white shadow-sm'
+                          ? 'bg-blue-600 text-white shadow-sm'
                           : 'text-stone-600 hover:bg-white/80',
                       )}
                     >
@@ -1353,10 +1259,10 @@ export default function AgentPage() {
                       onClick={() => setResponseMode('think')}
                       disabled={isStreaming}
                       className={cn(
-                        'inline-flex h-8 items-center rounded px-3 text-xs font-medium transition',
+                        'inline-flex h-7 items-center rounded-full px-3 text-xs font-medium transition',
                         responseMode === 'think'
-                          ? 'bg-emerald-700 text-white shadow-sm'
-                          : 'text-emerald-700 hover:bg-white/80',
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'text-blue-700 hover:bg-white/80',
                       )}
                     >
                       思考
@@ -1367,7 +1273,7 @@ export default function AgentPage() {
                 <div className="flex shrink-0 items-center justify-end gap-2">
                   <VoiceInputButton
                     compact
-                    className="[&>button]:h-9 [&>button]:w-9 [&>button]:rounded-md [&>button]:border-stone-200 [&>button]:bg-stone-50 [&>button]:text-stone-600 [&>button:hover]:bg-stone-100"
+                    className="[&>button]:h-9 [&>button]:w-9 [&>button]:rounded-full [&>button]:border-stone-200 [&>button]:bg-stone-50 [&>button]:text-stone-600 [&>button:hover]:bg-stone-100"
                     onTranscript={(text) => setInput((current) => (current ? `${current}\n${text}` : text))}
                     disabled={isStreaming}
                   />
@@ -1375,13 +1281,12 @@ export default function AgentPage() {
                     type="submit"
                     disabled={isStreaming ? false : !input.trim()}
                     className={cn(
-                      'inline-flex h-9 min-w-9 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50',
-                      isStreaming ? 'bg-rose-600 hover:bg-rose-700' : 'bg-stone-950 hover:bg-stone-800',
+                      'inline-flex h-9 min-w-9 items-center justify-center gap-2 rounded-full px-3 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50',
+                      isStreaming ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-700 hover:bg-emerald-800',
                     )}
                     aria-label={isStreaming ? '停止输出' : '发送消息'}
                   >
                     {isStreaming ? <Square className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-                    <span className="hidden sm:inline">{isStreaming ? '停止' : '发送'}</span>
                   </button>
                 </div>
               </div>
@@ -1413,7 +1318,9 @@ export default function AgentPage() {
       <AgentContextPanel
         open={isContextOpen}
         mode={mode}
+        familyName={activeFamily?.name?.trim() || '当前家族'}
         targetLabel={targetLabel}
+        selfTargetLabel={selfTargetLabel}
         targetSelection={targetSelection}
         selectorOptions={selectorOptions}
         personaOptions={personas}

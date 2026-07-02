@@ -99,7 +99,7 @@ export function selectionLabel(
   targetPersona?: PersonaMember | null,
 ): string {
   if (selection === 'NONE') return 'FamilyAgent';
-  if (selection === 'SELF') return '镜像自己';
+  if (selection === 'SELF') return targetMember?.username?.trim() || targetMember?.nickname?.trim() || '我';
   if (isPersonaTargetSelection(selection)) return targetPersona?.name?.trim() || '精神成员';
   return memberName(targetMember);
 }
