@@ -14,6 +14,7 @@ import {
   WorkbenchPage,
   WorkbenchSurface,
 } from '@/components/layout/Workbench';
+import { submitFormOnEnter } from '@/lib/formKeyboard';
 import type {
   DiaryEntryType,
   DiaryVisibility,
@@ -658,6 +659,7 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
   ]);
 
   const handleSave = useCallback(async () => {
+    if (saving) return;
     if (!selectedFamilyId) {
       setError('请先选择一个家族空间。');
       return;
@@ -745,6 +747,7 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
     relatedMemberLabel,
     relatedUserId,
     requestedTargetUserId,
+    saving,
     selectedFamilyId,
     tagText,
     title,
@@ -796,7 +799,14 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
         </div>
       )}
 
-      <div className="space-y-3">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void handleSave();
+        }}
+        onKeyDown={submitFormOnEnter}
+        className="space-y-3"
+      >
         <div className="overflow-hidden rounded-[1.35rem] border border-emerald-400 bg-white shadow-sm transition focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100">
           <textarea
             value={content}
@@ -883,8 +893,7 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
                 </button>
               )}
               <button
-                type="button"
-                onClick={() => void handleSave()}
+                type="submit"
                 disabled={!selectedFamilyId || !content.trim() || saving}
                 className="inline-flex h-10 min-w-10 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-300"
                 aria-label={primaryActionLabel(category)}
@@ -993,7 +1002,7 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
             <span>“帮我整理”只是辅助动作，不会自动合并，也不会替你自动保存。</span>
           </div>
         </div>
-      </div>
+      </form>
     </WorkbenchPage>
   );
 }

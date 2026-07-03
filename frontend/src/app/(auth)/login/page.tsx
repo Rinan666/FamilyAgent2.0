@@ -10,6 +10,7 @@ import AuthShell, {
   authLabelClassName,
   authPrimaryButtonClassName,
 } from '@/components/auth/AuthShell';
+import { submitFormOnEnter } from '@/lib/formKeyboard';
 import { toAuthUser } from '@/lib/auth';
 import { userApi } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
@@ -50,6 +51,8 @@ export default function LoginPage() {
 
   const handleSubmit = async (event?: React.FormEvent) => {
     event?.preventDefault();
+    if (loading) return;
+
     setError('');
     setLoading(true);
 
@@ -81,7 +84,7 @@ export default function LoginPage() {
         </p>
       )}
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} onKeyDown={submitFormOnEnter} className="space-y-4">
         {error && (
           <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
             {error}

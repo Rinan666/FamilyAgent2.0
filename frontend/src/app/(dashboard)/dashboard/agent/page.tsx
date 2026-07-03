@@ -41,6 +41,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useChatStore } from '@/stores/chatStore';
 import { cn, generateId } from '@/lib/utils';
 import { familyApi, memoryApi, mirrorApi, sessionApi, skillRunApi, writeMemoryApi } from '@/lib/api';
+import { isPlainEnter } from '@/lib/formKeyboard';
 import { loadSessionMessagesChronologically } from '@/lib/sessionHistory';
 import {
   buildWriteMemorySaveRequest,
@@ -755,6 +756,17 @@ export default function AgentPage() {
     }
   }, [input, isStreaming, sendMessage]);
 
+  const handleInputKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!isPlainEnter(event)) return;
+
+    event.preventDefault();
+    if (isStreaming) {
+      stopStreaming();
+      return;
+    }
+    void handleSubmit();
+  }, [handleSubmit, isStreaming, stopStreaming]);
+
   const loadAllSessionMessages = useCallback((targetSessionId: number) => (
     loadSessionMessagesChronologically(sessionApi.getSessionMessages, targetSessionId, 40)
   ), []);
@@ -1219,6 +1231,7 @@ export default function AgentPage() {
                 ref={inputTextareaRef}
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
+                onKeyDown={handleInputKeyDown}
                 placeholder="发消息或按住说话"
                 disabled={isStreaming}
                 rows={1}
