@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -27,6 +27,10 @@ const diaryVisibilityOptions = [...familyVisibilityOptions, 'LEGACY_VISIBLE'];
 
 function emptyPage(pageSize: number): PageResult<MemoryLibraryItem> {
   return { items: [], page: 1, pageSize, total: 0, totalPages: 0 };
+}
+
+function resolveRequestedViewMode(view?: string | null): LibraryViewMode {
+  return view?.toLowerCase() === 'archived' ? 'ARCHIVED' : 'ACTIVE';
 }
 
 function visibilityLabel(value?: string) {
@@ -85,13 +89,23 @@ export default function MemoryLibraryWorkbench({
     isLoading: loadingFamilies,
   } = useViewerRole();
 
+  const requestedFamilyId = useMemo(() => {
+    const value = Number(searchParams.get('familyId'));
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }, [searchParams]);
+
+  const requestedViewMode = useMemo<LibraryViewMode>(() => {
+    return libraryViewMode ?? resolveRequestedViewMode(searchParams.get('view'));
+  }, [libraryViewMode, searchParams]);
+
+  const latestLoadRequestId = useRef(0);
   const [pageData, setPageData] = useState<PageResult<MemoryLibraryItem>>(() => emptyPage(pageSizeOptions[0]));
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const [viewMode, setViewMode] = useState<LibraryViewMode>('ACTIVE');
+  const [viewMode, setViewMode] = useState<LibraryViewMode>(() => requestedViewMode);
   const [pageSize, setPageSize] = useState(pageSizeOptions[0]);
   const [currentPage, setCurrentPage] = useState(1);
   const [archivingItemId, setArchivingItemId] = useState('');
@@ -100,22 +114,17 @@ export default function MemoryLibraryWorkbench({
   const [savingItemId, setSavingItemId] = useState('');
   const [openItemMenuId, setOpenItemMenuId] = useState('');
 
-  const requestedFamilyId = useMemo(() => {
-    const value = Number(searchParams.get('familyId'));
-    return Number.isFinite(value) && value > 0 ? value : null;
-  }, [searchParams]);
-
-  const requestedViewMode = useMemo<LibraryViewMode>(() => {
-    if (libraryViewMode) return libraryViewMode;
-    return searchParams.get('view')?.toLowerCase() === 'archived' ? 'ARCHIVED' : 'ACTIVE';
-  }, [libraryViewMode, searchParams]);
-
   const canManageLibrary = activeMembership?.role === 'OWNER' || viewerRole === 'ADMIN';
   const totalPages = Math.max(1, pageData.totalPages || 1);
 
   const loadData = useCallback(async () => {
+    const requestId = latestLoadRequestId.current + 1;
+    latestLoadRequestId.current = requestId;
+
     if (!activeFamilyId) {
       setPageData(emptyPage(pageSize));
+      setIsLoading(false);
+      setError('');
       return;
     }
 
@@ -129,12 +138,16 @@ export default function MemoryLibraryWorkbench({
         keyword: debouncedQuery,
         type: 'ALL',
       });
+      if (latestLoadRequestId.current !== requestId) return;
       setPageData(nextPage);
     } catch (err) {
+      if (latestLoadRequestId.current !== requestId) return;
       setError(err instanceof Error ? err.message : '记忆库加载失败');
       setPageData(emptyPage(pageSize));
     } finally {
-      setIsLoading(false);
+      if (latestLoadRequestId.current === requestId) {
+        setIsLoading(false);
+      }
     }
   }, [
     activeFamilyId,
@@ -178,12 +191,6 @@ export default function MemoryLibraryWorkbench({
   useEffect(() => {
     setCurrentPage(1);
   }, [viewMode, pageSize]);
-
-  useEffect(() => {
-    if (!simplified && !canManageLibrary && viewMode !== 'ACTIVE') {
-      setViewMode('ACTIVE');
-    }
-  }, [canManageLibrary, simplified, viewMode]);
 
   useEffect(() => {
     void loadData();
