@@ -5,6 +5,7 @@ public record CreateFamilyMemoryInput(
         String type,
         String scope,
         String summary,
-        Integer importance
+        Integer importance,
+        AgentSaveMemoryMetadata metadata
 ) {
 }

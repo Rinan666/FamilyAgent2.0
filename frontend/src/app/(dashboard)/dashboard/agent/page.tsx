@@ -43,7 +43,7 @@ import { cn, generateId } from '@/lib/utils';
 import { agentApi, familyApi, memoryApi, mirrorApi, sessionApi, skillRunApi } from '@/lib/api';
 import { loadSessionMessagesChronologically } from '@/lib/sessionHistory';
 import {
-  buildWriteMemorySaveRequest,
+  buildAgentSaveMemoryToolRequest,
   isExplicitSaveMemoryCommand,
   savePlanDetail,
   savePlanPersistenceDecision,
@@ -930,19 +930,6 @@ export default function AgentPage() {
 
   const handleSaveMessage = useCallback(async (message: ChatMessage, conversationContext?: ChatMessage[]) => {
     if (!activeFamilyId) {
-      if (skillRunId) {
-        await skillRunApi.update(skillRunId, {
-          status: 'FAILED',
-          saved: false,
-          outputSummary: toolResult?.message || '保存确认已处理，但工具执行未成功。',
-          metadata: {
-            confirmationId,
-            executionStatus: result.confirmation.executionStatus || '',
-            executionErrorCode: result.confirmation.executionErrorCode || '',
-          },
-        });
-      }
-
       setSaveFeedback((current) => ({
         ...current,
         [message.id]: { status: 'error', detail: '请先选择一个家庭再保存。' },
@@ -1015,34 +1002,23 @@ export default function AgentPage() {
         return;
       }
 
-      const toolRequest = buildWriteMemorySaveRequest(
+      const toolResult = await agentApi.requestSaveMemoryTool(buildAgentSaveMemoryToolRequest(
         activeFamilyId,
         plan,
-        {},
-        currentMode === 'mirror' ? (mirrorTargetUserId || undefined) : undefined,
-      );
-      const toolResult = await agentApi.requestSaveMemoryTool({
-        familyId: toolRequest.familyId,
-        writeCategory: toolRequest.writeCategory,
-        content: toolRequest.content,
-        title: toolRequest.title,
-        tags: toolRequest.tags,
-        visibility: toolRequest.visibility,
-        relatedUserId: toolRequest.relatedUserId,
-        diaryEntryType: toolRequest.diaryEntryType,
-        memoryType: toolRequest.memoryType,
-        growthCategory: toolRequest.growthCategory,
-        growthSeverity: toolRequest.growthSeverity,
-        requestId: `save-memory-${message.id}`,
-        sessionId: sessionIdRef.current,
-        agentMode: currentMode,
-        subject: currentMode === 'mirror'
-          ? 'MirrorAgent'
-          : currentMode === 'persona'
-            ? 'PersonaMemberAgent'
-            : 'FamilyAgent',
-        contextLabel: 'save_memory',
-      });
+        {
+          requestId: `save-memory-${message.id}`,
+          sessionId: sessionIdRef.current,
+          agentMode: currentMode,
+          contextLabel: 'save_memory',
+          familyName: activeFamily?.name || '',
+          viewerRole,
+          savedFromMessageRole: message.role,
+          targetUserId: mirrorTargetUserId,
+          targetMemberName: currentMode === 'mirror' ? currentTargetName : '',
+          targetPersonaId: targetPersona?.id ?? targetPersonaId,
+          targetPersonaName: currentMode === 'persona' ? currentTargetName : '',
+        },
+      ));
 
       if (toolResult.status === 'CONFIRMATION_REQUIRED' && toolResult.confirmationId) {
         if (skillRunId) {

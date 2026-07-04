@@ -5,6 +5,7 @@ import com.familyagent.module.agent.harness.AgentRunContext;
 import com.familyagent.module.agent.harness.constant.AgentToolConfirmationRequirement;
 import com.familyagent.module.agent.harness.constant.AgentToolName;
 import com.familyagent.module.agent.harness.constant.AgentToolSideEffect;
+import com.familyagent.module.agent.harness.dto.AgentSaveMemoryMetadata;
 import com.familyagent.module.agent.harness.dto.CreateFamilyMemoryInput;
 import com.familyagent.module.agent.harness.dto.CreateFamilyMemoryOutput;
 import com.familyagent.module.memory.dto.CreateFamilyMemoryRequest;
@@ -47,7 +48,8 @@ class CreateFamilyMemoryToolTest {
                 "FAMILY_STORY",
                 "FAMILY_VISIBLE",
                 "Repair before replacing.",
-                4);
+                4,
+                metadata());
         MemoryEntry entry = new MemoryEntry();
         entry.setId(99L);
         when(familyMemoryFacade.create(org.mockito.ArgumentMatchers.any(CreateFamilyMemoryRequest.class)))
@@ -64,6 +66,9 @@ class CreateFamilyMemoryToolTest {
         assertEquals("FAMILY_VISIBLE", request.getScope());
         assertEquals("Repair before replacing.", request.getSummary());
         assertEquals(4, request.getImportance());
+        assertEquals("MIRROR_AGENT_TOOL", request.getMetadata().get("source"));
+        assertEquals("FAMILY_MEMORY", request.getMetadata().get("plannedTool"));
+        assertEquals("FAMILY_EXPERIENCE", request.getMetadata().get("sourceType"));
         assertEquals(99L, output.memoryEntryId());
     }
 
@@ -74,8 +79,19 @@ class CreateFamilyMemoryToolTest {
                 "FAMILY_STORY",
                 "FAMILY_VISIBLE",
                 null,
-                null);
+                null,
+                metadata());
 
         assertThrows(BusinessException.class, () -> tool.execute(context, input));
+    }
+
+    private static AgentSaveMemoryMetadata metadata() {
+        AgentSaveMemoryMetadata metadata = new AgentSaveMemoryMetadata();
+        metadata.setSource("MIRROR_AGENT_TOOL");
+        metadata.setPlannedTool("FAMILY_MEMORY");
+        metadata.setSourceType("FAMILY_EXPERIENCE");
+        metadata.setScenario("Mirror save");
+        metadata.setTarget("Child");
+        return metadata;
     }
 }

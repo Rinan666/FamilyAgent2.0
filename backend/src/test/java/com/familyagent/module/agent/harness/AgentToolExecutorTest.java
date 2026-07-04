@@ -117,6 +117,7 @@ class AgentToolExecutorTest {
         assertEquals(AgentToolCallStatus.CONFIRMATION_REQUIRED, result.status());
         assertEquals(AgentToolErrorCode.CONFIRMATION_REQUIRED.code(), result.errorCode());
         assertEquals(55L, result.confirmationId());
+        assertEquals(0, tool.executeCount());
         verify(confirmationService).createRequired(context, tool.descriptor(), input);
         verify(auditService).record(
                 context,
@@ -209,6 +210,7 @@ class AgentToolExecutorTest {
     private static class EchoTool implements AgentTool<EchoInput, EchoOutput> {
 
         private static final String NAME = "echo";
+        private int executeCount;
         private static final AgentToolDescriptor DESCRIPTOR = new AgentToolDescriptor(
                 NAME,
                 "Echo test tool",
@@ -230,7 +232,12 @@ class AgentToolExecutorTest {
 
         @Override
         public EchoOutput execute(AgentRunContext context, EchoInput input) {
+            executeCount++;
             return new EchoOutput(input.value());
+        }
+
+        private int executeCount() {
+            return executeCount;
         }
     }
 }

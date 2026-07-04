@@ -1,6 +1,9 @@
 import type {
   AgentSaveTool,
+  AgentSaveMemoryMetadata,
+  AgentSaveMemoryToolRequest,
   AgentSaveToolPlan,
+  AgentMode,
   DiaryEntryType,
   DiaryVisibility,
   GrowthGuardCategory,
@@ -58,6 +61,21 @@ export type SavePlanPersistenceDecision = {
   plan: AgentSaveToolPlan;
   shouldPersist: boolean;
   skippedDetail: string;
+};
+
+export type AgentSaveMemoryToolRequestContext = {
+  requestId?: string;
+  sessionId?: number | null;
+  agentMode: AgentMode;
+  familyName?: string;
+  viewerRole?: string;
+  savedFromMessageRole?: string;
+  targetUserId?: number | null;
+  targetMemberName?: string | null;
+  targetPersonaId?: number | null;
+  targetPersonaName?: string | null;
+  contextLabel?: string;
+  savedAt?: string;
 };
 
 function choice<T extends string>(value: unknown, allowed: Set<T>, fallback: T): T {
@@ -191,6 +209,90 @@ export function saveMemorySkillMetadata(plan: AgentSaveToolPlan, savedAt?: strin
   };
 }
 
+export function buildAgentSaveMemoryMetadata(
+  plan: AgentSaveToolPlan,
+  context: AgentSaveMemoryToolRequestContext,
+): AgentSaveMemoryMetadata {
+  const savedAt = context.savedAt || new Date().toISOString();
+  const common = {
+    familyName: context.familyName || '',
+    viewerRole: context.viewerRole || '',
+    savedFromMessageRole: context.savedFromMessageRole || '',
+    ...saveMemorySkillMetadata(plan, savedAt),
+  };
+
+  const metadata: AgentSaveMemoryMetadata = context.agentMode === 'mirror'
+    ? {
+        source: 'MIRROR_AGENT_TOOL',
+        relationSource: 'MIRROR_AGENT_TOOL',
+        relatedUserId: context.targetUserId ?? null,
+        relatedMemberName: context.targetMemberName || '',
+        ...common,
+      }
+    : context.agentMode === 'persona'
+      ? {
+          source: 'PERSONA_MEMBER_TOOL',
+          relationSource: 'PERSONA_MEMBER_TOOL',
+          relatedPersonaId: context.targetPersonaId ?? null,
+          relatedPersonaName: context.targetPersonaName || '',
+          ...common,
+        }
+      : {
+          source: 'FAMILY_COMPANION_TOOL',
+          relationSource: 'FAMILY_AGENT_TOOL',
+          ...common,
+        };
+
+  if (plan.tool === 'FAMILY_MEMORY' && context.agentMode === 'mirror') {
+    return {
+      ...metadata,
+      sourceType: 'FAMILY_EXPERIENCE',
+      scenario: '镜像对话保存',
+      target: context.targetMemberName || '',
+    };
+  }
+  if (plan.tool === 'FAMILY_MEMORY' && context.agentMode === 'persona') {
+    return {
+      ...metadata,
+      sourceType: 'FAMILY_EXPERIENCE',
+      scenario: '精神成员对话保存',
+      target: context.targetPersonaName || '',
+    };
+  }
+  if (plan.tool === 'GROWTH_GUARD' && context.agentMode === 'mirror') {
+    return {
+      ...metadata,
+      sourceType: 'GROWTH_OBSERVATION',
+      followUpStatus: 'PENDING',
+    };
+  }
+  return metadata;
+}
+
+export function buildAgentSaveMemoryToolRequest(
+  familyId: number,
+  plan: AgentSaveToolPlan,
+  context: AgentSaveMemoryToolRequestContext,
+): AgentSaveMemoryToolRequest {
+  const metadata = buildAgentSaveMemoryMetadata(plan, context);
+  const toolRequest = buildWriteMemorySaveRequest(
+    familyId,
+    plan,
+    metadata as Record<string, unknown>,
+    context.agentMode === 'mirror' ? (context.targetUserId || undefined) : undefined,
+  );
+
+  return {
+    ...toolRequest,
+    requestId: context.requestId,
+    sessionId: context.sessionId,
+    agentMode: context.agentMode,
+    subject: subjectFromAgentMode(context.agentMode),
+    contextLabel: context.contextLabel || 'save_memory',
+    metadata,
+  };
+}
+
 export function buildWriteMemorySaveRequest(
   familyId: number,
   plan: AgentSaveToolPlan,
@@ -215,6 +317,12 @@ export function buildWriteMemorySaveRequest(
 
 export function todayString() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function subjectFromAgentMode(mode: AgentMode) {
+  if (mode === 'mirror') return 'MirrorAgent';
+  if (mode === 'persona') return 'PersonaMemberAgent';
+  return 'FamilyAgent';
 }
 
 function defaultSaveTitle(tool: AgentSaveTool) {

@@ -46,7 +46,8 @@ public class AgentSaveMemoryToolCommandService {
                             request.getTitle(),
                             null,
                             tags(request.getTags()),
-                            request.getVisibility())));
+                            request.getVisibility(),
+                            request.getMetadata())));
             case EXPERIENCE -> toolExecutor.execute(new AgentToolCallRequest<>(
                     AgentToolName.CREATE_FAMILY_MEMORY.value(),
                     context,
@@ -55,7 +56,8 @@ public class AgentSaveMemoryToolCommandService {
                             request.getMemoryType(),
                             request.getVisibility(),
                             summary(request.getTitle(), request.getContent()),
-                            defaultImportance(request.getMemoryType()))));
+                            defaultImportance(request.getMemoryType()),
+                            request.getMetadata())));
             case OBSERVATION -> toolExecutor.execute(new AgentToolCallRequest<>(
                     AgentToolName.CREATE_GROWTH_GUARD_RECORD.value(),
                     context,
@@ -66,7 +68,8 @@ public class AgentSaveMemoryToolCommandService {
                             request.getGrowthSeverity(),
                             LocalDate.now(),
                             LocalDate.now().plusDays(7),
-                            request.getVisibility())));
+                            request.getVisibility(),
+                            request.getMetadata())));
         };
     }
 

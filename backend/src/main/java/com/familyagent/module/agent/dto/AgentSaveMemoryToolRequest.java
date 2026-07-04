@@ -1,5 +1,6 @@
 package com.familyagent.module.agent.dto;
 
+import com.familyagent.module.agent.harness.dto.AgentSaveMemoryMetadata;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -37,4 +38,5 @@ public class AgentSaveMemoryToolRequest {
     private String agentMode;
     private String subject;
     private String contextLabel;
+    private AgentSaveMemoryMetadata metadata;
 }

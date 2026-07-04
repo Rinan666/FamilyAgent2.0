@@ -55,6 +55,9 @@ class CreateDiaryEntryTool implements AgentTool<CreateDiaryEntryInput, CreateDia
         request.setMood(input.mood());
         request.setTags(input.tags());
         request.setVisibility(input.visibility());
+        if (input.metadata() != null) {
+            request.setMetadata(input.metadata().toMap());
+        }
         DiaryEntry entry = diaryEntryFacade.create(request);
         return new CreateDiaryEntryOutput(entry.getId());
     }

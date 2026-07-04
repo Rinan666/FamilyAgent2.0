@@ -370,7 +370,7 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
 
 ### Phase 2：写入工具与确认门
 
-状态：进行中。已完成确认状态、确认策略、持久化确认记录、确认审批/拒绝 API 契约、首个写入工具声明，以及 approve 后的后端幂等执行闭环；下一步把具体页面确认弹窗改为消费统一 confirmation contract。
+状态：进行中。已完成确认状态、确认策略、持久化确认记录、确认审批/拒绝 API 契约、三个写入工具声明、approve 后的后端幂等执行闭环，以及前端保存按钮接入统一 confirmation contract；Phase 2 收尾聚焦保存来源 metadata 保留、文档状态同步与回归测试。
 
 目标：把写日记、写家庭记忆、写成长观察纳入统一工具执行器。
 
@@ -394,6 +394,7 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
 - 2026-07-04：收紧前端显式保存命令链路。用户说“帮我保存 / 记一下 / 留作记录”等短命令时，前端会以上一段非 system 对话作为保存规划上下文，不再把保存命令本身当成待保存内容；保存规划 prompt 同步增加防臆造约束，要求 content 只能来自用户原话和最近对话中已经出现的信息。
 - 2026-07-04：优化手动保存草稿体验。记忆/日记编辑器将标题输入与正文拆开，AI 草稿标题不再被拼回正文首行，降低后续保存内容被标题重复污染的风险。
 - 2026-07-04：前端 Agent 保存按钮接入统一 confirmation contract。新增 Backend `/api/agent/save-memory-tool` 专用入口，将前端保存规划结果映射到 `create_diary_entry`、`create_family_memory`、`create_growth_guard_record` 强类型工具 input，经 `AgentToolExecutor` 生成 `CONFIRMATION_REQUIRED`；前端保存反馈可展示确认/取消按钮，并通过 `agentApi.decideToolConfirmation` 完成 approve / reject，SkillRun 同步流转为 `PLANNED`、`SUCCEEDED`、`CANCELED` 或 `FAILED`。
+- 2026-07-04：保存确认链路补齐来源 metadata 保留。`/api/agent/save-memory-tool` 继续作为专用入口，前端从 save plan 与 agent mode 构造强类型 `AgentSaveMemoryMetadata`，后端写入工具 input 保留该 DTO，并只在调用 Diary / Memory / Growth Facade 边界转换为现有 metadata map，保留旧写入路径的 source、relationSource、target、scenario、followUpStatus 与计划字段。
 
 工作项：
 
@@ -409,7 +410,7 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
    - [已接入确认门与 approve 执行闭环] `create_diary_entry`
    - [已接入确认门与 approve 执行闭环] `create_family_memory`
    - [已接入确认门与 approve 执行闭环] `create_growth_guard_record`
-5. [契约已完成，页面待接入] 前端保存确认弹窗改为消费统一 confirmation contract。
+5. [已完成] 前端保存确认弹窗改为消费统一 confirmation contract。
 6. 现有 save-plan 可以先作为上游决策，不强行迁移 LLM prompt。
 
 验收标准：

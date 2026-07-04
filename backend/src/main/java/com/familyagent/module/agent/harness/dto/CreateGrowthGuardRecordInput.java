@@ -9,6 +9,7 @@ public record CreateGrowthGuardRecordInput(
         Integer severity,
         LocalDate observedAt,
         LocalDate followUpAt,
-        String visibility
+        String visibility,
+        AgentSaveMemoryMetadata metadata
 ) {
 }

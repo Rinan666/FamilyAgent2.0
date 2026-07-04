@@ -554,6 +554,30 @@ export interface WriteMemoryResult {
   title: string;
 }
 
+export interface AgentSaveMemoryMetadata {
+  skillName?: string;
+  source?: string;
+  relationSource?: string;
+  familyName?: string;
+  viewerRole?: string;
+  savedFromMessageRole?: ChatMessage['role'] | string;
+  plannedTool?: AgentSaveTool;
+  plannedTitle?: string;
+  plannedReason?: string;
+  visibility?: string;
+  scope?: string;
+  confirmationPolicy?: string;
+  savedAt?: string;
+  relatedUserId?: number | null;
+  relatedMemberName?: string | null;
+  relatedPersonaId?: number | null;
+  relatedPersonaName?: string | null;
+  sourceType?: MemoryLibraryItemType;
+  scenario?: string;
+  target?: string;
+  followUpStatus?: GrowthFollowUpStatus;
+}
+
 export interface AgentSaveMemoryToolRequest {
   familyId: number;
   writeCategory: WriteCategory;
@@ -571,6 +595,7 @@ export interface AgentSaveMemoryToolRequest {
   agentMode?: AgentMode;
   subject?: string;
   contextLabel?: string;
+  metadata?: AgentSaveMemoryMetadata;
 }
 
 export type AgentSaveTool = 'NONE' | 'DIARY' | 'FAMILY_MEMORY' | 'GROWTH_GUARD';
