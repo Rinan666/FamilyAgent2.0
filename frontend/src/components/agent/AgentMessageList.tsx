@@ -1,13 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { CheckCircle, Loader2, Save, Sparkles } from 'lucide-react';
+import { Check, CheckCircle, Loader2, Save, Sparkles, X } from 'lucide-react';
 import MathRenderer from '@/components/agent/MathRenderer';
-import RagMemoryBadge from '@/components/agent/RagMemoryBadge';
-import WebSearchBadge from '@/components/agent/WebSearchBadge';
 import AnswerEvidenceDisclosure from '@/components/agent/AnswerEvidenceDisclosure';
 import { type SaveFeedback } from '@/components/agent/agentDisplay';
-import type { AgentMode, ChatMessage } from '@/types';
+import type { AgentConfirmationDecision, AgentMode, ChatMessage } from '@/types';
 
 interface AgentMessageListProps {
   messages: ChatMessage[];
@@ -17,6 +15,7 @@ interface AgentMessageListProps {
   targetLabel: string;
   saveFeedback: Record<string, SaveFeedback>;
   onSaveMessage: (message: ChatMessage) => void;
+  onDecideSaveConfirmation: (message: ChatMessage, confirmationId: number, decision: AgentConfirmationDecision) => void;
   onOpenContext?: () => void;
 }
 
@@ -40,6 +39,7 @@ export default function AgentMessageList({
   targetLabel,
   saveFeedback,
   onSaveMessage,
+  onDecideSaveConfirmation,
   onOpenContext,
 }: AgentMessageListProps) {
   if (!isLoadingMessages && messages.length === 0) {
@@ -91,6 +91,8 @@ export default function AgentMessageList({
 
         {messages.map((message) => {
           const feedback = saveFeedback[message.id];
+          const isConfirmingSave = feedback?.status === 'confirming';
+          const pendingConfirmationId = feedback?.status === 'confirmation' ? feedback.confirmationId : undefined;
           if (message.role === 'system') {
             return (
               <div key={message.id} className="text-center">
@@ -102,7 +104,6 @@ export default function AgentMessageList({
           }
 
           const isAssistant = message.role === 'assistant';
-          const isMirrorAssistant = message.metadata?.agentMode === 'mirror' || Boolean(message.metadata?.sourceRefs?.length);
           const showThinkingIndicator = isAssistant && isStreaming && !message.content.trim();
           const showSaveControls = !isStreaming && Boolean(message.content.trim());
 
@@ -141,20 +142,18 @@ export default function AgentMessageList({
                   </div>
                 )}
 
-                {isAssistant && <RagMemoryBadge metadata={message.metadata} />}
-                {isAssistant && <WebSearchBadge metadata={message.metadata} />}
-                {isAssistant && isMirrorAssistant && <AnswerEvidenceDisclosure message={message} />}
+                {isAssistant && <AnswerEvidenceDisclosure message={message} />}
 
                 {showSaveControls && (
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                   <button
                     type="button"
                     onClick={() => { onSaveMessage(message); }}
-                    disabled={feedback?.status === 'saving'}
+                    disabled={feedback?.status === 'saving' || isConfirmingSave}
                     className="inline-flex h-8 w-8 items-center justify-center rounded-full text-stone-400 transition hover:bg-stone-100 hover:text-stone-700 disabled:opacity-60"
                     aria-label="智能保存"
                   >
-                    {feedback?.status === 'saving'
+                    {feedback?.status === 'saving' || isConfirmingSave
                       ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       : <Save className="h-3.5 w-3.5" />}
                   </button>
@@ -173,6 +172,28 @@ export default function AgentMessageList({
                         <Link href={feedback.href} className="ml-2 underline underline-offset-2">
                           打开
                         </Link>
+                      )}
+                      {pendingConfirmationId && (
+                        <span className="ml-3 inline-flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => onDecideSaveConfirmation(message, pendingConfirmationId, 'APPROVE')}
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 transition hover:bg-emerald-100"
+                            aria-label="确认保存"
+                            title="确认保存"
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDecideSaveConfirmation(message, pendingConfirmationId, 'REJECT')}
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-stone-100 text-stone-500 transition hover:bg-stone-200"
+                            aria-label="取消保存"
+                            title="取消保存"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </span>
                       )}
                     </div>
                   )}

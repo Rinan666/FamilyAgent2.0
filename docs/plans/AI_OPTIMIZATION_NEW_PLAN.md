@@ -393,6 +393,7 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
 - 2026-07-01：新增 `create_growth_guard_record` 写入工具、强类型 `CreateGrowthGuardRecordInput` / `CreateGrowthGuardRecordOutput`，并通过 `AgentGrowthGuardRecordFacade` 隔离 growth 模块 Service；工具层要求 `targetUserId` 必填，真实 care authorization 继续由 growth 模块内规则裁决。
 - 2026-07-04：收紧前端显式保存命令链路。用户说“帮我保存 / 记一下 / 留作记录”等短命令时，前端会以上一段非 system 对话作为保存规划上下文，不再把保存命令本身当成待保存内容；保存规划 prompt 同步增加防臆造约束，要求 content 只能来自用户原话和最近对话中已经出现的信息。
 - 2026-07-04：优化手动保存草稿体验。记忆/日记编辑器将标题输入与正文拆开，AI 草稿标题不再被拼回正文首行，降低后续保存内容被标题重复污染的风险。
+- 2026-07-04：前端 Agent 保存按钮接入统一 confirmation contract。新增 Backend `/api/agent/save-memory-tool` 专用入口，将前端保存规划结果映射到 `create_diary_entry`、`create_family_memory`、`create_growth_guard_record` 强类型工具 input，经 `AgentToolExecutor` 生成 `CONFIRMATION_REQUIRED`；前端保存反馈可展示确认/取消按钮，并通过 `agentApi.decideToolConfirmation` 完成 approve / reject，SkillRun 同步流转为 `PLANNED`、`SUCCEEDED`、`CANCELED` 或 `FAILED`。
 
 工作项：
 

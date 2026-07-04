@@ -3,10 +3,17 @@ import type { ViewerRole } from '@/lib/roles';
 import type {
   AgentConfirmationDecision,
   AgentResponseMode,
+  AgentSaveMemoryToolRequest,
+  AgentToolExecutionResult,
   AgentToolConfirmationDecisionResult,
 } from '@/types';
 
 export const agentApi = {
+  requestSaveMemoryTool: (data: AgentSaveMemoryToolRequest) =>
+    request<AgentToolExecutionResult>('/agent/save-memory-tool', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   decideToolConfirmation: (confirmationId: number, decision: AgentConfirmationDecision) =>
     request<AgentToolConfirmationDecisionResult>(`/agent/tool-confirmations/${confirmationId}/decision`, {
       method: 'POST',

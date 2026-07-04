@@ -40,12 +40,11 @@ import { normalizeAssistantMetadata } from '@/hooks/chat/useChatHelpers';
 import { useAuthStore } from '@/stores/authStore';
 import { useChatStore } from '@/stores/chatStore';
 import { cn, generateId } from '@/lib/utils';
-import { familyApi, memoryApi, mirrorApi, sessionApi, skillRunApi, writeMemoryApi } from '@/lib/api';
+import { agentApi, familyApi, memoryApi, mirrorApi, sessionApi, skillRunApi } from '@/lib/api';
 import { loadSessionMessagesChronologically } from '@/lib/sessionHistory';
 import {
   buildWriteMemorySaveRequest,
   isExplicitSaveMemoryCommand,
-  saveMemorySkillMetadata,
   savePlanDetail,
   savePlanPersistenceDecision,
   savedRecordType,
@@ -55,6 +54,7 @@ import {
 } from '@/lib/savePlan';
 import type {
   AgentMode,
+  AgentConfirmationDecision,
   AgentResponseMode,
   AgentSaveToolPlan,
   AgentSessionMetadata,
@@ -930,6 +930,19 @@ export default function AgentPage() {
 
   const handleSaveMessage = useCallback(async (message: ChatMessage, conversationContext?: ChatMessage[]) => {
     if (!activeFamilyId) {
+      if (skillRunId) {
+        await skillRunApi.update(skillRunId, {
+          status: 'FAILED',
+          saved: false,
+          outputSummary: toolResult?.message || '保存确认已处理，但工具执行未成功。',
+          metadata: {
+            confirmationId,
+            executionStatus: result.confirmation.executionStatus || '',
+            executionErrorCode: result.confirmation.executionErrorCode || '',
+          },
+        });
+      }
+
       setSaveFeedback((current) => ({
         ...current,
         [message.id]: { status: 'error', detail: '请先选择一个家庭再保存。' },
@@ -1002,80 +1015,80 @@ export default function AgentPage() {
         return;
       }
 
-      const savedAt = new Date().toISOString();
-      const commonMetadata = currentMode === 'mirror'
-        ? {
-            source: 'MIRROR_AGENT_TOOL',
-            relationSource: 'MIRROR_AGENT_TOOL',
-            relatedUserId: mirrorTargetUserId,
-            relatedMemberName: currentTargetName,
-            savedFromMessageRole: message.role,
-            familyName: activeFamily?.name || '',
-            viewerRole,
-            ...saveMemorySkillMetadata(plan, savedAt),
-          }
-        : currentMode === 'persona'
-          ? {
-              source: 'PERSONA_MEMBER_TOOL',
-              relationSource: 'PERSONA_MEMBER_TOOL',
-              relatedPersonaId: targetPersona?.id ?? targetPersonaId,
-              relatedPersonaName: currentTargetName,
-              savedFromMessageRole: message.role,
-              familyName: activeFamily?.name || '',
-              viewerRole,
-              ...saveMemorySkillMetadata(plan, savedAt),
-            }
-        : {
-            source: 'FAMILY_COMPANION_TOOL',
-            relationSource: 'FAMILY_AGENT_TOOL',
-            savedFromMessageRole: message.role,
-            familyName: activeFamily?.name || '',
-            viewerRole,
-            ...saveMemorySkillMetadata(plan, savedAt),
-          };
-
-      const saved = await writeMemoryApi.create(buildWriteMemorySaveRequest(
+      const toolRequest = buildWriteMemorySaveRequest(
         activeFamilyId,
         plan,
-        {
-          ...commonMetadata,
-          ...(plan.tool === 'FAMILY_MEMORY' && currentMode === 'mirror'
-            ? {
-                sourceType: 'FAMILY_EXPERIENCE',
-                scenario: '镜像对话保存',
-                target: currentTargetName,
-              }
-            : {}),
-          ...(plan.tool === 'FAMILY_MEMORY' && currentMode === 'persona'
-            ? {
-                sourceType: 'FAMILY_EXPERIENCE',
-                scenario: '精神成员对话保存',
-                target: currentTargetName,
-              }
-            : {}),
-          ...(plan.tool === 'GROWTH_GUARD' && currentMode === 'mirror'
-            ? {
-                sourceType: 'GROWTH_OBSERVATION',
-                followUpStatus: 'PENDING',
-              }
-            : {}),
-        },
+        {},
         currentMode === 'mirror' ? (mirrorTargetUserId || undefined) : undefined,
-      ));
-      const savedRecordId = saved.savedRecordId;
+      );
+      const toolResult = await agentApi.requestSaveMemoryTool({
+        familyId: toolRequest.familyId,
+        writeCategory: toolRequest.writeCategory,
+        content: toolRequest.content,
+        title: toolRequest.title,
+        tags: toolRequest.tags,
+        visibility: toolRequest.visibility,
+        relatedUserId: toolRequest.relatedUserId,
+        diaryEntryType: toolRequest.diaryEntryType,
+        memoryType: toolRequest.memoryType,
+        growthCategory: toolRequest.growthCategory,
+        growthSeverity: toolRequest.growthSeverity,
+        requestId: `save-memory-${message.id}`,
+        sessionId: sessionIdRef.current,
+        agentMode: currentMode,
+        subject: currentMode === 'mirror'
+          ? 'MirrorAgent'
+          : currentMode === 'persona'
+            ? 'PersonaMemberAgent'
+            : 'FamilyAgent',
+        contextLabel: 'save_memory',
+      });
+
+      if (toolResult.status === 'CONFIRMATION_REQUIRED' && toolResult.confirmationId) {
+        if (skillRunId) {
+          await skillRunApi.update(skillRunId, {
+            status: 'PLANNED',
+            saved: false,
+            outputSummary: `等待确认：${savePlanDetail(plan)}`,
+            metadata: {
+              savedRecordType: savedRecordType(plan.tool),
+              plannedTool: plan.tool,
+              plannedReason: plan.reason,
+              confirmationId: toolResult.confirmationId,
+            },
+          });
+        }
+
+        setSaveFeedback((current) => ({
+          ...current,
+          [message.id]: {
+            status: 'confirmation',
+            detail: `请确认保存为${toolLabel(plan.tool)}：${plan.title}`,
+            confirmationId: toolResult.confirmationId ?? undefined,
+            skillRunId: skillRunId ?? undefined,
+          },
+        }));
+        return;
+      }
+
+      if (!toolResult.success) {
+        throw new Error(toolResult.message || '保存工具执行失败，请稍后重试。');
+      }
 
       if (skillRunId) {
         await skillRunApi.update(skillRunId, {
           status: 'SUCCEEDED',
           saved: true,
-          outputSummary: savePlanDetail(plan, savedRecordId),
+          outputSummary: savePlanDetail(plan),
           metadata: {
             savedRecordType: savedRecordType(plan.tool),
-            savedRecordId,
+            plannedTool: plan.tool,
+            plannedReason: plan.reason,
           },
         });
       }
 
+      const savedAt = new Date().toISOString();
       const savedMemory = savedMemoryFromPlan(plan, savedAt);
       if (savedMemory) {
         sessionSavedMemoriesRef.current = [...sessionSavedMemoriesRef.current, savedMemory].slice(-10);
@@ -1085,7 +1098,7 @@ export default function AgentPage() {
         ...current,
         [message.id]: {
           status: 'saved',
-          detail: savePlanDetail(plan, savedRecordId),
+          detail: savePlanDetail(plan),
           href: savedMemoryHref(activeFamilyId),
         },
       }));
@@ -1123,6 +1136,99 @@ export default function AgentPage() {
     targetPersonaId,
     viewerRole,
   ]);
+
+  const handleSaveConfirmationDecision = useCallback(async (
+    message: ChatMessage,
+    confirmationId: number,
+    decision: AgentConfirmationDecision,
+  ) => {
+    const skillRunId = saveFeedback[message.id]?.skillRunId;
+    setSaveFeedback((current) => ({
+      ...current,
+      [message.id]: {
+        status: 'confirming',
+        detail: decision === 'APPROVE' ? '正在确认保存...' : '正在取消保存...',
+        confirmationId,
+        skillRunId,
+      },
+    }));
+
+    try {
+      const result = await agentApi.decideToolConfirmation(confirmationId, decision);
+      if (decision === 'REJECT') {
+        if (skillRunId) {
+          await skillRunApi.update(skillRunId, {
+            status: 'CANCELED',
+            saved: false,
+            outputSummary: '用户取消保存。',
+            metadata: { confirmationId },
+          });
+        }
+        setSaveFeedback((current) => ({
+          ...current,
+          [message.id]: { status: 'skipped', detail: '已取消保存。' },
+        }));
+        return;
+      }
+
+      const toolResult = result.toolResult;
+      if (toolResult?.success) {
+        if (skillRunId) {
+          await skillRunApi.update(skillRunId, {
+            status: 'SUCCEEDED',
+            saved: true,
+            outputSummary: '已确认并完成保存。',
+            metadata: {
+              confirmationId,
+              executionStatus: result.confirmation.executionStatus || '',
+              executionErrorCode: result.confirmation.executionErrorCode || '',
+            },
+          });
+        }
+        setSaveFeedback((current) => ({
+          ...current,
+          [message.id]: {
+            status: 'saved',
+            detail: '已确认并完成保存。',
+            href: activeFamilyId ? savedMemoryHref(activeFamilyId) : undefined,
+          },
+        }));
+        return;
+      }
+
+      setSaveFeedback((current) => ({
+        ...current,
+        [message.id]: {
+          status: 'error',
+          detail: toolResult?.message || '保存确认已处理，但工具执行未成功。',
+          confirmationId,
+          skillRunId,
+        },
+      }));
+    } catch (error) {
+      if (skillRunId) {
+        try {
+          await skillRunApi.update(skillRunId, {
+            status: 'FAILED',
+            saved: false,
+            outputSummary: error instanceof Error ? error.message : '确认保存失败',
+            metadata: { confirmationId },
+          });
+        } catch {
+          // ignore secondary failure
+        }
+      }
+      setSaveFeedback((current) => ({
+        ...current,
+        [message.id]: {
+          status: 'error',
+          detail: error instanceof Error ? error.message : '确认保存失败，请稍后重试。',
+          confirmationId,
+          skillRunId,
+        },
+      }));
+    }
+  }, [activeFamilyId, saveFeedback]);
 
   useEffect(() => {
     if (isStreaming) return;
@@ -1232,6 +1338,9 @@ export default function AgentPage() {
             targetLabel={targetLabel}
             saveFeedback={saveFeedback}
             onSaveMessage={(message) => { void handleSaveMessage(message); }}
+            onDecideSaveConfirmation={(message, confirmationId, decision) => {
+              void handleSaveConfirmationDecision(message, confirmationId, decision);
+            }}
             onOpenContext={() => setIsContextOpen(true)}
           />
 

@@ -554,6 +554,25 @@ export interface WriteMemoryResult {
   title: string;
 }
 
+export interface AgentSaveMemoryToolRequest {
+  familyId: number;
+  writeCategory: WriteCategory;
+  content: string;
+  title?: string;
+  tags?: string[];
+  visibility?: DiaryVisibility | MemoryScope;
+  relatedUserId?: number;
+  diaryEntryType?: DiaryEntryType;
+  memoryType?: MemoryEntryType;
+  growthCategory?: GrowthGuardCategory;
+  growthSeverity?: number;
+  requestId?: string;
+  sessionId?: number | null;
+  agentMode?: AgentMode;
+  subject?: string;
+  contextLabel?: string;
+}
+
 export type AgentSaveTool = 'NONE' | 'DIARY' | 'FAMILY_MEMORY' | 'GROWTH_GUARD';
 
 export interface AgentSaveToolPlan {
