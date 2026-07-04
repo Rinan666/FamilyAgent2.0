@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { AgentSaveToolPlan } from '../types';
 import {
   buildWriteMemorySaveRequest,
+  isExplicitSaveMemoryCommand,
   normalizeSaveToolPlan,
   savePlanPersistenceDecision,
   savePlanDetail,
@@ -146,5 +147,17 @@ describe('savePlan helpers', () => {
     expect(writeCategoryFromTool('DIARY')).toBe('RECORD');
     expect(writeCategoryFromTool('FAMILY_MEMORY')).toBe('EXPERIENCE');
     expect(writeCategoryFromTool('GROWTH_GUARD')).toBe('OBSERVATION');
+  });
+
+  it('detects explicit memory save commands without matching general save questions', () => {
+    expect(isExplicitSaveMemoryCommand('帮我保存')).toBe(true);
+    expect(isExplicitSaveMemoryCommand('把刚才的内容记下来')).toBe(true);
+    expect(isExplicitSaveMemoryCommand('请保存到记忆库')).toBe(true);
+    expect(isExplicitSaveMemoryCommand('给我记一下')).toBe(true);
+    expect(isExplicitSaveMemoryCommand('把这段留作记录')).toBe(true);
+    expect(isExplicitSaveMemoryCommand('麻烦把这个收进记忆库吧')).toBe(true);
+    expect(isExplicitSaveMemoryCommand('怎么保存到本地？')).toBe(false);
+    expect(isExplicitSaveMemoryCommand('我今天学会了保存文件的快捷键')).toBe(false);
+    expect(isExplicitSaveMemoryCommand('请把今天的作业保存到电脑桌面')).toBe(false);
   });
 });

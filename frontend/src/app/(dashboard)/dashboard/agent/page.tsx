@@ -44,6 +44,7 @@ import { familyApi, memoryApi, mirrorApi, sessionApi, skillRunApi, writeMemoryAp
 import { loadSessionMessagesChronologically } from '@/lib/sessionHistory';
 import {
   buildWriteMemorySaveRequest,
+  isExplicitSaveMemoryCommand,
   saveMemorySkillMetadata,
   savePlanDetail,
   savePlanPersistenceDecision,
@@ -231,6 +232,8 @@ export default function AgentPage() {
 
   const routePromptAppliedRef = useRef('');
   const sessionSavedMemoriesRef = useRef<SessionSavedMemory[]>([]);
+  const pendingExplicitSaveRef = useRef<{ messageText: string; context: ChatMessage[] } | null>(null);
+  const handledExplicitSaveMessageIdsRef = useRef<Set<string>>(new Set());
   const createSessionPromiseRef = useRef<Promise<ChatSessionDetail> | null>(null);
   const sessionGenerationRef = useRef(0);
   const sessionIdRef = useRef<number | null>(null);
@@ -692,6 +695,8 @@ export default function AgentPage() {
     setSessionError('');
     setSaveFeedback({});
     sessionSavedMemoriesRef.current = [];
+    pendingExplicitSaveRef.current = null;
+    handledExplicitSaveMessageIdsRef.current.clear();
     setIsSessionsOpen(false);
     setIsContextOpen(false);
     autoRestoreFamilyIdRef.current = null;
@@ -742,11 +747,21 @@ export default function AgentPage() {
     setSessionError('');
     setSaveFeedback({});
     sessionSavedMemoriesRef.current = [];
+    pendingExplicitSaveRef.current = null;
+    handledExplicitSaveMessageIdsRef.current.clear();
   }, [discardStreaming, reset, setSessionId]);
 
   const handleSubmit = useCallback(async () => {
     const content = input.trim();
     if (!content || isStreaming) return;
+    pendingExplicitSaveRef.current = isExplicitSaveMemoryCommand(content)
+      ? {
+          messageText: content,
+          context: useChatStore.getState().messages
+            .filter((message) => message.role !== 'system')
+            .slice(-10),
+        }
+      : null;
     setInput('');
     try {
       await sendMessage(content);
@@ -779,6 +794,8 @@ export default function AgentPage() {
       setActiveSessionDetail(detail);
       setSaveFeedback({});
       sessionSavedMemoriesRef.current = [];
+      pendingExplicitSaveRef.current = null;
+      handledExplicitSaveMessageIdsRef.current.clear();
       upsertSession(detail);
     } catch (error) {
       if (sessionGenerationRef.current === generation) {
@@ -911,7 +928,7 @@ export default function AgentPage() {
     }
   }, [appendSessionMessages, isStreaming, members, personas, selfUserId, setMessages, stopStreaming, targetSelection]);
 
-  const handleSaveMessage = useCallback(async (message: ChatMessage) => {
+  const handleSaveMessage = useCallback(async (message: ChatMessage, conversationContext?: ChatMessage[]) => {
     if (!activeFamilyId) {
       setSaveFeedback((current) => ({
         ...current,
@@ -954,7 +971,7 @@ export default function AgentPage() {
       const planResult = await memoryApi.planSaveTool({
         message: originalContent,
         familyContext: activeFamily?.name || '',
-        conversationContext: recentMessages,
+        conversationContext: conversationContext ?? recentMessages,
         targetMemberName: currentTargetName,
         viewerRole,
       });
@@ -1106,6 +1123,21 @@ export default function AgentPage() {
     targetPersonaId,
     viewerRole,
   ]);
+
+  useEffect(() => {
+    if (isStreaming) return;
+    const pending = pendingExplicitSaveRef.current;
+    if (!pending) return;
+
+    const userMessage = [...messages]
+      .reverse()
+      .find((message) => message.role === 'user' && message.content.trim() === pending.messageText);
+    if (!userMessage || handledExplicitSaveMessageIdsRef.current.has(userMessage.id)) return;
+
+    handledExplicitSaveMessageIdsRef.current.add(userMessage.id);
+    pendingExplicitSaveRef.current = null;
+    void handleSaveMessage(userMessage, pending.context);
+  }, [handleSaveMessage, isStreaming, messages]);
 
   const selectorOptions = useMemo(
     () => members.filter((member) => member.userId !== selfUserId),

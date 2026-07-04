@@ -50,6 +50,8 @@ const GROWTH_CATEGORIES = new Set<GrowthGuardCategory>([
   'OTHER',
 ]);
 
+const EXPLICIT_SAVE_COMMAND_PATTERN = /^(?:请|麻烦)?(?:你)?(?:帮我|替我|给我)?(?:把)?(?:刚才|上面|上文|前面|这段|这条|这个|这些|那段|那条|那件事)?(?:的)?(?:内容|对话|记录|记忆|经历|事情|话)?(?:保存|保存成记忆|存起来|记一下|记下来|记录下来|留个记录|留作记录|沉淀下来|加入记忆库|放到记忆库|收进记忆库)(?:一下|起来|吧|为记忆|到记忆库)?[。.!！?？]*$/;
+
 export type SavedRecordType = 'DIARY_ENTRY' | 'FAMILY_MEMORY' | 'GROWTH_GUARD' | 'NONE';
 
 export type SavePlanPersistenceDecision = {
@@ -67,6 +69,12 @@ function boundedInt(value: unknown, fallback: number) {
   const number = Number(value);
   if (!Number.isFinite(number)) return fallback;
   return Math.max(1, Math.min(5, Math.round(number)));
+}
+
+export function isExplicitSaveMemoryCommand(value: string) {
+  const normalized = value.trim().replace(/\s+/g, '');
+  if (!normalized || normalized.length > 40) return false;
+  return EXPLICIT_SAVE_COMMAND_PATTERN.test(normalized);
 }
 
 export function normalizeSaveToolPlan(plan: AgentSaveToolPlan): AgentSaveToolPlan {

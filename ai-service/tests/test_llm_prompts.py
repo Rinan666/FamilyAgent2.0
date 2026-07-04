@@ -129,6 +129,8 @@ def test_persona_and_mirror_rules_avoid_third_person_motive_analysis():
 def test_memory_prompts_keep_human_quality_rules():
     assert "以后再看是否还能理解当时发生了什么、为什么重要" in SAVE_TOOL_PLAN_SYSTEM_PROMPT
     assert "保留原意和情绪质感" in SAVE_TOOL_PLAN_SYSTEM_PROMPT
+    assert "不得新增用户没有说过的人物关系、动机、情绪强度" in SAVE_TOOL_PLAN_SYSTEM_PROMPT
+    assert "如果只能依靠猜测才能写出来，返回 NONE" in SAVE_TOOL_PLAN_SYSTEM_PROMPT
     assert "像当事人愿意保存下来的记录" in ORGANIZE_DRAFT_SYSTEM_PROMPT
     assert "不要替换成泛泛的正确话" in ORGANIZE_DRAFT_SYSTEM_PROMPT
     assert "精神成员可以是虚构角色、家族象征、理想化人格" in PERSONA_MATERIAL_DRAFT_SYSTEM_PROMPT
