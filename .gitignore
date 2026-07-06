@@ -58,6 +58,7 @@ Desktop.ini
 .service-pids.txt
 .codex-runtime-pids.txt
 desktop/
+/scripts/local_tools/
 
 # --- Docker ---
 docker-compose.override.yml
