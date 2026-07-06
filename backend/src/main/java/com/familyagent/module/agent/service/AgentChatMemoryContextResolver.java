@@ -24,30 +24,33 @@ public class AgentChatMemoryContextResolver {
     private final AgentMirrorContextFacade mirrorContextFacade;
     private final AgentPersonaContextFacade personaContextFacade;
 
-    public String resolve(AgentChatStreamRequest request, Long viewerUserId, String requestId) {
+    public AgentChatMemoryResolution resolve(AgentChatStreamRequest request, Long viewerUserId, String requestId) {
         if (request.shouldUseServerMirrorContext()) {
-            return mirrorContextFacade.buildMirrorAgentContext(
+            return AgentChatMemoryResolution.contextOnly(mirrorContextFacade.buildMirrorAgentContext(
                     request.getFamilyId(),
                     request.getTargetUserId(),
-                    request.getMemberMessage());
+                    request.getMemberMessage()));
         }
         if (request.shouldUseServerPersonaContext()) {
             String personaContext = personaContextFacade.buildPersonaAgentContext(
                     request.getFamilyId(),
                     request.getTargetPersonaId());
             if (!request.isThinkMode()) {
-                return personaContext;
+                return AgentChatMemoryResolution.contextOnly(personaContext);
             }
-            String familyContext = buildFamilyMemoryContext(request, viewerUserId, requestId);
-            return familyContext.isBlank() ? personaContext : personaContext + "\n\nfamily_visible_reference:\n" + familyContext;
+            AgentChatMemoryResolution familyContext = buildFamilyMemoryContext(request, viewerUserId, requestId);
+            String context = familyContext.context().isBlank()
+                    ? personaContext
+                    : personaContext + "\n\nfamily_visible_reference:\n" + familyContext.context();
+            return new AgentChatMemoryResolution(context, familyContext.metadata());
         }
         if (!request.shouldUseServerFamilyMemoryContext()) {
-            return request.getMemoryContext();
+            return AgentChatMemoryResolution.contextOnly(request.getMemoryContext());
         }
         return buildFamilyMemoryContext(request, viewerUserId, requestId);
     }
 
-    private String buildFamilyMemoryContext(AgentChatStreamRequest request, Long viewerUserId, String requestId) {
+    private AgentChatMemoryResolution buildFamilyMemoryContext(AgentChatStreamRequest request, Long viewerUserId, String requestId) {
         AgentRunContext context = new AgentRunContext(
                 requestId,
                 request.getFamilyId(),
@@ -63,6 +66,9 @@ public class AgentChatMemoryContextResolver {
                 AgentToolName.RECALL_FAMILY_MEMORY.value(),
                 context,
                 input));
-        return result.success() && result.data() != null ? result.data().context() : "";
+        if (!result.success() || result.data() == null) {
+            return AgentChatMemoryResolution.empty();
+        }
+        return new AgentChatMemoryResolution(result.data().context(), result.data().metadata());
     }
 }

@@ -10,6 +10,7 @@ import com.familyagent.module.agent.harness.constant.AgentToolSideEffect;
 import com.familyagent.module.agent.harness.dto.RecallFamilyMemoryInput;
 import com.familyagent.module.agent.harness.dto.RecallFamilyMemoryOutput;
 import com.familyagent.module.memory.facade.AgentMemoryContextFacade;
+import com.familyagent.module.memory.facade.AgentMemoryContextResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -40,11 +41,11 @@ class RecallFamilyMemoryTool implements AgentTool<RecallFamilyMemoryInput, Recal
 
     @Override
     public RecallFamilyMemoryOutput execute(AgentRunContext context, RecallFamilyMemoryInput input) {
-        String memoryContext = memoryContextFacade.buildFamilyAgentContext(
+        AgentMemoryContextResult result = memoryContextFacade.buildFamilyAgentContextResult(
                 context.familyId(),
                 context.viewerUserId(),
                 input.memberMessage(),
                 input.recentUserMessages());
-        return new RecallFamilyMemoryOutput(memoryContext);
+        return new RecallFamilyMemoryOutput(result.context(), result.metadata());
     }
 }
