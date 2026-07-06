@@ -164,6 +164,9 @@ export function useChat(options: UseChatOptions = {}) {
       if (responseMode === 'quick') {
         return { context: '' } satisfies MemoryContextResult;
       }
+      if (activeFamilyId && contextLabel === 'family_memory') {
+        return { context: '' } satisfies MemoryContextResult;
+      }
 
       const recallQuery = buildFamilyRecallQuery(query, history);
       const activationScene = detectFamilyActivationScene(recallQuery);
@@ -219,7 +222,7 @@ export function useChat(options: UseChatOptions = {}) {
       console.log('Family context memories not loaded:', error);
       return { context: '' } satisfies MemoryContextResult;
     }
-  }, [activeFamilyId, getSessionSavedMemories, responseMode, viewerIdentityContext]);
+  }, [activeFamilyId, contextLabel, getSessionSavedMemories, responseMode, viewerIdentityContext]);
 
   const sendMessage = useCallback(async (message: string) => {
     if (isStreaming) return;
