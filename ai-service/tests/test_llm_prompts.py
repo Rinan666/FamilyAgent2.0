@@ -77,6 +77,29 @@ def test_build_family_agent_system_prompt_adds_self_intro_style_hint():
     assert "按用户当前问题自然回应" not in prompt
 
 
+def test_build_family_agent_system_prompt_guides_close_reading():
+    prompt = build_family_agent_system_prompt(
+        subject="FamilyAgent",
+        context_label="family_memory",
+        memory_context="",
+        viewer_role="MEMBER",
+        target_role="MEMBER",
+        response_mode="think",
+        client_timestamp="",
+        client_timezone="",
+        public_web_context="",
+        member_message="解释：外昭鸿志，内蕴谦光；恩厚犹轻，惠微怀盈。",
+    )
+
+    assert "先判断整段结构，再解释局部词句" in prompt
+    assert "因果、承接、转折、递进、对照关系" in prompt
+    assert "至少检查“说话者自己”“他人”“被赞颂对象”三类可能主语" in prompt
+    assert "用上下句互证来校正解释" in prompt
+    assert "厚恩可能是他人对我的扶持" in prompt
+    assert "而不是我轻看他人的恩情" in prompt
+    assert "用户提出自己的本意或纠错线索" in prompt
+
+
 def test_build_family_agent_system_prompt_adds_mirror_rules_for_mirror_context():
     prompt = build_family_agent_system_prompt(
         subject="MirrorAgent",
