@@ -222,18 +222,8 @@ function titleFromFirstLine(value: string) {
     ?.slice(0, 120) || '';
 }
 
-function contentWithTitleFirstLine(content: string, title?: string) {
-  const normalizedTitle = title?.trim();
-  if (!normalizedTitle) return content;
-
-  const trimmedContent = content.trim();
-  if (!trimmedContent) return normalizedTitle;
-  if (titleFromFirstLine(trimmedContent) === normalizedTitle) return trimmedContent;
-  return `${normalizedTitle}\n\n${trimmedContent}`;
-}
-
-function splitEditorContent(value: string) {
-  const lines = value.replace(/\r\n/g, '\n').split('\n');
+function splitFirstLineTitle(value: string) {
+  const lines = value.trim().replace(/\r\n/g, '\n').split('\n');
   const titleIndex = lines.findIndex((line) => line.trim());
   if (titleIndex < 0) return { title: '', body: '' };
 
@@ -243,6 +233,15 @@ function splitEditorContent(value: string) {
     title: firstLineTitle,
     body: body || value.trim(),
   };
+}
+
+function resolveEditorContent(content: string, title: string) {
+  const body = content.trim();
+  const explicitTitle = title.trim();
+  if (explicitTitle) {
+    return { title: explicitTitle.slice(0, 120), body };
+  }
+  return splitFirstLineTitle(body);
 }
 
 interface DiaryComposerProps {
@@ -606,8 +605,8 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
         target: relatedMemberLabel,
       });
       const draft = result.data;
-      const organizedContent = contentWithTitleFirstLine(draft.content || content, draft.title);
-      const organizedTitle = titleFromFirstLine(organizedContent) || draft.title?.trim() || title.trim();
+      const organizedContent = (draft.content || content).trim();
+      const organizedTitle = draft.title?.trim() || title.trim() || titleFromFirstLine(organizedContent);
       setTitle(organizedTitle);
       setContent(organizedContent);
       if (draft.tags?.length) setTagText(draft.tags.join(' '));
@@ -680,8 +679,8 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
     try {
       const tags = formatTags(tagText);
       const contentText = content.trim();
-      const editorContent = splitEditorContent(contentText);
-      const resolvedTitle = editorContent.title || title.trim() || titleFromFirstLine(contentText);
+      const editorContent = resolveEditorContent(contentText, title);
+      const resolvedTitle = editorContent.title || titleFromFirstLine(contentText);
       const bodyText = editorContent.body || contentText;
       if (editItem) {
         await memoryLibraryApi.updateItem({
@@ -808,6 +807,17 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
         className="space-y-3"
       >
         <div className="overflow-hidden rounded-[1.35rem] border border-emerald-400 bg-white shadow-sm transition focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100">
+          <label className="sr-only" htmlFor="memory-title-input">
+            记忆标题
+          </label>
+          <input
+            id="memory-title-input"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            maxLength={120}
+            placeholder="给这条记忆写一个标题"
+            className="h-14 w-full border-0 border-b border-stone-100 bg-white px-5 text-lg font-semibold text-stone-950 outline-none placeholder:text-stone-300 focus:border-emerald-200 sm:px-7"
+          />
           <textarea
             value={content}
             onChange={(event) => setContent(event.target.value)}

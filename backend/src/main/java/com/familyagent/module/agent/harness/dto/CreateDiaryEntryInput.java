@@ -8,6 +8,7 @@ public record CreateDiaryEntryInput(
         String title,
         String mood,
         List<String> tags,
-        String visibility
+        String visibility,
+        AgentSaveMemoryMetadata metadata
 ) {
 }

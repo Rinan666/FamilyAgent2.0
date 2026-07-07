@@ -171,12 +171,24 @@ export function detectFamilyActivationScene(query: string): FamilyActivationScen
 export function normalizeAssistantMetadata(metadata: Record<string, unknown>): NonNullable<ChatMessage['metadata']> {
   const webSearch = metadata.web_search;
   const responseMode = metadata.response_mode;
+  const rag = normalizeRagMetadata(metadata.rag);
+  const retrievalQuery = stringValue(metadata.retrievalQuery) || stringValue(metadata.retrieval_query);
+  const sourceSummary = stringValue(metadata.sourceSummary) || stringValue(metadata.source_summary);
   const baseMetadata: NonNullable<ChatMessage['metadata']> = {
     ...(responseMode === 'quick' || responseMode === 'think'
       ? { responseMode }
       : {}),
     ...(typeof metadata.thinking_summary === 'string' && metadata.thinking_summary.trim()
       ? { thinkingSummary: metadata.thinking_summary.trim() }
+      : {}),
+    ...(rag ? { rag } : {}),
+    ...(retrievalQuery ? { retrievalQuery } : {}),
+    ...(sourceSummary ? { sourceSummary } : {}),
+    ...(typeof metadata.insufficientSources === 'boolean'
+      ? { insufficientSources: metadata.insufficientSources }
+      : {}),
+    ...(typeof metadata.insufficient_sources === 'boolean'
+      ? { insufficientSources: metadata.insufficient_sources }
       : {}),
   };
   if (!webSearch || typeof webSearch !== 'object') return baseMetadata;
@@ -200,6 +212,51 @@ export function normalizeAssistantMetadata(metadata: Record<string, unknown>): N
         .slice(0, 4),
     },
   };
+}
+
+function normalizeRagMetadata(value: unknown): NonNullable<NonNullable<ChatMessage['metadata']>['rag']> | null {
+  if (!value || typeof value !== 'object') return null;
+  const data = value as Record<string, unknown>;
+  const rawSources = Array.isArray(data.sources) ? data.sources : [];
+  return {
+    retrievalMode: stringValue(data.retrievalMode) || stringValue(data.retrieval_mode) || undefined,
+    embeddingReadyCount: numberValue(data.embeddingReadyCount, data.embedding_ready_count),
+    diaryCount: numberValue(data.diaryCount, data.diary_count),
+    memoryCount: numberValue(data.memoryCount, data.memory_count),
+    growthRecordCount: numberValue(data.growthRecordCount, data.growth_record_count),
+    libraryCount: numberValue(data.libraryCount, data.library_count),
+    sessionSavedCount: numberValue(data.sessionSavedCount, data.session_saved_count),
+    totalReferenceCount: numberValue(data.totalReferenceCount, data.total_reference_count),
+    sources: rawSources
+      .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+      .map((item) => ({
+        id: stringValue(item.id) || `${stringValue(item.sourceType) || stringValue(item.source_type) || 'source'}-${stringValue(item.title)}`,
+        sourceType: stringValue(item.sourceType) || stringValue(item.source_type) || 'FAMILY_EXPERIENCE',
+        title: stringValue(item.title) || '未命名资料',
+        snippet: stringValue(item.snippet),
+        visibility: stringValue(item.visibility) || undefined,
+        temporalLayer: stringValue(item.temporalLayer) || stringValue(item.temporal_layer) || undefined,
+        topics: stringList(item.topics),
+        scenes: stringList(item.scenes),
+      }))
+      .slice(0, 8),
+  };
+}
+
+function numberValue(...values: unknown[]) {
+  const value = values.find((item) => item !== undefined && item !== null && item !== '');
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function stringValue(value: unknown) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function stringList(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : [];
 }
 
 export function currentTimeContext() {

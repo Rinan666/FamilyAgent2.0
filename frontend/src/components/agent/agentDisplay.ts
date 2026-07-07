@@ -9,9 +9,11 @@ import type {
 } from '@/types';
 
 export type SaveFeedback = {
-  status: 'saving' | 'saved' | 'skipped' | 'error';
+  status: 'saving' | 'confirmation' | 'confirming' | 'saved' | 'skipped' | 'error';
   detail: string;
   href?: string;
+  confirmationId?: number;
+  skillRunId?: number;
 };
 
 export type ModeReadinessTone = 'gray' | 'green' | 'blue' | 'yellow';

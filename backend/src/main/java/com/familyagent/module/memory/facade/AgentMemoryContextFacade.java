@@ -28,6 +28,18 @@ public class AgentMemoryContextFacade {
             Long viewerUserId,
             String memberMessage,
             List<String> recentUserMessages) {
+        return buildFamilyAgentContextResult(
+                familyId,
+                viewerUserId,
+                memberMessage,
+                recentUserMessages).context();
+    }
+
+    public AgentMemoryContextResult buildFamilyAgentContextResult(
+            Long familyId,
+            Long viewerUserId,
+            String memberMessage,
+            List<String> recentUserMessages) {
         try {
             AuthorizedMemoryRecallResult recall = recallService.recallForFamily(
                     familyId,
@@ -36,13 +48,13 @@ public class AgentMemoryContextFacade {
                     FAMILY_AGENT_SCENE,
                     DIARY_LIMIT,
                     MEMORY_LIMIT);
-            return formatter.format(recall);
+            return AgentMemoryContextResult.fromRecall(formatter.format(recall), recall);
         } catch (BusinessException e) {
             throw e;
         } catch (RuntimeException e) {
             log.warn("Failed to build FamilyAgent memory context: familyId={}, viewerUserId={}",
                     familyId, viewerUserId, e);
-            return "";
+            return AgentMemoryContextResult.empty();
         }
     }
 

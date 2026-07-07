@@ -5,6 +5,7 @@ import com.familyagent.module.agent.harness.AgentRunContext;
 import com.familyagent.module.agent.harness.constant.AgentToolConfirmationRequirement;
 import com.familyagent.module.agent.harness.constant.AgentToolName;
 import com.familyagent.module.agent.harness.constant.AgentToolSideEffect;
+import com.familyagent.module.agent.harness.dto.AgentSaveMemoryMetadata;
 import com.familyagent.module.agent.harness.dto.CreateGrowthGuardRecordInput;
 import com.familyagent.module.agent.harness.dto.CreateGrowthGuardRecordOutput;
 import com.familyagent.module.growth.dto.CreateGrowthGuardRecordRequest;
@@ -53,7 +54,8 @@ class CreateGrowthGuardRecordToolTest {
                 4,
                 observedAt,
                 followUpAt,
-                "CARE_VISIBLE");
+                "CARE_VISIBLE",
+                metadata());
         GrowthGuardRecord record = new GrowthGuardRecord();
         record.setId(77L);
         when(growthGuardRecordFacade.create(org.mockito.ArgumentMatchers.any(CreateGrowthGuardRecordRequest.class)))
@@ -73,6 +75,9 @@ class CreateGrowthGuardRecordToolTest {
         assertEquals(observedAt, request.getObservedAt());
         assertEquals(followUpAt, request.getFollowUpAt());
         assertEquals("CARE_VISIBLE", request.getVisibility());
+        assertEquals("MIRROR_AGENT_TOOL", request.getMetadata().get("source"));
+        assertEquals("PENDING", request.getMetadata().get("followUpStatus"));
+        assertEquals(202L, request.getMetadata().get("relatedUserId"));
         assertEquals(77L, output.growthGuardRecordId());
     }
 
@@ -85,7 +90,8 @@ class CreateGrowthGuardRecordToolTest {
                 3,
                 null,
                 null,
-                "CARE_VISIBLE");
+                "CARE_VISIBLE",
+                metadata());
 
         assertThrows(BusinessException.class, () -> tool.execute(context, input));
     }
@@ -99,8 +105,19 @@ class CreateGrowthGuardRecordToolTest {
                 3,
                 null,
                 null,
-                "CARE_VISIBLE");
+                "CARE_VISIBLE",
+                metadata());
 
         assertThrows(BusinessException.class, () -> tool.execute(context, input));
+    }
+
+    private static AgentSaveMemoryMetadata metadata() {
+        AgentSaveMemoryMetadata metadata = new AgentSaveMemoryMetadata();
+        metadata.setSource("MIRROR_AGENT_TOOL");
+        metadata.setPlannedTool("GROWTH_GUARD");
+        metadata.setRelatedUserId(202L);
+        metadata.setSourceType("GROWTH_OBSERVATION");
+        metadata.setFollowUpStatus("PENDING");
+        return metadata;
     }
 }

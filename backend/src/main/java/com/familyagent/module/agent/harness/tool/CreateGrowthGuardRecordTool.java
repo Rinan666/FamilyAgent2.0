@@ -59,6 +59,9 @@ class CreateGrowthGuardRecordTool implements AgentTool<CreateGrowthGuardRecordIn
         request.setObservedAt(input.observedAt());
         request.setFollowUpAt(input.followUpAt());
         request.setVisibility(input.visibility());
+        if (input.metadata() != null) {
+            request.setMetadata(input.metadata().toMap());
+        }
         GrowthGuardRecord record = growthGuardRecordFacade.create(request);
         return new CreateGrowthGuardRecordOutput(record.getId());
     }

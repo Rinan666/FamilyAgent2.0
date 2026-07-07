@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentSaveToolPlan } from '../types';
 import {
+  buildAgentSaveMemoryMetadata,
+  buildAgentSaveMemoryToolRequest,
   buildWriteMemorySaveRequest,
+  isExplicitSaveMemoryCommand,
   normalizeSaveToolPlan,
   savePlanPersistenceDecision,
   savePlanDetail,
@@ -142,9 +145,123 @@ describe('savePlan helpers', () => {
     });
   });
 
+  it('builds family save-memory tool request with source metadata', () => {
+    const normalized = normalizeSaveToolPlan(plan());
+    const request = buildAgentSaveMemoryToolRequest(10, normalized, {
+      requestId: 'save-memory-message-1',
+      sessionId: 88,
+      agentMode: 'family',
+      familyName: 'Chen Family',
+      viewerRole: 'GUARDIAN',
+      savedFromMessageRole: 'user',
+      savedAt: '2026-07-04T10:00:00.000Z',
+    });
+
+    expect(request).toMatchObject({
+      familyId: 10,
+      writeCategory: 'RECORD',
+      requestId: 'save-memory-message-1',
+      sessionId: 88,
+      agentMode: 'family',
+      subject: 'FamilyAgent',
+      metadata: {
+        source: 'FAMILY_COMPANION_TOOL',
+        relationSource: 'FAMILY_AGENT_TOOL',
+        familyName: 'Chen Family',
+        viewerRole: 'GUARDIAN',
+        savedFromMessageRole: 'user',
+        plannedTool: 'DIARY',
+        plannedTitle: normalized.title,
+        plannedReason: normalized.reason,
+        confirmationPolicy: 'USER_CONFIRMATION_OR_EXPLICIT_SAVE_COMMAND',
+        savedAt: '2026-07-04T10:00:00.000Z',
+      },
+    });
+  });
+
+  it('builds mirror family-memory metadata with target scenario', () => {
+    const normalized = normalizeSaveToolPlan(plan({ tool: 'FAMILY_MEMORY' }));
+    const metadata = buildAgentSaveMemoryMetadata(normalized, {
+      agentMode: 'mirror',
+      targetUserId: 202,
+      targetMemberName: 'Ming',
+      savedFromMessageRole: 'assistant',
+      savedAt: '2026-07-04T10:00:00.000Z',
+    });
+
+    expect(metadata).toMatchObject({
+      source: 'MIRROR_AGENT_TOOL',
+      relationSource: 'MIRROR_AGENT_TOOL',
+      relatedUserId: 202,
+      relatedMemberName: 'Ming',
+      savedFromMessageRole: 'assistant',
+      sourceType: 'FAMILY_EXPERIENCE',
+      scenario: '镜像对话保存',
+      target: 'Ming',
+    });
+  });
+
+  it('builds mirror growth metadata with follow-up status', () => {
+    const normalized = normalizeSaveToolPlan(plan({ tool: 'GROWTH_GUARD', category: 'VISION' }));
+    const request = buildAgentSaveMemoryToolRequest(10, normalized, {
+      agentMode: 'mirror',
+      targetUserId: 202,
+      targetMemberName: 'Ming',
+      savedAt: '2026-07-04T10:00:00.000Z',
+    });
+
+    expect(request).toMatchObject({
+      writeCategory: 'OBSERVATION',
+      relatedUserId: 202,
+      growthCategory: 'VISION',
+      subject: 'MirrorAgent',
+      metadata: {
+        sourceType: 'GROWTH_OBSERVATION',
+        followUpStatus: 'PENDING',
+        relatedUserId: 202,
+      },
+    });
+  });
+
+  it('builds persona family-memory metadata with persona target', () => {
+    const normalized = normalizeSaveToolPlan(plan({ tool: 'FAMILY_MEMORY' }));
+    const request = buildAgentSaveMemoryToolRequest(10, normalized, {
+      agentMode: 'persona',
+      targetPersonaId: 303,
+      targetPersonaName: 'Grandpa Chen',
+      savedAt: '2026-07-04T10:00:00.000Z',
+    });
+
+    expect(request).toMatchObject({
+      writeCategory: 'EXPERIENCE',
+      subject: 'PersonaMemberAgent',
+      metadata: {
+        source: 'PERSONA_MEMBER_TOOL',
+        relationSource: 'PERSONA_MEMBER_TOOL',
+        relatedPersonaId: 303,
+        relatedPersonaName: 'Grandpa Chen',
+        sourceType: 'FAMILY_EXPERIENCE',
+        scenario: '精神成员对话保存',
+        target: 'Grandpa Chen',
+      },
+    });
+  });
+
   it('maps save tool to write category', () => {
     expect(writeCategoryFromTool('DIARY')).toBe('RECORD');
     expect(writeCategoryFromTool('FAMILY_MEMORY')).toBe('EXPERIENCE');
     expect(writeCategoryFromTool('GROWTH_GUARD')).toBe('OBSERVATION');
+  });
+
+  it('detects explicit memory save commands without matching general save questions', () => {
+    expect(isExplicitSaveMemoryCommand('帮我保存')).toBe(true);
+    expect(isExplicitSaveMemoryCommand('把刚才的内容记下来')).toBe(true);
+    expect(isExplicitSaveMemoryCommand('请保存到记忆库')).toBe(true);
+    expect(isExplicitSaveMemoryCommand('给我记一下')).toBe(true);
+    expect(isExplicitSaveMemoryCommand('把这段留作记录')).toBe(true);
+    expect(isExplicitSaveMemoryCommand('麻烦把这个收进记忆库吧')).toBe(true);
+    expect(isExplicitSaveMemoryCommand('怎么保存到本地？')).toBe(false);
+    expect(isExplicitSaveMemoryCommand('我今天学会了保存文件的快捷键')).toBe(false);
+    expect(isExplicitSaveMemoryCommand('请把今天的作业保存到电脑桌面')).toBe(false);
   });
 });

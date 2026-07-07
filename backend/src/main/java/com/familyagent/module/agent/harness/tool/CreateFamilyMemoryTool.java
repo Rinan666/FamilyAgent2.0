@@ -54,6 +54,9 @@ class CreateFamilyMemoryTool implements AgentTool<CreateFamilyMemoryInput, Creat
         request.setScope(input.scope());
         request.setSummary(input.summary());
         request.setImportance(input.importance());
+        if (input.metadata() != null) {
+            request.setMetadata(input.metadata().toMap());
+        }
         MemoryEntry entry = familyMemoryFacade.create(request);
         return new CreateFamilyMemoryOutput(entry.getId());
     }

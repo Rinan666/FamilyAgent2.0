@@ -6,6 +6,7 @@ import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.infra.ai.AIServiceClient;
 import com.familyagent.infra.ai.dto.AgentChatStreamPayload;
 import com.familyagent.module.agent.dto.AgentChatStreamRequest;
+import com.familyagent.module.agent.service.AgentChatMemoryResolution;
 import com.familyagent.module.agent.service.AgentChatMemoryContextResolver;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -28,6 +29,8 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -57,8 +60,8 @@ public class AgentChatController {
                        HttpServletResponse response) throws IOException {
         Long userId = CurrentUserGuard.currentUserId();
         String effectiveRequestId = normalizeRequestId(requestId);
-        AgentChatStreamPayload aiPayload = request.toAiPayload(
-                memoryContextResolver.resolve(request, userId, effectiveRequestId));
+        AgentChatMemoryResolution memoryResolution = memoryContextResolver.resolve(request, userId, effectiveRequestId);
+        AgentChatStreamPayload aiPayload = request.toAiPayload(memoryResolution.context());
         enforceRequestSize(aiPayload);
         String hourKey = "quota:chat:user:" + userId + ":" + LocalDateTime.now().format(HOUR_KEY_FMT);
         RAtomicLong counter = redissonClient.getAtomicLong(hourKey);
@@ -79,6 +82,7 @@ public class AgentChatController {
         response.setHeader(REQUEST_ID_HEADER, effectiveRequestId);
 
         try (OutputStream outputStream = response.getOutputStream()) {
+            writeMetadataEvent(outputStream, memoryResolution.metadata(), effectiveRequestId);
             aiServiceClient.proxyChatStream(aiPayload, outputStream, authorization, effectiveRequestId);
         } catch (BusinessException e) {
             if (!response.isCommitted()) {
@@ -126,6 +130,18 @@ public class AgentChatController {
         } catch (IOException ioException) {
             log.warn("Failed to send downstream SSE error event", ioException);
         }
+    }
+
+    private void writeMetadataEvent(OutputStream outputStream, Map<String, Object> metadata, String requestId) throws IOException {
+        if (metadata == null || metadata.isEmpty()) {
+            return;
+        }
+        Map<String, Object> payload = new LinkedHashMap<>(metadata);
+        payload.put("type", "metadata");
+        payload.put("requestId", normalizeRequestId(requestId));
+        outputStream.write(("data: " + objectMapper.writeValueAsString(payload) + "\n\n")
+                .getBytes(StandardCharsets.UTF_8));
+        outputStream.flush();
     }
 
     private String streamErrorEvent(String requestId) {

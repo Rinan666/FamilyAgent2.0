@@ -5,6 +5,7 @@ import com.familyagent.module.agent.harness.AgentRunContext;
 import com.familyagent.module.agent.harness.constant.AgentToolConfirmationRequirement;
 import com.familyagent.module.agent.harness.constant.AgentToolName;
 import com.familyagent.module.agent.harness.constant.AgentToolSideEffect;
+import com.familyagent.module.agent.harness.dto.AgentSaveMemoryMetadata;
 import com.familyagent.module.agent.harness.dto.CreateDiaryEntryInput;
 import com.familyagent.module.agent.harness.dto.CreateDiaryEntryOutput;
 import com.familyagent.module.diary.dto.CreateDiaryEntryRequest;
@@ -50,7 +51,8 @@ class CreateDiaryEntryToolTest {
                 "Bedtime",
                 "calm",
                 List.of("bedtime"),
-                "FAMILY_SHARED");
+                "FAMILY_SHARED",
+                metadata());
         DiaryEntry entry = new DiaryEntry();
         entry.setId(88L);
         when(diaryEntryFacade.create(org.mockito.ArgumentMatchers.any(CreateDiaryEntryRequest.class)))
@@ -68,6 +70,8 @@ class CreateDiaryEntryToolTest {
         assertEquals("calm", request.getMood());
         assertEquals(List.of("bedtime"), request.getTags());
         assertEquals("FAMILY_SHARED", request.getVisibility());
+        assertEquals("FAMILY_COMPANION_TOOL", request.getMetadata().get("source"));
+        assertEquals("DIARY", request.getMetadata().get("plannedTool"));
         assertEquals(88L, output.diaryEntryId());
     }
 
@@ -79,8 +83,17 @@ class CreateDiaryEntryToolTest {
                 null,
                 null,
                 List.of(),
-                null);
+                null,
+                metadata());
 
         assertThrows(BusinessException.class, () -> tool.execute(context, input));
+    }
+
+    private static AgentSaveMemoryMetadata metadata() {
+        AgentSaveMemoryMetadata metadata = new AgentSaveMemoryMetadata();
+        metadata.setSource("FAMILY_COMPANION_TOOL");
+        metadata.setPlannedTool("DIARY");
+        metadata.setSavedFromMessageRole("user");
+        return metadata;
     }
 }
