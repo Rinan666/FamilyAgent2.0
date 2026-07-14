@@ -23,6 +23,7 @@ class AgentMemoryContextFacadeTest {
     @Test
     void buildFamilyAgentContext_usesAuthorizedRecallAndFormatsPreview() {
         MemoryEntry memory = new MemoryEntry();
+        memory.setUserId(202L);
         memory.setStatus(EntityStatus.ACTIVE.name());
         memory.setType("ELDER_ADVICE");
         memory.setContent("Brush teeth before sleep and keep the reminder gentle.");
@@ -55,6 +56,6 @@ class AgentMemoryContextFacadeTest {
                 8,
                 8);
         assertTrue(context.contains("retrieval_summary: mode=TEXT_FALLBACK embedding_ready=3"));
-        assertTrue(context.contains("[ELDER_ADVICE] Brush teeth before sleep"));
+        assertTrue(context.contains("[ELDER_ADVICE] author=family_user_202 Brush teeth before sleep"));
     }
 }

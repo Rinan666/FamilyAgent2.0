@@ -79,23 +79,24 @@ export function formatMemoryContext({
     .slice(0, 8)
     .map((item, index) => {
       const preview = (item.body || '').trim().slice(0, 220);
-      return `${index + 1}. [${item.sourceType}] ${item.title || 'Untitled'} ${preview}`;
+      const author = item.memberName?.trim() || authorLabel(item.authorUserId);
+      return `${index + 1}. [${item.sourceType}] author=${author} ${item.title || 'Untitled'} ${preview}`;
     });
 
   const memoryHits = familyMemories
     .filter((item) => item.status === 'ACTIVE' && item.content?.trim())
     .slice(0, 6)
-    .map((item, index) => `${index + 1}. [${item.type}] ${(item.summary || item.content).trim().slice(0, 220)}`);
+    .map((item, index) => `${index + 1}. [${item.type}] author=${authorLabel(item.userId)} ${(item.summary || item.content).trim().slice(0, 220)}`);
 
   const diaryHits = diaryEntries
     .filter((item) => item.rawText?.trim())
     .slice(0, 6)
-    .map((item, index) => `${index + 1}. [${item.structured?.entryType || 'DAILY'}] ${item.rawText.trim().slice(0, 220)}`);
+    .map((item, index) => `${index + 1}. [${item.structured?.entryType || 'DAILY'}] author=${authorLabel(item.userId)} ${item.rawText.trim().slice(0, 220)}`);
 
   const growthHits = growthRecords
     .filter((item) => item.status === 'ACTIVE')
     .slice(0, 6)
-    .map((item, index) => `${index + 1}. [${item.category || 'OTHER'} severity=${item.severity}] ${item.content.trim().slice(0, 220)}`);
+    .map((item, index) => `${index + 1}. [${item.category || 'OTHER'} severity=${item.severity}] observer=${authorLabel(item.createdBy)} subject=${authorLabel(item.targetUserId)} ${item.content.trim().slice(0, 220)}`);
 
   if (viewerIdentityContext?.trim()) {
     sections.push(`viewer_context:\n${viewerIdentityContext.trim()}`);
@@ -124,12 +125,16 @@ export function formatMemoryContext({
   const recentSavedMemories = sessionSavedMemories
     .filter((item) => item.content.trim())
     .slice(-5)
-    .map((item, index) => `${index + 1}. [${item.tool}] ${item.title}: ${item.content.slice(0, 220)}`);
+    .map((item, index) => `${index + 1}. [${item.tool}] author=current_conversation_user ${item.title}: ${item.content.slice(0, 220)}`);
   if (recentSavedMemories.length > 0) {
     sections.push(`recent_saved_memories:\n${recentSavedMemories.join('\n')}`);
   }
 
   return sections.join('\n\n');
+}
+
+function authorLabel(userId?: number) {
+  return userId == null ? 'unknown_family_member' : `family_user_${userId}`;
 }
 
 export function buildFamilyRecallQuery(

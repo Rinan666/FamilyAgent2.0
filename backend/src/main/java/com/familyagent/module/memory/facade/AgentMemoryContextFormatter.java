@@ -55,7 +55,8 @@ public class AgentMemoryContextFormatter {
             if (content.isBlank()) {
                 continue;
             }
-            hits.add(numbered(hits.size(), "[" + textOrDefault(memory.getType(), "MEMORY") + "] " + preview(content)));
+            hits.add(numbered(hits.size(), "[" + textOrDefault(memory.getType(), "MEMORY") + "] author="
+                    + authorLabel(memory.getUserId()) + " " + preview(content)));
         }
         return hits;
     }
@@ -70,7 +71,8 @@ public class AgentMemoryContextFormatter {
                 continue;
             }
             String entryType = entryType(diary.getStructured());
-            hits.add(numbered(hits.size(), "[" + entryType + "] " + preview(diary.getRawText())));
+            hits.add(numbered(hits.size(), "[" + entryType + "] author="
+                    + authorLabel(diary.getUserId()) + " " + preview(diary.getRawText())));
         }
         return hits;
     }
@@ -88,9 +90,11 @@ public class AgentMemoryContextFormatter {
             if (content.isBlank()) {
                 continue;
             }
-            hits.add(numbered(hits.size(), String.format("[%s] severity=%d %s",
+            hits.add(numbered(hits.size(), String.format("[%s] severity=%d observer=%s subject=%s %s",
                     textOrDefault(record.getCategory(), "OTHER"),
                     record.getSeverity() == null ? 0 : record.getSeverity(),
+                    authorLabel(record.getCreatedBy()),
+                    authorLabel(record.getTargetUserId()),
                     preview(content))));
         }
         return hits;
@@ -123,6 +127,10 @@ public class AgentMemoryContextFormatter {
 
     private String textOrDefault(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value.trim();
+    }
+
+    private String authorLabel(Long userId) {
+        return userId == null ? "unknown_family_member" : "family_user_" + userId;
     }
 
     private <T> List<T> safeList(List<T> items) {

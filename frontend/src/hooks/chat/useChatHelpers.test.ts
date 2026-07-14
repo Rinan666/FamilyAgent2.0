@@ -1,5 +1,39 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeAssistantMetadata } from './useChatHelpers';
+import { formatMemoryContext, normalizeAssistantMetadata } from './useChatHelpers';
+import type { DiaryEntry, GrowthGuardRecord, MemoryEntry } from '@/types';
+
+describe('formatMemoryContext', () => {
+  it('preserves recalled author and subject attribution', () => {
+    const context = formatMemoryContext({
+      libraryItems: [],
+      familyMemories: [{
+        userId: 202,
+        type: 'ELDER_ADVICE',
+        content: 'Keep promises made to children.',
+        status: 'ACTIVE',
+      } as MemoryEntry],
+      diaryEntries: [{
+        userId: 303,
+        rawText: 'I learned to pause before responding.',
+        visibility: 'FAMILY_VISIBLE',
+      } as DiaryEntry],
+      growthRecords: [{
+        createdBy: 404,
+        targetUserId: 505,
+        category: 'EMOTION',
+        severity: 2,
+        content: 'Became calmer after the routine changed.',
+        status: 'ACTIVE',
+      } as GrowthGuardRecord],
+      sessionSavedMemories: [],
+      activationScene: null,
+    });
+
+    expect(context).toContain('author=family_user_202');
+    expect(context).toContain('author=family_user_303');
+    expect(context).toContain('observer=family_user_404 subject=family_user_505');
+  });
+});
 
 describe('normalizeAssistantMetadata', () => {
   it('keeps server-sent RAG evidence metadata for the answer drawer', () => {
