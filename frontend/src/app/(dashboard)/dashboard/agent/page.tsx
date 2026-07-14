@@ -45,6 +45,7 @@ import { isPlainEnter } from '@/lib/formKeyboard';
 import { loadSessionMessagesChronologically } from '@/lib/sessionHistory';
 import {
   buildAgentSaveMemoryToolRequest,
+  buildRelevantSaveContext,
   isExplicitSaveMemoryCommand,
   savePlanDetail,
   savePlanPersistenceDecision,
@@ -270,6 +271,8 @@ export default function AgentPage() {
     isLoading,
   } = useViewerRole();
   const sessionId = useChatStore((state) => state.sessionId);
+  const chatFamilyId = useChatStore((state) => state.familyId);
+  const setChatFamilyId = useChatStore((state) => state.setFamilyId);
   const setSessionId = useChatStore((state) => state.setSessionId);
   const setMessages = useChatStore((state) => state.setMessages);
   const selfUserId = activeMembership?.userId ?? user?.id ?? null;
@@ -645,11 +648,6 @@ export default function AgentPage() {
     getInitialAssistantMetadata,
   });
 
-  const recentMessages = useMemo(
-    () => messages.filter((message) => message.role !== 'system').slice(-10),
-    [messages],
-  );
-
   const loadSessions = useCallback(async () => {
     if (!activeFamilyId) {
       setSessions([]);
@@ -685,6 +683,11 @@ export default function AgentPage() {
   }, [activeFamilyId]);
 
   useEffect(() => {
+    const nextFamilyId = activeFamilyId ?? null;
+    if (chatFamilyId === nextFamilyId) {
+      return;
+    }
+
     sessionGenerationRef.current += 1;
     createSessionPromiseRef.current = null;
     sessionIdRef.current = null;
@@ -701,6 +704,7 @@ export default function AgentPage() {
     setIsSessionsOpen(false);
     setIsContextOpen(false);
     autoRestoreFamilyIdRef.current = null;
+    setChatFamilyId(nextFamilyId);
 
     if (!activeFamilyId) {
       setSessions([]);
@@ -714,7 +718,14 @@ export default function AgentPage() {
       setSessions([]);
       setSessionsLoaded(false);
     }
-  }, [activeFamilyId, discardStreaming, setMessages, setSessionId]);
+  }, [
+    activeFamilyId,
+    chatFamilyId,
+    discardStreaming,
+    setChatFamilyId,
+    setMessages,
+    setSessionId,
+  ]);
 
   useEffect(() => {
     if (!isSessionsOpen || sessionsLoaded || !activeFamilyId) return;
@@ -834,6 +845,8 @@ export default function AgentPage() {
         || sessionGenerationRef.current !== generation
         || sessionIdRef.current
         || activeSessionDetailRef.current
+        || messages.length > 0
+        || isStreaming
       ) {
         return;
       }
@@ -855,7 +868,7 @@ export default function AgentPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeFamilyId, handleLoadSession, loadSessions]);
+  }, [activeFamilyId, handleLoadSession, isStreaming, loadSessions, messages.length]);
 
   const handleDeleteSession = useCallback(async (targetSessionId: number) => {
     try {
@@ -983,7 +996,7 @@ export default function AgentPage() {
       const planResult = await memoryApi.planSaveTool({
         message: originalContent,
         familyContext: activeFamily?.name || '',
-        conversationContext: conversationContext ?? recentMessages,
+        conversationContext: conversationContext ?? buildRelevantSaveContext(message, messages),
         targetMemberName: currentTargetName,
         viewerRole,
       });
@@ -1009,6 +1022,31 @@ export default function AgentPage() {
           [message.id]: {
             status: 'skipped',
             detail: decision.skippedDetail,
+          },
+        }));
+        return;
+      }
+
+      const growthTargetUserId = currentMode === 'mirror' ? mirrorTargetUserId : null;
+      if (plan.tool === 'GROWTH_GUARD' && !growthTargetUserId) {
+        if (skillRunId) {
+          try {
+            await skillRunApi.update(skillRunId, {
+              status: 'PLANNED',
+              saved: false,
+              outputSummary: 'Growth observation requires a target family member',
+              metadata: { savedRecordType: 'GROWTH_GUARD', plannedTool: plan.tool },
+            });
+          } catch {
+            // The user-facing guidance remains useful if audit persistence fails.
+          }
+        }
+        setIsContextOpen(true);
+        setSaveFeedback((current) => ({
+          ...current,
+          [message.id]: {
+            status: 'error',
+            detail: 'Please select a family member as the growth observation target, then try saving again.',
           },
         }));
         return;
@@ -1117,7 +1155,7 @@ export default function AgentPage() {
     activeMembership?.relationshipLabel,
     mirrorTargetUserId,
     mode,
-    recentMessages,
+    messages,
     targetLabel,
     targetMember,
     targetPersona,

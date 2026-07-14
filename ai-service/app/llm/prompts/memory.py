@@ -101,6 +101,11 @@ PERSONA_MATERIAL_DRAFT_SYSTEM_PROMPT = """你是 FamilyAgent 的精神成员材�
 只输出 JSON。"""
 
 
+SAVE_TOOL_PLAN_SYSTEM_PROMPT += """
+
+Candidate-source rule: when the user clicks save on a concrete message, treat that message as the primary save candidate. Use nearby conversation context only to resolve missing references. Do not extract an unrelated event from older context, and return NONE when the selected message itself is generic, abstract, or unrelated. Only a message that is itself a save command may use the surrounding conversation to recover the content being requested."""
+
+
 def build_save_tool_plan_user_prompt(
     family_context: str,
     target_member_name: str,

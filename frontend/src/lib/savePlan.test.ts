@@ -3,6 +3,7 @@ import type { AgentSaveToolPlan } from '../types';
 import {
   buildAgentSaveMemoryMetadata,
   buildAgentSaveMemoryToolRequest,
+  buildRelevantSaveContext,
   buildWriteMemorySaveRequest,
   isExplicitSaveMemoryCommand,
   normalizeSaveToolPlan,
@@ -34,6 +35,18 @@ function plan(overrides: Partial<AgentSaveToolPlan> = {}): AgentSaveToolPlan {
 }
 
 describe('savePlan helpers', () => {
+  it('keeps save planning scoped to the selected message and nearby turn', () => {
+    const messages = [
+      { id: 'old-user', role: 'user', content: 'Old topic', timestamp: '2026-07-01' },
+      { id: 'old-assistant', role: 'assistant', content: 'Old answer', timestamp: '2026-07-01' },
+      { id: 'current-user', role: 'user', content: 'Current topic', timestamp: '2026-07-02' },
+      { id: 'current-assistant', role: 'assistant', content: 'Current answer', timestamp: '2026-07-02' },
+    ] as const;
+
+    expect(buildRelevantSaveContext(messages[3], [...messages]).map((item) => item.id))
+      .toEqual(['current-user', 'current-assistant']);
+  });
+
   it('normalizes unsupported enum values before persistence', () => {
     const normalized = normalizeSaveToolPlan(plan({
       tool: 'FAMILY_MEMORY',

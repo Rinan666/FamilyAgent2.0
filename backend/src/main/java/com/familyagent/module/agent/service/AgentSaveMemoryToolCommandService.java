@@ -27,6 +27,7 @@ public class AgentSaveMemoryToolCommandService {
 
     public AgentToolCallResult<?> requestSave(AgentSaveMemoryToolRequest request, Long viewerUserId) {
         SaveWriteCategory category = SaveWriteCategory.from(request.getWriteCategory());
+        requireGrowthTarget(category, request);
         AgentRunContext context = new AgentRunContext(
                 requestId(request.getRequestId()),
                 request.getFamilyId(),
@@ -71,6 +72,12 @@ public class AgentSaveMemoryToolCommandService {
                             request.getVisibility(),
                             request.getMetadata())));
         };
+    }
+
+    private static void requireGrowthTarget(SaveWriteCategory category, AgentSaveMemoryToolRequest request) {
+        if (category == SaveWriteCategory.OBSERVATION && request.getRelatedUserId() == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Growth guard target user is required");
+        }
     }
 
     private static String requestId(String value) {

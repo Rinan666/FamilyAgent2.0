@@ -1,6 +1,7 @@
 package com.familyagent.module.agent.service;
 
 import com.familyagent.common.exception.BusinessException;
+import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.agent.dto.AgentSaveMemoryToolRequest;
 import com.familyagent.module.agent.harness.AgentToolExecutor;
 import com.familyagent.module.agent.harness.constant.AgentToolCallStatus;
@@ -131,6 +132,18 @@ class AgentSaveMemoryToolCommandServiceTest {
         AgentSaveMemoryToolRequest request = request("UNKNOWN");
 
         assertThrows(BusinessException.class, () -> service.requestSave(request, 101L));
+        verify(toolExecutor, never()).execute(any());
+    }
+
+    @Test
+    void requestSave_rejectsGrowthObservationWithoutTargetBeforeConfirmation() {
+        AgentSaveMemoryToolCommandService service = new AgentSaveMemoryToolCommandService(toolExecutor);
+        AgentSaveMemoryToolRequest request = request("OBSERVATION");
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.requestSave(request, 101L));
+
+        assertEquals(ErrorCode.BAD_REQUEST.getCode(), exception.getCode());
         verify(toolExecutor, never()).execute(any());
     }
 

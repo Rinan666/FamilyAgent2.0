@@ -4,6 +4,7 @@ import type {
   AgentSaveMemoryToolRequest,
   AgentSaveToolPlan,
   AgentMode,
+  ChatMessage,
   DiaryEntryType,
   DiaryVisibility,
   GrowthGuardCategory,
@@ -93,6 +94,17 @@ export function isExplicitSaveMemoryCommand(value: string) {
   const normalized = value.trim().replace(/\s+/g, '');
   if (!normalized || normalized.length > 40) return false;
   return EXPLICIT_SAVE_COMMAND_PATTERN.test(normalized);
+}
+
+export function buildRelevantSaveContext(message: ChatMessage, messages: readonly ChatMessage[]) {
+  const visibleMessages = messages.filter((item) => item.role !== 'system');
+  const messageIndex = visibleMessages.findIndex((item) => item.id === message.id);
+  if (messageIndex < 0) return visibleMessages.slice(-4);
+
+  const contextStart = message.role === 'assistant'
+    ? Math.max(0, messageIndex - 1)
+    : Math.max(0, messageIndex - 2);
+  return visibleMessages.slice(contextStart, messageIndex + 1);
 }
 
 export function normalizeSaveToolPlan(plan: AgentSaveToolPlan): AgentSaveToolPlan {
@@ -279,7 +291,7 @@ export function buildAgentSaveMemoryToolRequest(
     familyId,
     plan,
     metadata as Record<string, unknown>,
-    context.agentMode === 'mirror' ? (context.targetUserId || undefined) : undefined,
+    context.targetUserId || undefined,
   );
 
   return {

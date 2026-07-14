@@ -57,6 +57,8 @@ def test_build_family_agent_system_prompt_includes_full_context():
     assert "当用户提到今天、明天、本周、最近、刚才等相对时间时，以这个时间为基准。" in prompt
     assert "已联网搜索并整理公共信息。" in prompt
     assert "授权记忆片段" in prompt
+    assert "不得把其他家庭成员发布、观察或被观察的内容说成当前对话者" in prompt
+    assert "author=current_conversation_user" in prompt
 
 
 def test_build_family_agent_system_prompt_adds_self_intro_style_hint():
@@ -140,6 +142,11 @@ def test_build_family_agent_system_prompt_adds_persona_rules_for_persona_context
     assert "简单问候不要扩写成独白" in prompt
     assert "不要写“你问……其实是在……”" in prompt
     assert "精神成员：外公" in prompt
+
+
+def test_save_plan_prompt_prioritizes_selected_message_over_old_context():
+    assert "treat that message as the primary save candidate" in SAVE_TOOL_PLAN_SYSTEM_PROMPT
+    assert "Do not extract an unrelated event from older context" in SAVE_TOOL_PLAN_SYSTEM_PROMPT
 
 
 def test_persona_and_mirror_rules_avoid_third_person_motive_analysis():
