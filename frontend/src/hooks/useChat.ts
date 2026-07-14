@@ -22,6 +22,12 @@ import {
 
 export type { SessionSavedMemory } from '@/hooks/chat/useChatHelpers';
 
+type ActiveStreamControl = {
+  abort: (discard: boolean) => void;
+};
+
+let activeStreamControl: ActiveStreamControl | null = null;
+
 type MemoryContextResult = {
   context: string;
   metadata?: NonNullable<ChatMessage['metadata']>;
@@ -139,6 +145,8 @@ export function useChat(options: UseChatOptions = {}) {
     if (runId > 0) {
       stoppedRunsRef.current.add(runId);
     }
+    activeStreamControl?.abort(false);
+    activeStreamControl = null;
     activeStreamRef.current?.abort();
     activeStreamRef.current = null;
     setStreaming(false);
@@ -151,6 +159,8 @@ export function useChat(options: UseChatOptions = {}) {
       stoppedRunsRef.current.delete(runId);
       streamRunIdRef.current += 1;
     }
+    activeStreamControl?.abort(true);
+    activeStreamControl = null;
     activeStreamRef.current?.abort();
     activeStreamRef.current = null;
     setStreaming(false);
@@ -287,6 +297,7 @@ export function useChat(options: UseChatOptions = {}) {
       return;
     }
 
+    let streamControl: ActiveStreamControl | null = null;
     const handle = agentApi.streamChat(
       {
         message: requestConfig.message,
@@ -332,6 +343,9 @@ export function useChat(options: UseChatOptions = {}) {
         const isCurrentRun = isRunActive(runId);
         stoppedRunsRef.current.delete(runId);
         clearActiveStream(runId);
+        if (activeStreamControl === streamControl) {
+          activeStreamControl = null;
+        }
         if (isCurrentRun) {
           setStreaming(false);
           streamRunIdRef.current += 1;
@@ -354,6 +368,17 @@ export function useChat(options: UseChatOptions = {}) {
     }
 
     activeStreamRef.current = handle;
+    streamControl = {
+      abort: (discard) => {
+        if (discard) {
+          finalizedRunsRef.current.add(runId);
+        }
+        stoppedRunsRef.current.add(runId);
+        streamRunIdRef.current += 1;
+        handle.abort();
+      },
+    };
+    activeStreamControl = streamControl;
     void persistUserMessageTask;
   }, [
     activeFamilyId,

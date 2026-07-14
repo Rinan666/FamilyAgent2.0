@@ -3,9 +3,11 @@ import type { ChatMessage } from '@/types';
 import { generateId } from '@/lib/utils';
 
 interface ChatState {
+  familyId: number | null;
   sessionId: number | null;
   messages: ChatMessage[];
   isStreaming: boolean;
+  setFamilyId: (id: number | null) => void;
   setSessionId: (id: number | null) => void;
   setMessages: (messages: ChatMessage[]) => void;
   addMessage: (role: 'user' | 'assistant' | 'system', content: string) => ChatMessage;
@@ -17,9 +19,12 @@ interface ChatState {
 }
 
 export const useChatStore = create<ChatState>((set) => ({
+  familyId: null,
   sessionId: null,
   messages: [],
   isStreaming: false,
+
+  setFamilyId: (familyId) => set({ familyId }),
 
   setSessionId: (sessionId) => set({ sessionId }),
 
