@@ -361,11 +361,18 @@ function Invoke-StartAll {
 
     Push-Location "$Root\frontend"
     try {
+        $buildErrorActionPreference = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
         npm run build *>&1 | Tee-Object -FilePath $FrontendBuildLog
-        if ($LASTEXITCODE -ne 0) {
+        $frontendBuildExitCode = $LASTEXITCODE
+        $ErrorActionPreference = $buildErrorActionPreference
+        if ($frontendBuildExitCode -ne 0) {
             Fail-AndExit "       [ERROR] Frontend build failed. Check $FrontendBuildLog"
         }
     } finally {
+        if ($buildErrorActionPreference) {
+            $ErrorActionPreference = $buildErrorActionPreference
+        }
         Pop-Location
     }
 
