@@ -8,6 +8,8 @@ authorization, and persistence still live in existing services.
 from copy import deepcopy
 from typing import Any
 
+from app.runtime.skill_manifest import SAVE_MEMORY_PLAN_MANIFEST
+
 
 MEMORY_LAYERS: list[dict[str, Any]] = [
     {
@@ -64,15 +66,11 @@ MEMORY_LAYERS: list[dict[str, Any]] = [
 
 FAMILY_SKILLS: list[dict[str, Any]] = [
     {
-        "name": "save_memory",
+        **SAVE_MEMORY_PLAN_MANIFEST.as_dict(),
         "title": "对话记忆沉淀",
         "status": "ACTIVE",
         "category": "memory",
         "endpoint": "/ai/memory/save-plan",
-        "description": "判断对话内容是否适合保存，并分类为每日记录、经验沉淀或成长观察。",
-        "reads": ["L0", "L4"],
-        "writes": ["L0", "L1", "L4"],
-        "requires_confirmation": True,
         "confirmation_policy": "USER_CONFIRMATION_OR_EXPLICIT_SAVE_COMMAND",
         "permission_model": "backend_filters_family_scope_before_ai_context",
         "audit_events": [

@@ -370,7 +370,7 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
 
 ### Phase 2：写入工具与确认门
 
-状态：进行中。已完成确认状态、确认策略、持久化确认记录、确认审批/拒绝 API 契约、三个写入工具声明、approve 后的后端幂等执行闭环，以及前端保存按钮接入统一 confirmation contract；Phase 2 收尾聚焦保存来源 metadata 保留、文档状态同步与回归测试。
+状态：核心闭环已完成。已完成确认状态、确认策略、持久化确认记录、确认审批/拒绝 API 契约、三个写入工具声明、approve 后的后端幂等执行闭环，以及前端保存按钮接入统一 confirmation contract；后续只做回归补强和与 Skill Runtime 的衔接。
 
 目标：把写日记、写家庭记忆、写成长观察纳入统一工具执行器。
 
@@ -424,6 +424,14 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
 ---
 
 ### Phase 3：Skill Runtime Harness
+
+状态：进行中。已从 `save_memory` skill 开始接入版本化 manifest、统一 executor 和 use case 边界，外部 save-plan 契约保持不变。
+
+最近进度：
+
+- 2026-07-14：新增 `SkillManifest` 与 `SkillExecutor`，为 skill 声明版本、输入/输出 schema、读写层、确认要求、隐私级别和统一超时预算。
+- 2026-07-14：将 `/ai/memory/save-plan` 的价值预审、脱敏、LLM 规划、结果清洗和失败降级迁入 `SaveMemoryPlanUseCase`；路由只保留 API 适配，仍返回 `{ success, data }`。
+- 2026-07-14：`save_memory` registry 条目开始复用 manifest，避免 registry 与执行实现继续分叉。
 
 目标：把 skill 从静态 registry / 固定 endpoint 升级为可执行、可审计、可版本化、可评测的 runtime。
 
