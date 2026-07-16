@@ -81,7 +81,9 @@ services:
     build:
       context: ./ai-service
       args:
-        PYTHON_IMAGE: ${DOCKER_PYTHON_IMAGE:-docker.m.daocloud.io/library/python:3.12-slim}
+        PYTHON_IMAGE: ${DOCKER_PYTHON_IMAGE:-python:3.12-slim}
+        DEBIAN_MIRROR: ${DOCKER_DEBIAN_MIRROR:-}
+        PIP_INDEX_URL: ${DOCKER_PIP_INDEX_URL:-https://pypi.org/simple}
     restart: unless-stopped
     env_file:
       - ${STACK_ENV_FILE:-.env.docker}
@@ -106,6 +108,18 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8000/ai/health/ready', timeout=3).read()
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
     networks:
       - fa-network
 
@@ -152,7 +166,7 @@ services:
       minio:
         condition: service_healthy
       ai-service:
-        condition: service_started
+        condition: service_healthy
     networks:
       - fa-network
 

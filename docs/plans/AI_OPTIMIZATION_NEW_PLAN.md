@@ -1,6 +1,6 @@
 # FamilyAgent AI Harness 统一升级计划
 
-> 更新日期：2026-06-29
+> 更新日期：2026-07-16
 > 来源：本文件合并原 `AI_OPTIMIZATION_NEW_PLAN.md` 与 `AGENT_HARNESS_PLAN.md`。
 > 范围：`ai-service/`、`backend/src/main/java/com/familyagent/infra/ai/`、后端 `agent` / `memory` / `diary` / `growth` / `mirror` / `family` / `session` / `skillrun` 中调用 AI 或 Agent 工具的链路，以及前端 Agent 交互与确认流程。
 > 目标：把 FamilyAgent 从“安全增强版 AI 网关 + 固定业务端点”逐步升级为统一的 AI Architecture Harness。所有 Agent、Skill、Tool、Memory Recall、Web Search、Trace、Replay、Eval、Prompt / Model Governance 都应接入同一个演进路线，而不是拆成多份互相前置的计划。
@@ -344,6 +344,11 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
 - 2026-06-30：新增 `aiProxyBoundary.test.ts`，覆盖 AI runtime 草稿路由放行、媒体处理放行、Agent / family / memory 写入绕过 Backend 被拒、未知路径默认拒绝。
 - 2026-06-30：补充源码扫描防回退测试，确保前端新增 `/ai-proxy/...` 调用必须集中到 `AI_PROXY_ROUTES` 与 `aiProxyUrl()`。
 - 2026-06-30：盘点 Python AI service 当前入口，并在 `docs/AI_PROXY_BOUNDARY_INVENTORY.md` 中标注 Agent、Embedding、Memory、DIP、Health 路由分类与前端代理结论。
+- 2026-07-15：完成容器级入口收敛验证。PostgreSQL 16.14 中 V15/V16 均为成功状态，`agent_runs` / `agent_run_steps` 实表存在；Backend、AI Service、Frontend、Redis、RabbitMQ、MinIO 全部启动，健康端点返回 200。无内部身份调用 Python draft 路由返回 401，内部身份可通过认证并执行 synthetic organize-draft smoke，前端 `/ai-proxy/memory/organize-draft` 返回 403，Backend 未登录调用保持统一 `Result.code=401`。
+- 2026-07-15：修复 AI Service 镜像构建对固定镜像站的依赖。Dockerfile 的 Debian/PyPI 源改为可配置 build args，默认回到官方源；使用干净 `python:3.12-slim` 完整构建成功，`opencv-python-headless`、`insightface`、`onnxruntime` 均进入正式运行镜像，DIP 路由恢复加载，draft synthetic smoke 继续成功。
+- 2026-07-16：完成 AI Service 镜像依赖瘦身与缓存验证。InsightFace 继续固定为 `1.0.1`，但其桌面 OpenCV 依赖元数据在构建期规范化为已固定的 `opencv-python-headless==4.13.0.92`；`pip check` 无破损依赖，正式镜像不再包含 `opencv-python`，ONNX / ONNX Runtime 导入、DIP JPEG 解码、readiness 和内部 organize-draft synthetic smoke 均通过。镜像由 `508181971` B 降至 `462746732` B，减少 `45435239` B（约 `8.94%`）；BuildKit pip cache 已验证命中。
+- 2026-07-16：将 AI Service readiness 从固定 `ready/not_checked` 占位响应升级为强类型配置检查。主 LLM provider 凭据或生产内部服务身份缺失时返回 HTTP 503 和 `not_ready`，不调用付费模型或发送家庭数据；AI Service 当前不直接访问数据库，因此明确标记 `database=not_required`。Compose healthcheck 已接入该端点，Backend 启动条件同步升级为 `service_healthy`。
+- 2026-07-16：收敛 Python 与 Backend AI 调用日志，provider、Embedding、Web Search、stream、内部认证和 fallback 失败只记录稳定 errorCode、异常类型、requestId、provider/model 与 latency，不再记录异常正文、响应 body 或堆栈。新增日志捕获回归测试；AI Service 全量测试增至 171 条，36/36 eval 的进程输出不再包含 provider fixture 异常详情。
 
 目标：避免 Python AI service、前端代理和 Java Backend 同时形成多套 AI 入口，确保 Backend Agent Harness 与未来 Python AI Runtime Harness 分工清晰。
 
@@ -425,13 +430,19 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
 
 ### Phase 3：Skill Runtime Harness
 
-状态：进行中。已从 `save_memory` skill 开始接入版本化 manifest、统一 executor 和 use case 边界，外部 save-plan 契约保持不变。
+状态：核心闭环已完成。`save_memory` 已接入版本化 manifest、runtime registry、统一 executor、use case、强类型 SkillRun 和结构化失败语义；后续 trace 与 eval 分别进入 Phase 4 / Phase 5。
 
 最近进度：
 
 - 2026-07-14：新增 `SkillManifest` 与 `SkillExecutor`，为 skill 声明版本、输入/输出 schema、读写层、确认要求、隐私级别和统一超时预算。
 - 2026-07-14：将 `/ai/memory/save-plan` 的价值预审、脱敏、LLM 规划、结果清洗和失败降级迁入 `SaveMemoryPlanUseCase`；路由只保留 API 适配，仍返回 `{ success, data }`。
 - 2026-07-14：`save_memory` registry 条目开始复用 manifest，避免 registry 与执行实现继续分叉。
+- 2026-07-14：抽出 `SaveMemoryPromptRenderer` 与 `SaveMemoryOutputParser`，分别负责 AI-bound prompt 脱敏渲染和确定性价值清洗；补充隐私脱敏、提示词注入拒绝与原有 save-plan 回归测试。
+- 2026-07-14：将后端 `SkillRunService` 收敛为稳定门面，新增 `SkillRunCommandService`、`SkillRunQueryService`、`SkillRunLifecycleService` 与输入策略；状态值收敛到 `SkillRunStatus`，跨模块成员校验经 `FamilyMembershipFacade` 隔离。
+- 2026-07-14：将 `SkillRun.metadata` 与 `usedSources` 收敛为 `SkillRunMetadata` / `SkillRunSourceRef`，并使用专用 typed JSONB handler；旧未知字段读取到显式 `extra`，前端请求和响应类型同步收敛。
+- 2026-07-14：新增 Backend `/api/agent/save-memory-plan`，通过 `AIServiceClient -> SaveMemoryPlanClient` 调用 Python AI，并自动记录 save-plan 的 SkillRun 状态；前端移除手工 SkillRun 创建和 `/ai-proxy/memory/save-plan` 直连。
+- 2026-07-14：修正 save-plan provider failure 与非法模型输出的错误语义，AI service 返回 `success=false` 和稳定 `errorCode`；Backend 不再把不可用降级计划记为正常低价值结果，并将原始结构化失败码写入 `SkillRun.metadata.executionErrorCode`。
+- 2026-07-14：新增 `SkillRuntimeRegistry` / `SkillRuntime`，将 `save_memory` manifest 与统一 executor 稳定关联；`memory.py` 只装配已注册 runtime 与 use case，不再临时拼装执行边界。
 
 目标：把 skill 从静态 registry / 固定 endpoint 升级为可执行、可审计、可版本化、可评测的 runtime。
 
@@ -450,41 +461,62 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
 
 工作项：
 
-1. 保留原 endpoint 和 `{ success, data }` 响应结构。
-2. 新增 `SkillManifest`：name、version、description、inputSchema、outputSchema、reads、writes、requiresConfirmation、timeoutSeconds、privacyLevel。
-3. 新增 `SkillExecutor`。
-4. 新增 `SaveMemoryPlanUseCase`。
-5. 抽出 prompt 渲染和输出解析。
-6. 后端拆分 `SkillRunService`：
-   - `SkillRunCommandService`
-   - `SkillRunQueryService`
-   - `SkillRunLifecycleService`
-7. 收敛 `SkillRun.metadata`：
-   - 新增强类型 `SkillRunMetadata`。
-   - 动态兼容字段放入 `extra`。
+1. [已完成] 保留原 endpoint 和 `{ success, data }` 响应结构。
+2. [已完成] 新增 `SkillManifest`：name、version、description、inputSchema、outputSchema、reads、writes、requiresConfirmation、timeoutSeconds、privacyLevel。
+3. [已完成] 新增 `SkillExecutor`。
+4. [已完成] 新增 `SaveMemoryPlanUseCase`。
+5. [已完成] 抽出 prompt 渲染和输出解析。
+6. [已完成] 后端拆分 `SkillRunService`：
+   - [已完成] `SkillRunCommandService`
+   - [已完成] `SkillRunQueryService`
+   - [已完成] `SkillRunLifecycleService`
+7. [已完成] 收敛 `SkillRun.metadata`：
+   - [已完成] 新增强类型 `SkillRunMetadata`。
+   - [已完成] 动态兼容字段放入 `extra`。
 
 验收标准：
 
-- 外部接口完全兼容。
-- `memory.py` 不再直接承载 save-plan 的完整编排。
-- skill registry 可关联 manifest 和 executor。
-- 每次 skill 执行都有强类型 run record。
-- 需要确认的 skill 不会绕过确认直接写入最终数据。
+- [已完成] 外部接口完全兼容。
+- [已完成] `memory.py` 不再直接承载 save-plan 的完整编排。
+- [已完成] skill runtime registry 可关联 manifest 和 executor。
+- [已完成] 当前 `save_memory` skill 每次后端业务执行都有强类型 SkillRun record。
+- [已完成] 需要确认的 skill 不会绕过确认直接写入最终数据。
 
 ---
 
 ### Phase 4：Agent Run、Trace 与 Replay
 
+状态：核心闭环已完成。Agent 工具执行链路、chat stream 父 run、runId 三端透传、skill / LLM / Web Search / Memory Recall / Embedding span、内部 trace 查询和隐私安全 replay artifact 已接齐；后续 eval 与治理进入 Phase 5。
+
+最近进度：
+
+- 2026-07-15：新增 `agent_runs` 表、`AgentRunRecord`、`AgentRunStatus` 与 `AgentRunLifecycleService`；工具执行自动创建或续接 run，并在成功、失败、等待确认、拒绝和过期时记录明确状态。
+- 2026-07-15：`AgentRunContext` 增加兼容式 `runId`，`agent_tool_calls` 与 `agent_tool_confirmations` 同步关联 run；确认 approve 继续原 run，reject / expired 进入明确终态。
+- 2026-07-15：新增 `AgentRunQueryService` 与 `AgentRunTraceQueryService`，支持内部按 runId、requestId、sessionId 查询，并按 runId 组装只包含脱敏 input summary 的工具轨迹；暂未开放外部 Controller。
+- 2026-07-15：Chat stream 接入父 run 生命周期。Backend 在授权召回前创建 run，召回工具作为子调用只记录 tool trace、不提前结束父 run；stream `done`、结构化 `error`、EOF、transport failure 和请求拒绝分别收敛到明确终态。
+- 2026-07-15：`runId` 通过 `X-Agent-Run-Id` 从 Backend 透传到 Python AI service，并同步进入 metadata / content / done / error SSE event；前端消息 metadata 增加强类型 `requestId` / `runId`，不改变已有事件判定方式。
+- 2026-07-15：新增 `agent_run_steps`、`AgentTraceRecorder` 与强类型 span descriptor，字段覆盖 operation、stepType、promptVersion、skillVersion、latencyMs、errorCode、degraded 和 privacyCategories；step 不保存 prompt、家庭原文或模型输出。
+- 2026-07-15：save-memory planning 接入 AgentRun + SKILL span。SkillRun metadata 同步记录 `agentRunId`、`skillVersion=1.0.0` 与 `promptVersion=memory.save_plan.v1`，成功和结构化失败均可从 SkillRun 追溯到 Agent run/step。
+- 2026-07-15：Chat stream 接入隐私安全的 LLM / Web Search observation。Python AI service 仅在终端 `done` / `error` event 附带强类型 `traceObservations`，Backend tracker 提取后写入 `agent_run_steps`；前端保持原终端事件处理，不新增 trace metadata 回调。
+- 2026-07-15：每次 LLM 主模型与 fallback 尝试分别记录 provider、model、latency、success、errorCode 和 degraded；即使所有 provider 均失败，也会先刷新 observation 再输出结构化 stream error。
+- 2026-07-15：Web Search 对 provider 失败、功能禁用、隐私 query 拒绝和 metadata timeout 保持明确失败/降级语义；trace 不保存 prompt、原始 search query、家庭内容或模型输出，无效 observation 会在 AI service / Backend 边界被拒绝。
+- 2026-07-15：授权家庭记忆召回接入独立 `MEMORY_RECALL` span，operation 固定为 `memory.recall.authorized`；正常空结果记成功，底层召回异常继续向聊天链路返回空上下文，但 span 记录 `MEMORY_RECALL_FAILED`、`degraded=true`。Trace 存储失败采用 best-effort，不阻断召回主路径，异常日志不输出底层错误详情。
+- 2026-07-15：授权召回的 query embedding 接入独立 `EMBEDDING` span，operation 固定为 `embedding.recall_query`，记录 provider、model、latency、success、errorCode 和 degraded，不保存 query 或向量。Provider degraded、传输失败、空向量、维度不符、非有限值均进入明确失败 span，并继续文本召回 fallback。
+- 2026-07-15：Embedding 外部调用与响应校验从已偏大的 `AuthorizedMemoryRecallRankingService` 下沉到独立 Spring 协作类 `AuthorizedMemoryRecallEmbeddingService`；Ranking 仅消费已校验向量和强类型 observation，不继续承载 provider 逻辑。
+- 2026-07-15：`V15__create_agent_runs.sql` 与 `V16__create_agent_run_steps.sql` 已在本地 PostgreSQL 16.14 实例通过 Flyway 正式执行，schema 从 v14 升级到 v16；迁移历史、34 个字段、索引、外键及事务内写入/回滚烟雾测试均已验证。
+- 2026-07-15：新增内部只读 `AgentRunReplayService`，按时间合并 STEP / TOOL trajectory，并输出 run 状态、版本、错误、降级和延迟汇总；未开放外部 Controller。
+- 2026-07-15：Replay artifact 不包含原始 requestId、familyId、viewerUserId、sessionId、subject、prompt、家庭内容、模型输出、搜索 query 或向量。requestId 仅生成 16 位十六进制哈希引用，工具输入摘要仅允许 `inputType=[A-Za-z0-9_.$]{1,120}`，旧数据或不安全摘要统一输出 `inputType=REDACTED`。
+
 目标：从 requestId 追踪升级为 Agent run 级别的结构化 trace，并沉淀可脱敏回放的 run artifact。
 
 工作项：
 
-1. 新增 `agent_runs` 表。
-2. 新增 `agent_run_steps` 表或轻量事件表。
-3. `AgentRunContext` 增加 runId。
-4. 每次工具调用关联 runId。
-5. 新增或完善 `TraceRecorder`。
-6. 定义 span 字段：
+1. [已完成] 新增 `agent_runs` 表。
+2. [已完成] 新增 `agent_run_steps` 表或轻量事件表。
+3. [已完成] `AgentRunContext` 增加 runId。
+4. [已完成] 每次工具调用关联 runId。
+5. [已完成] 新增或完善 `TraceRecorder`：当前已包含 run lifecycle、typed step recorder、tool audit、LLM / Web Search observation、trace query 与 replay artifact。
+6. [已完成] 定义 span 字段：
    - requestId。
    - runId。
    - spanId。
@@ -499,75 +531,97 @@ Python AI service 是 Java Backend 的 AI runtime 子系统，不是第二套业
    - errorCode。
    - degraded。
    - privacyCategories。
-7. 接入关键链路：
-   - chat stream。
-   - LLM call。
-   - Web Search。
-   - Memory Recall。
-   - Skill execution。
-   - Embedding。
-8. 新增 run artifact / replay 数据结构：
-   - 不保存敏感原文。
-   - 保存脱敏输入摘要、版本、工具轨迹和结果摘要。
-   - 保存 eval 可读取的 trajectory summary。
+7. [已完成] 接入关键链路：
+   - [run 级别已完成] chat stream。
+   - [已完成] LLM call。
+   - [已完成] Web Search。
+   - [已完成] Memory Recall。
+   - [save-memory 已完成] Skill execution。
+   - [已完成] Embedding。
+8. [已完成] 新增 run artifact / replay 数据结构：
+   - [已完成] 不保存敏感原文。
+   - [已完成] 保存脱敏输入摘要、版本、工具轨迹和结果摘要。
+   - [已完成] 保存 eval 可读取的 trajectory summary。
 
 验收标准：
 
-- 可以按 sessionId / requestId / runId 查询一次 Agent 调用的工具轨迹。
+- [已完成] 可以按 sessionId / requestId / runId 查询一次 Agent 调用的工具轨迹。
 - 可以解释某条记忆、日记或成长观察由哪个 Agent 工具写入。
-- 一次聊天可以看到最小 run tree。
-- eval 可读取 trace / run artifact 检查 trajectory。
+- [已完成] 一次聊天可以看到 chat 父 run、授权召回 tool call、独立 Memory Recall / Embedding span、LLM 尝试、Web Search span 和脱敏 replay trajectory。
+- [已完成] eval 可读取 trace / run artifact 检查 trajectory。
 
 ---
 
 ### Phase 5：Evaluation / Governance Harness
 
+状态：核心闭环已完成。已具备 36 条 AI golden cases、3 条 Backend trajectory fixtures、隐私安全 JSON 报告、核心 prompt/schema manifest 版本、P0 safety/privacy 与 contract 100% 门禁，以及 baseline/candidate 对比；后续继续扩大真实模型抽样和更多业务工具覆盖。
+
+最近进度：
+
+- 2026-07-15：新增 `ai-service/evals/`，按强类型 case、evaluator、runner、report model 拆分职责；可通过 `python -m evals` 一键运行，也可使用 `--output` 生成 JSON 报告。
+- 2026-07-15：首批 `familyagent.core.v1` 套件包含 36 条 golden cases，覆盖 history system/developer role 注入、prompt 提取、身份劫持、正常安全复盘、正常风格请求、垃圾/暗语输入、家庭价值信号、Web Search 隐私、save-plan、chat stream、embedding、organize-draft 和 persona material 契约。
+- 2026-07-15：Save-memory eval 使用 deterministic mock LLM，覆盖低价值输入不调用模型、模糊家庭信号进入模型、高价值学习经验经 post-check 保留、provider failure 和非法输出保持结构化失败。
+- 2026-07-15：`eval.report.v1` 仅记录 case ID、保护资产、预期/实际决策、稳定 errorCode 和延迟，不记录 prompt、家庭内容、搜索 query、模型输出或异常详情；当前 36/36 通过，安全/隐私失败数为 0。
+- 2026-07-15：`save_memory` manifest 新增强类型 `prompt_version=memory.save_plan.v1` 与 `schema_version=save_tool_plan.schema.v1`；`eval.report.v1` 同步记录 skill、prompt、schema artifact 版本，为后续模型或提示词对比提供稳定基线。
+- 2026-07-15：Chat `memory_context` 现在仅信任带内部服务身份的 Backend 调用；普通用户令牌提交的伪造上下文直接忽略，内部上下文仍经过 PII 脱敏与 prompt/role 注入检测，且日志不输出上下文原文。
+- 2026-07-15：新增 stream provider failure / terminal done、embedding provider failure / local dimensions、organize-draft strict schema / enum post-check / heritage form cleanup 等跨链路 fixture eval。
+- 2026-07-15：新增统一 artifact 版本常量，family chat LLM trace 写入 `promptVersion=family_chat.system.v1`；Eval 报告同步记录 `memory.organize_draft.v1` 与 `organized_draft.schema.v1`。
+- 2026-07-15：新增内部 `AgentTrajectoryEvalService` 与 `trajectory.eval.report.v1`，按 run 终态、错误码和精确事件顺序评估脱敏 replay artifact；报告只包含 case ID、事件数量、稳定错误码和 trajectory pass rate，不复制 run、inputType 或工具详情。
+- 2026-07-15：新增工具权限拒绝、用户拒绝确认、重复确认不再次执行 3 条 Backend trajectory fixtures；`agent.trajectory.core.v1` 当前 3/3 通过，trajectory pass rate 为 100%。
+- 2026-07-15：`organize_draft` 与 `persona_material_draft` 迁入强类型 `SkillManifest`，registry 不再分别手写 reads、writes、确认、prompt 和 schema 版本字段；persona 新增 strict schema 与输出边界 fixture。
+- 2026-07-15：`eval.report.v1` 新增 fail-closed `P0_SAFETY_PRIVACY` 与 `CONTRACT` gates，两类案例均要求 100% 通过；缺少对应案例时也不会误判为可发布。主观质量案例仍进入总体 pass rate，不被扩大成硬安全策略。
+- 2026-07-15：新增隐私安全 `eval.comparison.v1` 与 `EvalReportComparator`，比较 baseline/candidate 的 case 通过状态、gate 状态和 artifact 版本，不读取或保存 prompt、家庭原文或模型输出。
+- 2026-07-15：`python -m evals --baseline <report>` 支持输出 `NO_CHANGE`、`IMPROVED`、`REGRESSION`、`INCOMPARABLE` 结论；case/gate 回退或案例集合漂移返回非零退出码。本地 baseline 自比较验证为 36 条 unchanged、0 regression。
+- 2026-07-15：`organize_draft` 与 `persona_material_draft` 已接入统一 `SkillRuntime`、独立 prompt renderer、output parser 和 use case；路由不再直接编排 provider、JSON 解析和失败映射。
+- 2026-07-15：两个 draft endpoint 的 provider failure、timeout、非法 JSON 统一返回 `success=false`、`data=null` 与稳定 `AI_PROVIDER_ERROR` / `AI_TIMEOUT` / `AI_INVALID_RESPONSE`，响应和日志不输出底层异常详情；前端按 errorCode 映射安全提示。
+- 2026-07-15：`organize_draft` 与 `persona_material_draft` 已迁入 Backend `/api/agent/organize-draft`、`/api/agent/persona-material-draft`；Backend 通过独立 `DraftGenerationClient` 和内部服务身份调 Python SkillRuntime，先校验家族成员身份，并记录 SkillRun、AgentRun、trace、prompt/schema/skill 版本。Python save-plan 与两个 draft POST 路由新增 internal-only gate，普通用户令牌不能绕过 Backend 直接调用；前端已移除两个 `/ai-proxy/memory/*draft` allowlist 入口。
+
 目标：让 AI 变更可比较、可回滚、可评估，并逐步建立模型、prompt、schema、skill 上线门禁。
 
 工作项：
 
-1. 新增 `ai-service/evals/`。
-2. 建立第一批 golden cases：
-   - history system role 注入。
-   - 客户端伪造 memory_context。
-   - Web Search 隐私 query。
-   - save-plan 垃圾输入。
-   - organize-draft schema 输出。
-   - stream provider failure。
-   - embedding provider failure。
-   - tool permission denied。
-   - confirmation rejected。
-   - duplicated confirmation。
-3. eval runner 支持 mock LLM 和 JSON 报告。
-4. 为核心 prompt 增加版本：
-   - `family_chat.system.v1`
-   - `memory.save_plan.v1`
-   - `memory.organize_draft.v1`
-   - `persona.material_draft.v1`
-5. 为核心 schema 增加版本：
-   - `save_tool_plan.schema.v1`
-   - `organized_draft.schema.v1`
-   - `persona_material_draft.schema.v1`
-6. skill manifest 引用 prompt/schema 版本。
-7. trace、SkillRun、eval 报告记录版本。
-8. 增加 regression report：
-   - eval pass rate。
-   - trajectory pass rate。
-   - safety / privacy failure count。
-   - model / prompt 对比结论。
-9. 定义上线门禁：
-   - P0 safety / privacy case 必须 100% 通过。
-   - contract case 必须 100% 通过。
-   - 真实模型抽样 eval 可先作为人工审批依据，不立即阻断常规开发。
+1. [已完成] 新增 `ai-service/evals/`。
+2. [已完成首批 36 条] 建立第一批 golden cases：
+   - [已完成] history system role 注入。
+   - [已完成] 客户端伪造 memory_context。
+   - [已完成] Web Search 隐私 query。
+   - [已完成] save-plan 垃圾输入。
+   - [已完成] organize-draft schema 输出。
+   - [已完成] stream provider failure。
+   - [已完成] embedding provider failure。
+   - [已完成] tool permission denied。
+   - [已完成] confirmation rejected。
+   - [已完成] duplicated confirmation。
+3. [已完成] eval runner 支持 mock LLM 和 JSON 报告。
+4. [已完成] 为核心 prompt 增加版本：
+   - [已完成] `family_chat.system.v1`
+   - [已完成] `memory.save_plan.v1`
+   - [已完成] `memory.organize_draft.v1`
+   - [已完成] `persona.material_draft.v1`
+5. [已完成] 为核心 schema 增加版本：
+   - [已完成] `save_tool_plan.schema.v1`
+   - [已完成] `organized_draft.schema.v1`
+   - [已完成] `persona_material_draft.schema.v1`
+6. [核心 skill 已完成] skill manifest 引用 prompt/schema 版本。
+7. [family chat / save-memory / organize-draft / persona eval 已完成基础接入] trace、SkillRun、eval 报告记录版本。
+8. [已完成基础报告] 增加 regression report：
+   - [已完成] eval pass rate。
+   - [已完成] trajectory pass rate。
+   - [已完成] safety / privacy failure count。
+   - [已完成] model / prompt 对比结论。
+9. [已完成基础门禁] 定义上线门禁：
+   - [已完成] P0 safety / privacy case 必须 100% 通过。
+   - [已完成] contract case 必须 100% 通过。
+   - [已完成规则定义] 真实模型抽样 eval 可先作为人工审批依据，不立即阻断常规开发。
 
 验收标准：
 
-- 至少 20 条 AI golden cases。
-- 本地可一键运行低成本 eval。
-- 关键工具可以用 fixture 回放。
-- 权限、确认、失败、幂等都有测试。
+- [已完成] 至少 20 条 AI golden cases。
+- [已完成] 本地可一键运行低成本 eval。
+- [save-memory 与 Agent tool trajectory 已完成] 关键工具可以用 fixture 回放。
+- [已完成基础闭环] 权限、确认、失败、幂等都有测试，并已纳入首批 trajectory eval。
 - 任何一次 AI 输出都能追溯 prompt/schema/skill 版本。
-- 模型升级前后能比较核心场景结果。
+- [已完成] 模型升级前后能比较核心场景结果。
 
 ---
 
