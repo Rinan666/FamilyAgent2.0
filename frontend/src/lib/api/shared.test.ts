@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
-import { sseStreamRequest } from './shared';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { AI_PROXY_ROUTES } from './aiProxyBoundary';
+import { aiRequest, ApiError, sseStreamRequest } from './shared';
 
 function streamFromChunks(chunks: string[]) {
   const encoder = new TextEncoder();
@@ -10,6 +11,10 @@ function streamFromChunks(chunks: string[]) {
     },
   });
 }
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('sseStreamRequest', () => {
   it('uses the backend API proxy and handles streamed SSE chunks incrementally', async () => {
@@ -118,5 +123,31 @@ describe('sseStreamRequest', () => {
       'chunk:partial answer',
       'error:AI stream ended before a completion event. Please retry.',
     ]);
+  });
+});
+
+describe('aiRequest structured failures for remaining proxy routes', () => {
+  it('maps provider failure without exposing server details', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      success: false,
+      data: null,
+      errorCode: 'AI_PROVIDER_ERROR',
+      error: 'private provider outage detail',
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })));
+
+    const request = aiRequest(AI_PROXY_ROUTES.DIP_FACES_CLUSTER_BY_URLS, { urls: [] });
+
+    await expect(request).rejects.toEqual(new ApiError(500, 'AI 服务暂时不可用，请稍后再试。'));
+  });
+
+  it('maps invalid structured output to a retryable user message', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      success: false,
+      data: null,
+      errorCode: 'AI_INVALID_RESPONSE',
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })));
+
+    await expect(aiRequest(AI_PROXY_ROUTES.DIP_FACES_CLUSTER_BY_URLS, {}))
+      .rejects.toEqual(new ApiError(500, 'AI 返回的草稿格式异常，请重试。'));
   });
 });

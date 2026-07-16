@@ -34,6 +34,7 @@ type AIStreamEvent = {
   retryable?: unknown;
   degraded?: unknown;
   requestId?: unknown;
+  runId?: unknown;
   latencyMs?: unknown;
   web_search?: unknown;
 };
@@ -82,6 +83,12 @@ function aiErrorMessage(status: number, detail?: unknown, retryAfter?: string | 
     return 'AI 服务暂时不可用，请稍后再试。';
   }
   return raw || `AI 服务返回异常（HTTP ${status}）`;
+}
+
+function aiBusinessErrorMessage(errorCode: unknown) {
+  if (errorCode === 'AI_TIMEOUT') return 'AI 整理超时，请缩短内容后重试。';
+  if (errorCode === 'AI_INVALID_RESPONSE') return 'AI 返回的草稿格式异常，请重试。';
+  return 'AI 服务暂时不可用，请稍后再试。';
 }
 async function readErrorDetail(res: Response): Promise<unknown> {
   const data = await res.json().catch(() => null);
@@ -341,7 +348,7 @@ export async function aiRequest<T>(path: AiProxyRoute, body: unknown): Promise<T
     throw new ApiError(res.status, aiErrorMessage(res.status, detail, res.headers.get('Retry-After')));
   }
   const data = await res.json();
-  if (!data.success) throw new ApiError(500, aiErrorMessage(500, data.detail || 'AI error'));
+  if (!data.success) throw new ApiError(500, aiBusinessErrorMessage(data.errorCode));
   return data as T;
 }
 

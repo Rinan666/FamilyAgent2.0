@@ -1,9 +1,9 @@
-import { aiRequest, request } from './shared';
-import { AI_PROXY_ROUTES } from './aiProxyBoundary';
+import { request } from './shared';
 import type {
+  AgentDraftResult,
   AgentDraftScene,
+  AgentSaveMemoryPlanResult,
   AgentOrganizedDraft,
-  AgentSaveToolPlan,
   AuthorizedMemoryRecallResult,
   ChatMessage,
   CreateFamilyMemoryRequest,
@@ -41,51 +41,74 @@ export const memoryApi = {
       body: JSON.stringify({ voteType }),
     }),
   planSaveTool: (body: {
+    familyId: number;
     message: string;
     familyContext?: string;
     conversationContext?: ChatMessage[];
     targetMemberName?: string;
     viewerRole?: string;
+    source?: string;
+    requestId?: string;
   }) =>
-    aiRequest<{ success: boolean; data: AgentSaveToolPlan }>(AI_PROXY_ROUTES.MEMORY_SAVE_PLAN, {
-      message: body.message,
-      family_context: body.familyContext || '',
-      conversation_context: body.conversationContext || [],
-      target_member_name: body.targetMemberName || '',
-      viewer_role: body.viewerRole || '',
+    request<AgentSaveMemoryPlanResult>('/agent/save-memory-plan', {
+      method: 'POST',
+      body: JSON.stringify({
+        familyId: body.familyId,
+        message: body.message,
+        familyContext: body.familyContext || '',
+        conversationContext: (body.conversationContext || []).map(({ role, content }) => ({ role, content })),
+        targetMemberName: body.targetMemberName || '',
+        viewerRole: body.viewerRole || '',
+        source: body.source || 'FAMILY_AGENT_CHAT',
+        requestId: body.requestId,
+      }),
     }),
   organizeDraft: (body: {
+    familyId: number;
     content: string;
     scene: AgentDraftScene;
     familyContext?: string;
     currentType?: string;
     currentVisibility?: string;
     target?: string;
+    requestId?: string;
   }) =>
-    aiRequest<{ success: boolean; data: AgentOrganizedDraft }>(AI_PROXY_ROUTES.MEMORY_ORGANIZE_DRAFT, {
-      content: body.content,
-      scene: body.scene,
-      family_context: body.familyContext || '',
-      current_type: body.currentType || '',
-      current_visibility: body.currentVisibility || '',
-      target: body.target || '',
+    request<AgentDraftResult<AgentOrganizedDraft>>('/agent/organize-draft', {
+      method: 'POST',
+      body: JSON.stringify({
+        familyId: body.familyId,
+        content: body.content,
+        scene: body.scene,
+        familyContext: body.familyContext || '',
+        currentType: body.currentType || '',
+        currentVisibility: body.currentVisibility || '',
+        target: body.target || '',
+        requestId: body.requestId,
+      }),
     }),
   organizePersonaMaterialDraft: (body: {
+    familyId: number;
     content: string;
     profile: Partial<PersonaMaterialDraftProfile>;
     familyContext?: string;
+    requestId?: string;
   }) =>
-    aiRequest<{ success: boolean; data: PersonaMaterialDraft }>(AI_PROXY_ROUTES.MEMORY_PERSONA_MATERIAL_DRAFT, {
-      content: body.content,
-      profile: {
-        name: body.profile.name || '',
-        description: body.profile.description || '',
-        era_identity: body.profile.eraIdentity || '',
-        values: body.profile.values || '',
-        speaking_style: body.profile.speakingStyle || '',
-        personality: body.profile.personality || '',
-      },
-      family_context: body.familyContext || '',
+    request<AgentDraftResult<PersonaMaterialDraft>>('/agent/persona-material-draft', {
+      method: 'POST',
+      body: JSON.stringify({
+        familyId: body.familyId,
+        content: body.content,
+        profile: {
+          name: body.profile.name || '',
+          description: body.profile.description || '',
+          eraIdentity: body.profile.eraIdentity || '',
+          values: body.profile.values || '',
+          speakingStyle: body.profile.speakingStyle || '',
+          personality: body.profile.personality || '',
+        },
+        familyContext: body.familyContext || '',
+        requestId: body.requestId,
+      }),
     }),
   recall: (body: { query?: string; subject?: string; limit?: number }) =>
     request<MemoryEntry[]>('/memories/recall', {

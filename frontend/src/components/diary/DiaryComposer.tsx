@@ -592,11 +592,12 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
   }, [requestedTargetUserId]);
 
   const handleOrganize = useCallback(async () => {
-    if (!content.trim()) return;
+    if (!content.trim() || !selectedFamilyId) return;
     setOrganizing(true);
     setError('');
     try {
       const result = await memoryApi.organizeDraft({
+        familyId: selectedFamilyId,
         content,
         scene: organizeScene(category),
         familyContext: selectedFamily?.description || selectedFamily?.name || '',
@@ -612,29 +613,29 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
       if (draft.tags?.length) setTagText(draft.tags.join(' '));
       if (category === 'RECORD') {
         setDiaryEntryType(
-          draft.diary_entry_type
-            && ['DAILY', 'IMPORTANT_EVENT', 'LESSON', 'EMOTION', 'MESSAGE_TO_FAMILY', 'SELF_REFLECTION'].includes(draft.diary_entry_type)
-            ? draft.diary_entry_type as DiaryEntryType
+          draft.diaryEntryType
+            && ['DAILY', 'IMPORTANT_EVENT', 'LESSON', 'EMOTION', 'MESSAGE_TO_FAMILY', 'SELF_REFLECTION'].includes(draft.diaryEntryType)
+            ? draft.diaryEntryType as DiaryEntryType
             : diaryEntryType,
         );
-        setVisibility(normalizeVisibility(draft.diary_visibility) || visibility);
+        setVisibility(normalizeVisibility(draft.diaryVisibility) || visibility);
       } else if (category === 'EXPERIENCE') {
         setMemoryType(
-          draft.memory_type && validMemoryTypes.has(draft.memory_type)
-            ? draft.memory_type
+          draft.memoryType && validMemoryTypes.has(draft.memoryType)
+            ? draft.memoryType
             : memoryType,
         );
-        setVisibility(normalizeVisibility(draft.memory_scope) || visibility);
+        setVisibility(normalizeVisibility(draft.memoryScope) || visibility);
       } else {
         setGrowthCategory(
-          draft.growth_category && validGrowthCategories.has(draft.growth_category as GrowthGuardCategory)
-            ? draft.growth_category as GrowthGuardCategory
+          draft.growthCategory && validGrowthCategories.has(draft.growthCategory as GrowthGuardCategory)
+            ? draft.growthCategory as GrowthGuardCategory
             : growthCategory,
         );
-        setGrowthSeverity(draft.growth_severity && draft.growth_severity >= 1 && draft.growth_severity <= 5
-          ? draft.growth_severity
+        setGrowthSeverity(draft.growthSeverity && draft.growthSeverity >= 1 && draft.growthSeverity <= 5
+          ? draft.growthSeverity
           : growthSeverity);
-        setVisibility(normalizeVisibility(draft.memory_scope) || visibility);
+        setVisibility(normalizeVisibility(draft.memoryScope) || visibility);
       }
       setDraftStatus(`已整理${draft.reason ? `：${draft.reason}` : ''}`);
       flashSuccess('已整理到可直接保存的版本');
@@ -653,6 +654,7 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
     memoryType,
     relatedMemberLabel,
     selectedFamily,
+    selectedFamilyId,
     title,
     visibility,
   ]);

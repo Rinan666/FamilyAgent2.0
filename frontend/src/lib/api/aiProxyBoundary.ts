@@ -1,7 +1,4 @@
 export const AI_PROXY_ROUTES = {
-  MEMORY_SAVE_PLAN: '/memory/save-plan',
-  MEMORY_ORGANIZE_DRAFT: '/memory/organize-draft',
-  MEMORY_PERSONA_MATERIAL_DRAFT: '/memory/persona-material-draft',
   DIP_FACES_CLUSTER_BY_URLS: '/dip/faces/cluster-by-urls',
 } as const;
 
@@ -22,22 +19,16 @@ export type AiProxyBoundaryDecision = {
 };
 
 const ALLOWED_ROUTES = new Map<string, Omit<AiProxyBoundaryDecision, 'allowed' | 'route'>>([
-  [routeKey(AI_PROXY_ROUTES.MEMORY_SAVE_PLAN), {
-    category: 'AI_RUNTIME',
-    detail: 'Allowed as a draft planning route. Final memory writes must still go through Java Backend APIs.',
-  }],
-  [routeKey(AI_PROXY_ROUTES.MEMORY_ORGANIZE_DRAFT), {
-    category: 'AI_RUNTIME',
-    detail: 'Allowed as a draft generation route. Final memory writes must still go through Java Backend APIs.',
-  }],
-  [routeKey(AI_PROXY_ROUTES.MEMORY_PERSONA_MATERIAL_DRAFT), {
-    category: 'AI_RUNTIME',
-    detail: 'Allowed as a persona material drafting route. Final profile writes must still go through Java Backend APIs.',
-  }],
   [routeKey(AI_PROXY_ROUTES.DIP_FACES_CLUSTER_BY_URLS), {
     category: 'NON_BUSINESS_MEDIA',
     detail: 'Allowed as temporary media processing without direct family business writes.',
   }],
+]);
+
+const BACKEND_OWNED_ROUTES = new Map<string, string>([
+  ['memory/save-plan', '/api/agent/save-memory-plan'],
+  ['memory/organize-draft', '/api/agent/organize-draft'],
+  ['memory/persona-material-draft', '/api/agent/persona-material-draft'],
 ]);
 
 const BACKEND_OWNED_PREFIXES = new Map<string, string>([
@@ -89,6 +80,17 @@ export function resolveAiProxyBoundary(path: string[]): AiProxyBoundaryDecision 
       allowed: true,
       route,
       ...allowed,
+    };
+  }
+
+  const backendRoute = BACKEND_OWNED_ROUTES.get(route);
+  if (backendRoute) {
+    return {
+      allowed: false,
+      category: 'BACKEND_OWNED',
+      route,
+      detail: 'This capability is owned by Java Backend and must not bypass Backend Agent Harness.',
+      migrationTarget: backendRoute,
     };
   }
 

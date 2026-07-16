@@ -179,6 +179,8 @@ export function normalizeAssistantMetadata(metadata: Record<string, unknown>): N
   const rag = normalizeRagMetadata(metadata.rag);
   const retrievalQuery = stringValue(metadata.retrievalQuery) || stringValue(metadata.retrieval_query);
   const sourceSummary = stringValue(metadata.sourceSummary) || stringValue(metadata.source_summary);
+  const requestId = stringValue(metadata.requestId) || stringValue(metadata.request_id);
+  const runId = positiveNumberValue(metadata.runId, metadata.run_id);
   const baseMetadata: NonNullable<ChatMessage['metadata']> = {
     ...(responseMode === 'quick' || responseMode === 'think'
       ? { responseMode }
@@ -189,6 +191,8 @@ export function normalizeAssistantMetadata(metadata: Record<string, unknown>): N
     ...(rag ? { rag } : {}),
     ...(retrievalQuery ? { retrievalQuery } : {}),
     ...(sourceSummary ? { sourceSummary } : {}),
+    ...(requestId ? { requestId } : {}),
+    ...(runId ? { runId } : {}),
     ...(typeof metadata.insufficientSources === 'boolean'
       ? { insufficientSources: metadata.insufficientSources }
       : {}),
@@ -252,6 +256,11 @@ function numberValue(...values: unknown[]) {
   const value = values.find((item) => item !== undefined && item !== null && item !== '');
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number : 0;
+}
+
+function positiveNumberValue(...values: unknown[]) {
+  const value = numberValue(...values);
+  return value > 0 ? value : 0;
 }
 
 function stringValue(value: unknown) {

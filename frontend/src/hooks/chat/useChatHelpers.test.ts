@@ -59,6 +59,8 @@ describe('normalizeAssistantMetadata', () => {
         ],
       },
       retrievalQuery: 'bedtime health',
+      requestId: 'chat-request-1',
+      runId: 91,
     });
 
     expect(metadata.rag).toMatchObject({
@@ -79,5 +81,7 @@ describe('normalizeAssistantMetadata', () => {
       scenes: ['health'],
     });
     expect(metadata.retrievalQuery).toBe('bedtime health');
+    expect(metadata.requestId).toBe('chat-request-1');
+    expect(metadata.runId).toBe(91);
   });
 });

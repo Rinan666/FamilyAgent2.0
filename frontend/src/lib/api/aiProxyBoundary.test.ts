@@ -20,16 +20,16 @@ function sourceFiles(dir: string): string[] {
 }
 
 describe('resolveAiProxyBoundary', () => {
-  it('allows explicitly registered AI runtime draft routes', () => {
-    expect(resolveAiProxyBoundary(['memory', 'save-plan'])).toMatchObject({
-      allowed: true,
-      category: 'AI_RUNTIME',
-      route: 'memory/save-plan',
-    });
+  it('routes family draft generation through Java Backend', () => {
     expect(resolveAiProxyBoundary(['memory', 'organize-draft'])).toMatchObject({
-      allowed: true,
-      category: 'AI_RUNTIME',
-      route: 'memory/organize-draft',
+      allowed: false,
+      category: 'BACKEND_OWNED',
+      migrationTarget: '/api/agent/organize-draft',
+    });
+    expect(resolveAiProxyBoundary(['memory', 'persona-material-draft'])).toMatchObject({
+      allowed: false,
+      category: 'BACKEND_OWNED',
+      migrationTarget: '/api/agent/persona-material-draft',
     });
   });
 
@@ -42,6 +42,11 @@ describe('resolveAiProxyBoundary', () => {
   });
 
   it('blocks Agent and family data capabilities from bypassing Java Backend', () => {
+    expect(resolveAiProxyBoundary(['memory', 'save-plan'])).toMatchObject({
+      allowed: false,
+      category: 'BACKEND_OWNED',
+      migrationTarget: '/api/agent/save-memory-plan',
+    });
     expect(resolveAiProxyBoundary(['agent', 'chat', 'stream'])).toMatchObject({
       allowed: false,
       category: 'BACKEND_OWNED',
@@ -72,7 +77,6 @@ describe('resolveAiProxyBoundary', () => {
   });
 
   it('builds proxy URLs only from allowlisted route constants', () => {
-    expect(aiProxyUrl(AI_PROXY_ROUTES.MEMORY_SAVE_PLAN)).toBe('/ai-proxy/memory/save-plan');
     expect(aiProxyUrl(AI_PROXY_ROUTES.DIP_FACES_CLUSTER_BY_URLS)).toBe('/ai-proxy/dip/faces/cluster-by-urls');
   });
 

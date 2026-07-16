@@ -347,6 +347,7 @@ function PersonaMaterialModal({
     setError('');
     try {
       const result = await memoryApi.organizePersonaMaterialDraft({
+        familyId,
         content: rawText,
         profile: draftProfile,
       });

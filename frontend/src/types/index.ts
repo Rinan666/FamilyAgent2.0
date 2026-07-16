@@ -323,6 +323,8 @@ export interface ChatMessage {
       sources: { title: string; url: string; snippet?: string }[];
     };
     responseMode?: AgentResponseMode;
+    requestId?: string;
+    runId?: number;
     thinkingSummary?: string;
     rag?: {
       retrievalMode?: string;
@@ -618,18 +620,28 @@ export interface AgentSaveToolPlan {
   confirmation_message: string;
 }
 
+export interface AgentSaveMemoryPlanResult {
+  skillRunId: number;
+  plan: AgentSaveToolPlan;
+}
+
+export interface AgentDraftResult<T> {
+  skillRunId: number;
+  data: T;
+}
+
 export type AgentDraftScene = 'DIARY' | 'HERITAGE' | 'GROWTH_GUARD';
 
 export interface AgentOrganizedDraft {
   title: string;
   content: string;
   tags: string[];
-  diary_entry_type: DiaryEntryType | string;
-  diary_visibility: DiaryVisibility | string;
-  memory_type: MemoryEntryType;
-  memory_scope: MemoryScope | string;
-  growth_category: GrowthGuardCategory | string;
-  growth_severity: number;
+  diaryEntryType: DiaryEntryType | string;
+  diaryVisibility: DiaryVisibility | string;
+  memoryType: MemoryEntryType;
+  memoryScope: MemoryScope | string;
+  growthCategory: GrowthGuardCategory | string;
+  growthSeverity: number;
   scenario: string;
   reason: string;
 }
@@ -745,8 +757,8 @@ export interface SkillRun {
   inputSummary?: string;
   outputSummary?: string;
   saved: boolean;
-  usedSources?: Record<string, unknown>[];
-  metadata?: Record<string, unknown>;
+  usedSources?: SkillRunSourceRef[];
+  metadata?: SkillRunMetadata;
   createdAt: string;
   updatedAt?: string;
 }
@@ -759,16 +771,37 @@ export interface CreateSkillRunRequest {
   inputSummary?: string;
   outputSummary?: string;
   saved?: boolean;
-  usedSources?: Record<string, unknown>[];
-  metadata?: Record<string, unknown>;
+  usedSources?: SkillRunSourceRef[];
+  metadata?: SkillRunMetadata;
 }
 
 export interface UpdateSkillRunRequest {
   status?: SkillRunStatus;
   outputSummary?: string;
   saved?: boolean;
-  usedSources?: Record<string, unknown>[];
-  metadata?: Record<string, unknown>;
+  usedSources?: SkillRunSourceRef[];
+  metadata?: SkillRunMetadata;
+}
+
+export interface SkillRunSourceRef {
+  sourceType: string;
+  sourceId?: number;
+  extra?: Record<string, unknown>;
+}
+
+export interface SkillRunMetadata {
+  savedRecordType?: string;
+  plannedTool?: AgentSaveTool;
+  plannedReason?: string;
+  requestId?: string;
+  agentRunId?: number;
+  skillVersion?: string;
+  promptVersion?: string;
+  schemaVersion?: string;
+  confirmationId?: number;
+  executionStatus?: string;
+  executionErrorCode?: string;
+  extra?: Record<string, unknown>;
 }
 
 export interface MirrorContextResponse {

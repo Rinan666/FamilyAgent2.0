@@ -52,7 +52,6 @@ import {
   savedRecordType,
   todayString,
   toolLabel,
-  truncateAuditText,
 } from '@/lib/savePlan';
 import type {
   AgentMode,
@@ -976,47 +975,29 @@ export default function AgentPage() {
       : currentMode === 'persona'
         ? targetPersona?.name || targetLabel
         : (activeMembership?.relationshipLabel || '');
+    const currentSkillSource = currentMode === 'mirror'
+      ? 'MIRROR_AGENT_CHAT'
+      : currentMode === 'persona'
+        ? 'PERSONA_MEMBER_CHAT'
+        : 'FAMILY_AGENT_CHAT';
     let skillRunId: number | null = null;
 
     try {
-      const skillRun = await skillRunApi.create({
-        familyId: activeFamilyId,
-        skillName: 'save_memory',
-        status: 'RUNNING',
-        source: currentMode === 'mirror'
-          ? 'MIRROR_AGENT_CHAT'
-          : currentMode === 'persona'
-            ? 'PERSONA_MEMBER_CHAT'
-            : 'FAMILY_AGENT_CHAT',
-        inputSummary: truncateAuditText(originalContent),
-        saved: false,
-      });
-      skillRunId = skillRun.id;
-
       const planResult = await memoryApi.planSaveTool({
+        familyId: activeFamilyId,
         message: originalContent,
         familyContext: activeFamily?.name || '',
         conversationContext: conversationContext ?? buildRelevantSaveContext(message, messages),
         targetMemberName: currentTargetName,
         viewerRole,
+        source: currentSkillSource,
+        requestId: `save-plan-${message.id}`,
       });
+      skillRunId = planResult.skillRunId;
 
-      const decision = savePlanPersistenceDecision(planResult.data);
+      const decision = savePlanPersistenceDecision(planResult.plan);
       const plan = decision.plan;
       if (!decision.shouldPersist) {
-        if (skillRunId) {
-          await skillRunApi.update(skillRunId, {
-            status: 'SUCCEEDED',
-            saved: false,
-            outputSummary: decision.skippedDetail,
-            metadata: {
-              savedRecordType: 'NONE',
-              plannedTool: plan.tool,
-              plannedReason: plan.reason,
-            },
-          });
-        }
-
         setSaveFeedback((current) => ({
           ...current,
           [message.id]: {
