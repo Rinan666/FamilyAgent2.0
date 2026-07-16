@@ -9,6 +9,8 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -57,5 +59,22 @@ class AgentMemoryContextFacadeTest {
                 8);
         assertTrue(context.contains("retrieval_summary: mode=TEXT_FALLBACK embedding_ready=3"));
         assertTrue(context.contains("[ELDER_ADVICE] author=family_user_202 Brush teeth before sleep"));
+    }
+
+    @Test
+    void buildFamilyAgentContextResult_exposesDegradedRecallFailureWithoutSensitiveDetails() {
+        when(recallService.recallForFamily(10L, 101L, "hello", "FAMILY_AGENT", 8, 8))
+                .thenThrow(new RuntimeException("database connection secret"));
+
+        AgentMemoryContextResult result = facade.buildFamilyAgentContextResult(
+                10L,
+                101L,
+                "hello",
+                List.of());
+
+        assertFalse(result.success());
+        assertEquals(AgentMemoryContextErrorCode.RECALL_FAILED.code(), result.errorCode());
+        assertEquals("", result.context());
+        assertTrue(result.metadata().isEmpty());
     }
 }

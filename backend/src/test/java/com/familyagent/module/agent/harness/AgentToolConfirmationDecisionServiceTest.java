@@ -35,11 +35,13 @@ class AgentToolConfirmationDecisionServiceTest {
     private final AgentToolConfirmationRecordRepository repository = mock(AgentToolConfirmationRecordRepository.class);
     private final AgentToolRegistry registry = mock(AgentToolRegistry.class);
     private final AgentToolExecutor toolExecutor = mock(AgentToolExecutor.class);
+    private final AgentRunLifecycleService runLifecycleService = mock(AgentRunLifecycleService.class);
     private final AgentToolConfirmationDecisionService service = new AgentToolConfirmationDecisionService(
             repository,
             registry,
             new AgentToolConfirmationPayloadCodec(new ObjectMapper()),
-            toolExecutor);
+            toolExecutor,
+            runLifecycleService);
 
     @Test
     void decide_approveRequiredConfirmation_executesApprovedToolOnce() {
@@ -65,6 +67,7 @@ class AgentToolConfirmationDecisionServiceTest {
         assertEquals("hello", request.input().value());
         assertEquals(10L, request.context().familyId());
         assertEquals(101L, request.context().viewerUserId());
+        assertEquals(500L, request.context().runId());
         verify(repository).updateById(record);
     }
 
@@ -79,6 +82,7 @@ class AgentToolConfirmationDecisionServiceTest {
         assertNotNull(result.confirmation().decidedAt());
         verify(toolExecutor, never()).executeConfirmed(any(), any());
         verify(repository).updateById(record);
+        verify(runLifecycleService).cancel(500L, "AGENT_TOOL_CONFIRMATION_REJECTED");
     }
 
     @Test
@@ -93,6 +97,7 @@ class AgentToolConfirmationDecisionServiceTest {
         assertNotNull(result.confirmation().decidedAt());
         verify(toolExecutor, never()).executeConfirmed(any(), any());
         verify(repository).updateById(record);
+        verify(runLifecycleService).fail(500L, "AGENT_TOOL_CONFIRMATION_EXPIRED");
     }
 
     @Test
@@ -121,6 +126,7 @@ class AgentToolConfirmationDecisionServiceTest {
     private AgentToolConfirmationRecord requiredRecord() {
         AgentToolConfirmationRecord record = new AgentToolConfirmationRecord();
         record.setId(55L);
+        record.setRunId(500L);
         record.setToolName(EchoTool.NAME);
         record.setFamilyId(10L);
         record.setViewerUserId(101L);
@@ -129,6 +135,7 @@ class AgentToolConfirmationDecisionServiceTest {
         record.setAgentMode("family_memory");
         record.setSubject("family");
         record.setContextLabel("test");
+        record.setCompleteRunAfterTool(true);
         record.setInputPayload("{\"value\":\"hello\"}");
         record.setStatus(AgentConfirmationStatus.REQUIRED.name());
         record.setExpiresAt(LocalDateTime.now().plusMinutes(5));

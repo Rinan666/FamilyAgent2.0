@@ -34,6 +34,7 @@ public class AgentToolConfirmationService {
             Object input) {
         AgentToolConfirmationRecord record = new AgentToolConfirmationRecord();
         record.setToolName(descriptor.name());
+        record.setRunId(context.runId());
         record.setFamilyId(context.familyId());
         record.setViewerUserId(context.viewerUserId());
         record.setRequestId(inputSummarizer.trim(context.requestId(), REQUEST_ID_LIMIT));
@@ -41,6 +42,7 @@ public class AgentToolConfirmationService {
         record.setAgentMode(inputSummarizer.trim(context.agentMode(), 80));
         record.setSubject(inputSummarizer.trim(context.subject(), 200));
         record.setContextLabel(inputSummarizer.trim(context.contextLabel(), 200));
+        record.setCompleteRunAfterTool(context.completeRunAfterTool());
         record.setInputSummary(inputSummarizer.summarize(input));
         String inputPayload = payloadCodec.encode(descriptor, input);
         record.setInputPayload(inputPayload);

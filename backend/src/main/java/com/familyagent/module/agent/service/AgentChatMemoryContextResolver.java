@@ -24,7 +24,7 @@ public class AgentChatMemoryContextResolver {
     private final AgentMirrorContextFacade mirrorContextFacade;
     private final AgentPersonaContextFacade personaContextFacade;
 
-    public AgentChatMemoryResolution resolve(AgentChatStreamRequest request, Long viewerUserId, String requestId) {
+    public AgentChatMemoryResolution resolve(AgentChatStreamRequest request, AgentRunContext runContext) {
         if (request.shouldUseServerMirrorContext()) {
             return AgentChatMemoryResolution.contextOnly(mirrorContextFacade.buildMirrorAgentContext(
                     request.getFamilyId(),
@@ -38,7 +38,7 @@ public class AgentChatMemoryContextResolver {
             if (!request.isThinkMode()) {
                 return AgentChatMemoryResolution.contextOnly(personaContext);
             }
-            AgentChatMemoryResolution familyContext = buildFamilyMemoryContext(request, viewerUserId, requestId);
+            AgentChatMemoryResolution familyContext = buildFamilyMemoryContext(request, runContext);
             String context = familyContext.context().isBlank()
                     ? personaContext
                     : personaContext + "\n\nfamily_visible_reference:\n" + familyContext.context();
@@ -47,24 +47,18 @@ public class AgentChatMemoryContextResolver {
         if (!request.shouldUseServerFamilyMemoryContext()) {
             return AgentChatMemoryResolution.contextOnly(request.getMemoryContext());
         }
-        return buildFamilyMemoryContext(request, viewerUserId, requestId);
+        return buildFamilyMemoryContext(request, runContext);
     }
 
-    private AgentChatMemoryResolution buildFamilyMemoryContext(AgentChatStreamRequest request, Long viewerUserId, String requestId) {
-        AgentRunContext context = new AgentRunContext(
-                requestId,
-                request.getFamilyId(),
-                viewerUserId,
-                null,
-                request.getKnowledgePoint(),
-                request.getSubject(),
-                "family_memory");
+    private AgentChatMemoryResolution buildFamilyMemoryContext(
+            AgentChatStreamRequest request,
+            AgentRunContext runContext) {
         RecallFamilyMemoryInput input = new RecallFamilyMemoryInput(
                 request.getMemberMessage(),
                 request.userHistoryContents());
         AgentToolCallResult<RecallFamilyMemoryOutput> result = toolExecutor.execute(new AgentToolCallRequest<>(
                 AgentToolName.RECALL_FAMILY_MEMORY.value(),
-                context,
+                runContext,
                 input));
         if (!result.success() || result.data() == null) {
             return AgentChatMemoryResolution.empty();

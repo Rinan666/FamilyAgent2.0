@@ -27,6 +27,7 @@ public class AgentToolConfirmationDecisionService {
     private final AgentToolRegistry registry;
     private final AgentToolConfirmationPayloadCodec payloadCodec;
     private final AgentToolExecutor toolExecutor;
+    private final AgentRunLifecycleService runLifecycleService;
 
     @Transactional
     public AgentToolConfirmationDecisionResult decide(
@@ -52,10 +53,12 @@ public class AgentToolConfirmationDecisionService {
         LocalDateTime now = LocalDateTime.now(Clock.systemDefaultZone());
         if (!record.getExpiresAt().isAfter(now)) {
             transition(record, AgentConfirmationStatus.EXPIRED, now, null);
+            runLifecycleService.fail(record.getRunId(), AgentToolErrorCode.CONFIRMATION_EXPIRED.code());
             return result(record, null);
         }
         if (decision == AgentConfirmationDecision.REJECT) {
             transition(record, AgentConfirmationStatus.REJECTED, now, null);
+            runLifecycleService.cancel(record.getRunId(), AgentToolErrorCode.CONFIRMATION_REJECTED.code());
             return result(record, null);
         }
 
@@ -72,6 +75,7 @@ public class AgentToolConfirmationDecisionService {
             String errorCode = e.getCode() == ErrorCode.NOT_FOUND.getCode()
                     ? AgentToolErrorCode.TOOL_NOT_FOUND.code()
                     : AgentToolErrorCode.INVALID_INPUT.code();
+            runLifecycleService.fail(record.getRunId(), errorCode);
             return AgentToolCallResult.failure(
                     AgentToolCallStatus.FAILED,
                     errorCode,
@@ -85,13 +89,15 @@ public class AgentToolConfirmationDecisionService {
             AgentTool<I, O> tool) {
         I input = payloadCodec.decode(tool, record.getInputPayload());
         AgentRunContext context = new AgentRunContext(
+                record.getRunId(),
                 record.getRequestId(),
                 record.getFamilyId(),
                 record.getViewerUserId(),
                 record.getSessionId(),
                 record.getAgentMode(),
                 record.getSubject(),
-                record.getContextLabel());
+                record.getContextLabel(),
+                !Boolean.FALSE.equals(record.getCompleteRunAfterTool()));
         return toolExecutor.executeConfirmed(
                 new AgentToolCallRequest<>(record.getToolName(), context, input),
                 record.getId());

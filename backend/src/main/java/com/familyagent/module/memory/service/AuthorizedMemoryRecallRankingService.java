@@ -1,10 +1,8 @@
 package com.familyagent.module.memory.service;
 
-import com.familyagent.infra.ai.AIServiceClient;
-import com.familyagent.infra.ai.dto.EmbeddingRequest;
-import com.familyagent.infra.ai.dto.EmbeddingResponse;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
+import com.familyagent.module.memory.dto.EmbeddingCallObservation;
 import com.familyagent.module.memory.dto.RecallSourceSummary;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import lombok.RequiredArgsConstructor;
@@ -27,10 +25,9 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class AuthorizedMemoryRecallRankingService {
 
-    private static final int EMBEDDING_DIMENSIONS = 1536;
     private static final double MAX_VECTOR_DISTANCE = 0.72;
 
-    private final AIServiceClient aiServiceClient;
+    private final AuthorizedMemoryRecallEmbeddingService embeddingService;
     private final JdbcTemplate jdbcTemplate;
 
     public RankedRecall rank(
@@ -56,13 +53,15 @@ public class AuthorizedMemoryRecallRankingService {
                     vectorRanking.diaries(),
                     vectorRanking.memories(),
                     vectorRanking.growthRecords(),
-                    true);
+                    true,
+                    vectorRanking.embeddingObservation());
         }
         return new RankedRecall(
                 rankDiaries(diaryCandidates, query, diaryLimit),
                 rankMemories(memoryCandidates, query, memoryLimit),
                 rankGrowthRecords(growthCandidates, query, memoryLimit),
-                false);
+                false,
+                vectorRanking.embeddingObservation());
     }
 
     public List<RecallSourceSummary> buildSourceSummaries(
@@ -131,31 +130,19 @@ public class AuthorizedMemoryRecallRankingService {
             int memoryLimit,
             long readyEmbeddings) {
         if (readyEmbeddings <= 0 || query.isBlank()) {
-            return VectorRanking.empty();
+            return VectorRanking.empty(null);
         }
 
+        AuthorizedMemoryRecallEmbeddingService.RecallQueryEmbedding embedding = embeddingService.embed(
+                familyId,
+                query);
+        EmbeddingCallObservation observation = embedding.observation();
+        if (!observation.success()) {
+            return VectorRanking.empty(observation);
+        }
+
+        List<Double> values = embedding.values();
         try {
-            EmbeddingResponse response = aiServiceClient.embedText(EmbeddingRequest.builder()
-                    .text(query)
-                    .dimensions(EMBEDDING_DIMENSIONS)
-                    .sourceType("RECALL_QUERY")
-                    .familyId(familyId)
-                    .build());
-            if (response == null || !response.isSuccess() || response.isDegraded()) {
-                return VectorRanking.empty();
-            }
-            List<Double> values = response.getEmbedding();
-            if (values == null || values.isEmpty()) {
-                return VectorRanking.empty();
-            }
-            if (values.size() != EMBEDDING_DIMENSIONS) {
-                return VectorRanking.empty();
-            }
-            for (Double value : values) {
-                if (value == null || !Double.isFinite(value)) {
-                    return VectorRanking.empty();
-                }
-            }
             String vector = toVectorLiteral(values);
             List<Long> diaryIds = vectorRankIds(familyId, "DIARY", diaryCandidates.stream().map(DiaryEntry::getId).toList(), vector, diaryLimit);
             List<Long> memoryIds = vectorRankIds(familyId, "MEMORY", memoryCandidates.stream().map(MemoryEntry::getId).toList(), vector, memoryLimit);
@@ -167,10 +154,16 @@ public class AuthorizedMemoryRecallRankingService {
             List<DiaryEntry> diaries = mergeVectorAndTextDiaries(diaryCandidates, diaryIds, query, diaryLimit);
             List<MemoryEntry> memories = mergeVectorAndTextMemories(memoryCandidates, memoryIds, query, memoryLimit);
             List<GrowthGuardRecord> growthRecords = mergeVectorAndTextGrowthRecords(growthCandidates, growthIds, query, memoryLimit);
-            return new VectorRanking(diaries, memories, growthRecords, !diaryIds.isEmpty() || !memoryIds.isEmpty() || !growthIds.isEmpty());
-        } catch (Exception e) {
-            log.warn("Vector memory recall failed, using text fallback: {}", e.getMessage());
-            return VectorRanking.empty();
+            return new VectorRanking(
+                    diaries,
+                    memories,
+                    growthRecords,
+                    !diaryIds.isEmpty() || !memoryIds.isEmpty() || !growthIds.isEmpty(),
+                    observation);
+        } catch (RuntimeException error) {
+            log.warn("Vector memory recall failed, using text fallback: errorType={}",
+                    error.getClass().getSimpleName());
+            return VectorRanking.empty(observation);
         }
     }
 
@@ -559,15 +552,26 @@ public class AuthorizedMemoryRecallRankingService {
             List<DiaryEntry> diaries,
             List<MemoryEntry> memories,
             List<GrowthGuardRecord> growthRecords,
-            boolean usedVector) {}
+            boolean usedVector,
+            EmbeddingCallObservation embeddingObservation) {
+
+        public RankedRecall(
+                List<DiaryEntry> diaries,
+                List<MemoryEntry> memories,
+                List<GrowthGuardRecord> growthRecords,
+                boolean usedVector) {
+            this(diaries, memories, growthRecords, usedVector, null);
+        }
+    }
 
     private record VectorRanking(
             List<DiaryEntry> diaries,
             List<MemoryEntry> memories,
             List<GrowthGuardRecord> growthRecords,
-            boolean usedVector) {
-        private static VectorRanking empty() {
-            return new VectorRanking(List.of(), List.of(), List.of(), false);
+            boolean usedVector,
+            EmbeddingCallObservation embeddingObservation) {
+        private static VectorRanking empty(EmbeddingCallObservation observation) {
+            return new VectorRanking(List.of(), List.of(), List.of(), false, observation);
         }
     }
 }

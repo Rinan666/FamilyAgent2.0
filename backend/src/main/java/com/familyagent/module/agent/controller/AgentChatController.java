@@ -6,8 +6,11 @@ import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.infra.ai.AIServiceClient;
 import com.familyagent.infra.ai.dto.AgentChatStreamPayload;
 import com.familyagent.module.agent.dto.AgentChatStreamRequest;
+import com.familyagent.module.agent.harness.AgentRunContext;
 import com.familyagent.module.agent.service.AgentChatMemoryResolution;
 import com.familyagent.module.agent.service.AgentChatMemoryContextResolver;
+import com.familyagent.module.agent.service.AgentChatRunService;
+import com.familyagent.module.agent.service.AgentChatStreamTracker;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
@@ -47,8 +50,10 @@ public class AgentChatController {
     private static final int MAX_CHAT_REQUEST_BYTES = 32 * 1024;
     private static final DateTimeFormatter HOUR_KEY_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH");
     private static final String REQUEST_ID_HEADER = "X-Request-Id";
+    private static final String RUN_ID_HEADER = "X-Agent-Run-Id";
     private final AIServiceClient aiServiceClient;
     private final AgentChatMemoryContextResolver memoryContextResolver;
+    private final AgentChatRunService chatRunService;
     private final RedissonClient redissonClient;
     private final ObjectMapper objectMapper;
 
@@ -60,17 +65,17 @@ public class AgentChatController {
                        HttpServletResponse response) throws IOException {
         Long userId = CurrentUserGuard.currentUserId();
         String effectiveRequestId = normalizeRequestId(requestId);
-        AgentChatMemoryResolution memoryResolution = memoryContextResolver.resolve(request, userId, effectiveRequestId);
-        AgentChatStreamPayload aiPayload = request.toAiPayload(memoryResolution.context());
-        enforceRequestSize(aiPayload);
-        String hourKey = "quota:chat:user:" + userId + ":" + LocalDateTime.now().format(HOUR_KEY_FMT);
-        RAtomicLong counter = redissonClient.getAtomicLong(hourKey);
-        long count = counter.incrementAndGet();
-        if (count == 1) {
-            counter.expire(1, TimeUnit.HOURS);
-        } else if (count > MAX_CHATS_PER_HOUR) {
-            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED,
-                    "每小时对话次数已达上限（" + MAX_CHATS_PER_HOUR + " 次），请稍后再试");
+        AgentRunContext runContext = chatRunService.start(request, userId, effectiveRequestId);
+        AgentChatMemoryResolution memoryResolution;
+        AgentChatStreamPayload aiPayload;
+        try {
+            memoryResolution = memoryContextResolver.resolve(request, runContext);
+            aiPayload = request.toAiPayload(memoryResolution.context());
+            enforceRequestSize(aiPayload);
+            enforceQuota(userId);
+        } catch (RuntimeException error) {
+            chatRunService.failPreparation(runContext, error);
+            throw error;
         }
 
         response.setStatus(HttpServletResponse.SC_OK);
@@ -80,11 +85,22 @@ public class AgentChatController {
         response.setHeader("Connection", "keep-alive");
         response.setHeader("X-Accel-Buffering", "no");
         response.setHeader(REQUEST_ID_HEADER, effectiveRequestId);
+        if (runContext.runId() != null) {
+            response.setHeader(RUN_ID_HEADER, String.valueOf(runContext.runId()));
+        }
 
         try (OutputStream outputStream = response.getOutputStream()) {
-            writeMetadataEvent(outputStream, memoryResolution.metadata(), effectiveRequestId);
-            aiServiceClient.proxyChatStream(aiPayload, outputStream, authorization, effectiveRequestId);
+            AgentChatStreamTracker tracker = new AgentChatStreamTracker(outputStream, objectMapper);
+            writeMetadataEvent(tracker, memoryResolution.metadata(), effectiveRequestId, runContext.runId());
+            aiServiceClient.proxyChatStream(
+                    aiPayload,
+                    tracker,
+                    authorization,
+                    effectiveRequestId,
+                    runContext.runId());
+            chatRunService.complete(runContext, tracker);
         } catch (BusinessException e) {
+            chatRunService.failStream(runContext);
             if (!response.isCommitted()) {
                 response.resetBuffer();
                 response.setStatus(HttpServletResponse.SC_BAD_GATEWAY);
@@ -100,9 +116,25 @@ public class AgentChatController {
             }
 
             log.warn("FamilyAgent chat stream failed after response committed: requestId={}, error={}", effectiveRequestId, e.getMessage());
-            writeErrorEvent(response.getOutputStream(), effectiveRequestId);
+            writeErrorEvent(response.getOutputStream(), effectiveRequestId, runContext.runId());
+        } catch (IOException e) {
+            chatRunService.failIo(runContext);
+            throw e;
         }
     }
+
+    private void enforceQuota(Long userId) {
+        String hourKey = "quota:chat:user:" + userId + ":" + LocalDateTime.now().format(HOUR_KEY_FMT);
+        RAtomicLong counter = redissonClient.getAtomicLong(hourKey);
+        long count = counter.incrementAndGet();
+        if (count == 1) {
+            counter.expire(1, TimeUnit.HOURS);
+        } else if (count > MAX_CHATS_PER_HOUR) {
+            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED,
+                    "每小时对话次数已达上限（" + MAX_CHATS_PER_HOUR + " 次），请稍后再试");
+        }
+    }
+
 
     private String normalizeRequestId(String requestId) {
         if (requestId == null || requestId.isBlank()) {
@@ -123,31 +155,39 @@ public class AgentChatController {
         }
     }
 
-    private void writeErrorEvent(OutputStream outputStream, String requestId) {
+    private void writeErrorEvent(OutputStream outputStream, String requestId, Long runId) {
         try {
-            outputStream.write(streamErrorEvent(requestId).getBytes(StandardCharsets.UTF_8));
+            outputStream.write(streamErrorEvent(requestId, runId).getBytes(StandardCharsets.UTF_8));
             outputStream.flush();
         } catch (IOException ioException) {
             log.warn("Failed to send downstream SSE error event", ioException);
         }
     }
 
-    private void writeMetadataEvent(OutputStream outputStream, Map<String, Object> metadata, String requestId) throws IOException {
-        if (metadata == null || metadata.isEmpty()) {
-            return;
-        }
-        Map<String, Object> payload = new LinkedHashMap<>(metadata);
+    private void writeMetadataEvent(
+            OutputStream outputStream,
+            Map<String, Object> metadata,
+            String requestId,
+            Long runId) throws IOException {
+        Map<String, Object> payload = metadata == null
+                ? new LinkedHashMap<>()
+                : new LinkedHashMap<>(metadata);
         payload.put("type", "metadata");
         payload.put("requestId", normalizeRequestId(requestId));
+        if (runId != null) {
+            payload.put("runId", runId);
+        }
         outputStream.write(("data: " + objectMapper.writeValueAsString(payload) + "\n\n")
                 .getBytes(StandardCharsets.UTF_8));
         outputStream.flush();
     }
 
-    private String streamErrorEvent(String requestId) {
+    private String streamErrorEvent(String requestId, Long runId) {
+        String runField = runId == null ? "" : ",\"runId\":" + runId;
         return "data: {\"type\":\"error\",\"error\":true,\"code\":\"AI_STREAM_UNAVAILABLE\","
                 + "\"message\":\"AI service unavailable, please retry later.\",\"retryable\":true,"
-                + "\"degraded\":false,\"requestId\":\"" + escapeJson(normalizeRequestId(requestId)) + "\"}\n\n";
+                + "\"degraded\":false,\"requestId\":\"" + escapeJson(normalizeRequestId(requestId)) + "\""
+                + runField + "}\n\n";
     }
 
     private String escapeJson(String value) {

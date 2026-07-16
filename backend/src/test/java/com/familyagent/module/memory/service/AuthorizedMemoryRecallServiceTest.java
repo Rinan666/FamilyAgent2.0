@@ -8,6 +8,7 @@ import com.familyagent.module.family.service.FamilyService;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
+import com.familyagent.module.memory.dto.EmbeddingCallObservation;
 import com.familyagent.module.memory.dto.RecallSourceSummary;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEmbeddingRepository;
@@ -311,6 +312,8 @@ class AuthorizedMemoryRecallServiceTest {
     void recallForFamily_usesRankingModeToSetRetrievalMode() {
         Long familyId = 10L;
         Long viewerUserId = 101L;
+        EmbeddingCallObservation embeddingObservation = new EmbeddingCallObservation(
+                true, true, false, "local", "local/hash-embedding", 1536, 18L, null);
 
         when(memoryRepository.findActiveFamilyMemories(eq(familyId), eq(viewerUserId), anyInt()))
                 .thenReturn(List.of());
@@ -320,7 +323,8 @@ class AuthorizedMemoryRecallServiceTest {
                         List.of(),
                         List.of(),
                         List.of(),
-                        true));
+                        true,
+                        embeddingObservation));
         when(rankingService.buildSourceSummaries(List.of(), List.of(), List.of()))
                 .thenReturn(List.of());
 
@@ -332,6 +336,7 @@ class AuthorizedMemoryRecallServiceTest {
                 3);
 
         assertEquals("VECTOR_WITH_TEXT_FALLBACK", result.getRetrievalMode());
+        assertEquals(embeddingObservation, result.getEmbeddingObservation());
     }
 
     @Test

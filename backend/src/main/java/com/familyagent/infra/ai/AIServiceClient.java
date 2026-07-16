@@ -5,6 +5,8 @@ import com.familyagent.common.response.ErrorCode;
 import com.familyagent.infra.ai.dto.AgentChatStreamPayload;
 import com.familyagent.infra.ai.dto.EmbeddingRequest;
 import com.familyagent.infra.ai.dto.EmbeddingResponse;
+import com.familyagent.infra.ai.dto.SaveMemoryPlanPayload;
+import com.familyagent.infra.ai.dto.SaveMemoryPlanResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
@@ -18,12 +20,10 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.ClientHttpRequest;
-import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -47,6 +47,7 @@ public class AIServiceClient {
     private static final int STREAM_BUFFER_SIZE = 1024;
     private static final String INTERNAL_SERVICE_TOKEN_HEADER = "X-Internal-Service-Token";
     private static final String REQUEST_ID_HEADER = "X-Request-Id";
+    private static final String RUN_ID_HEADER = "X-Agent-Run-Id";
     private static final String ERROR_NONE = "NONE";
     private static final String ERROR_AI_SERVICE = "AI_SERVICE_ERROR";
 
@@ -56,19 +57,41 @@ public class AIServiceClient {
     private final String internalToken;
     private final ObjectMapper objectMapper;
     private final MeterRegistry meterRegistry;
+    private final SaveMemoryPlanClient saveMemoryPlanClient;
 
     public AIServiceClient(@Qualifier("aiServiceRestTemplate") RestTemplate restTemplate,
                            @Qualifier("aiServiceStreamRestTemplate") RestTemplate streamRestTemplate,
                            @Value("${ai-service.base-url:http://localhost:8000}") String baseUrl,
                            @Value("${ai-service.internal-token:}") String internalToken,
                            ObjectMapper objectMapper,
-                           MeterRegistry meterRegistry) {
+                           MeterRegistry meterRegistry,
+                           SaveMemoryPlanClient saveMemoryPlanClient) {
         this.restTemplate = restTemplate;
         this.streamRestTemplate = streamRestTemplate;
         this.baseUrl = baseUrl;
         this.internalToken = internalToken;
         this.objectMapper = objectMapper;
         this.meterRegistry = meterRegistry;
+        this.saveMemoryPlanClient = saveMemoryPlanClient;
+    }
+
+    public SaveMemoryPlanResponse planSaveMemory(SaveMemoryPlanPayload payload, String requestId) {
+        try {
+            return saveMemoryPlanClient.plan(payload, normalizeRequestId(requestId));
+        } catch (AIServiceInputRejectedException error) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, error.getMessage());
+        }
+    }
+
+    public SaveMemoryPlanResponse planSaveMemory(
+            SaveMemoryPlanPayload payload,
+            String requestId,
+            Long runId) {
+        try {
+            return saveMemoryPlanClient.plan(payload, normalizeRequestId(requestId), runId);
+        } catch (AIServiceInputRejectedException error) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, error.getMessage());
+        }
     }
 
     /**
@@ -76,6 +99,25 @@ public class AIServiceClient {
      */
     @CircuitBreaker(name = "aiService", fallbackMethod = "fallbackProxyChatStream")
     public void proxyChatStream(AgentChatStreamPayload request, OutputStream downstream, String authorization, String requestId) {
+        proxyChatStreamInternal(request, downstream, authorization, requestId, null);
+    }
+
+    @CircuitBreaker(name = "aiService", fallbackMethod = "fallbackProxyChatStreamWithRun")
+    public void proxyChatStream(
+            AgentChatStreamPayload request,
+            OutputStream downstream,
+            String authorization,
+            String requestId,
+            Long runId) {
+        proxyChatStreamInternal(request, downstream, authorization, requestId, runId);
+    }
+
+    private void proxyChatStreamInternal(
+            AgentChatStreamPayload request,
+            OutputStream downstream,
+            String authorization,
+            String requestId,
+            Long runId) {
         long startedAt = System.nanoTime();
         String effectiveRequestId = normalizeRequestId(requestId);
         boolean success = false;
@@ -87,6 +129,9 @@ public class AIServiceClient {
             headers.setContentType(MediaType.APPLICATION_JSON);
             headers.setAccept(java.util.List.of(MediaType.TEXT_EVENT_STREAM));
             headers.set(REQUEST_ID_HEADER, effectiveRequestId);
+            if (runId != null) {
+                headers.set(RUN_ID_HEADER, String.valueOf(runId));
+            }
             if (internalToken != null && !internalToken.isBlank()) {
                 headers.set(INTERNAL_SERVICE_TOKEN_HEADER, internalToken);
             }
@@ -97,9 +142,8 @@ public class AIServiceClient {
 
             streamRestTemplate.execute(uri, HttpMethod.POST, httpRequest -> writeStreamRequest(httpRequest, entity, jsonBody), response -> {
                 if (!response.getStatusCode().is2xxSuccessful()) {
-                    String errorBody = readResponseBody(response);
-                    log.warn("AI service stream response error: requestId={}, status={}, body={}",
-                            effectiveRequestId, response.getStatusCode().value(), truncateForLog(errorBody));
+                    log.warn("AI service stream response error: requestId={}, status={}",
+                            effectiveRequestId, response.getStatusCode().value());
                     throw new BusinessException(
                             ErrorCode.AI_SERVICE_ERROR,
                             "AI service unavailable, please retry later."
@@ -114,12 +158,13 @@ public class AIServiceClient {
             throw e;
         } catch (HttpStatusCodeException e) {
             errorCode = ERROR_AI_SERVICE;
-            log.warn("AI service stream response error: requestId={}, status={}, body={}",
-                    effectiveRequestId, e.getStatusCode().value(), truncateForLog(e.getResponseBodyAsString()));
+            log.warn("AI service stream response error: requestId={}, status={}",
+                    effectiveRequestId, e.getStatusCode().value());
             throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "AI service unavailable, please retry later.");
         } catch (Exception e) {
             errorCode = "AI_STREAM_INTERRUPTED";
-            log.error("FamilyAgent chat SSE proxy failed: requestId={}", effectiveRequestId, e);
+            log.error("FamilyAgent chat SSE proxy failed: requestId={}, errorType={}",
+                    effectiveRequestId, e.getClass().getSimpleName());
             throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "AI service unavailable, please retry later.");
         } finally {
             recordAiCall("chat_stream", success, errorCode, null, null, false, elapsed(startedAt));
@@ -141,38 +186,6 @@ public class AIServiceClient {
         }
     }
 
-    private String readResponseBody(ClientHttpResponse response) {
-        InputStream errorStream;
-        try {
-            errorStream = response.getBody();
-        } catch (IOException e) {
-            log.warn("Failed to open AI service error body", e);
-            return "";
-        }
-        if (errorStream == null) {
-            return "";
-        }
-
-        try (InputStream input = errorStream; ByteArrayOutputStream output = new ByteArrayOutputStream()) {
-            byte[] buffer = new byte[STREAM_BUFFER_SIZE];
-            int bytesRead;
-            while ((bytesRead = input.read(buffer)) != -1) {
-                output.write(buffer, 0, bytesRead);
-            }
-            return output.toString(StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            log.warn("Failed to read AI service error body", e);
-            return "";
-        }
-    }
-
-    private String truncateForLog(String value) {
-        if (value == null || value.isBlank()) {
-            return "";
-        }
-        return value.length() <= 500 ? value : value.substring(0, 500) + "...";
-    }
-
     private String newRequestId() {
         return "ai-" + UUID.randomUUID();
     }
@@ -186,10 +199,16 @@ public class AIServiceClient {
     }
 
     private String streamErrorEvent(String requestId) {
+        return streamErrorEvent(requestId, null);
+    }
+
+    private String streamErrorEvent(String requestId, Long runId) {
         String safeRequestId = normalizeRequestId(requestId);
+        String runField = runId == null ? "" : ",\"runId\":" + runId;
         return "data: {\"type\":\"error\",\"error\":true,\"code\":\"AI_STREAM_UNAVAILABLE\","
                 + "\"message\":\"AI service unavailable, please retry later.\",\"retryable\":true,"
-                + "\"degraded\":false,\"requestId\":\"" + escapeJson(safeRequestId) + "\"}\n\n";
+                + "\"degraded\":false,\"requestId\":\"" + escapeJson(safeRequestId) + "\""
+                + runField + "}\n\n";
     }
 
     private String escapeJson(String value) {
@@ -296,7 +315,8 @@ public class AIServiceClient {
                     false,
                     elapsed(startedAt)
             );
-            log.warn("Embedding service transport failed: requestId={}, error={}", requestId, e.getMessage());
+            log.warn("Embedding service transport failed: requestId={}, errorType={}",
+                    requestId, e.getClass().getSimpleName());
             throw new BusinessException(ErrorCode.AI_SERVICE_ERROR, "AI service unavailable");
         }
     }
@@ -309,15 +329,15 @@ public class AIServiceClient {
         try {
             return restTemplate.getForObject(baseUrl + "/ai/health", Map.class);
         } catch (Exception e) {
-            log.error("AI service health check failed", e);
-            return Map.of("status", "DOWN", "error", e.getMessage());
+            log.error("AI service health check failed: errorType={}", e.getClass().getSimpleName());
+            return Map.of("status", "DOWN", "errorCode", ERROR_AI_SERVICE);
         }
     }
 
     // --- Fallback methods ---
 
     private EmbeddingResponse fallbackEmbedText(EmbeddingRequest request, Exception ex) {
-        log.warn("AI embedding fallback triggered: {}", ex.getMessage());
+        log.warn("AI embedding fallback triggered: errorType={}", ex.getClass().getSimpleName());
         return EmbeddingResponse.unavailable();
     }
 
@@ -329,9 +349,29 @@ public class AIServiceClient {
             Exception ex
     ) {
         String effectiveRequestId = normalizeRequestId(requestId);
-        log.warn("AI chat stream fallback triggered: requestId={}, error={}", effectiveRequestId, ex.getMessage());
+        log.warn("AI chat stream fallback triggered: requestId={}, errorType={}",
+                effectiveRequestId, ex.getClass().getSimpleName());
         try {
             downstream.write(streamErrorEvent(effectiveRequestId).getBytes(StandardCharsets.UTF_8));
+            downstream.flush();
+        } catch (IOException ignored) {
+            // downstream already closed
+        }
+    }
+
+    private void fallbackProxyChatStreamWithRun(
+            AgentChatStreamPayload request,
+            OutputStream downstream,
+            String authorization,
+            String requestId,
+            Long runId,
+            Exception ex
+    ) {
+        String effectiveRequestId = normalizeRequestId(requestId);
+        log.warn("AI chat stream fallback triggered: requestId={}, runId={}, errorType={}",
+                effectiveRequestId, runId, ex.getClass().getSimpleName());
+        try {
+            downstream.write(streamErrorEvent(effectiveRequestId, runId).getBytes(StandardCharsets.UTF_8));
             downstream.flush();
         } catch (IOException ignored) {
             // downstream already closed

@@ -22,4 +22,5 @@ public class AuthorizedMemoryRecallResult {
     private String retrievalMode;
     private String query;
     private long embeddingReadyCount;
+    private EmbeddingCallObservation embeddingObservation;
 }

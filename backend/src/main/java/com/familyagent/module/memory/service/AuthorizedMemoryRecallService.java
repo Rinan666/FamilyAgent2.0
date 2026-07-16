@@ -172,6 +172,7 @@ public class AuthorizedMemoryRecallService {
                         ranked.growthRecords()))
                 .query(normalizedQuery)
                 .embeddingReadyCount(readyEmbeddings)
+                .embeddingObservation(ranked.embeddingObservation())
                 .retrievalMode(ranked.usedVector() ? "VECTOR_WITH_TEXT_FALLBACK" : "TEXT_FALLBACK")
                 .build();
     }

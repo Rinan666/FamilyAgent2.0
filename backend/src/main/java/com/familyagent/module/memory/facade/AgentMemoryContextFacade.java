@@ -52,9 +52,9 @@ public class AgentMemoryContextFacade {
         } catch (BusinessException e) {
             throw e;
         } catch (RuntimeException e) {
-            log.warn("Failed to build FamilyAgent memory context: familyId={}, viewerUserId={}",
-                    familyId, viewerUserId, e);
-            return AgentMemoryContextResult.empty();
+            log.warn("Failed to build FamilyAgent memory context: familyId={}, viewerUserId={}, errorType={}",
+                    familyId, viewerUserId, e.getClass().getSimpleName());
+            return AgentMemoryContextResult.failed(AgentMemoryContextErrorCode.RECALL_FAILED);
         }
     }
 

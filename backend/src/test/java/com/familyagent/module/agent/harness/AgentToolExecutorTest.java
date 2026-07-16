@@ -32,6 +32,7 @@ import static org.mockito.Mockito.when;
 class AgentToolExecutorTest {
 
     @Mock private AgentToolRegistry registry;
+    @Mock private AgentRunLifecycleService runLifecycleService;
     @Mock private AgentToolPermissionGate permissionGate;
     @Mock private AgentToolAuditService auditService;
     @Mock private AgentConfirmationPolicy confirmationPolicy;
@@ -48,13 +49,14 @@ class AgentToolExecutorTest {
             "family_memory",
             "family",
             "test");
+    private final AgentRunContext tracedContext = context.withRunId(500L);
 
     @Test
     void execute_success_passesGateAndWritesAudit() {
         EchoTool tool = new EchoTool();
         EchoInput input = new EchoInput("hello");
         doReturn(tool).when(registry).require(EchoTool.NAME);
-        when(confirmationPolicy.evaluate(context, tool.descriptor(), input))
+        when(confirmationPolicy.evaluate(tracedContext, tool.descriptor(), input))
                 .thenReturn(AgentConfirmationStatus.NOT_REQUIRED);
         AgentToolExecutor executor = executor();
 
@@ -65,8 +67,9 @@ class AgentToolExecutorTest {
 
         assertTrue(result.success());
         assertEquals("hello", result.data().value());
-        verify(permissionGate).assertAllowed(context, tool.descriptor(), input);
-        verify(auditService).record(context, tool.descriptor(), input, AgentToolCallStatus.SUCCEEDED, null);
+        verify(permissionGate).assertAllowed(tracedContext, tool.descriptor(), input);
+        verify(auditService).record(tracedContext, tool.descriptor(), input, AgentToolCallStatus.SUCCEEDED, null);
+        verify(runLifecycleService).succeed(tracedContext);
     }
 
     @Test
@@ -76,7 +79,7 @@ class AgentToolExecutorTest {
         doReturn(tool).when(registry).require(EchoTool.NAME);
         doThrow(new BusinessException(ErrorCode.FORBIDDEN, "denied"))
                 .when(permissionGate)
-                .assertAllowed(context, tool.descriptor(), input);
+                .assertAllowed(tracedContext, tool.descriptor(), input);
         AgentToolExecutor executor = executor();
 
         AgentToolCallResult<EchoOutput> result = executor.execute(new AgentToolCallRequest<>(
@@ -88,11 +91,12 @@ class AgentToolExecutorTest {
         assertEquals(AgentToolCallStatus.DENIED, result.status());
         assertEquals(AgentToolErrorCode.PERMISSION_DENIED.code(), result.errorCode());
         verify(auditService).record(
-                context,
+                tracedContext,
                 tool.descriptor(),
                 input,
                 AgentToolCallStatus.DENIED,
                 AgentToolErrorCode.PERMISSION_DENIED.code());
+        verify(runLifecycleService).fail(tracedContext, AgentToolErrorCode.PERMISSION_DENIED.code());
     }
 
     @Test
@@ -100,11 +104,11 @@ class AgentToolExecutorTest {
         EchoTool tool = new EchoTool();
         EchoInput input = new EchoInput("hello");
         doReturn(tool).when(registry).require(EchoTool.NAME);
-        when(confirmationPolicy.evaluate(context, tool.descriptor(), input))
+        when(confirmationPolicy.evaluate(tracedContext, tool.descriptor(), input))
                 .thenReturn(AgentConfirmationStatus.REQUIRED);
         AgentToolConfirmationRecord confirmation = new AgentToolConfirmationRecord();
         confirmation.setId(55L);
-        when(confirmationService.createRequired(context, tool.descriptor(), input))
+        when(confirmationService.createRequired(tracedContext, tool.descriptor(), input))
                 .thenReturn(confirmation);
         AgentToolExecutor executor = executor();
 
@@ -118,13 +122,15 @@ class AgentToolExecutorTest {
         assertEquals(AgentToolErrorCode.CONFIRMATION_REQUIRED.code(), result.errorCode());
         assertEquals(55L, result.confirmationId());
         assertEquals(0, tool.executeCount());
-        verify(confirmationService).createRequired(context, tool.descriptor(), input);
+        verify(confirmationService).createRequired(tracedContext, tool.descriptor(), input);
         verify(auditService).record(
-                context,
+                tracedContext,
                 tool.descriptor(),
                 input,
                 AgentToolCallStatus.CONFIRMATION_REQUIRED,
-                AgentToolErrorCode.CONFIRMATION_REQUIRED.code());
+                AgentToolErrorCode.CONFIRMATION_REQUIRED.code(),
+                55L);
+        verify(runLifecycleService).waitForConfirmation(tracedContext);
     }
 
     @Test
@@ -141,7 +147,47 @@ class AgentToolExecutorTest {
 
         assertTrue(result.success());
         verify(confirmationPolicy, never()).evaluate(any(), any(), any());
-        verify(auditService).record(context, tool.descriptor(), input, AgentToolCallStatus.SUCCEEDED, null, 55L);
+        verify(auditService).record(tracedContext, tool.descriptor(), input, AgentToolCallStatus.SUCCEEDED, null, 55L);
+        verify(runLifecycleService).succeed(tracedContext);
+    }
+
+    @Test
+    void execute_childToolDoesNotCompleteParentRun() {
+        EchoTool tool = new EchoTool();
+        EchoInput input = new EchoInput("hello");
+        AgentRunContext parentContext = new AgentRunContext(
+                700L,
+                "req-parent",
+                10L,
+                101L,
+                201L,
+                "family_memory",
+                "family",
+                "chat_stream",
+                false);
+        doReturn(tool).when(registry).require(EchoTool.NAME);
+        when(runLifecycleService.startOrResume(parentContext)).thenReturn(parentContext);
+        when(confirmationPolicy.evaluate(parentContext, tool.descriptor(), input))
+                .thenReturn(AgentConfirmationStatus.NOT_REQUIRED);
+        AgentToolExecutor executor = new AgentToolExecutor(
+                registry,
+                runLifecycleService,
+                permissionGate,
+                auditService,
+                inputValidator,
+                confirmationPolicy,
+                confirmationService,
+                errorMapper,
+                descriptorFactory);
+
+        AgentToolCallResult<EchoOutput> result = executor.execute(new AgentToolCallRequest<>(
+                EchoTool.NAME,
+                parentContext,
+                input));
+
+        assertTrue(result.success());
+        verify(runLifecycleService, never()).succeed(parentContext);
+        verify(runLifecycleService, never()).fail(eq(parentContext), any());
     }
 
     @Test
@@ -159,11 +205,12 @@ class AgentToolExecutorTest {
         assertEquals(AgentToolCallStatus.FAILED, result.status());
         assertEquals(AgentToolErrorCode.INVALID_INPUT.code(), result.errorCode());
         verify(auditService).record(
-                eq(context),
+                eq(tracedContext),
                 eq(tool.descriptor()),
                 eq("wrong-input"),
                 eq(AgentToolCallStatus.FAILED),
                 eq(AgentToolErrorCode.INVALID_INPUT.code()));
+        verify(runLifecycleService).fail(tracedContext, AgentToolErrorCode.INVALID_INPUT.code());
     }
 
     @Test
@@ -181,17 +228,20 @@ class AgentToolExecutorTest {
         assertEquals(AgentToolErrorCode.TOOL_NOT_FOUND.code(), result.errorCode());
         ArgumentCaptor<AgentToolDescriptor> descriptorCaptor = ArgumentCaptor.forClass(AgentToolDescriptor.class);
         verify(auditService).record(
-                eq(context),
+                eq(tracedContext),
                 descriptorCaptor.capture(),
                 any(),
                 eq(AgentToolCallStatus.FAILED),
                 eq(AgentToolErrorCode.TOOL_NOT_FOUND.code()));
         assertEquals("missing", descriptorCaptor.getValue().name());
+        verify(runLifecycleService).fail(tracedContext, AgentToolErrorCode.TOOL_NOT_FOUND.code());
     }
 
     private AgentToolExecutor executor() {
+        when(runLifecycleService.startOrResume(context)).thenReturn(tracedContext);
         return new AgentToolExecutor(
                 registry,
+                runLifecycleService,
                 permissionGate,
                 auditService,
                 inputValidator,

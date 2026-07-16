@@ -5,7 +5,6 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.util.List;
-import java.util.Map;
 
 @Data
 public class CreateSkillRunRequest {
@@ -21,6 +20,6 @@ public class CreateSkillRunRequest {
     private String inputSummary;
     private String outputSummary;
     private Boolean saved;
-    private List<Map<String, Object>> usedSources;
-    private Map<String, Object> metadata;
+    private List<SkillRunSourceRef> usedSources;
+    private SkillRunMetadata metadata;
 }

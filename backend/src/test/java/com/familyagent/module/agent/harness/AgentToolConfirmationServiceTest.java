@@ -39,12 +39,14 @@ class AgentToolConfirmationServiceTest {
         AgentToolConfirmationRecord record = captor.getValue();
         assertEquals(record, returned);
         assertEquals("create_family_memory", record.getToolName());
+        assertEquals(500L, record.getRunId());
         assertEquals(10L, record.getFamilyId());
         assertEquals(101L, record.getViewerUserId());
         assertEquals("request-1", record.getRequestId());
         assertEquals("family_memory", record.getAgentMode());
         assertEquals("family", record.getSubject());
         assertEquals("test", record.getContextLabel());
+        assertEquals(true, record.getCompleteRunAfterTool());
         assertEquals("inputType=PrivateInput", record.getInputSummary());
         assertFalse(record.getInputSummary().contains(input.privateText()));
         assertEquals("{\"privateText\":\"private child memory\"}", record.getInputPayload());
@@ -71,13 +73,15 @@ class AgentToolConfirmationServiceTest {
 
     private AgentRunContext context() {
         AgentRunContext context = new AgentRunContext(
+                500L,
                 "request-1",
                 10L,
                 101L,
                 null,
                 "family_memory",
                 "family",
-                "test");
+                "test",
+                true);
         return context;
     }
 

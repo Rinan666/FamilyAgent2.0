@@ -17,6 +17,7 @@ public class AgentToolConfirmationRecord {
     private Long id;
 
     private String toolName;
+    private Long runId;
     private Long familyId;
     private Long viewerUserId;
     private String requestId;
@@ -24,6 +25,7 @@ public class AgentToolConfirmationRecord {
     private String agentMode;
     private String subject;
     private String contextLabel;
+    private Boolean completeRunAfterTool;
     private String idempotencyKey;
     private String inputSummary;
     private String inputPayload;

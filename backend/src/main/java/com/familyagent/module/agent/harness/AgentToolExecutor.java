@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AgentToolExecutor {
 
     private final AgentToolRegistry registry;
+    private final AgentRunLifecycleService runLifecycleService;
     private final AgentToolPermissionGate permissionGate;
     private final AgentToolAuditService auditService;
     private final AgentToolInputValidator inputValidator;
@@ -52,6 +53,9 @@ public class AgentToolExecutor {
                     "Agent tool request is required",
                     false);
         }
+        AgentRunContext context = runLifecycleService.startOrResume(request.context());
+        request = new AgentToolCallRequest<>(request.toolName(), context, request.input());
+        boolean completeRunAfterTool = context == null || context.completeRunAfterTool();
         AgentTool<?, ?> rawTool;
         try {
             rawTool = registry.require(request.toolName());
@@ -60,6 +64,7 @@ public class AgentToolExecutor {
                     AgentToolCallStatus.FAILED,
                     AgentToolErrorCode.TOOL_NOT_FOUND.code(),
                     confirmationId);
+            failRunIfOwned(request.context(), AgentToolErrorCode.TOOL_NOT_FOUND.code(), completeRunAfterTool);
             return AgentToolCallResult.failure(
                     AgentToolCallStatus.FAILED,
                     AgentToolErrorCode.TOOL_NOT_FOUND.code(),
@@ -77,7 +82,11 @@ public class AgentToolExecutor {
                         request.context(), descriptor, request.input());
                 auditService.record(request.context(), descriptor, request.input(),
                         AgentToolCallStatus.CONFIRMATION_REQUIRED,
-                        AgentToolErrorCode.CONFIRMATION_REQUIRED.code());
+                        AgentToolErrorCode.CONFIRMATION_REQUIRED.code(),
+                        confirmation.getId());
+                if (completeRunAfterTool) {
+                    runLifecycleService.waitForConfirmation(request.context());
+                }
                 return AgentToolCallResult.confirmationRequired(
                         AgentToolErrorCode.CONFIRMATION_REQUIRED.code(),
                         "Agent tool requires confirmation",
@@ -94,11 +103,15 @@ public class AgentToolExecutor {
                     AgentToolCallStatus.SUCCEEDED,
                     null,
                     confirmationId);
+            if (completeRunAfterTool) {
+                runLifecycleService.succeed(request.context());
+            }
             return AgentToolCallResult.success(output);
         } catch (BusinessException e) {
             String errorCode = errorMapper.errorCode(e);
             AgentToolCallStatus status = errorMapper.status(e);
             recordAudit(request.context(), descriptor, request.input(), status, errorCode, confirmationId);
+            failRunIfOwned(request.context(), errorCode, completeRunAfterTool);
             return AgentToolCallResult.failure(status, errorCode, e.getMessage(), false);
         } catch (RuntimeException e) {
             log.warn("Agent tool execution failed: toolName={}", descriptor.name(), e);
@@ -106,6 +119,7 @@ public class AgentToolExecutor {
                     AgentToolCallStatus.FAILED,
                     AgentToolErrorCode.EXECUTION_FAILED.code(),
                     confirmationId);
+            failRunIfOwned(request.context(), AgentToolErrorCode.EXECUTION_FAILED.code(), completeRunAfterTool);
             return AgentToolCallResult.failure(
                     AgentToolCallStatus.FAILED,
                     AgentToolErrorCode.EXECUTION_FAILED.code(),
@@ -126,5 +140,11 @@ public class AgentToolExecutor {
             return;
         }
         auditService.record(context, descriptor, input, status, errorCode, confirmationId);
+    }
+
+    private void failRunIfOwned(AgentRunContext context, String errorCode, boolean completeRunAfterTool) {
+        if (completeRunAfterTool) {
+            runLifecycleService.fail(context, errorCode);
+        }
     }
 }

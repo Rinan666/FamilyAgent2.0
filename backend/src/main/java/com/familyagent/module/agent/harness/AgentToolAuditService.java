@@ -36,6 +36,7 @@ public class AgentToolAuditService {
             Long confirmationId) {
         AgentToolCallRecord record = new AgentToolCallRecord();
         record.setToolName(descriptor == null ? null : descriptor.name());
+        record.setRunId(context == null ? null : context.runId());
         record.setFamilyId(context == null ? null : context.familyId());
         record.setViewerUserId(context == null ? null : context.viewerUserId());
         record.setConfirmationId(confirmationId);

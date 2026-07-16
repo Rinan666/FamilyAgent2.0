@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -47,7 +48,7 @@ class AgentChatMemoryContextResolverTest {
         when(toolExecutor.execute(org.mockito.ArgumentMatchers.any()))
                 .thenReturn(AgentToolCallResult.success(new RecallFamilyMemoryOutput("authorized context")));
 
-        AgentChatMemoryResolution resolution = resolver.resolve(request, 101L, "req-1");
+        AgentChatMemoryResolution resolution = resolver.resolve(request, runContext());
 
         assertEquals("authorized context", resolution.context());
         ArgumentCaptor<AgentToolCallRequest<RecallFamilyMemoryInput>> captor = ArgumentCaptor.forClass(AgentToolCallRequest.class);
@@ -58,6 +59,8 @@ class AgentChatMemoryContextResolverTest {
         assertEquals(10L, runContext.familyId());
         assertEquals(101L, runContext.viewerUserId());
         assertEquals("req-1", runContext.requestId());
+        assertEquals(500L, runContext.runId());
+        assertFalse(runContext.completeRunAfterTool());
         assertEquals("How should I talk about bedtime?", call.input().memberMessage());
         assertEquals(List.of("earlier user turn"), call.input().recentUserMessages());
     }
@@ -72,7 +75,7 @@ class AgentChatMemoryContextResolverTest {
                         "denied",
                         false));
 
-        AgentChatMemoryResolution resolution = resolver.resolve(request, 101L, "req-1");
+        AgentChatMemoryResolution resolution = resolver.resolve(request, runContext());
 
         assertEquals("", resolution.context());
         assertTrue(resolution.metadata().isEmpty());
@@ -84,7 +87,7 @@ class AgentChatMemoryContextResolverTest {
         request.setResponseMode("quick");
         request.setMemoryContext("client context");
 
-        AgentChatMemoryResolution resolution = resolver.resolve(request, 101L, "req-1");
+        AgentChatMemoryResolution resolution = resolver.resolve(request, runContext());
 
         assertEquals("client context", resolution.context());
         verify(toolExecutor, never()).execute(org.mockito.ArgumentMatchers.any());
@@ -102,7 +105,7 @@ class AgentChatMemoryContextResolverTest {
                         "family context",
                         Map.of("rag", Map.of("memoryCount", 1)))));
 
-        AgentChatMemoryResolution resolution = resolver.resolve(request, 101L, "req-1");
+        AgentChatMemoryResolution resolution = resolver.resolve(request, runContext());
 
         assertTrue(resolution.context().contains("persona context"));
         assertTrue(resolution.context().contains("family_visible_reference"));
@@ -118,5 +121,18 @@ class AgentChatMemoryContextResolverTest {
         request.setSubject("FamilyAgent");
         request.setResponseMode("think");
         return request;
+    }
+
+    private AgentRunContext runContext() {
+        return new AgentRunContext(
+                500L,
+                "req-1",
+                10L,
+                101L,
+                null,
+                "family_memory",
+                "FamilyAgent",
+                "chat_stream",
+                false);
     }
 }

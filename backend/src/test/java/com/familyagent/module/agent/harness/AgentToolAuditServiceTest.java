@@ -24,13 +24,15 @@ class AgentToolAuditServiceTest {
     @Test
     void record_writesMinimalNonRawInputSummary() {
         AgentRunContext context = new AgentRunContext(
+                500L,
                 "request-with-a-long-but-valid-id",
                 10L,
                 101L,
                 null,
                 "family_memory",
                 "family",
-                "test");
+                "test",
+                true);
         AgentToolDescriptor descriptor = new AgentToolDescriptor(
                 "recall_family_memory",
                 "Recall memory",
@@ -47,6 +49,7 @@ class AgentToolAuditServiceTest {
         verify(repository).insert(captor.capture());
         AgentToolCallRecord record = captor.getValue();
         assertEquals("recall_family_memory", record.getToolName());
+        assertEquals(500L, record.getRunId());
         assertEquals(10L, record.getFamilyId());
         assertEquals(101L, record.getViewerUserId());
         assertEquals("inputType=PrivateInput", record.getInputSummary());

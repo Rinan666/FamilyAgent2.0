@@ -9,10 +9,13 @@ import io.github.resilience4j.springboot3.retry.autoconfigure.RetryAutoConfigura
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.aop.AopAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
@@ -26,6 +29,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@ExtendWith(OutputCaptureExtension.class)
 class AIServiceClientResilienceTest {
 
     private final RestTemplate aiRestTemplate = mock(RestTemplate.class);
@@ -40,6 +44,7 @@ class AIServiceClientResilienceTest {
             .withBean("aiServiceStreamRestTemplate", RestTemplate.class, () -> streamRestTemplate)
             .withBean(ObjectMapper.class, ObjectMapper::new)
             .withBean(MeterRegistry.class, SimpleMeterRegistry::new)
+            .withBean(SaveMemoryPlanClient.class, () -> mock(SaveMemoryPlanClient.class))
             .withBean(AIServiceClient.class)
             .withPropertyValues(
                     "ai-service.base-url=http://127.0.0.1:1",
@@ -51,9 +56,9 @@ class AIServiceClientResilienceTest {
                     "resilience4j.circuitbreaker.instances.aiService.minimumNumberOfCalls=2");
 
     @Test
-    void embedText_transportFailure_isRetriedBySpringAopAndFallsBack() {
+    void embedText_transportFailure_isRetriedBySpringAopAndFallsBack(CapturedOutput output) {
         when(aiRestTemplate.postForEntity(anyString(), any(), eq(EmbeddingResponse.class)))
-                .thenThrow(new ResourceAccessException("connection refused"));
+                .thenThrow(new ResourceAccessException("private embedding transport detail"));
 
         contextRunner.run(context -> {
             AIServiceClient client = context.getBean(AIServiceClient.class);
@@ -67,5 +72,6 @@ class AIServiceClientResilienceTest {
             assertFalse(response.isSuccess());
             verify(aiRestTemplate, times(2)).postForEntity(anyString(), any(), eq(EmbeddingResponse.class));
         });
+        assertFalse(output.getAll().contains("private embedding transport detail"));
     }
 }
