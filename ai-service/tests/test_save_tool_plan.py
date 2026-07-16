@@ -175,7 +175,7 @@ def test_low_value_self_insight_is_not_saved():
 
 
 @pytest.mark.asyncio
-async def test_save_plan_provider_failure_returns_none_without_leaking_error(monkeypatch):
+async def test_save_plan_provider_failure_is_structured_without_leaking_error(monkeypatch, caplog):
     async def fail_chat(*args, **kwargs):
         raise RuntimeError("provider secret outage detail")
 
@@ -185,15 +185,17 @@ async def test_save_plan_provider_failure_returns_none_without_leaking_error(mon
         SaveToolPlanRequest(message="孩子最近做应用题总是没读完题就列式，我想后面提醒他先复述题意。")
     )
 
-    assert response["success"] is True
+    assert response["success"] is False
+    assert response["errorCode"] == "AI_PROVIDER_ERROR"
     assert response["data"]["should_save"] is False
     assert response["data"]["tool"] == "NONE"
     assert "provider secret outage detail" not in json.dumps(response, ensure_ascii=False)
+    assert "provider secret outage detail" not in caplog.text
     assert "保存规划暂时不可用" in response["data"]["reason"]
 
 
 @pytest.mark.asyncio
-async def test_save_plan_invalid_json_returns_none(monkeypatch):
+async def test_save_plan_invalid_json_is_structured_failure(monkeypatch):
     async def invalid_json(*args, **kwargs):
         return "not json"
 
@@ -203,7 +205,8 @@ async def test_save_plan_invalid_json_returns_none(monkeypatch):
         SaveToolPlanRequest(message="今天我和妈妈聊志愿选择，发现自己更在意长期能不能坚持。")
     )
 
-    assert response["success"] is True
+    assert response["success"] is False
+    assert response["errorCode"] == "AI_INVALID_RESPONSE"
     assert response["data"]["should_save"] is False
     assert response["data"]["tool"] == "NONE"
     assert "保存规划暂时不可用" in response["data"]["reason"]

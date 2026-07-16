@@ -7,6 +7,8 @@ from typing import AsyncIterator
 
 from app.config import settings
 from app.llm.client import llm_client
+from app.llm.observation import LLMCallObservation
+from app.runtime.artifact_versions import FAMILY_CHAT_PROMPT_VERSION
 from app.llm.prompts.chat import build_family_agent_system_prompt
 from app.services.web_search import build_web_search_context
 from app.utils.safety_limits import (
@@ -82,6 +84,23 @@ class FamilyAgent:
                 except asyncio.TimeoutError:
                     yield {
                         "type": "metadata",
+                        "trace_observation": {
+                            "stepType": "WEB_SEARCH",
+                            "operation": "web_search.public",
+                            "provider": None,
+                            "model": None,
+                            "latencyMs": max(
+                                0,
+                                round(settings.web_search_stream_metadata_timeout_seconds * 1000),
+                            ),
+                            "success": False,
+                            "errorCode": "WEB_SEARCH_METADATA_TIMEOUT",
+                            "degraded": True,
+                            "privacyCategories": ["PUBLIC_DATA"],
+                        },
+                    }
+                    yield {
+                        "type": "metadata",
                         "response_mode": "think",
                         "web_search": {
                             "needed": False,
@@ -93,6 +112,14 @@ class FamilyAgent:
                     }
 
             if web_search_context is not None:
+                trace_factory = getattr(web_search_context, "as_trace_observation", None)
+                if callable(trace_factory) and (
+                    web_search_context.needed or not getattr(web_search_context, "success", True)
+                ):
+                    yield {
+                        "type": "metadata",
+                        "trace_observation": trace_factory(),
+                    }
                 yield {
                     "type": "metadata",
                     "response_mode": "think",
@@ -138,8 +165,27 @@ class FamilyAgent:
                 {"role": "user", "content": member_message},
             ]
 
-            async for chunk in llm_client.chat_stream(messages, temperature=0.7):
-                yield {"type": "content", "content": chunk}
+            llm_observations: list[LLMCallObservation] = []
+            llm_error: Exception | None = None
+            try:
+                async for chunk in llm_client.chat_stream(
+                    messages,
+                    temperature=0.7,
+                    observation_sink=llm_observations.append,
+                ):
+                    yield {"type": "content", "content": chunk}
+            except Exception as exc:
+                llm_error = exc
+            finally:
+                for observation in llm_observations:
+                    yield {
+                        "type": "metadata",
+                        "trace_observation": observation.as_trace_observation(
+                            prompt_version=FAMILY_CHAT_PROMPT_VERSION,
+                        ),
+                    }
+            if llm_error is not None:
+                raise llm_error
         finally:
             if web_search_task is not None and not web_search_task.done():
                 web_search_task.cancel()

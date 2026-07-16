@@ -8,7 +8,11 @@ authorization, and persistence still live in existing services.
 from copy import deepcopy
 from typing import Any
 
-from app.runtime.skill_manifest import SAVE_MEMORY_PLAN_MANIFEST
+from app.runtime.skill_manifest import (
+    ORGANIZE_DRAFT_MANIFEST,
+    PERSONA_MATERIAL_DRAFT_MANIFEST,
+    SAVE_MEMORY_PLAN_MANIFEST,
+)
 
 
 MEMORY_LAYERS: list[dict[str, Any]] = [
@@ -71,6 +75,7 @@ FAMILY_SKILLS: list[dict[str, Any]] = [
         "status": "ACTIVE",
         "category": "memory",
         "endpoint": "/ai/memory/save-plan",
+        "description": "判断对话内容是否适合保存，并分类为每日记录、经验沉淀或成长观察。",
         "confirmation_policy": "USER_CONFIRMATION_OR_EXPLICIT_SAVE_COMMAND",
         "permission_model": "backend_filters_family_scope_before_ai_context",
         "audit_events": [
@@ -80,29 +85,23 @@ FAMILY_SKILLS: list[dict[str, Any]] = [
         ],
     },
     {
-        "name": "organize_draft",
+        **ORGANIZE_DRAFT_MANIFEST.as_dict(),
         "title": "口述草稿整理",
         "status": "ACTIVE",
         "category": "memory",
         "endpoint": "/ai/memory/organize-draft",
         "description": "把口述内容整理成日记、经验沉淀或成长观察草稿。",
-        "reads": ["L0"],
-        "writes": ["L1"],
-        "requires_confirmation": True,
         "confirmation_policy": "RETURNS_DRAFT_ONLY",
         "permission_model": "backend_controls_final_persistence",
         "audit_events": ["SKILL_DRAFT_CREATED"],
     },
     {
-        "name": "persona_material_draft",
+        **PERSONA_MATERIAL_DRAFT_MANIFEST.as_dict(),
         "title": "Persona material draft",
         "status": "ACTIVE",
         "category": "profile",
         "endpoint": "/ai/memory/persona-material-draft",
         "description": "Organizes pasted persona source text into editable profile suggestions and material cards.",
-        "reads": ["L0"],
-        "writes": ["L1"],
-        "requires_confirmation": True,
         "confirmation_policy": "RETURNS_DRAFT_ONLY",
         "permission_model": "backend_controls_final_persona_material_persistence",
         "audit_events": ["PERSONA_MATERIAL_DRAFT_CREATED"],

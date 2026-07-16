@@ -3,12 +3,15 @@
 import json
 import logging
 import re
+import time
+from collections.abc import Callable
 from typing import AsyncIterator, Optional
 
 import litellm
 from tenacity import retry, retry_if_not_exception_type, stop_after_attempt, wait_exponential
 
 from app.config import settings
+from app.llm.observation import LLMCallObservation
 from app.utils.safety_limits import (
     PromptLeakAttemptError,
     RoleHijackAttemptError,
@@ -75,7 +78,11 @@ class LLMClient:
         except (SafetyLimitError, PromptLeakAttemptError, RoleHijackAttemptError, TimeoutError):
             raise
         except Exception as exc:
-            logger.warning("LLM call failed (model=%s): %s, trying fallback", model, exc)
+            logger.warning(
+                "LLM call failed: model=%s errorType=%s; trying fallback",
+                model,
+                type(exc).__name__,
+            )
             if model != self.fallback_model and self.fallback_model != model:
                 return await self.chat(
                     messages=messages,
@@ -110,9 +117,12 @@ class LLMClient:
         model: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
+        observation_sink: Callable[[LLMCallObservation], None] | None = None,
+        _degraded: bool = False,
     ) -> AsyncIterator[str]:
         """Run a streaming chat completion."""
         model = model or self.default_model
+        started_at = time.monotonic()
         validate_messages(messages)
         max_tokens = bounded_output_tokens(max_tokens)
 
@@ -131,20 +141,72 @@ class LLMClient:
                 delta = chunk.choices[0].delta
                 if delta.content:
                     yield delta.content
-        except (SafetyLimitError, PromptLeakAttemptError, RoleHijackAttemptError, TimeoutError):
+            self._observe_stream(
+                observation_sink,
+                model=model,
+                started_at=started_at,
+                success=True,
+                error_code=None,
+                degraded=_degraded,
+            )
+        except (SafetyLimitError, PromptLeakAttemptError, RoleHijackAttemptError, TimeoutError) as exc:
+            self._observe_stream(
+                observation_sink,
+                model=model,
+                started_at=started_at,
+                success=False,
+                error_code="AI_TIMEOUT" if isinstance(exc, TimeoutError) else "AI_INPUT_REJECTED",
+                degraded=_degraded,
+            )
             raise
         except Exception as exc:
-            logger.error("LLM stream call failed (model=%s): %s", model, exc)
+            self._observe_stream(
+                observation_sink,
+                model=model,
+                started_at=started_at,
+                success=False,
+                error_code="AI_PROVIDER_ERROR",
+                degraded=_degraded,
+            )
+            logger.error(
+                "LLM stream call failed: model=%s errorType=%s",
+                model,
+                type(exc).__name__,
+            )
             if model != self.fallback_model and self.fallback_model != model:
                 async for chunk in self.chat_stream(
                     messages,
                     model=self.fallback_model,
                     temperature=temperature,
                     max_tokens=max_tokens,
+                    observation_sink=observation_sink,
+                    _degraded=True,
                 ):
                     yield chunk
             else:
                 raise RuntimeError("LLM stream provider unavailable") from exc
+
+    def _observe_stream(
+        self,
+        observation_sink: Callable[[LLMCallObservation], None] | None,
+        *,
+        model: str,
+        started_at: float,
+        success: bool,
+        error_code: str | None,
+        degraded: bool,
+    ) -> None:
+        if observation_sink is None:
+            return
+        provider = model.split("/", 1)[0].strip() if "/" in model else "unknown"
+        observation_sink(LLMCallObservation(
+            provider=provider or "unknown",
+            model=model,
+            latency_ms=max(0, round((time.monotonic() - started_at) * 1000)),
+            success=success,
+            error_code=error_code,
+            degraded=degraded,
+        ))
 
 
 llm_client = LLMClient()

@@ -97,17 +97,17 @@ async def embed_text(request: EmbedRequest, http_request: Request):
             e.status_code,
         )
         raise
-    except Exception as e:
+    except Exception as error:
         logger.warning(
-            "Embedding generation failed: request_id=%s provider=%s model=%s dimensions=%s latency_ms=%s errorCode=EMBEDDING_GENERATION_FAILED error=%s",
+            "Embedding generation failed: request_id=%s provider=%s model=%s dimensions=%s latency_ms=%s errorCode=EMBEDDING_GENERATION_FAILED errorType=%s",
             request_id,
             provider,
             model,
             dimensions,
             _elapsed_ms(started_at),
-            e,
+            type(error).__name__,
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Embedding generation failed") from error
 
 
 def _embedding_provider(model: str) -> str:
@@ -149,8 +149,8 @@ async def _embed(text: str, model: str, dimensions: int) -> list[float]:
         )
         values = response["data"][0]["embedding"]
         return _fit_dimensions([float(item) for item in values], dimensions)
-    except Exception as e:
-        logger.warning("LiteLLM embedding failed: %s", e)
+    except Exception as error:
+        logger.warning("LiteLLM embedding failed: errorType=%s", type(error).__name__)
         raise HTTPException(status_code=503, detail="Embedding provider unavailable")
 
 
@@ -178,8 +178,8 @@ async def _dashscope_embedding(text: str, model: str, dimensions: int) -> list[f
             data = response.json()
             values = data["data"][0]["embedding"]
             return _fit_dimensions([float(item) for item in values], dimensions)
-    except Exception as e:
-        logger.warning("DashScope embedding failed: %s", e)
+    except Exception as error:
+        logger.warning("DashScope embedding failed: errorType=%s", type(error).__name__)
         raise HTTPException(status_code=503, detail="Embedding provider unavailable")
 
 
@@ -213,8 +213,11 @@ async def _dashscope_multimodal_embedding(text: str, model: str, dimensions: int
             data = response.json()
             values = data["output"]["embeddings"][0]["embedding"]
             return _fit_dimensions([float(item) for item in values], dimensions)
-    except Exception as e:
-        logger.warning("DashScope multimodal embedding failed: %s", e)
+    except Exception as error:
+        logger.warning(
+            "DashScope multimodal embedding failed: errorType=%s",
+            type(error).__name__,
+        )
         raise HTTPException(status_code=503, detail="Embedding provider unavailable")
 
 

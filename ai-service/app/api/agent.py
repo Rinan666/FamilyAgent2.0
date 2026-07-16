@@ -11,7 +11,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from app.agents.family_agent import family_agent
 from app.middleware.auth import verify_token_or_internal_service
@@ -30,6 +30,7 @@ from app.utils.sanitizer import sanitize_text
 logger = logging.getLogger("familyagent.ai.api.agent")
 SSE_KEEPALIVE_SECONDS = 10.0
 REQUEST_ID_HEADER = "x-request-id"
+RUN_ID_HEADER = "x-agent-run-id"
 
 router = APIRouter(dependencies=[
     Depends(verify_token_or_internal_service),
@@ -65,6 +66,21 @@ class StreamContentEvent(BaseModel):
     type: Literal["content"] = "content"
     content: str
     requestId: str
+    runId: int | None = None
+
+
+class StreamTraceObservation(BaseModel):
+    stepType: Literal["LLM", "WEB_SEARCH"]
+    operation: str = Field(min_length=1, max_length=120)
+    provider: str | None = Field(default=None, max_length=80)
+    model: str | None = Field(default=None, max_length=160)
+    promptVersion: str | None = Field(default=None, max_length=80)
+    skillVersion: str | None = Field(default=None, max_length=40)
+    latencyMs: int | None = Field(default=None, ge=0)
+    success: bool
+    errorCode: str | None = Field(default=None, max_length=80)
+    degraded: bool = False
+    privacyCategories: list[Literal["FAMILY_DATA", "PUBLIC_DATA"]] = Field(default_factory=list)
 
 
 class StreamDoneEvent(BaseModel):
@@ -72,7 +88,9 @@ class StreamDoneEvent(BaseModel):
     done: bool = True
     degraded: bool = False
     requestId: str
+    runId: int | None = None
     latencyMs: int | None = None
+    traceObservations: list[StreamTraceObservation] | None = None
 
 
 class StreamErrorEvent(BaseModel):
@@ -83,7 +101,9 @@ class StreamErrorEvent(BaseModel):
     retryable: bool
     degraded: bool = False
     requestId: str
+    runId: int | None = None
     latencyMs: int | None = None
+    traceObservations: list[StreamTraceObservation] | None = None
 
 
 class StreamMetadataEvent(BaseModel):
@@ -91,6 +111,7 @@ class StreamMetadataEvent(BaseModel):
 
     type: Literal["metadata"] = "metadata"
     requestId: str
+    runId: int | None = None
 
 
 def _sse_data(payload: dict) -> str:
@@ -103,21 +124,54 @@ def _request_id_from_header(value: str | None) -> str:
     return value.strip()[:128]
 
 
+def _run_id_from_header(value: str | None) -> int | None:
+    if not value or not value.strip().isdigit():
+        return None
+    run_id = int(value.strip())
+    return run_id if run_id > 0 else None
+
+
+def _trusted_memory_context(value: str, http_request: Request) -> str:
+    if not getattr(getattr(http_request, "state", None), "internal_service", False):
+        if value.strip():
+            logger.warning("Ignored untrusted client memory_context")
+        return ""
+
+    memory_context = redact_with_note(value).text
+    try:
+        validate_no_prompt_leak_attempt(memory_context)
+        validate_no_role_hijack_attempt(memory_context)
+    except (PromptLeakAttemptError, RoleHijackAttemptError):
+        logger.warning("Rejected unsafe internal memory_context")
+        return "已授权上下文因包含疑似指令注入内容被本轮忽略。"
+    return memory_context
+
+
 def _event_payload(event: BaseModel) -> dict:
     return event.model_dump(exclude_none=True)
 
 
-def _metadata_event(payload: dict, request_id: str) -> dict:
+def _validated_trace_observation(payload: object) -> dict | None:
+    try:
+        return StreamTraceObservation.model_validate(payload).model_dump(exclude_none=True)
+    except ValidationError:
+        logger.warning("Dropped invalid internal trace observation")
+        return None
+
+
+def _metadata_event(payload: dict, request_id: str, run_id: int | None = None) -> dict:
     metadata = dict(payload)
     metadata["type"] = "metadata"
     metadata["requestId"] = request_id
+    metadata["runId"] = run_id
     return _event_payload(StreamMetadataEvent(**metadata))
 
 
-def _content_event(content: object, request_id: str) -> dict:
+def _content_event(content: object, request_id: str, run_id: int | None = None) -> dict:
     return _event_payload(StreamContentEvent(
         content=content if isinstance(content, str) else "",
         requestId=request_id,
+        runId=run_id,
     ))
 
 
@@ -127,22 +181,35 @@ def _stream_error_event(
     message: str = "AI service unavailable, please retry later.",
     retryable: bool = True,
     request_id: str = "",
+    run_id: int | None = None,
     latency_ms: int | None = None,
+    trace_observations: list[dict] | None = None,
 ) -> dict:
     return _event_payload(StreamErrorEvent(
         code=code,
         message=message,
         retryable=retryable,
         requestId=request_id,
+        runId=run_id,
         latencyMs=latency_ms,
+        traceObservations=trace_observations,
     ))
 
 
-def _stream_done_event(*, degraded: bool = False, request_id: str = "", latency_ms: int | None = None) -> dict:
+def _stream_done_event(
+    *,
+    degraded: bool = False,
+    request_id: str = "",
+    run_id: int | None = None,
+    latency_ms: int | None = None,
+    trace_observations: list[dict] | None = None,
+) -> dict:
     return _event_payload(StreamDoneEvent(
         degraded=degraded,
         requestId=request_id,
+        runId=run_id,
         latencyMs=latency_ms,
+        traceObservations=trace_observations,
     ))
 
 
@@ -168,19 +235,15 @@ async def _stream_sse_events(queue: asyncio.Queue[dict]):
 async def stream_chat(request: AgentChatRequest, http_request: Request):
     """Primary SSE endpoint for FamilyAgent chat."""
     request_id = _request_id_from_header(http_request.headers.get(REQUEST_ID_HEADER))
+    run_id = _run_id_from_header(http_request.headers.get(RUN_ID_HEADER))
     member_message = sanitize_text(request.member_message)
     enforce_input_guard(member_message)
-    memory_context = redact_with_note(request.memory_context).text
-    try:
-        validate_no_prompt_leak_attempt(memory_context)
-        validate_no_role_hijack_attempt(memory_context)
-    except (PromptLeakAttemptError, RoleHijackAttemptError):
-        logger.warning("Rejected unsafe memory_context in FamilyAgent request")
-        memory_context = "已授权上下文因包含疑似指令注入内容被本轮忽略。"
+    memory_context = _trusted_memory_context(request.memory_context, http_request)
 
     async def generate():
         queue: asyncio.Queue[dict] = asyncio.Queue()
         started_at = time.monotonic()
+        trace_observations: list[dict] = []
 
         def stream_latency_ms() -> int:
             return max(0, round((time.monotonic() - started_at) * 1000))
@@ -200,17 +263,39 @@ async def stream_chat(request: AgentChatRequest, http_request: Request):
                     client_timezone=request.client_timezone,
                 ):
                     if isinstance(chunk, dict) and chunk.get("type") == "metadata":
-                        await queue.put(_metadata_event(chunk, request_id))
+                        trace_observation = chunk.get("trace_observation")
+                        if isinstance(trace_observation, dict):
+                            validated_observation = _validated_trace_observation(trace_observation)
+                            if validated_observation is not None:
+                                trace_observations.append(validated_observation)
+                            continue
+                        await queue.put(_metadata_event(chunk, request_id, run_id))
                     elif isinstance(chunk, dict):
-                        await queue.put(_content_event(chunk.get("content", ""), request_id))
+                        await queue.put(_content_event(chunk.get("content", ""), request_id, run_id))
                     else:
-                        await queue.put(_content_event(chunk, request_id))
+                        await queue.put(_content_event(chunk, request_id, run_id))
 
-                await queue.put(_stream_done_event(request_id=request_id, latency_ms=stream_latency_ms()))
-            except Exception:
+                await queue.put(_stream_done_event(
+                    request_id=request_id,
+                    run_id=run_id,
+                    latency_ms=stream_latency_ms(),
+                    trace_observations=trace_observations or None,
+                ))
+            except Exception as error:
                 latency_ms = stream_latency_ms()
-                logger.exception("FamilyAgent stream failed: requestId=%s latencyMs=%s", request_id, latency_ms)
-                await queue.put(_stream_error_event(request_id=request_id, latency_ms=latency_ms))
+                logger.error(
+                    "FamilyAgent stream failed: requestId=%s runId=%s latencyMs=%s errorType=%s",
+                    request_id,
+                    run_id,
+                    latency_ms,
+                    type(error).__name__,
+                )
+                await queue.put(_stream_error_event(
+                    request_id=request_id,
+                    run_id=run_id,
+                    latency_ms=latency_ms,
+                    trace_observations=trace_observations or None,
+                ))
 
         task = asyncio.create_task(produce())
         try:
@@ -230,5 +315,6 @@ async def stream_chat(request: AgentChatRequest, http_request: Request):
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
             "X-Request-Id": request_id,
+            **({"X-Agent-Run-Id": str(run_id)} if run_id is not None else {}),
         },
     )

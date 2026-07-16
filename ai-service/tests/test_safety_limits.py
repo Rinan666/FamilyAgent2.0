@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 
 from app.utils.safety_limits import (
@@ -122,15 +124,14 @@ async def test_rate_limit_blocks_after_window_limit():
 @pytest.mark.asyncio
 async def test_rate_limit_releases_after_short_window():
     key = "test:rate-limit:release"
+    period_seconds = 0.2
 
-    await check_rate_limit(key, limit=1, period_seconds=0.01, label="测试请求")
+    await check_rate_limit(key, limit=1, period_seconds=period_seconds, label="测试请求")
     with pytest.raises(RateLimitExceededError):
-        await check_rate_limit(key, limit=1, period_seconds=0.01, label="测试请求")
+        await check_rate_limit(key, limit=1, period_seconds=period_seconds, label="测试请求")
 
-    import asyncio
-
-    await asyncio.sleep(0.02)
-    await check_rate_limit(key, limit=1, period_seconds=0.01, label="测试请求")
+    await asyncio.sleep(period_seconds + 0.05)
+    await check_rate_limit(key, limit=1, period_seconds=period_seconds, label="测试请求")
 
 
 @pytest.mark.asyncio

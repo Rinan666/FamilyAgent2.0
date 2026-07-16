@@ -41,6 +41,13 @@ def test_family_skills_include_active_memory_workflows():
     assert persona_material["endpoint"] == "/ai/memory/persona-material-draft"
     assert persona_material["requires_confirmation"] is True
     assert persona_material["confirmation_policy"] == "RETURNS_DRAFT_ONLY"
+    assert persona_material["prompt_version"] == "persona.material_draft.v1"
+    assert persona_material["schema_version"] == "persona_material_draft.schema.v1"
+
+    organize_draft = get_family_skill("organize_draft")
+    assert organize_draft is not None
+    assert organize_draft["prompt_version"] == "memory.organize_draft.v1"
+    assert organize_draft["schema_version"] == "organized_draft.schema.v1"
 
 
 def test_family_skill_status_filter_is_case_insensitive():

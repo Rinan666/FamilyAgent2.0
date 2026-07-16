@@ -73,6 +73,21 @@ async def test_internal_service_token_rejects_wrong_value(monkeypatch):
     assert exc.value.status_code == 401
 
 
+def test_backend_owned_capability_rejects_user_identity():
+    request = SimpleNamespace(state=SimpleNamespace(internal_service=False))
+
+    with pytest.raises(HTTPException) as exc:
+        auth.require_internal_service(request)
+
+    assert exc.value.status_code == 403
+
+
+def test_backend_owned_capability_accepts_internal_identity():
+    request = SimpleNamespace(state=SimpleNamespace(internal_service=True))
+
+    assert auth.require_internal_service(request) is None
+
+
 @pytest.mark.asyncio
 async def test_backend_401_is_always_rejected(monkeypatch):
     FakeAsyncClient.response = FakeResponse(401)
@@ -134,3 +149,17 @@ async def test_backend_timeout_respects_fail_closed(monkeypatch):
         await auth._call_backend_verify("Bearer token")
 
     assert exc.value.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_backend_auth_failure_does_not_log_exception_details(monkeypatch, caplog):
+    FakeAsyncClient.response = None
+    FakeAsyncClient.error = RuntimeError("private auth transport detail")
+    monkeypatch.setattr(auth.httpx, "AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr(auth.settings, "auth_fail_open", False)
+
+    with pytest.raises(HTTPException) as exc:
+        await auth._call_backend_verify("Bearer token")
+
+    assert exc.value.status_code == 503
+    assert "private auth transport detail" not in caplog.text

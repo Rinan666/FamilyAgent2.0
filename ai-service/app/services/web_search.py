@@ -9,6 +9,7 @@ from __future__ import annotations
 import html
 import logging
 import re
+import time
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote_plus, urlparse
@@ -100,6 +101,24 @@ class WebSearchContext:
     needed: bool
     results: list[WebSearchResult]
     prompt_context: str
+    provider: str | None = None
+    latency_ms: int = 0
+    success: bool = True
+    error_code: str | None = None
+    degraded: bool = False
+
+    def as_trace_observation(self) -> dict[str, object]:
+        return {
+            "stepType": "WEB_SEARCH",
+            "operation": "web_search.public",
+            "provider": self.provider,
+            "model": None,
+            "latencyMs": self.latency_ms,
+            "success": self.success,
+            "errorCode": self.error_code,
+            "degraded": self.degraded,
+            "privacyCategories": ["PUBLIC_DATA"],
+        }
 
 
 def is_thinking_mode(response_mode: str | None) -> bool:
@@ -178,23 +197,39 @@ def format_web_context(results: list[WebSearchResult], query: str, response_mode
 
 async def search_public_web(query: str, response_mode: str | None = "think") -> list[WebSearchResult]:
     """Search public web results when enabled and needed."""
-    if not settings.web_search_enabled or not needs_web_search(query, response_mode):
-        return []
+    results, _, _, _ = await _search_public_web_observed(query, response_mode)
+    return results
+
+
+async def _search_public_web_observed(
+    query: str,
+    response_mode: str | None = "think",
+) -> tuple[list[WebSearchResult], str | None, bool, str | None]:
+    if not needs_web_search(query, response_mode):
+        return [], None, True, None
+    if not settings.web_search_enabled:
+        return [], None, False, "WEB_SEARCH_DISABLED"
     if is_private_web_search_query(query):
         logger.info("Web search skipped because query contains private markers")
-        return []
+        return [], None, False, "WEB_SEARCH_QUERY_REJECTED"
     public_query = rewrite_public_search_query(query)
     if len(public_query) < 3:
         logger.info("Web search skipped because query rewrite produced no public query")
-        return []
+        return [], None, False, "WEB_SEARCH_QUERY_REJECTED"
+    provider = "tavily" if settings.tavily_api_key else settings.web_search_provider.lower()
     try:
         if settings.tavily_api_key:
-            return await _search_tavily(public_query)
-        if settings.web_search_provider.lower() == "duckduckgo":
-            return await _search_duckduckgo(public_query)
+            return await _search_tavily(public_query), provider, True, None
+        if provider == "duckduckgo":
+            return await _search_duckduckgo(public_query), provider, True, None
     except Exception as exc:
-        logger.warning("Web search failed: %s", exc)
-    return []
+        logger.warning(
+            "Web search failed: provider=%s errorType=%s",
+            provider,
+            type(exc).__name__,
+        )
+        return [], provider, False, "WEB_SEARCH_PROVIDER_ERROR"
+    return [], provider, False, "WEB_SEARCH_PROVIDER_UNAVAILABLE"
 
 
 async def build_web_context(query: str, response_mode: str | None = "think") -> str:
@@ -203,11 +238,17 @@ async def build_web_context(query: str, response_mode: str | None = "think") -> 
 
 async def build_web_search_context(query: str, response_mode: str | None = "think") -> WebSearchContext:
     needed = needs_web_search(query, response_mode)
-    results = await search_public_web(query, response_mode) if needed else []
+    started_at = time.monotonic()
+    results, provider, success, error_code = await _search_public_web_observed(query, response_mode)
     return WebSearchContext(
         needed=needed,
         results=results,
         prompt_context=format_web_context(results, query, response_mode),
+        provider=provider,
+        latency_ms=max(0, round((time.monotonic() - started_at) * 1000)),
+        success=success,
+        error_code=error_code,
+        degraded=needed and not success,
     )
 
 

@@ -70,6 +70,12 @@ async def verify_token_or_internal_service(
     return await verify_token(request, authorization=authorization)
 
 
+def require_internal_service(request: Request) -> None:
+    """Reject user-authenticated calls to backend-owned AI capabilities."""
+    if not getattr(request.state, "internal_service", False):
+        raise HTTPException(status_code=403, detail="Backend service identity is required")
+
+
 async def _call_backend_verify(token: str) -> Optional[dict]:
     """Call the Java backend /api/users/me endpoint to verify the token."""
     backend_url = settings.backend_url.rstrip("/")
@@ -95,8 +101,13 @@ async def _call_backend_verify(token: str) -> Optional[dict]:
             return _handle_backend_unavailable(f"status={resp.status_code}", -1, "backend_error", "后端异常-开发放行")
     except httpx.TimeoutException:
         return _handle_backend_unavailable("timeout", -2, "timeout", "后端超时-开发放行")
-    except Exception as e:
-        return _handle_backend_unavailable(f"exception={e}", -3, "error", "验证异常-开发放行")
+    except Exception as error:
+        return _handle_backend_unavailable(
+            f"errorType={type(error).__name__}",
+            -3,
+            "error",
+            "验证异常-开发放行",
+        )
 
 
 def _handle_backend_unavailable(reason: str, user_id: int, username: str, nickname: str) -> dict:

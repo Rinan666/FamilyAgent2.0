@@ -1,8 +1,7 @@
-import json
-
 import pytest
 
 from app.agents.family_agent import family_agent
+from app.llm.observation import LLMCallObservation
 
 
 class _WebSearchContext:
@@ -21,7 +20,7 @@ async def test_family_agent_chat_stream_builds_messages_without_behavior_drift(m
         captured["response_mode"] = response_mode
         return _WebSearchContext()
 
-    async def fake_chat_stream(messages, temperature=0.7):
+    async def fake_chat_stream(messages, temperature=0.7, observation_sink=None):
         captured["messages"] = messages
         captured["temperature"] = temperature
         yield "第一段"
@@ -71,3 +70,48 @@ async def test_family_agent_chat_stream_builds_messages_without_behavior_drift(m
     assert "授权上下文" in captured["messages"][0]["content"]
     assert captured["messages"][1] == {"role": "assistant", "content": "之前的上下文"}
     assert captured["messages"][2] == {"role": "user", "content": "请帮我分析这段家庭冲突"}
+
+
+@pytest.mark.asyncio
+async def test_family_agent_flushes_llm_observations_before_stream_failure(monkeypatch):
+    async def fake_build_web_search_context(message: str, response_mode: str = "think"):
+        return _WebSearchContext()
+
+    async def failing_chat_stream(messages, temperature=0.7, observation_sink=None):
+        observation_sink(LLMCallObservation(
+            provider="dashscope",
+            model="dashscope/qwen-flash",
+            latency_ms=7,
+            success=False,
+            error_code="AI_PROVIDER_ERROR",
+            degraded=False,
+        ))
+        raise RuntimeError("provider unavailable")
+        yield "unreachable"
+
+    monkeypatch.setattr(
+        "app.agents.family_agent.build_web_search_context",
+        fake_build_web_search_context,
+    )
+    monkeypatch.setattr("app.agents.family_agent.llm_client.chat_stream", failing_chat_stream)
+
+    chunks = []
+    with pytest.raises(RuntimeError, match="provider unavailable"):
+        async for chunk in family_agent.chat_stream(member_message="analyze this conflict"):
+            chunks.append(chunk)
+
+    assert chunks[-1] == {
+        "type": "metadata",
+        "trace_observation": {
+            "stepType": "LLM",
+            "operation": "llm.chat_stream",
+            "provider": "dashscope",
+            "model": "dashscope/qwen-flash",
+            "promptVersion": "family_chat.system.v1",
+            "latencyMs": 7,
+            "success": False,
+            "errorCode": "AI_PROVIDER_ERROR",
+            "degraded": False,
+            "privacyCategories": ["FAMILY_DATA"],
+        },
+    }

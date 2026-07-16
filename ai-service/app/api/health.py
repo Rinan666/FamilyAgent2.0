@@ -4,10 +4,14 @@ Health check routes.
 import time
 
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
+from app.api.health_models import ReadinessResponse, ReadinessStatus
 from app.config import settings
+from app.services.readiness import ReadinessService
 
 router = APIRouter()
+readiness_service = ReadinessService(settings)
 
 _start_time = time.time()
 
@@ -26,13 +30,14 @@ async def health_check():
     }
 
 
-@router.get("/health/ready")
-async def readiness_check():
-    """Readiness check placeholder."""
-    return {
-        "status": "ready",
-        "checks": {
-            "database": "not_checked",
-            "llm": "not_checked",
-        },
-    }
+@router.get(
+    "/health/ready",
+    response_model=ReadinessResponse,
+    responses={503: {"model": ReadinessResponse}},
+)
+async def readiness_check() -> ReadinessResponse | JSONResponse:
+    """Report whether required AI runtime configuration is available."""
+    result = readiness_service.evaluate()
+    if result.status == ReadinessStatus.NOT_READY:
+        return JSONResponse(status_code=503, content=result.model_dump(mode="json"))
+    return result

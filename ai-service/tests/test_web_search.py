@@ -4,8 +4,11 @@ Web search trigger and context tests.
 
 import asyncio
 
+import pytest
+
 from app.services.web_search import (
     WebSearchResult,
+    build_web_search_context,
     format_web_context,
     is_private_web_search_query,
     needs_web_search,
@@ -75,6 +78,48 @@ def test_search_public_web_skips_private_query(monkeypatch):
         assert results == []
 
     asyncio.run(run())
+
+
+@pytest.mark.asyncio
+async def test_web_search_does_not_log_provider_exception_details(monkeypatch, caplog):
+    async def fail_search(query: str):
+        raise RuntimeError("private web provider detail")
+
+    monkeypatch.setattr("app.services.web_search.settings.web_search_enabled", True)
+    monkeypatch.setattr("app.services.web_search.settings.tavily_api_key", "token")
+    monkeypatch.setattr("app.services.web_search._search_tavily", fail_search)
+
+    results = await search_public_web("search current OpenAI model", "think")
+
+    assert results == []
+    assert "private web provider detail" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_web_search_observation_marks_disabled_provider_as_degraded(monkeypatch):
+    monkeypatch.setattr("app.services.web_search.settings.web_search_enabled", False)
+
+    context = await build_web_search_context("search latest OpenAI model", "think")
+
+    assert context.needed is True
+    assert context.success is False
+    assert context.error_code == "WEB_SEARCH_DISABLED"
+    assert context.degraded is True
+
+
+@pytest.mark.asyncio
+async def test_web_search_observation_marks_private_query_rejection(monkeypatch):
+    monkeypatch.setattr("app.services.web_search.settings.web_search_enabled", True)
+
+    context = await build_web_search_context(
+        "search current dentist prices near phone 13812345678",
+        "think",
+    )
+
+    assert context.needed is True
+    assert context.success is False
+    assert context.error_code == "WEB_SEARCH_QUERY_REJECTED"
+    assert context.degraded is True
 
 
 def test_empty_web_context_requires_uncertainty():

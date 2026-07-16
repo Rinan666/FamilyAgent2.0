@@ -31,9 +31,9 @@ async def test_local_embedding_uses_requested_dimensions():
 
 
 @pytest.mark.asyncio
-async def test_external_embedding_provider_failure_is_not_hash_fallback(monkeypatch):
+async def test_external_embedding_provider_failure_is_not_hash_fallback(monkeypatch, caplog):
     async def fail_embedding(*args, **kwargs):
-        raise RuntimeError("provider unavailable")
+        raise RuntimeError("private embedding provider detail")
 
     monkeypatch.setattr(embedding.litellm, "aembedding", fail_embedding)
 
@@ -41,6 +41,7 @@ async def test_external_embedding_provider_failure_is_not_hash_fallback(monkeypa
         await _embed("家庭记忆", "openai/text-embedding-3-small", 128)
 
     assert exc.value.status_code == 503
+    assert "private embedding provider detail" not in caplog.text
 
 
 @pytest.mark.asyncio
