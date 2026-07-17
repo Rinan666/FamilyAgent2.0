@@ -1,10 +1,10 @@
 package com.familyagent.module.memory.service;
 
 import com.familyagent.module.diary.entity.DiaryEntry;
-import com.familyagent.module.diary.repository.DiaryEntryRepository;
+import com.familyagent.module.diary.facade.MemoryRecallDiaryFacade;
 import com.familyagent.module.family.facade.FamilyMembershipFacade;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
-import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
+import com.familyagent.module.growth.facade.MemoryRecallGrowthFacade;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEmbeddingRepository;
@@ -23,9 +23,9 @@ public class AuthorizedMemoryRecallService {
 
     private static final int CANDIDATE_MULTIPLIER = 5;
 
-    private final DiaryEntryRepository diaryRepository;
+    private final MemoryRecallDiaryFacade diaryRecallFacade;
     private final MemoryEntryRepository memoryRepository;
-    private final GrowthGuardRecordRepository growthRecordRepository;
+    private final MemoryRecallGrowthFacade growthRecallFacade;
     private final MemoryEmbeddingRepository embeddingRepository;
     private final FamilyMembershipFacade familyMembershipFacade;
     private final AuthorizedMemoryRecallSocialSupport socialSupport;
@@ -101,7 +101,7 @@ public class AuthorizedMemoryRecallService {
     private RecallCandidates loadFamilyCandidates(Long familyId, Long viewerUserId, int diaryLimit, int memoryLimit) {
         int diaryCandidateLimit = Math.max(diaryLimit * CANDIDATE_MULTIPLIER, diaryLimit);
         int memoryCandidateLimit = Math.max(memoryLimit * CANDIDATE_MULTIPLIER, memoryLimit);
-        List<DiaryEntry> diaryCandidates = diaryRepository.findVisibleByFamily(
+        List<DiaryEntry> diaryCandidates = diaryRecallFacade.findVisibleByFamily(
                 familyId,
                 viewerUserId,
                 diaryCandidateLimit);
@@ -109,7 +109,7 @@ public class AuthorizedMemoryRecallService {
                 familyId,
                 viewerUserId,
                 memoryCandidateLimit);
-        List<GrowthGuardRecord> growthCandidates = growthRecordRepository.findVisibleByFamily(
+        List<GrowthGuardRecord> growthCandidates = growthRecallFacade.findVisibleByFamily(
                 familyId,
                 viewerUserId,
                 memoryCandidateLimit);
@@ -125,18 +125,18 @@ public class AuthorizedMemoryRecallService {
             int memoryLimit) {
         int diaryCandidateLimit = Math.max(diaryLimit * CANDIDATE_MULTIPLIER, diaryLimit);
         int memoryCandidateLimit = Math.max(memoryLimit * CANDIDATE_MULTIPLIER, memoryLimit);
-        List<DiaryEntry> diaryCandidates = diaryRepository.findVisibleByFamilyAndTarget(
+        List<DiaryEntry> diaryCandidates = diaryRecallFacade.findVisibleByFamilyAndTarget(
                 familyId,
                 targetUserId,
                 viewerUserId,
                 diaryCandidateLimit);
-        List<DiaryEntry> relatedDiaryCandidates = diaryRepository.findVisibleRelatedByFamilyAndTarget(
+        List<DiaryEntry> relatedDiaryCandidates = diaryRecallFacade.findVisibleRelatedByFamilyAndTarget(
                 familyId,
                 targetUserId,
                 viewerUserId,
                 diaryCandidateLimit);
         diaryCandidates = mergeDiaryCandidates(diaryCandidates, relatedDiaryCandidates);
-        List<GrowthGuardRecord> growthCandidates = growthRecordRepository.findVisibleByFamily(
+        List<GrowthGuardRecord> growthCandidates = growthRecallFacade.findVisibleByFamily(
                 familyId,
                 viewerUserId,
                 memoryCandidateLimit);

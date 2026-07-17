@@ -3,10 +3,10 @@ package com.familyagent.module.memory.service;
 import com.familyagent.common.constant.EntityStatus;
 import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.module.diary.entity.DiaryEntry;
-import com.familyagent.module.diary.repository.DiaryEntryRepository;
+import com.familyagent.module.diary.facade.MemoryRecallDiaryFacade;
 import com.familyagent.module.family.facade.FamilyMembershipFacade;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
-import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
+import com.familyagent.module.growth.facade.MemoryRecallGrowthFacade;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
 import com.familyagent.module.memory.dto.EmbeddingCallObservation;
 import com.familyagent.module.memory.dto.RecallSourceSummary;
@@ -38,9 +38,9 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AuthorizedMemoryRecallServiceTest {
 
-    @Mock private DiaryEntryRepository diaryRepository;
+    @Mock private MemoryRecallDiaryFacade diaryRepository;
     @Mock private MemoryEntryRepository memoryRepository;
-    @Mock private GrowthGuardRecordRepository growthRecordRepository;
+    @Mock private MemoryRecallGrowthFacade growthRecordRepository;
     @Mock private MemoryEmbeddingRepository embeddingRepository;
     @Mock private FamilyMembershipFacade familyMembershipFacade;
     @Mock private AuthorizedMemoryRecallSocialSupport socialSupport;
