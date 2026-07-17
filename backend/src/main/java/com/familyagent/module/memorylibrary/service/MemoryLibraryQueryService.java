@@ -1,7 +1,5 @@
 package com.familyagent.module.memorylibrary.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.response.PageResult;
@@ -14,16 +12,9 @@ import com.familyagent.module.memory.repository.MemoryEntryVoteRepository;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryItem;
 import com.familyagent.module.memorylibrary.dto.MemoryLibrarySearchRequest;
 import lombok.RequiredArgsConstructor;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
-import java.sql.Array;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -42,9 +33,8 @@ public class MemoryLibraryQueryService {
     private static final Set<String> TYPES = Set.of(
             "ALL", "LIFE_RECORD", "FAMILY_EXPERIENCE", "GROWTH_OBSERVATION", "AI_SUMMARY");
 
-    private final JdbcTemplate jdbcTemplate;
+    private final MemoryLibraryQueryGateway queryGateway;
     private final MemoryLibraryFamilyFacade familyService;
-    private final ObjectMapper objectMapper;
     private final MemoryEntryVoteRepository memoryEntryVoteRepository;
     private final GrowthGuardStalenessVoteRepository growthGuardStalenessVoteRepository;
 
@@ -74,38 +64,23 @@ public class MemoryLibraryQueryService {
         int pageSize = normalizePageSize(request.getPageSize());
         int offset = (page - 1) * pageSize;
 
-        Object[] args = concat(
-                sectionArgs(request.getFamilyId(), viewerUserId, searchTerms, type, memberUserId, visibility, tag, dateFrom, dateTo),
-                sectionArgs(request.getFamilyId(), viewerUserId, searchTerms, type, memberUserId, visibility, tag, dateFrom, dateTo),
-                growthSectionArgs(request.getFamilyId(), viewerUserId, searchTerms, type, memberUserId, visibility, tag, dateFrom, dateTo));
-
-        String sql = MemoryLibraryQuerySql.fullQuery(archived);
-        long total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM (" + sql + ") items", Long.class, args);
-        List<MemoryLibraryItem> items = jdbcTemplate.query(
-                "SELECT * FROM (" + sql + ") items ORDER BY sort_time DESC, id DESC LIMIT ? OFFSET ?",
-                (rs, rowNum) -> mapItem(rs),
-                concat(args, pageSize, offset));
+        MemoryLibraryQueryGateway.QueryResult result = queryGateway.query(
+                new MemoryLibraryQueryGateway.QueryCriteria(
+                        request.getFamilyId(),
+                        viewerUserId,
+                        searchTerms,
+                        type,
+                        memberUserId,
+                        visibility,
+                        tag,
+                        dateFrom,
+                        dateTo,
+                        archived,
+                        pageSize,
+                        offset));
+        List<MemoryLibraryItem> items = result.items();
         items.forEach(item -> attachDynamicSignals(item, viewerUserId));
-        return PageResult.of(items, page, pageSize, total);
-    }
-
-    private MemoryLibraryItem mapItem(ResultSet rs) throws SQLException {
-        return MemoryLibraryItem.builder()
-                .id(rs.getString("id"))
-                .sourceType(rs.getString("source_type"))
-                .type(rs.getString("type"))
-                .title(rs.getString("title"))
-                .body(rs.getString("body"))
-                .familyId(rs.getLong("family_id"))
-                .authorUserId(rs.getLong("author_user_id"))
-                .memberUserId(rs.getLong("member_user_id"))
-                .memberName(rs.getString("member_name"))
-                .visibility(rs.getString("visibility"))
-                .tags(readStringArray(rs.getArray("tags")))
-                .metadata(readMap(rs.getObject("metadata")))
-                .createdAt(readDateTime(rs, "created_at"))
-                .updatedAt(readDateTime(rs, "updated_at"))
-                .build();
+        return PageResult.of(items, page, pageSize, result.total());
     }
 
     private void attachDynamicSignals(MemoryLibraryItem item, Long viewerUserId) {
@@ -135,38 +110,6 @@ public class MemoryLibraryQueryService {
         item.setMetadata(metadata);
     }
 
-    private static Object[] sectionArgs(Long familyId, Long viewerUserId, List<String> searchTerms,
-            String type, Long memberUserId, String visibility, String tag, LocalDate dateFrom, LocalDate dateTo) {
-        String[] terms = searchTerms.toArray(String[]::new);
-        return new Object[] { familyId, viewerUserId, viewerUserId, viewerUserId,
-                terms, terms, type, type, memberUserId, memberUserId, visibility, visibility,
-                tag, tag, dateFrom, dateFrom, dateTo, dateTo };
-    }
-
-    private static Object[] growthSectionArgs(Long familyId, Long viewerUserId, List<String> searchTerms,
-            String type, Long memberUserId, String visibility, String tag, LocalDate dateFrom, LocalDate dateTo) {
-        String[] terms = searchTerms.toArray(String[]::new);
-        return new Object[] { familyId, viewerUserId, viewerUserId, viewerUserId, viewerUserId,
-                terms, terms, type, type, memberUserId, memberUserId, visibility, visibility,
-                tag, tag, dateFrom, dateFrom, dateTo, dateTo };
-    }
-
-    static Object[] concat(Object[] args, Object... tail) {
-        Object[] result = new Object[args.length + tail.length];
-        System.arraycopy(args, 0, result, 0, args.length);
-        System.arraycopy(tail, 0, result, args.length, tail.length);
-        return result;
-    }
-
-    static Object[] concat(Object[]... groups) {
-        int length = 0;
-        for (Object[] g : groups) length += g.length;
-        Object[] result = new Object[length];
-        int offset = 0;
-        for (Object[] g : groups) { System.arraycopy(g, 0, result, offset, g.length); offset += g.length; }
-        return result;
-    }
-
     private static int normalizePage(Integer page) {
         return page == null || page <= 0 ? DEFAULT_PAGE : page;
     }
@@ -182,29 +125,4 @@ public class MemoryLibraryQueryService {
         return normalized;
     }
 
-    private static LocalDateTime readDateTime(ResultSet rs, String column) throws SQLException {
-        Timestamp ts = rs.getTimestamp(column);
-        return ts == null ? null : ts.toLocalDateTime();
-    }
-
-    private static String[] readStringArray(Array array) throws SQLException {
-        if (array == null) return new String[0];
-        Object raw = array.getArray();
-        if (raw instanceof String[] values) return values;
-        if (raw instanceof Object[] values) {
-            String[] result = new String[values.length];
-            for (int i = 0; i < values.length; i++) result[i] = values[i] == null ? "" : String.valueOf(values[i]);
-            return result;
-        }
-        return new String[0];
-    }
-
-    private Map<String, Object> readMap(Object value) {
-        if (value == null) return Collections.emptyMap();
-        if (value instanceof Map<?, ?> map) return objectMapper.convertValue(map, new TypeReference<>() {});
-        String json = value instanceof String text ? text : String.valueOf(value);
-        if (json == null || json.isBlank()) return Collections.emptyMap();
-        try { return objectMapper.readValue(json, new TypeReference<>() {}); }
-        catch (Exception ignored) { return Collections.emptyMap(); }
-    }
 }

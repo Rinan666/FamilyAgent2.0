@@ -1,7 +1,6 @@
 package com.familyagent.module.memorylibrary.service;
 
 import cn.dev33.satoken.stp.StpUtil;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.response.PageResult;
@@ -22,18 +21,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -42,7 +36,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class MemoryLibraryServiceTest {
 
-    @Mock private JdbcTemplate jdbcTemplate;
+    @Mock private MemoryLibraryQueryGateway queryGateway;
     @Mock private MemoryLibraryFamilyFacade familyService;
     @Mock private MemoryLibraryDiaryFacade diaryFacade;
     @Mock private MemoryLibraryMemoryFacade memoryEntryRepository;
@@ -51,21 +45,19 @@ class MemoryLibraryServiceTest {
     @Mock private GrowthGuardStalenessVoteRepository growthGuardStalenessVoteRepository;
     @Mock private MemoryIndexingFacade memoryEmbeddingService;
     @Mock private MemoryLibraryEmbeddingFacade embeddingFacade;
-    @Spy  private ObjectMapper objectMapper = new ObjectMapper();
 
     // --- MemoryLibraryQueryService ---
 
     @Test
     void search_checksMembershipAndUsesCurrentViewerForEveryPermissionSection() {
         MemoryLibraryQueryService queryService = new MemoryLibraryQueryService(
-                jdbcTemplate, familyService, objectMapper,
+                queryGateway, familyService,
                 memoryEntryVoteRepository, growthGuardStalenessVoteRepository);
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(101L);
-            when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), any(Object[].class))).thenReturn(0L);
-            when(jdbcTemplate.query(anyString(), any(org.springframework.jdbc.core.RowMapper.class), any(Object[].class)))
-                    .thenReturn(List.of());
+            when(queryGateway.query(any())).thenReturn(
+                    new MemoryLibraryQueryGateway.QueryResult(List.of(), 0L));
 
             MemoryLibrarySearchRequest request = new MemoryLibrarySearchRequest();
             request.setFamilyId(10L);
@@ -80,26 +72,23 @@ class MemoryLibraryServiceTest {
             assertEquals(2, result.getPage());
             assertEquals(3, result.getPageSize());
 
-            ArgumentCaptor<Object[]> countArgs = ArgumentCaptor.forClass(Object[].class);
-            ArgumentCaptor<Object[]> listArgs = ArgumentCaptor.forClass(Object[].class);
-            ArgumentCaptor<String> countSql = ArgumentCaptor.forClass(String.class);
-            ArgumentCaptor<String> listSql = ArgumentCaptor.forClass(String.class);
-            verify(jdbcTemplate).queryForObject(countSql.capture(), eq(Long.class), countArgs.capture());
-            verify(jdbcTemplate).query(listSql.capture(), any(org.springframework.jdbc.core.RowMapper.class), listArgs.capture());
-
-            assertTrue(listSql.getValue().contains("jsonb_typeof(me.metadata->'tags')"));
-            assertTrue(listSql.getValue().contains("jsonb_typeof(gr.metadata->'tags')"));
-            assertPermissionSectionArgs(countArgs.getValue(), false);
-            assertPermissionSectionArgs(listArgs.getValue(), true);
-            assertEquals(countQuestionMarks(countSql.getValue()), countArgs.getValue().length);
-            assertEquals(countQuestionMarks(listSql.getValue()), listArgs.getValue().length);
+            ArgumentCaptor<MemoryLibraryQueryGateway.QueryCriteria> criteriaCaptor =
+                    ArgumentCaptor.forClass(MemoryLibraryQueryGateway.QueryCriteria.class);
+            verify(queryGateway).query(criteriaCaptor.capture());
+            MemoryLibraryQueryGateway.QueryCriteria criteria = criteriaCaptor.getValue();
+            assertEquals(10L, criteria.familyId());
+            assertEquals(101L, criteria.viewerUserId());
+            assertEquals("ALL", criteria.type());
+            assertEquals(3, criteria.limit());
+            assertEquals(3, criteria.offset());
+            assertEquals(MemoryLibrarySupport.searchTerms(request.getKeyword()), criteria.searchTerms());
         }
     }
 
     @Test
     void search_rejectsUnsupportedTypeBeforeQueryingDatabase() {
         MemoryLibraryQueryService queryService = new MemoryLibraryQueryService(
-                jdbcTemplate, familyService, objectMapper,
+                queryGateway, familyService,
                 memoryEntryVoteRepository, growthGuardStalenessVoteRepository);
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
@@ -118,14 +107,13 @@ class MemoryLibraryServiceTest {
     @Test
     void search_acceptsLegacyAiSummaryType() {
         MemoryLibraryQueryService queryService = new MemoryLibraryQueryService(
-                jdbcTemplate, familyService, objectMapper,
+                queryGateway, familyService,
                 memoryEntryVoteRepository, growthGuardStalenessVoteRepository);
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(101L);
-            when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), any(Object[].class))).thenReturn(0L);
-            when(jdbcTemplate.query(anyString(), any(org.springframework.jdbc.core.RowMapper.class), any(Object[].class)))
-                    .thenReturn(List.of());
+            when(queryGateway.query(any())).thenReturn(
+                    new MemoryLibraryQueryGateway.QueryResult(List.of(), 0L));
 
             MemoryLibrarySearchRequest request = new MemoryLibrarySearchRequest();
             request.setFamilyId(10L);
@@ -141,7 +129,7 @@ class MemoryLibraryServiceTest {
     @Test
     void search_requiresFamilyId() {
         MemoryLibraryQueryService queryService = new MemoryLibraryQueryService(
-                jdbcTemplate, familyService, objectMapper,
+                queryGateway, familyService,
                 memoryEntryVoteRepository, growthGuardStalenessVoteRepository);
 
         BusinessException exception = assertThrows(BusinessException.class,
@@ -322,37 +310,4 @@ class MemoryLibraryServiceTest {
         verify(memoryEmbeddingService, never()).indexMemoryAfterCommit(any());
     }
 
-    // --- helpers ---
-
-    private static void assertPermissionSectionArgs(Object[] args, boolean includesPagination) {
-        int expectedLength = includesPagination ? 57 : 55;
-        assertEquals(expectedLength, args.length);
-        assertSection(args, 0, 18);
-        assertSection(args, 18, 18);
-        assertSection(args, 36, 19);
-        if (includesPagination) {
-            assertEquals(3, args[55]);
-            assertEquals(3, args[56]);
-        }
-    }
-
-    private static void assertSection(Object[] args, int offset, int length) {
-        assertEquals(10L, args[offset]);
-        assertEquals(101L, args[offset + 1]);
-        assertEquals(101L, args[offset + 2]);
-        assertEquals(101L, args[offset + 3]);
-        if (length == 19) {
-            assertEquals(101L, args[offset + 4]);
-        }
-    }
-
-    private static int countQuestionMarks(String sql) {
-        int count = 0;
-        for (int i = 0; i < sql.length(); i++) {
-            if (sql.charAt(i) == '?') {
-                count++;
-            }
-        }
-        return count;
-    }
 }
