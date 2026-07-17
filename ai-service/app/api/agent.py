@@ -2,7 +2,6 @@
 Primary FamilyAgent chat routes.
 """
 import asyncio
-import json
 import logging
 import time
 import uuid
@@ -11,9 +10,19 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.agents.family_agent import family_agent
+from app.api.stream_events import (
+    StreamEvent,
+    StreamTraceObservation,
+    content_event,
+    metadata_event,
+    stream_done_event,
+    stream_error_event,
+    stream_sse_events,
+    validate_trace_observation,
+)
 from app.middleware.auth import verify_token_or_internal_service
 from app.utils.input_guard import enforce_input_guard
 from app.utils.privacy_guard import redact_with_note
@@ -28,7 +37,6 @@ from app.utils.safety_limits import (
 from app.utils.sanitizer import sanitize_text
 
 logger = logging.getLogger("familyagent.ai.api.agent")
-SSE_KEEPALIVE_SECONDS = 10.0
 REQUEST_ID_HEADER = "x-request-id"
 RUN_ID_HEADER = "x-agent-run-id"
 
@@ -62,62 +70,6 @@ class AgentChatRequest(BaseModel):
     client_timezone: str = Field(default="", description="Client timezone")
 
 
-class StreamContentEvent(BaseModel):
-    type: Literal["content"] = "content"
-    content: str
-    requestId: str
-    runId: int | None = None
-
-
-class StreamTraceObservation(BaseModel):
-    stepType: Literal["LLM", "WEB_SEARCH"]
-    operation: str = Field(min_length=1, max_length=120)
-    provider: str | None = Field(default=None, max_length=80)
-    model: str | None = Field(default=None, max_length=160)
-    promptVersion: str | None = Field(default=None, max_length=80)
-    skillVersion: str | None = Field(default=None, max_length=40)
-    latencyMs: int | None = Field(default=None, ge=0)
-    success: bool
-    errorCode: str | None = Field(default=None, max_length=80)
-    degraded: bool = False
-    privacyCategories: list[Literal["FAMILY_DATA", "PUBLIC_DATA"]] = Field(default_factory=list)
-
-
-class StreamDoneEvent(BaseModel):
-    type: Literal["done"] = "done"
-    done: bool = True
-    degraded: bool = False
-    requestId: str
-    runId: int | None = None
-    latencyMs: int | None = None
-    traceObservations: list[StreamTraceObservation] | None = None
-
-
-class StreamErrorEvent(BaseModel):
-    type: Literal["error"] = "error"
-    error: bool = True
-    code: str
-    message: str
-    retryable: bool
-    degraded: bool = False
-    requestId: str
-    runId: int | None = None
-    latencyMs: int | None = None
-    traceObservations: list[StreamTraceObservation] | None = None
-
-
-class StreamMetadataEvent(BaseModel):
-    model_config = ConfigDict(extra="allow")
-
-    type: Literal["metadata"] = "metadata"
-    requestId: str
-    runId: int | None = None
-
-
-def _sse_data(payload: dict) -> str:
-    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-
-
 def _request_id_from_header(value: str | None) -> str:
     if not value or not value.strip():
         return f"ai-{uuid.uuid4()}"
@@ -147,90 +99,6 @@ def _trusted_memory_context(value: str, http_request: Request) -> str:
     return memory_context
 
 
-def _event_payload(event: BaseModel) -> dict:
-    return event.model_dump(exclude_none=True)
-
-
-def _validated_trace_observation(payload: object) -> dict | None:
-    try:
-        return StreamTraceObservation.model_validate(payload).model_dump(exclude_none=True)
-    except ValidationError:
-        logger.warning("Dropped invalid internal trace observation")
-        return None
-
-
-def _metadata_event(payload: dict, request_id: str, run_id: int | None = None) -> dict:
-    metadata = dict(payload)
-    metadata["type"] = "metadata"
-    metadata["requestId"] = request_id
-    metadata["runId"] = run_id
-    return _event_payload(StreamMetadataEvent(**metadata))
-
-
-def _content_event(content: object, request_id: str, run_id: int | None = None) -> dict:
-    return _event_payload(StreamContentEvent(
-        content=content if isinstance(content, str) else "",
-        requestId=request_id,
-        runId=run_id,
-    ))
-
-
-def _stream_error_event(
-    *,
-    code: str = "AI_STREAM_UNAVAILABLE",
-    message: str = "AI service unavailable, please retry later.",
-    retryable: bool = True,
-    request_id: str = "",
-    run_id: int | None = None,
-    latency_ms: int | None = None,
-    trace_observations: list[dict] | None = None,
-) -> dict:
-    return _event_payload(StreamErrorEvent(
-        code=code,
-        message=message,
-        retryable=retryable,
-        requestId=request_id,
-        runId=run_id,
-        latencyMs=latency_ms,
-        traceObservations=trace_observations,
-    ))
-
-
-def _stream_done_event(
-    *,
-    degraded: bool = False,
-    request_id: str = "",
-    run_id: int | None = None,
-    latency_ms: int | None = None,
-    trace_observations: list[dict] | None = None,
-) -> dict:
-    return _event_payload(StreamDoneEvent(
-        degraded=degraded,
-        requestId=request_id,
-        runId=run_id,
-        latencyMs=latency_ms,
-        traceObservations=trace_observations,
-    ))
-
-
-def _sse_comment(comment: str) -> str:
-    return f": {comment}\n\n"
-
-
-async def _stream_sse_events(queue: asyncio.Queue[dict]):
-    yield _sse_comment("connected")
-    while True:
-        try:
-            payload = await asyncio.wait_for(queue.get(), timeout=SSE_KEEPALIVE_SECONDS)
-        except asyncio.TimeoutError:
-            yield _sse_comment("keep-alive")
-            continue
-
-        yield _sse_data(payload)
-        if payload.get("done") or payload.get("error"):
-            break
-
-
 @router.post("/chat/stream")
 async def stream_chat(request: AgentChatRequest, http_request: Request):
     """Primary SSE endpoint for FamilyAgent chat."""
@@ -241,9 +109,9 @@ async def stream_chat(request: AgentChatRequest, http_request: Request):
     memory_context = _trusted_memory_context(request.memory_context, http_request)
 
     async def generate():
-        queue: asyncio.Queue[dict] = asyncio.Queue()
+        queue: asyncio.Queue[StreamEvent] = asyncio.Queue()
         started_at = time.monotonic()
-        trace_observations: list[dict] = []
+        trace_observations: list[StreamTraceObservation] = []
 
         def stream_latency_ms() -> int:
             return max(0, round((time.monotonic() - started_at) * 1000))
@@ -265,17 +133,17 @@ async def stream_chat(request: AgentChatRequest, http_request: Request):
                     if isinstance(chunk, dict) and chunk.get("type") == "metadata":
                         trace_observation = chunk.get("trace_observation")
                         if isinstance(trace_observation, dict):
-                            validated_observation = _validated_trace_observation(trace_observation)
+                            validated_observation = validate_trace_observation(trace_observation)
                             if validated_observation is not None:
                                 trace_observations.append(validated_observation)
                             continue
-                        await queue.put(_metadata_event(chunk, request_id, run_id))
+                        await queue.put(metadata_event(chunk, request_id, run_id))
                     elif isinstance(chunk, dict):
-                        await queue.put(_content_event(chunk.get("content", ""), request_id, run_id))
+                        await queue.put(content_event(chunk.get("content", ""), request_id, run_id))
                     else:
-                        await queue.put(_content_event(chunk, request_id, run_id))
+                        await queue.put(content_event(chunk, request_id, run_id))
 
-                await queue.put(_stream_done_event(
+                await queue.put(stream_done_event(
                     request_id=request_id,
                     run_id=run_id,
                     latency_ms=stream_latency_ms(),
@@ -290,7 +158,7 @@ async def stream_chat(request: AgentChatRequest, http_request: Request):
                     latency_ms,
                     type(error).__name__,
                 )
-                await queue.put(_stream_error_event(
+                await queue.put(stream_error_event(
                     request_id=request_id,
                     run_id=run_id,
                     latency_ms=latency_ms,
@@ -299,7 +167,7 @@ async def stream_chat(request: AgentChatRequest, http_request: Request):
 
         task = asyncio.create_task(produce())
         try:
-            async for event in _stream_sse_events(queue):
+            async for event in stream_sse_events(queue):
                 yield event
         finally:
             if not task.done():
