@@ -1,6 +1,5 @@
 package com.familyagent.module.memory.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.familyagent.infra.ai.AIServiceClient;
 import com.familyagent.infra.ai.dto.EmbeddingRequest;
 import com.familyagent.infra.ai.dto.EmbeddingResponse;
@@ -11,10 +10,10 @@ import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
 import com.familyagent.module.memory.dto.RebuildEmbeddingResponse;
 import com.familyagent.module.memory.entity.MemoryEntry;
+import com.familyagent.module.memory.repository.MemoryEmbeddingWriteRepository;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -35,8 +34,7 @@ public class MemoryEmbeddingService {
     private static final int EMBEDDING_DIMENSIONS = 1536;
 
     private final AIServiceClient aiServiceClient;
-    private final JdbcTemplate jdbcTemplate;
-    private final ObjectMapper objectMapper;
+    private final MemoryEmbeddingWriteRepository embeddingWriteRepository;
     private final DiaryEntryRepository diaryRepository;
     private final MemoryEntryRepository memoryRepository;
     private final GrowthGuardRecordRepository growthRecordRepository;
@@ -174,7 +172,12 @@ public class MemoryEmbeddingService {
             return;
         }
         String contentHash = sha256(text);
-        Long embeddingId = upsertPending(sourceType, sourceId, familyId, userId, contentHash);
+        Long embeddingId = embeddingWriteRepository.upsertPending(
+                sourceType,
+                sourceId,
+                familyId,
+                userId,
+                contentHash);
 
         try {
             EmbeddingResponse response = aiServiceClient.embedText(EmbeddingRequest.builder()
@@ -188,92 +191,25 @@ public class MemoryEmbeddingService {
                     response,
                     EMBEDDING_DIMENSIONS);
             if (!validation.valid()) {
-                markFailed(embeddingId, validation.error());
+                embeddingWriteRepository.markFailed(embeddingId, validation.error());
                 return;
             }
 
             List<Double> values = validation.values();
-            String vector = toVectorLiteral(values);
-            String model = nonBlank(response.getModel(), "");
-            String metadata = objectMapper.writeValueAsString(Map.of(
-                    "privacyCategories", response.getPrivacyCategories() == null ? List.of() : response.getPrivacyCategories(),
-                    "provider", nonBlank(response.getProvider(), ""),
-                    "dimensions", response.getDimensions() == null ? values.size() : response.getDimensions()));
-            jdbcTemplate.update("""
-                    UPDATE memory_embeddings
-                    SET embedding_model = ?,
-                        embedding = ?::vector,
-                        status = 'READY',
-                        metadata = ?::jsonb,
-                        updated_at = NOW()
-                    WHERE id = ?
-                    """, model, vector, metadata, embeddingId);
+            embeddingWriteRepository.markReady(
+                    embeddingId,
+                    response.getModel(),
+                    values,
+                    response.getPrivacyCategories(),
+                    response.getProvider(),
+                    response.getDimensions() == null ? values.size() : response.getDimensions());
         } catch (Exception e) {
-            log.warn("Memory embedding indexing failed: sourceType={}, sourceId={}, error={}",
-                    sourceType, sourceId, e.getMessage());
-            markFailed(embeddingId, e.getMessage());
-        }
-    }
-
-    private Long upsertPending(String sourceType, Long sourceId, Long familyId, Long userId, String contentHash) {
-        supersedeOlderPendingEmbeddings(sourceType, sourceId, contentHash);
-        return jdbcTemplate.queryForObject("""
-                INSERT INTO memory_embeddings (
-                    family_id, user_id, source_type, source_id, content_hash, status, metadata
-                )
-                VALUES (?, ?, ?, ?, ?, 'PENDING', '{}'::jsonb)
-                ON CONFLICT (source_type, source_id, content_hash)
-                DO UPDATE SET status = 'PENDING', updated_at = NOW()
-                RETURNING id
-                """, Long.class, familyId, userId, sourceType, sourceId, contentHash);
-    }
-
-    private void supersedeOlderPendingEmbeddings(String sourceType, Long sourceId, String contentHash) {
-        try {
-            String metadata = objectMapper.writeValueAsString(Map.of(
-                    "error", "Superseded by newer embedding request",
-                    "cleanupReason", "STALE_PENDING_SUPERSEDED",
-                    "supersededByContentHash", contentHash == null ? "" : contentHash));
-            jdbcTemplate.update("""
-                    UPDATE memory_embeddings
-                    SET status = 'FAILED',
-                        metadata = ?::jsonb,
-                        updated_at = NOW()
-                    WHERE source_type = ?
-                      AND source_id = ?
-                      AND status = 'PENDING'
-                      AND content_hash <> ?
-                    """, metadata, sourceType, sourceId, contentHash);
-        } catch (Exception e) {
-            log.warn("Failed to supersede stale pending embeddings: sourceType={}, sourceId={}, error={}",
-                    sourceType, sourceId, e.getMessage());
-        }
-    }
-
-    private void markFailed(Long id, String error) {
-        if (id == null) {
-            return;
-        }
-        try {
-            String metadata = objectMapper.writeValueAsString(Map.of(
-                    "error", error == null ? "unknown" : error));
-            jdbcTemplate.update("""
-                    UPDATE memory_embeddings
-                    SET status = 'FAILED',
-                        metadata = ?::jsonb,
-                        updated_at = NOW()
-                    WHERE id = ?
-                    """, metadata, id);
-        } catch (Exception serializationError) {
-            log.warn("Failed to serialize embedding error metadata: id={}, error={}",
-                    id, serializationError.getMessage());
-            jdbcTemplate.update("""
-                    UPDATE memory_embeddings
-                    SET status = 'FAILED',
-                        metadata = '{"error":"unknown"}'::jsonb,
-                        updated_at = NOW()
-                    WHERE id = ?
-                    """, id);
+            log.warn(
+                    "Memory embedding indexing failed: sourceType={}, sourceId={}, errorType={}",
+                    sourceType,
+                    sourceId,
+                    e.getClass().getSimpleName());
+            embeddingWriteRepository.markFailed(embeddingId, "embedding indexing failed");
         }
     }
 
@@ -303,17 +239,6 @@ public class MemoryEmbeddingService {
                 "observedAt: " + safe(record.getObservedAt()),
                 "content: " + safe(record.getContent()),
                 "metadata: " + safe(record.getMetadata()));
-    }
-
-    private static String toVectorLiteral(List<?> values) {
-        StringBuilder builder = new StringBuilder("[");
-        for (int i = 0; i < values.size(); i++) {
-            if (i > 0) {
-                builder.append(',');
-            }
-            builder.append(Double.parseDouble(String.valueOf(values.get(i))));
-        }
-        return builder.append(']').toString();
     }
 
     private static String sha256(String text) {
@@ -349,10 +274,6 @@ public class MemoryEmbeddingService {
             return String.valueOf(map.get(key));
         }
         return fallback;
-    }
-
-    private static String nonBlank(String value, String fallback) {
-        return value == null || value.isBlank() ? fallback : value;
     }
 
     private static String safe(Object value) {
