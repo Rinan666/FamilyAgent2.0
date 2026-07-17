@@ -9,10 +9,10 @@ import com.familyagent.module.memory.dto.EmbeddingCallObservation;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.eval.dto.MemoryRecallQualityEvalCase;
 import com.familyagent.module.memory.eval.dto.MemoryRecallQualityEvalReport;
+import com.familyagent.module.memory.repository.MemoryRecallVectorRepository;
 import com.familyagent.module.memory.service.AuthorizedMemoryRecallEmbeddingService;
 import com.familyagent.module.memory.service.AuthorizedMemoryRecallRankingService;
 import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -34,9 +34,9 @@ class AuthorizedMemoryRecallQualityEvalTest {
 
     private final AuthorizedMemoryRecallEmbeddingService embeddingService =
             mock(AuthorizedMemoryRecallEmbeddingService.class);
-    private final JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+    private final MemoryRecallVectorRepository vectorRepository = mock(MemoryRecallVectorRepository.class);
     private final AuthorizedMemoryRecallRankingService rankingService =
-            new AuthorizedMemoryRecallRankingService(embeddingService, jdbcTemplate);
+            new AuthorizedMemoryRecallRankingService(embeddingService, vectorRepository);
     private final MemoryRecallQualityEvalService evalService = new MemoryRecallQualityEvalService();
 
     @Test
@@ -58,7 +58,7 @@ class AuthorizedMemoryRecallQualityEvalTest {
         assertEquals(1.0d, report.metrics().firstResultHitRate());
         assertEquals(0, report.metrics().unauthorizedResultCount());
         assertTrue(report.metrics().privacyGatePassed());
-        verifyNoInteractions(jdbcTemplate);
+        verifyNoInteractions(vectorRepository);
 
         String json = new ObjectMapper().writeValueAsString(report);
         assertFalse(json.contains("bedtime routine"));

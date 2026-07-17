@@ -5,9 +5,9 @@ import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.memory.dto.EmbeddingCallObservation;
 import com.familyagent.module.memory.dto.RecallSourceSummary;
 import com.familyagent.module.memory.entity.MemoryEntry;
+import com.familyagent.module.memory.repository.MemoryRecallVectorRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -29,7 +29,7 @@ public class AuthorizedMemoryRecallRankingService {
     private static final double MAX_VECTOR_DISTANCE = 0.72;
 
     private final AuthorizedMemoryRecallEmbeddingService embeddingService;
-    private final JdbcTemplate jdbcTemplate;
+    private final MemoryRecallVectorRepository vectorRepository;
 
     public RankedRecall rank(
             Long familyId,
@@ -144,10 +144,24 @@ public class AuthorizedMemoryRecallRankingService {
 
         List<Double> values = embedding.values();
         try {
-            String vector = toVectorLiteral(values);
-            List<Long> diaryIds = vectorRankIds(familyId, "DIARY", diaryCandidates.stream().map(DiaryEntry::getId).toList(), vector, diaryLimit);
-            List<Long> memoryIds = vectorRankIds(familyId, "MEMORY", memoryCandidates.stream().map(MemoryEntry::getId).toList(), vector, memoryLimit);
-            List<Long> growthIds = vectorRankIds(familyId, "GROWTH_OBSERVATION", growthCandidates.stream().map(GrowthGuardRecord::getId).toList(), vector, memoryLimit);
+            List<Long> diaryIds = rankSourceIds(
+                    familyId,
+                    "DIARY",
+                    diaryCandidates.stream().map(DiaryEntry::getId).toList(),
+                    values,
+                    diaryLimit);
+            List<Long> memoryIds = rankSourceIds(
+                    familyId,
+                    "MEMORY",
+                    memoryCandidates.stream().map(MemoryEntry::getId).toList(),
+                    values,
+                    memoryLimit);
+            List<Long> growthIds = rankSourceIds(
+                    familyId,
+                    "GROWTH_OBSERVATION",
+                    growthCandidates.stream().map(GrowthGuardRecord::getId).toList(),
+                    values,
+                    memoryLimit);
             diaryIds = filterSupportedDiaryIds(diaryCandidates, diaryIds, query);
             memoryIds = filterSupportedMemoryIds(memoryCandidates, memoryIds, query);
             growthIds = filterSupportedGrowthIds(growthCandidates, growthIds, query);
@@ -168,35 +182,22 @@ public class AuthorizedMemoryRecallRankingService {
         }
     }
 
-    private List<Long> vectorRankIds(Long familyId, String sourceType, List<Long> sourceIds, String vector, int limit) {
+    private List<Long> rankSourceIds(
+            Long familyId,
+            String sourceType,
+            List<Long> sourceIds,
+            List<Double> values,
+            int limit) {
         if (sourceIds.isEmpty()) {
             return List.of();
         }
-        String placeholders = String.join(",", sourceIds.stream().map(id -> "?").toList());
-        List<Object> params = new ArrayList<>();
-        params.add(familyId);
-        params.add(sourceType);
-        params.addAll(sourceIds);
-        params.add(vector);
-        params.add(MAX_VECTOR_DISTANCE);
-        params.add(vector);
-        params.add(limit);
-        return jdbcTemplate.queryForList("""
-                SELECT ranked.source_id
-                FROM (
-                    SELECT DISTINCT ON (source_id) source_id, embedding, updated_at
-                    FROM memory_embeddings
-                    WHERE family_id = ?
-                      AND source_type = ?
-                      AND source_id IN (%s)
-                      AND status = 'READY'
-                      AND embedding IS NOT NULL
-                    ORDER BY source_id, updated_at DESC
-                ) ranked
-                WHERE ranked.embedding <=> ?::vector <= ?
-                ORDER BY ranked.embedding <=> ?::vector
-                LIMIT ?
-                """.formatted(placeholders), Long.class, params.toArray());
+        return vectorRepository.rankSourceIds(
+                familyId,
+                sourceType,
+                sourceIds,
+                values,
+                MAX_VECTOR_DISTANCE,
+                limit);
     }
 
     private static List<Long> filterSupportedDiaryIds(List<DiaryEntry> candidates, List<Long> vectorIds, String query) {
@@ -357,17 +358,6 @@ public class AuthorizedMemoryRecallRankingService {
                         .thenComparing(GrowthGuardRecord::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .limit(limit)
                 .toList();
-    }
-
-    private static String toVectorLiteral(List<?> values) {
-        StringBuilder builder = new StringBuilder("[");
-        for (int i = 0; i < values.size(); i++) {
-            if (i > 0) {
-                builder.append(',');
-            }
-            builder.append(Double.parseDouble(String.valueOf(values.get(i))));
-        }
-        return builder.append(']').toString();
     }
 
     private static List<DiaryEntry> rankDiaries(List<DiaryEntry> entries, String query, int limit) {
