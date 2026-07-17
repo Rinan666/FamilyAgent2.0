@@ -6,9 +6,9 @@ import com.familyagent.common.response.PageResult;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.family.facade.MemoryLibraryFamilyFacade;
 import com.familyagent.module.growth.dto.GrowthStalenessStats;
-import com.familyagent.module.growth.repository.GrowthGuardStalenessVoteRepository;
+import com.familyagent.module.growth.facade.MemoryLibraryGrowthStalenessFacade;
 import com.familyagent.module.memory.dto.MemoryVoteStats;
-import com.familyagent.module.memory.repository.MemoryEntryVoteRepository;
+import com.familyagent.module.memory.facade.MemoryLibraryVoteFacade;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryItem;
 import com.familyagent.module.memorylibrary.dto.MemoryLibrarySearchRequest;
 import lombok.RequiredArgsConstructor;
@@ -35,8 +35,8 @@ public class MemoryLibraryQueryService {
 
     private final MemoryLibraryQueryGateway queryGateway;
     private final MemoryLibraryFamilyFacade familyService;
-    private final MemoryEntryVoteRepository memoryEntryVoteRepository;
-    private final GrowthGuardStalenessVoteRepository growthGuardStalenessVoteRepository;
+    private final MemoryLibraryVoteFacade memoryVoteFacade;
+    private final MemoryLibraryGrowthStalenessFacade growthStalenessFacade;
 
     public PageResult<MemoryLibraryItem> search(MemoryLibrarySearchRequest request) {
         return query(request, false);
@@ -88,7 +88,7 @@ public class MemoryLibraryQueryService {
         MemoryLibrarySupport.ParsedItemId parsed = MemoryLibrarySupport.parseItemId(item.getId());
         Map<String, Object> metadata = MemoryLibrarySupport.mutableMap(item.getMetadata());
         if ("memory".equals(parsed.prefix()) && "FAMILY_EXPERIENCE".equals(item.getSourceType())) {
-            MemoryVoteStats stats = memoryEntryVoteRepository.statsByMemoryId(parsed.id(), viewerUserId);
+            MemoryVoteStats stats = memoryVoteFacade.getStats(parsed.id(), viewerUserId);
             if (stats == null) stats = new MemoryVoteStats(parsed.id(), 0, 0, 0, 1.0, null);
             metadata.put("voteStats", Map.of(
                     "memoryId", parsed.id(),
@@ -99,7 +99,7 @@ public class MemoryLibraryQueryService {
                     "myVote", stats.getMyVote() == null ? "" : stats.getMyVote()));
         }
         if ("growth".equals(parsed.prefix()) && "GROWTH_OBSERVATION".equals(item.getSourceType())) {
-            GrowthStalenessStats stats = growthGuardStalenessVoteRepository.statsByRecordId(parsed.id(), viewerUserId);
+            GrowthStalenessStats stats = growthStalenessFacade.getStats(parsed.id(), viewerUserId);
             if (stats == null) stats = new GrowthStalenessStats(parsed.id(), 0, 1.0, false);
             metadata.put("stalenessStats", Map.of(
                     "recordId", parsed.id(),

@@ -6,13 +6,13 @@ import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.response.PageResult;
 import com.familyagent.module.diary.facade.MemoryLibraryDiaryFacade;
 import com.familyagent.module.family.facade.MemoryLibraryFamilyFacade;
+import com.familyagent.module.growth.facade.MemoryLibraryGrowthStalenessFacade;
 import com.familyagent.module.growth.facade.MemoryLibraryGrowthFacade;
-import com.familyagent.module.growth.repository.GrowthGuardStalenessVoteRepository;
 import com.familyagent.module.memory.entity.MemoryEntry;
-import com.familyagent.module.memory.repository.MemoryEntryVoteRepository;
 import com.familyagent.module.memory.facade.MemoryIndexingFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryEmbeddingFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryMemoryFacade;
+import com.familyagent.module.memory.facade.MemoryLibraryVoteFacade;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryItem;
 import com.familyagent.module.memorylibrary.dto.MemoryLibrarySearchRequest;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryUpdateRequest;
@@ -41,8 +41,8 @@ class MemoryLibraryServiceTest {
     @Mock private MemoryLibraryDiaryFacade diaryFacade;
     @Mock private MemoryLibraryMemoryFacade memoryEntryRepository;
     @Mock private MemoryLibraryGrowthFacade growthFacade;
-    @Mock private MemoryEntryVoteRepository memoryEntryVoteRepository;
-    @Mock private GrowthGuardStalenessVoteRepository growthGuardStalenessVoteRepository;
+    @Mock private MemoryLibraryVoteFacade memoryVoteFacade;
+    @Mock private MemoryLibraryGrowthStalenessFacade growthStalenessFacade;
     @Mock private MemoryIndexingFacade memoryEmbeddingService;
     @Mock private MemoryLibraryEmbeddingFacade embeddingFacade;
 
@@ -52,7 +52,7 @@ class MemoryLibraryServiceTest {
     void search_checksMembershipAndUsesCurrentViewerForEveryPermissionSection() {
         MemoryLibraryQueryService queryService = new MemoryLibraryQueryService(
                 queryGateway, familyService,
-                memoryEntryVoteRepository, growthGuardStalenessVoteRepository);
+                memoryVoteFacade, growthStalenessFacade);
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(101L);
@@ -89,7 +89,7 @@ class MemoryLibraryServiceTest {
     void search_rejectsUnsupportedTypeBeforeQueryingDatabase() {
         MemoryLibraryQueryService queryService = new MemoryLibraryQueryService(
                 queryGateway, familyService,
-                memoryEntryVoteRepository, growthGuardStalenessVoteRepository);
+                memoryVoteFacade, growthStalenessFacade);
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(101L);
@@ -108,7 +108,7 @@ class MemoryLibraryServiceTest {
     void search_acceptsLegacyAiSummaryType() {
         MemoryLibraryQueryService queryService = new MemoryLibraryQueryService(
                 queryGateway, familyService,
-                memoryEntryVoteRepository, growthGuardStalenessVoteRepository);
+                memoryVoteFacade, growthStalenessFacade);
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(101L);
@@ -130,7 +130,7 @@ class MemoryLibraryServiceTest {
     void search_requiresFamilyId() {
         MemoryLibraryQueryService queryService = new MemoryLibraryQueryService(
                 queryGateway, familyService,
-                memoryEntryVoteRepository, growthGuardStalenessVoteRepository);
+                memoryVoteFacade, growthStalenessFacade);
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> queryService.search(new MemoryLibrarySearchRequest()));
