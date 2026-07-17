@@ -36,7 +36,8 @@ class AuthorizedMemoryRecallRankingServiceTest {
                         observation));
         AuthorizedMemoryRecallRankingService service = new AuthorizedMemoryRecallRankingService(
                 embeddingService,
-                vectorRepository);
+                vectorRepository,
+                new AuthorizedMemoryRecallTextRanker());
 
         AuthorizedMemoryRecallRankingService.RankedRecall result = service.rank(
                 10L,
@@ -69,7 +70,8 @@ class AuthorizedMemoryRecallRankingServiceTest {
                 .thenReturn(List.of(44L));
         AuthorizedMemoryRecallRankingService service = new AuthorizedMemoryRecallRankingService(
                 embeddingService,
-                vectorRepository);
+                vectorRepository,
+                new AuthorizedMemoryRecallTextRanker());
 
         AuthorizedMemoryRecallRankingService.RankedRecall result = service.rank(
                 10L,
@@ -109,7 +111,8 @@ class AuthorizedMemoryRecallRankingServiceTest {
                 .thenThrow(new IllegalStateException("database detail"));
         AuthorizedMemoryRecallRankingService service = new AuthorizedMemoryRecallRankingService(
                 embeddingService,
-                vectorRepository);
+                vectorRepository,
+                new AuthorizedMemoryRecallTextRanker());
 
         AuthorizedMemoryRecallRankingService.RankedRecall result = service.rank(
                 10L,
