@@ -7,7 +7,6 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.util.List;
-import java.util.Map;
 
 @Data
 public class WriteMemoryRequest {
@@ -33,5 +32,5 @@ public class WriteMemoryRequest {
     @Max(5)
     private Integer growthSeverity;
 
-    private Map<String, Object> metadata;
+    private WriteMemoryMetadata metadata;
 }

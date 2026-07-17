@@ -533,6 +533,14 @@ export interface CreateFamilyMemoryRequest {
   metadata?: Record<string, unknown>;
 }
 
+export interface WriteMemoryMetadata {
+  source?: string;
+  authorName?: string;
+  relatedMemberName?: string | null;
+  observerPerspective?: string;
+  evidenceType?: string;
+}
+
 export interface WriteMemoryRequest {
   familyId: number;
   writeCategory: WriteCategory;
@@ -545,7 +553,7 @@ export interface WriteMemoryRequest {
   memoryType?: MemoryEntryType;
   growthCategory?: GrowthGuardCategory;
   growthSeverity?: number;
-  metadata?: Record<string, unknown>;
+  metadata?: WriteMemoryMetadata;
 }
 
 export interface WriteMemoryResult {

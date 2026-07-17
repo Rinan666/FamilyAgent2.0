@@ -6,11 +6,12 @@ import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.diary.dto.CreateDiaryEntryRequest;
 import com.familyagent.module.diary.entity.DiaryEntry;
-import com.familyagent.module.diary.service.DiaryEntryService;
+import com.familyagent.module.diary.facade.AgentDiaryEntryFacade;
 import com.familyagent.module.growth.dto.CreateGrowthGuardRecordRequest;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
-import com.familyagent.module.growth.service.GrowthGuardService;
+import com.familyagent.module.growth.facade.AgentGrowthGuardRecordFacade;
 import com.familyagent.module.memory.dto.CreateFamilyMemoryRequest;
+import com.familyagent.module.memory.dto.WriteMemoryMetadata;
 import com.familyagent.module.memory.dto.WriteMemoryRequest;
 import com.familyagent.module.memory.dto.WriteMemoryResult;
 import com.familyagent.module.memory.entity.MemoryEntry;
@@ -31,17 +32,17 @@ public class WriteMemoryCommandService {
 
     private static final Set<String> WRITE_CATEGORIES = Set.of("RECORD", "EXPERIENCE", "OBSERVATION");
 
-    private final DiaryEntryService diaryEntryService;
+    private final AgentDiaryEntryFacade diaryEntryFacade;
     private final MemoryService memoryService;
-    private final GrowthGuardService growthGuardService;
+    private final AgentGrowthGuardRecordFacade growthGuardRecordFacade;
 
     public WriteMemoryCommandService(
-            DiaryEntryService diaryEntryService,
+            AgentDiaryEntryFacade diaryEntryFacade,
             MemoryService memoryService,
-            GrowthGuardService growthGuardService) {
-        this.diaryEntryService = diaryEntryService;
+            AgentGrowthGuardRecordFacade growthGuardRecordFacade) {
+        this.diaryEntryFacade = diaryEntryFacade;
         this.memoryService = memoryService;
-        this.growthGuardService = growthGuardService;
+        this.growthGuardRecordFacade = growthGuardRecordFacade;
     }
 
     @Transactional
@@ -70,7 +71,7 @@ public class WriteMemoryCommandService {
             metadata.put("relatedUserId", request.getRelatedUserId());
         }
         diaryRequest.setMetadata(metadata);
-        DiaryEntry entry = diaryEntryService.create(diaryRequest);
+        DiaryEntry entry = diaryEntryFacade.create(diaryRequest);
         return new WriteMemoryResult(
                 "DIARY_ENTRY",
                 entry.getId(),
@@ -129,7 +130,7 @@ public class WriteMemoryCommandService {
             metadata.put("tags", normalizeTags(request.getTags()));
         }
         growthRequest.setMetadata(metadata);
-        GrowthGuardRecord record = growthGuardService.createRecord(growthRequest);
+        GrowthGuardRecord record = growthGuardRecordFacade.create(growthRequest);
         return new WriteMemoryResult(
                 "GROWTH_GUARD",
                 record.getId(),
@@ -163,12 +164,11 @@ public class WriteMemoryCommandService {
         return normalized.stream().limit(8).toList();
     }
 
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> mutableMetadata(Map<String, Object> metadata) {
+    private static Map<String, Object> mutableMetadata(WriteMemoryMetadata metadata) {
         if (metadata == null) {
             return new HashMap<>();
         }
-        return new HashMap<>(metadata);
+        return new HashMap<>(metadata.toMap());
     }
 
     private static String blankToNull(String value) {

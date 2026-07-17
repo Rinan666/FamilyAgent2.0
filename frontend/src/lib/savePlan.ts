@@ -11,6 +11,7 @@ import type {
   MemoryEntryType,
   MemoryScope,
   WriteCategory,
+  WriteMemoryMetadata,
   WriteMemoryRequest,
 } from '../types';
 
@@ -290,7 +291,7 @@ export function buildAgentSaveMemoryToolRequest(
   const toolRequest = buildWriteMemorySaveRequest(
     familyId,
     plan,
-    metadata as Record<string, unknown>,
+    metadata,
     context.targetUserId || undefined,
   );
 
@@ -308,7 +309,7 @@ export function buildAgentSaveMemoryToolRequest(
 export function buildWriteMemorySaveRequest(
   familyId: number,
   plan: AgentSaveToolPlan,
-  metadata: Record<string, unknown>,
+  metadata: WriteMemoryMetadata,
   targetUserId?: number,
 ): WriteMemoryRequest {
   return {
