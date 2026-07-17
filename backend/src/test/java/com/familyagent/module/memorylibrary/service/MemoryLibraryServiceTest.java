@@ -6,7 +6,7 @@ import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.response.PageResult;
 import com.familyagent.module.diary.repository.DiaryEntryRepository;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.MemoryLibraryFamilyFacade;
 import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
 import com.familyagent.module.growth.repository.GrowthGuardStalenessVoteRepository;
 import com.familyagent.module.memory.entity.MemoryEntry;
@@ -42,7 +42,7 @@ import static org.mockito.Mockito.when;
 class MemoryLibraryServiceTest {
 
     @Mock private JdbcTemplate jdbcTemplate;
-    @Mock private FamilyService familyService;
+    @Mock private MemoryLibraryFamilyFacade familyService;
     @Mock private DiaryEntryRepository diaryEntryRepository;
     @Mock private MemoryEntryRepository memoryEntryRepository;
     @Mock private GrowthGuardRecordRepository growthRecordRepository;

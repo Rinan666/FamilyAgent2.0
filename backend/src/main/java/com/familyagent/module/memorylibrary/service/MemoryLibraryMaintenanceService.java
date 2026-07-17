@@ -8,7 +8,7 @@ import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.repository.DiaryEntryRepository;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.MemoryLibraryFamilyFacade;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
 import com.familyagent.module.memory.entity.MemoryEntry;
@@ -41,7 +41,7 @@ public class MemoryLibraryMaintenanceService {
     private static final Set<String> GROWTH_CATEGORIES = Set.of(
             "POSTURE", "DENTAL", "VISION", "SLEEP", "EXERCISE", "SCREEN_TIME", "EMOTION", "COMMUNICATION", "OTHER");
 
-    private final FamilyService familyService;
+    private final MemoryLibraryFamilyFacade familyService;
     private final DiaryEntryRepository diaryEntryRepository;
     private final MemoryEntryRepository memoryEntryRepository;
     private final GrowthGuardRecordRepository growthRecordRepository;

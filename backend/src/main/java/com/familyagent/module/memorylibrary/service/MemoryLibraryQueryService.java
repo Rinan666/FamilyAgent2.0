@@ -6,7 +6,7 @@ import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.response.PageResult;
 import com.familyagent.common.security.CurrentUserGuard;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.MemoryLibraryFamilyFacade;
 import com.familyagent.module.growth.dto.GrowthStalenessStats;
 import com.familyagent.module.growth.repository.GrowthGuardStalenessVoteRepository;
 import com.familyagent.module.memory.dto.MemoryVoteStats;
@@ -43,7 +43,7 @@ public class MemoryLibraryQueryService {
             "ALL", "LIFE_RECORD", "FAMILY_EXPERIENCE", "GROWTH_OBSERVATION", "AI_SUMMARY");
 
     private final JdbcTemplate jdbcTemplate;
-    private final FamilyService familyService;
+    private final MemoryLibraryFamilyFacade familyService;
     private final ObjectMapper objectMapper;
     private final MemoryEntryVoteRepository memoryEntryVoteRepository;
     private final GrowthGuardStalenessVoteRepository growthGuardStalenessVoteRepository;

@@ -2,7 +2,6 @@ package com.familyagent.module.memorylibrary.service;
 
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
-import com.familyagent.module.family.service.FamilyService;
 import com.familyagent.common.security.CurrentUserGuard;
 
 import java.util.HashMap;
@@ -28,18 +27,6 @@ class MemoryLibrarySupport {
         } catch (NumberFormatException e) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "记忆 ID 不合法");
         }
-    }
-
-    static void ensureCreatorOrFamilyOwner(FamilyService familyService, Long familyId, Long creatorUserId, String message) {
-        Long viewerUserId = CurrentUserGuard.currentUserId();
-        if (viewerUserId.equals(creatorUserId)) return;
-        try {
-            familyService.checkOwner(familyId);
-            return;
-        } catch (BusinessException ignored) {
-            // fall through
-        }
-        throw new BusinessException(ErrorCode.FORBIDDEN, message);
     }
 
     static void ensureCreator(Long creatorUserId, String message) {

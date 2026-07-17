@@ -3,7 +3,7 @@ package com.familyagent.module.memorylibrary.service;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.MemoryLibraryFamilyFacade;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
 import com.familyagent.module.memory.facade.MemoryIndexingFacade;
@@ -23,7 +23,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class MemoryLibraryClassicalizeService {
 
-    private final FamilyService familyService;
+    private final MemoryLibraryFamilyFacade familyService;
     private final MemoryEntryRepository memoryEntryRepository;
     private final MemoryIndexingFacade memoryEmbeddingService;
 
@@ -51,7 +51,7 @@ public class MemoryLibraryClassicalizeService {
         if (normalizedStyleNote == null) normalizedStyleNote = "MEMORY_LIBRARY_CLASSICALIZE";
 
         MemoryEntry entry = requireActiveFamilyExperienceMemory(familyId, parsed.id());
-        MemoryLibrarySupport.ensureCreatorOrFamilyOwner(familyService, familyId, entry.getUserId(),
+        familyService.ensureCreatorOrOwner(familyId, entry.getUserId(),
                 "只能改写自己创建的经验，或由家族创建者改写");
 
         Map<String, Object> metadata = MemoryLibrarySupport.mutableMap(entry.getMetadata());
