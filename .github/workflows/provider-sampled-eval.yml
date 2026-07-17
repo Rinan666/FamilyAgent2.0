@@ -1,0 +1,64 @@
+name: Provider Sampled Eval
+
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: provider-sampled-eval
+  cancel-in-progress: false
+
+jobs:
+  sampled-eval:
+    name: Weekly public provider samples
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DEFAULT_LLM_MODEL: ${{ vars.PROVIDER_SAMPLED_EVAL_MODEL || 'dashscope/qwen-flash' }}
+      PROVIDER_SAMPLED_EVAL_CASE_LIMIT: "2"
+      PROVIDER_SAMPLED_EVAL_TIMEOUT_SECONDS: "20"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check provider credentials
+        id: credentials
+        env:
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+        run: |
+          if [ -z "$DASHSCOPE_API_KEY" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "DashScope credentials are not configured; sampled eval skipped."
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Python 3.12
+        if: steps.credentials.outputs.available == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ai-service/requirements-runtime.lock
+
+      - name: Install monitoring dependencies
+        if: steps.credentials.outputs.available == 'true'
+        working-directory: ai-service
+        run: >-
+          python -m pip install
+          --constraint requirements-runtime.lock
+          litellm==1.88.1
+          pydantic-settings==2.3.0
+          python-dotenv==1.2.2
+
+      - name: Run cost-bounded provider evaluation
+        if: steps.credentials.outputs.available == 'true'
+        working-directory: ai-service
+        env:
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          PROVIDER_SAMPLED_EVAL_ENABLED: "true"
+        run: python -m app.monitoring.provider_sampled_eval
