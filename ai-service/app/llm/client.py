@@ -49,9 +49,12 @@ class LLMClient:
         temperature: float = 0.7,
         max_tokens: int = 4096,
         response_format: Optional[dict] = None,
+        observation_sink: Callable[[LLMCallObservation], None] | None = None,
+        _degraded: bool = False,
     ) -> str:
         """Run a non-streaming chat completion."""
         model = model or self.default_model
+        started_at = time.monotonic()
         validate_messages(messages)
         max_tokens = bounded_output_tokens(max_tokens)
 
@@ -74,10 +77,34 @@ class LLMClient:
             if response_format:
                 content = self._extract_json(content)
 
+            self._observe_call(
+                observation_sink,
+                model=model,
+                started_at=started_at,
+                success=True,
+                error_code=None,
+                degraded=_degraded,
+            )
             return content
-        except (SafetyLimitError, PromptLeakAttemptError, RoleHijackAttemptError, TimeoutError):
+        except (SafetyLimitError, PromptLeakAttemptError, RoleHijackAttemptError, TimeoutError) as exc:
+            self._observe_call(
+                observation_sink,
+                model=model,
+                started_at=started_at,
+                success=False,
+                error_code="AI_TIMEOUT" if isinstance(exc, TimeoutError) else "AI_INPUT_REJECTED",
+                degraded=_degraded,
+            )
             raise
         except Exception as exc:
+            self._observe_call(
+                observation_sink,
+                model=model,
+                started_at=started_at,
+                success=False,
+                error_code="AI_PROVIDER_ERROR",
+                degraded=_degraded,
+            )
             logger.warning(
                 "LLM call failed: model=%s errorType=%s; trying fallback",
                 model,
@@ -90,6 +117,8 @@ class LLMClient:
                     temperature=temperature,
                     max_tokens=max_tokens,
                     response_format=response_format,
+                    observation_sink=observation_sink,
+                    _degraded=True,
                 )
             raise
 
@@ -141,7 +170,7 @@ class LLMClient:
                 delta = chunk.choices[0].delta
                 if delta.content:
                     yield delta.content
-            self._observe_stream(
+            self._observe_call(
                 observation_sink,
                 model=model,
                 started_at=started_at,
@@ -150,7 +179,7 @@ class LLMClient:
                 degraded=_degraded,
             )
         except (SafetyLimitError, PromptLeakAttemptError, RoleHijackAttemptError, TimeoutError) as exc:
-            self._observe_stream(
+            self._observe_call(
                 observation_sink,
                 model=model,
                 started_at=started_at,
@@ -160,7 +189,7 @@ class LLMClient:
             )
             raise
         except Exception as exc:
-            self._observe_stream(
+            self._observe_call(
                 observation_sink,
                 model=model,
                 started_at=started_at,
@@ -186,7 +215,7 @@ class LLMClient:
             else:
                 raise RuntimeError("LLM stream provider unavailable") from exc
 
-    def _observe_stream(
+    def _observe_call(
         self,
         observation_sink: Callable[[LLMCallObservation], None] | None,
         *,

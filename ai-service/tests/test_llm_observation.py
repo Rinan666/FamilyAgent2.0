@@ -88,3 +88,31 @@ async def test_chat_does_not_log_provider_exception_details(monkeypatch, caplog)
         await client.chat([{"role": "user", "content": "hello"}])
 
     assert "private non-stream provider detail" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_chat_observes_primary_failure_and_fallback_success(monkeypatch):
+    client = LLMClient()
+    client.default_model = "primary/model"
+    client.fallback_model = "fallback/model"
+
+    async def fake_completion(**kwargs):
+        if kwargs["model"] == "primary/model":
+            raise RuntimeError("primary unavailable")
+        message = type("Message", (), {"content": "OK"})()
+        choice = type("Choice", (), {"message": message})()
+        return type("Response", (), {"choices": [choice]})()
+
+    monkeypatch.setattr("app.llm.client.litellm.acompletion", fake_completion)
+    observations = []
+
+    result = await client.chat(
+        [{"role": "user", "content": "hello"}],
+        observation_sink=observations.append,
+    )
+
+    assert result == "OK"
+    assert [(item.model, item.success, item.degraded) for item in observations] == [
+        ("primary/model", False, False),
+        ("fallback/model", True, True),
+    ]

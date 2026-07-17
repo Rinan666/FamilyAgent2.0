@@ -1,0 +1,3 @@
+credentials-file: /etc/cloudflared/credentials.json
+ingress:
+  - service: http://frontend:3000

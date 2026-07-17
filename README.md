@@ -71,16 +71,65 @@ FamilyAgent 的核心价值，不是提供泛化建议，而是把家族成员�
 
 ---
 
-## 本地开发
+## 本地启动（Docker Compose）
 
-本地开发时，先准备根目录 `.env`，再启动 PostgreSQL、Redis、RabbitMQ 和 MinIO 等依赖服务。
+完整应用栈统一由 Docker Compose 启动，包括 PostgreSQL、Redis、RabbitMQ、MinIO、AI Service、后端、前端和 Cloudflare Tunnel。宿主机不需要分别安装 Node.js、Java、Python。仓库不再提供 PowerShell 启动器，Docker Compose 是唯一标准启动入口。
 
-- 前端位于 `frontend`，使用 `npm install` 与 `npm run dev`
-- 后端位于 `backend`，使用 `./mvnw.cmd spring-boot:run`
-- AI 服务位于 `ai-service`，先创建 `.venv` 并安装 `requirements.txt`，再执行 `start.bat`
+### 1. 准备环境变量
+
+在项目根目录准备 `.env`。首次配置可以参考 `.env.example`，并至少确认数据库、Redis、RabbitMQ、MinIO、内部服务令牌和 AI Provider 等配置。
+
+`COMPOSE_PROJECT_NAME` 必须与当前环境已有的 Compose 项目名保持一致。本机现有环境使用 `familyagent`；云服务器如果已有 `fa-*` 容器，应保持：
+
+```env
+COMPOSE_PROJECT_NAME=fa
+```
+
+不要直接修改已有服务器的项目名，否则 Docker 会把它识别为另一套应用，可能创建重复容器并产生端口冲突。项目名只决定 Compose 对容器的归属，PostgreSQL、Redis、RabbitMQ 和 MinIO 仍复用显式命名的 `fa_*` 数据卷。
+
+Cloudflare Tunnel 还需要配置命名隧道 ID 和凭据文件的绝对路径：
+
+```env
+CLOUDFLARED_TUNNEL_ID=00000000-0000-0000-0000-000000000000
+CLOUDFLARED_CREDENTIALS_FILE=C:/Users/your-name/.cloudflared/00000000-0000-0000-0000-000000000000.json
+```
+
+凭据文件只读挂载到容器，不会复制到镜像中。
+
+### 2. 构建并启动
+
+```powershell
+docker compose --env-file .env -f docker-compose.stack.yml config --quiet
+docker compose --env-file .env -f docker-compose.stack.yml up -d --build
+```
+
+首次构建需要下载 Maven、npm 和 Python 依赖，后续构建会复用 Docker 缓存。日常启动无需重新构建：
+
+```powershell
+docker compose --env-file .env -f docker-compose.stack.yml up -d
+```
+
+### 3. 检查状态
+
+```powershell
+docker compose --env-file .env -f docker-compose.stack.yml ps
+docker compose --env-file .env -f docker-compose.stack.yml logs --tail=200
+```
 
 默认访问入口：
 
 - 前端：`http://localhost:3000`
-- 后端：`http://localhost:8080`
+- 后端健康检查：`http://localhost:8080/actuator/health`
+- AI 健康检查：`http://localhost:8000/ai/health/ready`
 - AI 文档：`http://localhost:8000/docs`
+- RabbitMQ 管理界面：`http://localhost:15672`
+- MinIO 控制台：`http://localhost:9001`
+- 公网入口：`https://app.familyagent.cn`
+
+### 4. 停止
+
+```powershell
+docker compose --env-file .env -f docker-compose.stack.yml down
+```
+
+停止命令默认保留 PostgreSQL、Redis、RabbitMQ 和 MinIO 数据卷。更完整的生产配置与故障排查说明见 `docs/deployment/docker-stack.md`。

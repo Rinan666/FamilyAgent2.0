@@ -6,6 +6,7 @@ FROM ${PYTHON_IMAGE}
 
 ARG DEBIAN_MIRROR=
 ARG PIP_INDEX_URL=https://pypi.org/simple
+ARG PIP_VERSION=25.1.1
 
 WORKDIR /app
 
@@ -32,17 +33,17 @@ RUN if [ -n "${DEBIAN_MIRROR}" ]; then \
 
 RUN mkdir -p /home/appuser/.insightface && chown -R appuser:appgroup /home/appuser
 
-COPY requirements.txt ./
+COPY requirements-runtime.txt requirements-runtime.lock ./
 # InsightFace declares desktop OpenCV even though it runs with the headless
 # distribution. Normalize that dependency after installation so pip can still
 # verify the complete runtime environment.
 RUN --mount=type=cache,target=/home/appuser/.cache/pip,uid=0,gid=0,mode=0755 \
     set -eu; \
-    insightface_requirement="$(sed -n '/^insightface==/p' requirements.txt | head -n 1)"; \
+    insightface_requirement="$(sed -n '/^insightface==/p' requirements-runtime.lock | head -n 1)"; \
     test -n "${insightface_requirement}"; \
-    grep -v '^insightface==' requirements.txt > /tmp/requirements-runtime.txt; \
-    pip install --upgrade pip --index-url "${PIP_INDEX_URL}"; \
-    pip install -r /tmp/requirements-runtime.txt --index-url "${PIP_INDEX_URL}"; \
+    grep -v '^insightface==' requirements-runtime.lock > /tmp/requirements-install.txt; \
+    pip install "pip==${PIP_VERSION}" --index-url "${PIP_INDEX_URL}"; \
+    pip install -r /tmp/requirements-install.txt --index-url "${PIP_INDEX_URL}"; \
     pip install --no-deps "${insightface_requirement}" --index-url "${PIP_INDEX_URL}"; \
     insightface_metadata="$(find /usr/local/lib/python*/site-packages \
         -path '*/insightface-*.dist-info/METADATA' -print -quit)"; \
@@ -51,7 +52,7 @@ RUN --mount=type=cache,target=/home/appuser/.cache/pip,uid=0,gid=0,mode=0755 \
     sed -i 's/^Requires-Dist: opencv-python$/Requires-Dist: opencv-python-headless/' \
         "${insightface_metadata}"; \
     pip check; \
-    rm -f /tmp/requirements-runtime.txt
+    rm -f /tmp/requirements-install.txt
 
 COPY --chown=appuser:appgroup app ./app
 COPY --chown=appuser:appgroup dip ./dip

@@ -2,16 +2,48 @@
 
 ## Start
 
+Docker Compose is the standard startup path for the complete application stack.
+
+For local Windows development, use the root `.env` file:
+
+```powershell
+docker compose --env-file .env -f docker-compose.stack.yml up -d --build
+```
+
+For deployment, prepare the dedicated Docker environment file:
+
 ```bash
 cp .env.docker.example .env.docker
-./scripts/server-deploy.sh
+docker compose --env-file .env.docker -f docker-compose.stack.yml up -d --build
 ```
+
+Keep `COMPOSE_PROJECT_NAME` aligned with the existing Compose project on each host. Existing cloud deployments using `fa-*` containers should set:
+
+```env
+COMPOSE_PROJECT_NAME=fa
+```
+
+Changing the project name on an existing host makes Compose treat the stack as a different application and can create duplicate containers or port conflicts. The local `.env.example` uses `familyagent`, while `.env.docker.example` uses `fa` for server compatibility.
 
 - Frontend: `3000`
 - Backend: `8080`
 - AI: `8000`
-- Logs: `./scripts/docker-stack.sh logs`
-- Stop: `./scripts/docker-stack.sh down`
+- Public tunnel: Cloudflare routes to the `frontend` container
+- Logs: `docker compose --env-file .env.docker -f docker-compose.stack.yml logs -f`
+- Stop: `docker compose --env-file .env.docker -f docker-compose.stack.yml down`
+
+The host PowerShell launcher is not required for the Docker Stack.
+
+## Cloudflare Tunnel
+
+The stack runs `cloudflared` as a container. Configure the named tunnel ID and the absolute host path to its credential JSON:
+
+```env
+CLOUDFLARED_TUNNEL_ID=00000000-0000-0000-0000-000000000000
+CLOUDFLARED_CREDENTIALS_FILE=C:/Users/your-name/.cloudflared/00000000-0000-0000-0000-000000000000.json
+```
+
+On Linux, use an absolute Linux path for `CLOUDFLARED_CREDENTIALS_FILE`. The credential file is mounted read-only and is never copied into the image.
 
 ## Required Production Secrets
 
@@ -136,6 +168,7 @@ Check service logs:
 docker compose --env-file .env.docker -f docker-compose.stack.yml logs --tail=200 backend
 docker compose --env-file .env.docker -f docker-compose.stack.yml logs --tail=200 ai-service
 docker compose --env-file .env.docker -f docker-compose.stack.yml logs --tail=200 frontend
+docker compose --env-file .env.docker -f docker-compose.stack.yml logs --tail=200 cloudflared
 ```
 
 Check backend health:

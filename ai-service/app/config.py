@@ -61,23 +61,10 @@ class Settings(BaseSettings):
     ai_embedding_ip_rate_limit_per_minute: int = 240
     ai_embedding_timeout_seconds: float = 30.0
 
-    # Database
-    db_host: str = "localhost"
-    db_port: int = 5432
-    db_name: str = "familyagent"
-    db_user: str = "fa_user"
-    db_password: str = "fa_dev_pass"
-
-    # Redis
-    redis_host: str = "localhost"
-    redis_port: int = 6379
-    redis_password: Optional[str] = None
-
-    # RabbitMQ
-    rabbitmq_host: str = "localhost"
-    rabbitmq_port: int = 5672
-    rabbitmq_user: str = "fa_user"
-    rabbitmq_password: str = "fa_dev_pass"
+    # Synthetic provider monitoring (never used by readiness)
+    provider_monitor_enabled: bool = False
+    provider_monitor_timeout_seconds: float = 30.0
+    provider_monitor_max_tokens: int = 8
 
     # Math sandbox
     math_sandbox_timeout: int = 5

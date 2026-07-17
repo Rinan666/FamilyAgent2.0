@@ -1,4 +1,4 @@
-#name: familyagent-stack
+name: ${COMPOSE_PROJECT_NAME:-fa}
 
 services:
   postgres:
@@ -84,30 +84,17 @@ services:
         PYTHON_IMAGE: ${DOCKER_PYTHON_IMAGE:-python:3.12-slim}
         DEBIAN_MIRROR: ${DOCKER_DEBIAN_MIRROR:-}
         PIP_INDEX_URL: ${DOCKER_PIP_INDEX_URL:-https://pypi.org/simple}
+        PIP_VERSION: ${DOCKER_PIP_VERSION:-25.1.1}
     restart: unless-stopped
     env_file:
-      - ${STACK_ENV_FILE:-.env.docker}
+      - ${STACK_ENV_FILE:-.env}
     environment:
       APP_ENV: ${APP_ENV:-prod}
       APP_DEBUG: ${APP_DEBUG:-false}
       AI_SERVICE_PORT: 8000
       BACKEND_URL: http://backend:8080
-      DB_HOST: postgres
-      DB_PORT: 5432
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-ASDFGZXCVB008}
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5672
     ports:
       - "${AI_SERVICE_PORT:-8000}:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
     healthcheck:
       test:
         - CMD
@@ -131,7 +118,7 @@ services:
         JAVA_RUNTIME_IMAGE: ${DOCKER_JAVA_RUNTIME_IMAGE:-docker.m.daocloud.io/library/eclipse-temurin:17-jre-jammy}
     restart: unless-stopped
     env_file:
-      - ${STACK_ENV_FILE:-.env.docker}
+      - ${STACK_ENV_FILE:-.env}
     environment:
       APP_ENV: ${APP_ENV:-prod}
       SPRING_PROFILES_ACTIVE: prod
@@ -179,7 +166,7 @@ services:
         AI_SERVICE_URL: ${DOCKER_FRONTEND_AI_SERVICE_URL:-http://ai-service:8000}
     restart: unless-stopped
     env_file:
-      - ${STACK_ENV_FILE:-.env.docker}
+      - ${STACK_ENV_FILE:-.env}
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -197,12 +184,42 @@ services:
     networks:
       - fa-network
 
+  cloudflared:
+    image: ${DOCKER_CLOUDFLARED_IMAGE:-cloudflare/cloudflared:latest}
+    restart: unless-stopped
+    command:
+      - tunnel
+      - --no-autoupdate
+      - --config
+      - /etc/cloudflared/config.yml
+      - run
+      - ${CLOUDFLARED_TUNNEL_ID:?CLOUDFLARED_TUNNEL_ID is required}
+    volumes:
+      - type: bind
+        source: ./deploy/cloudflared/config.yml
+        target: /etc/cloudflared/config.yml
+        read_only: true
+      - type: bind
+        source: ${CLOUDFLARED_CREDENTIALS_FILE:?CLOUDFLARED_CREDENTIALS_FILE is required}
+        target: /etc/cloudflared/credentials.json
+        read_only: true
+    depends_on:
+      frontend:
+        condition: service_started
+    networks:
+      - fa-network
+
 volumes:
   pg_data:
+    name: fa_pg_data
   redis_data:
+    name: fa_redis_data
   rabbitmq_data:
+    name: fa_rabbitmq_data
   minio_data:
+    name: fa_minio_data
 
 networks:
   fa-network:
+    name: fa-network
     driver: bridge
