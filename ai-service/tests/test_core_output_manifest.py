@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from app.api.stream_events import FAMILY_CHAT_STREAM_SCHEMA_VERSION
 from app.runtime.core_output_manifest import (
     BACKEND_RECALL_ALGORITHM_VERSION,
     CORE_OUTPUT_MANIFEST,
@@ -20,6 +21,7 @@ def test_core_outputs_declare_applicable_versions_and_eval_bindings():
         "memory_recall_ranking",
     }
     assert items["family_chat"].prompt_version
+    assert items["family_chat"].schema_version == FAMILY_CHAT_STREAM_SCHEMA_VERSION
     for capability in ("save_memory_plan", "organize_draft", "persona_material_draft"):
         item = items[capability]
         assert item.skill_version
@@ -45,4 +47,18 @@ def test_backend_recall_algorithm_version_matches_cross_service_contract():
 
     assert f'ALGORITHM_VERSION = "{BACKEND_RECALL_ALGORITHM_VERSION}"' in ranking_source.read_text(
         encoding="utf-8"
+    )
+
+
+def test_backend_stream_schema_version_matches_cross_service_contract():
+    repository_root = Path(__file__).resolve().parents[2]
+    version_source = repository_root / (
+        "backend/src/main/java/com/familyagent/module/agent/constant/"
+        "AgentAiArtifactVersions.java"
+    )
+    if not version_source.exists():
+        pytest.skip("Backend source is not mounted in the AI Service test container")
+
+    assert f'FAMILY_CHAT_STREAM_SCHEMA = "{FAMILY_CHAT_STREAM_SCHEMA_VERSION}"' in (
+        version_source.read_text(encoding="utf-8")
     )

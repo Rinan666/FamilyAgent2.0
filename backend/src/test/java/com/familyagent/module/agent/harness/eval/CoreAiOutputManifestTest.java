@@ -1,6 +1,7 @@
 package com.familyagent.module.agent.harness.eval;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.familyagent.module.agent.constant.AgentAiArtifactVersions;
 import com.familyagent.module.agent.harness.eval.dto.CoreAiOutputManifestItem;
 import org.junit.jupiter.api.Test;
 
@@ -22,6 +23,9 @@ class CoreAiOutputManifestTest {
 
         assertEquals(5, items.size());
         assertVersion(items.get("family_chat").promptVersion());
+        assertEquals(
+                AgentAiArtifactVersions.FAMILY_CHAT_STREAM_SCHEMA,
+                items.get("family_chat").schemaVersion());
         assertSkillVersions(items.get("save_memory_plan"));
         assertSkillVersions(items.get("organize_draft"));
         assertSkillVersions(items.get("persona_material_draft"));

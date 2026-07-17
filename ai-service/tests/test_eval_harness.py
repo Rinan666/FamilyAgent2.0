@@ -41,6 +41,7 @@ async def test_default_eval_suite_passes_without_leaking_fixture_content(caplog)
         ("PROMPT", "memory.save_plan", "memory.save_plan.v1"),
         ("SCHEMA", "save_tool_plan", "save_tool_plan.schema.v1"),
         ("PROMPT", "family_chat.system", "family_chat.system.v1"),
+        ("SCHEMA", "family_chat.stream", "family_chat.stream.schema.v1"),
         ("ALGORITHM", "memory_recall_ranking", "authorized-memory-recall.v1"),
         ("SKILL", "organize_draft", "1.0.0"),
         ("PROMPT", "memory.organize_draft", "memory.organize_draft.v1"),

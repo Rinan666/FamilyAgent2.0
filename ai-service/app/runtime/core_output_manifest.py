@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
+from app.api.stream_events import FAMILY_CHAT_STREAM_SCHEMA_VERSION
 from app.runtime.artifact_versions import FAMILY_CHAT_PROMPT_VERSION
 from app.runtime.skill_manifest import (
     ORGANIZE_DRAFT_MANIFEST,
@@ -53,7 +54,7 @@ CORE_OUTPUT_MANIFEST = (
         owner="ai-service",
         skill_version=None,
         prompt_version=FAMILY_CHAT_PROMPT_VERSION,
-        schema_version=None,
+        schema_version=FAMILY_CHAT_STREAM_SCHEMA_VERSION,
         algorithm_version=None,
         provider_observation_required_when_external=True,
         eval_binding="family-chat-stream-contract",

@@ -16,7 +16,7 @@ public final class CoreAiOutputManifest {
                     "ai-service",
                     null,
                     AgentAiArtifactVersions.FAMILY_CHAT_PROMPT,
-                    null,
+                    AgentAiArtifactVersions.FAMILY_CHAT_STREAM_SCHEMA,
                     null,
                     true,
                     "family-chat-stream-contract"),

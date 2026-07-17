@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 logger = logging.getLogger("familyagent.ai.api.stream_events")
 SSE_KEEPALIVE_SECONDS = 10.0
+FAMILY_CHAT_STREAM_SCHEMA_VERSION = "family_chat.stream.schema.v1"
 
 
 class StreamContentEvent(BaseModel):

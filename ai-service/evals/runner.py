@@ -6,6 +6,7 @@ import logging
 import time
 from datetime import UTC, datetime
 
+from app.api.stream_events import FAMILY_CHAT_STREAM_SCHEMA_VERSION
 from app.runtime.artifact_versions import FAMILY_CHAT_PROMPT_VERSION
 from app.runtime.core_output_manifest import BACKEND_RECALL_ALGORITHM_VERSION
 from app.runtime.skill_manifest import (
@@ -61,6 +62,11 @@ DEFAULT_ARTIFACTS = (
         kind=EvalArtifactKind.PROMPT,
         name="family_chat.system",
         version=FAMILY_CHAT_PROMPT_VERSION,
+    ),
+    EvalArtifactVersion(
+        kind=EvalArtifactKind.SCHEMA,
+        name="family_chat.stream",
+        version=FAMILY_CHAT_STREAM_SCHEMA_VERSION,
     ),
     EvalArtifactVersion(
         kind=EvalArtifactKind.ALGORITHM,
