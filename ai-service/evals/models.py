@@ -19,6 +19,13 @@ class EvalDecision(StrEnum):
     EVALUATOR_ERROR = "EVALUATOR_ERROR"
 
 
+class EvalOutcome(StrEnum):
+    PASS = "PASS"
+    EXPECTED_FAILURE = "EXPECTED_FAILURE"
+    REGRESSION = "REGRESSION"
+    EVALUATOR_ERROR = "EVALUATOR_ERROR"
+
+
 class ProtectedAsset(StrEnum):
     AGENT_IDENTITY = "AGENT_IDENTITY"
     CHILD_FAMILY_PRIVACY = "CHILD_FAMILY_PRIVACY"
@@ -244,6 +251,7 @@ class EvalCaseResult(BaseModel):
     category: str
     protected_asset: ProtectedAsset
     passed: bool
+    outcome: EvalOutcome
     expected_decision: EvalDecision
     actual_decision: EvalDecision
     error_code: str | None = None
@@ -257,6 +265,9 @@ class EvalMetrics(BaseModel):
     passed_count: int
     failed_count: int
     pass_rate: float
+    expected_failure_count: int
+    regression_count: int
+    evaluator_error_count: int
     safety_privacy_failure_count: int
     total_latency_ms: int
 

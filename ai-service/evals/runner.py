@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from datetime import UTC, datetime
 
@@ -14,6 +15,7 @@ from app.runtime.skill_manifest import (
 )
 
 from .evaluators import evaluate_case
+from .log_control import suppress_application_logs
 from .models import (
     EvalArtifactKind,
     EvalArtifactVersion,
@@ -22,13 +24,16 @@ from .models import (
     EvalGateName,
     EvalGateResult,
     EvalMetrics,
+    EvalOutcome,
     EvalReport,
     GoldenCase,
     ProtectedAsset,
     SavePlanEvalCase,
 )
 
-REPORT_SCHEMA_VERSION = "eval.report.v1"
+logger = logging.getLogger("familyagent.ai.evals.runner")
+
+REPORT_SCHEMA_VERSION = "eval.report.v2"
 DEFAULT_SUITE_VERSION = "familyagent.core.v1"
 P0_GATE_CATEGORIES = {"safety", "privacy"}
 CONTRACT_GATE_CATEGORIES = {"contract"}
@@ -112,6 +117,9 @@ class EvalRunner:
         )
         total_latency = sum(result.latency_ms for result in results)
         pass_rate = round(passed_count / len(results), 4) if results else 1.0
+        expected_failure_count = _outcome_count(results, EvalOutcome.EXPECTED_FAILURE)
+        regression_count = _outcome_count(results, EvalOutcome.REGRESSION)
+        evaluator_error_count = _outcome_count(results, EvalOutcome.EVALUATOR_ERROR)
         gates = (
             _gate_result(results, EvalGateName.P0_SAFETY_PRIVACY, P0_GATE_CATEGORIES),
             _gate_result(results, EvalGateName.CONTRACT, CONTRACT_GATE_CATEGORIES),
@@ -127,6 +135,9 @@ class EvalRunner:
                 passed_count=passed_count,
                 failed_count=failed_count,
                 pass_rate=pass_rate,
+                expected_failure_count=expected_failure_count,
+                regression_count=regression_count,
+                evaluator_error_count=evaluator_error_count,
                 safety_privacy_failure_count=safety_privacy_failures,
                 total_latency_ms=total_latency,
             ),
@@ -135,22 +146,29 @@ class EvalRunner:
 
     async def _run_case(self, case: GoldenCase) -> EvalCaseResult:
         started = time.perf_counter()
+        expected = _expected_decision(case)
         try:
-            evaluation = await evaluate_case(case)
+            with suppress_application_logs(expected == EvalDecision.STRUCTURED_FAILURE):
+                evaluation = await evaluate_case(case)
             actual = evaluation.actual_decision
             error_code = evaluation.error_code
             passed = evaluation.passed
-        except Exception:
+        except Exception as error:
             actual = EvalDecision.EVALUATOR_ERROR
             error_code = "EVAL_EXECUTION_ERROR"
             passed = False
+            logger.error(
+                "Evaluation case failed unexpectedly: caseId=%s errorType=%s",
+                case.case_id,
+                type(error).__name__,
+            )
         latency_ms = max(0, round((time.perf_counter() - started) * 1000))
-        expected = _expected_decision(case)
         return EvalCaseResult(
             case_id=case.case_id,
             category=case.category,
             protected_asset=case.protected_asset,
             passed=passed,
+            outcome=_outcome(passed, expected, actual),
             expected_decision=expected,
             actual_decision=actual,
             error_code=error_code,
@@ -162,6 +180,24 @@ def _expected_decision(case: GoldenCase) -> EvalDecision:
     if isinstance(case, SavePlanEvalCase):
         return case.expected.decision
     return case.expected_decision
+
+
+def _outcome(
+    passed: bool,
+    expected: EvalDecision,
+    actual: EvalDecision,
+) -> EvalOutcome:
+    if actual == EvalDecision.EVALUATOR_ERROR:
+        return EvalOutcome.EVALUATOR_ERROR
+    if not passed:
+        return EvalOutcome.REGRESSION
+    if expected == EvalDecision.STRUCTURED_FAILURE:
+        return EvalOutcome.EXPECTED_FAILURE
+    return EvalOutcome.PASS
+
+
+def _outcome_count(results: tuple[EvalCaseResult, ...], outcome: EvalOutcome) -> int:
+    return sum(result.outcome == outcome for result in results)
 
 
 def _gate_result(
