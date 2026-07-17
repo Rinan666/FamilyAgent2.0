@@ -3,7 +3,7 @@ package com.familyagent.module.memory.service;
 import com.familyagent.infra.ai.AIServiceClient;
 import com.familyagent.infra.ai.dto.EmbeddingResponse;
 import com.familyagent.module.diary.repository.DiaryEntryRepository;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.FamilyMembershipFacade;
 import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
 import com.familyagent.module.memory.repository.MemoryEmbeddingWriteRepository;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
@@ -32,7 +32,7 @@ class MemoryEmbeddingServiceTest {
     @Mock private DiaryEntryRepository diaryRepository;
     @Mock private MemoryEntryRepository memoryRepository;
     @Mock private GrowthGuardRecordRepository growthRecordRepository;
-    @Mock private FamilyService familyService;
+    @Mock private FamilyMembershipFacade familyMembershipFacade;
 
     // In a unit test without Spring proxies, @Async methods execute synchronously.
     private final EmbeddingAsyncProcessor asyncProcessor = new EmbeddingAsyncProcessor();
@@ -160,7 +160,7 @@ class MemoryEmbeddingServiceTest {
                 diaryRepository,
                 memoryRepository,
                 growthRecordRepository,
-                familyService,
+                familyMembershipFacade,
                 asyncProcessor);
     }
 

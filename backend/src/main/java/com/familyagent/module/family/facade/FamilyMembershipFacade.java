@@ -13,4 +13,8 @@ public class FamilyMembershipFacade {
     public void checkMembership(Long familyId) {
         familyService.checkMembership(familyId);
     }
+
+    public void checkMembership(Long familyId, Long userId) {
+        familyService.getFamilyMember(familyId, userId);
+    }
 }

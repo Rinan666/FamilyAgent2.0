@@ -6,7 +6,7 @@ import com.familyagent.common.constant.MemoryType;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.FamilyMembershipFacade;
 import com.familyagent.module.memory.dto.MemoryVoteStats;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.entity.MemoryEntryVote;
@@ -33,7 +33,7 @@ public class MemoryVoteService {
 
     private final MemoryEntryRepository memoryRepository;
     private final MemoryEntryVoteRepository voteRepository;
-    private final FamilyService familyService;
+    private final FamilyMembershipFacade familyMembershipFacade;
 
     @Transactional
     public MemoryEntry vote(Long memoryId, String voteType) {
@@ -46,7 +46,7 @@ public class MemoryVoteService {
         if (!FAMILY_MEMORY_TYPES.contains(entry.getType())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "只有家族经验可以投票");
         }
-        familyService.checkMembership(entry.getFamilyId());
+        familyMembershipFacade.checkMembership(entry.getFamilyId());
         MemoryEntry visibleEntry = memoryRepository.findVisibleFamilyMemoryById(entry.getFamilyId(), memoryId, viewerUserId);
         if (visibleEntry == null) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权对不可见的家族经验投票");

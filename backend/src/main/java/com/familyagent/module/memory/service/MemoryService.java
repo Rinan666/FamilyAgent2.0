@@ -8,7 +8,7 @@ import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.response.PageResult;
 import com.familyagent.common.security.CurrentUserGuard;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.FamilyMembershipFacade;
 import com.familyagent.module.memory.dto.CreateFamilyMemoryRequest;
 import com.familyagent.module.memory.dto.CreateMemoryEntryRequest;
 import com.familyagent.module.memory.entity.MemoryEntry;
@@ -35,7 +35,7 @@ public class MemoryService {
     private static final Set<String> FAMILY_MEMORY_SCOPES = MemoryScope.familyNames();
 
     private final MemoryEntryRepository memoryRepository;
-    private final FamilyService familyService;
+    private final FamilyMembershipFacade familyMembershipFacade;
     private final MemoryEmbeddingService memoryEmbeddingService;
     private final MemoryMergeService memoryMergeService;
     private final MemorySearchService memorySearchService;
@@ -54,7 +54,7 @@ public class MemoryService {
     @Transactional
     public MemoryEntry createFamilyMemory(CreateFamilyMemoryRequest request) {
         Long userId = CurrentUserGuard.currentUserId();
-        familyService.checkMembership(request.getFamilyId());
+        familyMembershipFacade.checkMembership(request.getFamilyId());
 
         Map<String, Object> metadata = buildFamilyMemoryMetadata(request);
         Object sourceDiaryId = metadata.get("sourceDiaryId");

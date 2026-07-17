@@ -2,7 +2,7 @@ package com.familyagent.module.memory.service;
 
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.repository.DiaryEntryRepository;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.FamilyMembershipFacade;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
@@ -27,7 +27,7 @@ public class AuthorizedMemoryRecallService {
     private final MemoryEntryRepository memoryRepository;
     private final GrowthGuardRecordRepository growthRecordRepository;
     private final MemoryEmbeddingRepository embeddingRepository;
-    private final FamilyService familyService;
+    private final FamilyMembershipFacade familyMembershipFacade;
     private final AuthorizedMemoryRecallSocialSupport socialSupport;
     private final AuthorizedMemoryRecallRankingService rankingService;
     private final AuthorizedMemoryRecallQueryPolicy queryPolicy;
@@ -48,7 +48,7 @@ public class AuthorizedMemoryRecallService {
             String scene,
             int diaryLimit,
             int memoryLimit) {
-        familyService.checkMembership(familyId);
+        familyMembershipFacade.checkMembership(familyId);
         return recallForFamilyAfterViewerValidated(familyId, viewerUserId, query, scene, diaryLimit, memoryLimit);
     }
 

@@ -1,7 +1,7 @@
 package com.familyagent.module.memory.service;
 
 import cn.dev33.satoken.stp.StpUtil;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.FamilyMembershipFacade;
 import com.familyagent.module.memory.dto.CreateFamilyMemoryRequest;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
@@ -33,7 +33,7 @@ class MemoryServiceTest {
 
     @Mock private MemoryEntryRepository memoryRepository;
     @Mock private MemoryEntryVoteRepository voteRepository;
-    @Mock private FamilyService familyService;
+    @Mock private FamilyMembershipFacade familyMembershipFacade;
     @Mock private MemoryEmbeddingService memoryEmbeddingService;
     @Mock private MemoryMergeService memoryMergeService;
     @Mock private MemorySearchService memorySearchService;
@@ -139,8 +139,14 @@ class MemoryServiceTest {
 
     @Test
     void searchFamilyMemories_shouldClampPageAndAttachVoteStats() {
-        MemoryVoteService realVoteService = new MemoryVoteService(memoryRepository, voteRepository, familyService);
-        MemorySearchService searchService = new MemorySearchService(memoryRepository, familyService, realVoteService);
+        MemoryVoteService realVoteService = new MemoryVoteService(
+                memoryRepository,
+                voteRepository,
+                familyMembershipFacade);
+        MemorySearchService searchService = new MemorySearchService(
+                memoryRepository,
+                familyMembershipFacade,
+                realVoteService);
 
         MemoryEntry entry = new MemoryEntry();
         entry.setId(301L);
@@ -171,7 +177,7 @@ class MemoryServiceTest {
     // --- helpers ---
 
     private MemoryService newService() {
-        return new MemoryService(memoryRepository, familyService, memoryEmbeddingService,
+        return new MemoryService(memoryRepository, familyMembershipFacade, memoryEmbeddingService,
                 memoryMergeService, memorySearchService, memoryVoteService, redissonClient);
     }
 

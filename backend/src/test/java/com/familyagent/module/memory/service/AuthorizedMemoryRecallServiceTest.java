@@ -4,7 +4,7 @@ import com.familyagent.common.constant.EntityStatus;
 import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.repository.DiaryEntryRepository;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.FamilyMembershipFacade;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
@@ -42,7 +42,7 @@ class AuthorizedMemoryRecallServiceTest {
     @Mock private MemoryEntryRepository memoryRepository;
     @Mock private GrowthGuardRecordRepository growthRecordRepository;
     @Mock private MemoryEmbeddingRepository embeddingRepository;
-    @Mock private FamilyService familyService;
+    @Mock private FamilyMembershipFacade familyMembershipFacade;
     @Mock private AuthorizedMemoryRecallSocialSupport socialSupport;
     @Mock private AuthorizedMemoryRecallRankingService rankingService;
     @Spy private AuthorizedMemoryRecallQueryPolicy queryPolicy = new AuthorizedMemoryRecallQueryPolicy();
@@ -60,7 +60,7 @@ class AuthorizedMemoryRecallServiceTest {
                 3,
                 3);
 
-        verify(familyService).checkMembership(familyId);
+        verify(familyMembershipFacade).checkMembership(familyId);
         verify(diaryRepository, never()).findVisibleByFamily(any(), any(), anyInt());
         verify(memoryRepository, never()).findActiveFamilyMemories(any(), any(), anyInt());
         verify(growthRecordRepository, never()).findVisibleByFamily(any(), any(), anyInt());
@@ -106,7 +106,7 @@ class AuthorizedMemoryRecallServiceTest {
                 3,
                 3);
 
-        verify(familyService).checkMembership(familyId);
+        verify(familyMembershipFacade).checkMembership(familyId);
         verify(diaryRepository).findVisibleByFamily(eq(familyId), eq(viewerUserId), anyInt());
         verify(memoryRepository).findActiveFamilyMemories(eq(familyId), eq(viewerUserId), anyInt());
         verify(growthRecordRepository).findVisibleByFamily(eq(familyId), eq(viewerUserId), anyInt());
@@ -148,7 +148,7 @@ class AuthorizedMemoryRecallServiceTest {
                 3,
                 3);
 
-        verify(familyService).checkMembership(familyId);
+        verify(familyMembershipFacade).checkMembership(familyId);
         verify(diaryRepository).findVisibleByFamily(eq(familyId), eq(viewerUserId), anyInt());
         verify(memoryRepository).findActiveFamilyMemories(eq(familyId), eq(viewerUserId), anyInt());
         verify(growthRecordRepository).findVisibleByFamily(eq(familyId), eq(viewerUserId), anyInt());

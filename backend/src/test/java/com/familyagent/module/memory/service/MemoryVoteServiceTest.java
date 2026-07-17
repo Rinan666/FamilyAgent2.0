@@ -1,7 +1,7 @@
 package com.familyagent.module.memory.service;
 
 import cn.dev33.satoken.stp.StpUtil;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.FamilyMembershipFacade;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.entity.MemoryEntryVote;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
@@ -27,11 +27,14 @@ class MemoryVoteServiceTest {
 
     @Mock private MemoryEntryRepository memoryRepository;
     @Mock private MemoryEntryVoteRepository voteRepository;
-    @Mock private FamilyService familyService;
+    @Mock private FamilyMembershipFacade familyMembershipFacade;
 
     @Test
     void vote_shouldTreatDuplicateInsertAsExistingVote() {
-        MemoryVoteService service = new MemoryVoteService(memoryRepository, voteRepository, familyService);
+        MemoryVoteService service = new MemoryVoteService(
+                memoryRepository,
+                voteRepository,
+                familyMembershipFacade);
 
         MemoryEntry entry = new MemoryEntry();
         entry.setId(301L);
@@ -58,7 +61,7 @@ class MemoryVoteServiceTest {
             assertTrue(((Map<?, ?>) result.getMetadata()).containsKey("voteStats"));
         }
 
-        verify(familyService).checkMembership(1L);
+        verify(familyMembershipFacade).checkMembership(1L);
         verify(voteRepository).insert(any());
         verify(voteRepository, never()).updateById(any());
     }

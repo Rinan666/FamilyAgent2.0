@@ -2,7 +2,7 @@ package com.familyagent.module.memory.service;
 
 import com.familyagent.common.response.PageResult;
 import com.familyagent.common.security.CurrentUserGuard;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.FamilyMembershipFacade;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,11 +23,11 @@ public class MemorySearchService {
     private static final int MAX_PAGE_SIZE = 20;
 
     private final MemoryEntryRepository memoryRepository;
-    private final FamilyService familyService;
+    private final FamilyMembershipFacade familyMembershipFacade;
     private final MemoryVoteService memoryVoteService;
 
     public List<MemoryEntry> listFamilyMemories(Long familyId, int limit) {
-        familyService.checkMembership(familyId);
+        familyMembershipFacade.checkMembership(familyId);
         Long viewerUserId = CurrentUserGuard.currentUserId();
         List<MemoryEntry> entries = memoryRepository.findActiveFamilyMemories(
                 familyId, viewerUserId, normalizeLimit(limit));
@@ -41,7 +41,7 @@ public class MemorySearchService {
 
     public PageResult<MemoryEntry> searchFamilyMemories(
             Long familyId, Long targetUserId, String keyword, int page, int pageSize) {
-        familyService.checkMembership(familyId);
+        familyMembershipFacade.checkMembership(familyId);
         Long viewerUserId = CurrentUserGuard.currentUserId();
         int normalizedPageSize = normalizePageSize(pageSize);
         String normalizedKeyword = normalizeKeyword(keyword);
