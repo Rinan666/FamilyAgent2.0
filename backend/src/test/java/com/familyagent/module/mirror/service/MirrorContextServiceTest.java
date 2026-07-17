@@ -7,13 +7,13 @@ import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.facade.MirrorStyleDiaryFacade;
 import com.familyagent.module.family.dto.FamilyMemberVO;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.MirrorFamilyContextFacade;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.facade.MirrorStyleGrowthFacade;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
 import com.familyagent.module.memory.entity.MemoryEntry;
+import com.familyagent.module.memory.facade.MirrorMemoryRecallFacade;
 import com.familyagent.module.memory.facade.MirrorStyleMemoryFacade;
-import com.familyagent.module.memory.service.AuthorizedMemoryRecallService;
 import com.familyagent.module.mirror.dto.MirrorContextResponse;
 import com.familyagent.module.mirror.repository.MirrorAgentDataRepository;
 import org.junit.jupiter.api.Test;
@@ -42,11 +42,11 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class MirrorContextServiceTest {
 
-    @Mock private FamilyService familyService;
+    @Mock private MirrorFamilyContextFacade familyService;
     @Mock private MirrorStyleDiaryFacade diaryStyleFacade;
     @Mock private MirrorStyleMemoryFacade memoryStyleFacade;
     @Mock private MirrorStyleGrowthFacade growthStyleFacade;
-    @Mock private AuthorizedMemoryRecallService memoryRecallService;
+    @Mock private MirrorMemoryRecallFacade memoryRecallService;
     @Mock private MirrorAgentDataRepository mirrorAgentDataRepository;
 
     @Test

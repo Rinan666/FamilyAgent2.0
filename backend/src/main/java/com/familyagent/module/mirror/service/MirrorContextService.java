@@ -1,18 +1,17 @@
 package com.familyagent.module.mirror.service;
 
 import com.familyagent.common.exception.BusinessException;
-import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.facade.MirrorStyleDiaryFacade;
 import com.familyagent.module.family.dto.FamilyMemberVO;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.MirrorFamilyContextFacade;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.facade.MirrorStyleGrowthFacade;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
 import com.familyagent.module.memory.entity.MemoryEntry;
+import com.familyagent.module.memory.facade.MirrorMemoryRecallFacade;
 import com.familyagent.module.memory.facade.MirrorStyleMemoryFacade;
-import com.familyagent.module.memory.service.AuthorizedMemoryRecallService;
 import com.familyagent.module.mirror.dto.MirrorContextResponse;
 import com.familyagent.module.mirror.entity.MirrorAgentData;
 import com.familyagent.module.mirror.repository.MirrorAgentDataRepository;
@@ -32,22 +31,22 @@ public class MirrorContextService {
     private static final int STYLE_LIMIT = 80;
     private static final String DISCLAIMER = "镜像 Agent 不是本人，也不代表本人真实想法；它会用目标成员的授权可见内容回答，并用目标成员的私有记录生成不含原文的风格参考。记录不足时应直接说明不确定。";
 
-    private final FamilyService familyService;
+    private final MirrorFamilyContextFacade familyContextFacade;
     private final MirrorStyleDiaryFacade diaryStyleFacade;
     private final MirrorStyleMemoryFacade memoryStyleFacade;
     private final MirrorStyleGrowthFacade growthStyleFacade;
-    private final AuthorizedMemoryRecallService memoryRecallService;
+    private final MirrorMemoryRecallFacade memoryRecallFacade;
     private final MirrorAgentDataRepository mirrorAgentDataRepository;
     private final MirrorContextPromptBuilder promptBuilder;
 
     public MirrorContextResponse getContext(Long familyId, Long targetUserId, String query) {
         Long viewerUserId = CurrentUserGuard.currentUserId();
-        familyService.checkMembership(familyId);
+        familyContextFacade.checkMembership(familyId);
 
-        FamilyMemberVO target = familyService.getMemberView(familyId, targetUserId);
+        FamilyMemberVO target = familyContextFacade.getMemberView(familyId, targetUserId);
         FamilyMemberVO viewer;
         try {
-            viewer = familyService.getMemberView(familyId, viewerUserId);
+            viewer = familyContextFacade.getMemberView(familyId, viewerUserId);
         } catch (BusinessException ignored) {
             viewer = null;
         }
@@ -56,9 +55,9 @@ public class MirrorContextService {
         if (viewer != null) {
             membersForLabels.add(viewer);
         }
-        familyService.attachRelationshipLabels(familyId, viewerUserId, membersForLabels);
+        familyContextFacade.attachRelationshipLabels(familyId, viewerUserId, membersForLabels);
 
-        AuthorizedMemoryRecallResult recall = memoryRecallService.recallForMirror(
+        AuthorizedMemoryRecallResult recall = memoryRecallFacade.recallForMirror(
                 familyId,
                 targetUserId,
                 viewerUserId,
