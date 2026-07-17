@@ -62,8 +62,7 @@ class MirrorContextServiceTest {
 
             FamilyMemberVO target = member(familyId, targetUserId, "target", "目标成员", "MEMBER");
             FamilyMemberVO viewer = member(familyId, 101L, "viewer", "查看者", "MEMBER");
-            when(familyService.getMemberView(familyId, targetUserId)).thenReturn(target);
-            when(familyService.getMemberView(familyId, 101L)).thenReturn(viewer);
+            stubFamilyContext(familyId, targetUserId, target, viewer);
             when(memoryRecallService.recallForMirror(eq(familyId), eq(targetUserId), eq(101L), eq("选择"), anyInt(), anyInt()))
                     .thenReturn(AuthorizedMemoryRecallResult.builder()
                             .diaries(List.of(diary(1L, familyId, targetUserId, "授权可见的选择记录", "FAMILY_VISIBLE")))
@@ -84,7 +83,7 @@ class MirrorContextServiceTest {
 
             MirrorContextResponse response = service.getContext(familyId, targetUserId, "选择");
 
-            verify(familyService).checkMembership(familyId);
+            verify(familyService).load(familyId, targetUserId, 101L);
             assertFalse(response.getMemoryContext().contains(privatePhrase));
             assertFalse(response.getMemoryContext().contains("蓝色铁盒"));
             assertFalse(response.getMemoryContext().contains(privateMemoryPhrase));
@@ -111,8 +110,7 @@ class MirrorContextServiceTest {
 
             FamilyMemberVO target = member(familyId, targetUserId, "target", "目标成员", "MEMBER");
             FamilyMemberVO viewer = member(familyId, 101L, "viewer", "查看者", "MEMBER");
-            when(familyService.getMemberView(familyId, targetUserId)).thenReturn(target);
-            when(familyService.getMemberView(familyId, 101L)).thenReturn(viewer);
+            stubFamilyContext(familyId, targetUserId, target, viewer);
             when(memoryRecallService.recallForMirror(eq(familyId), eq(targetUserId), eq(101L), eq("   "), anyInt(), anyInt()))
                     .thenReturn(recall(List.of(), List.of(), "   "));
             stubEmptyStyleSamples(familyId, targetUserId);
@@ -134,8 +132,7 @@ class MirrorContextServiceTest {
 
             FamilyMemberVO target = member(familyId, targetUserId, "target", "目标成员", "MEMBER");
             FamilyMemberVO viewer = member(familyId, 101L, "viewer", "查看者", "MEMBER");
-            when(familyService.getMemberView(familyId, targetUserId)).thenReturn(target);
-            when(familyService.getMemberView(familyId, 101L)).thenReturn(viewer);
+            stubFamilyContext(familyId, targetUserId, target, viewer);
             when(memoryRecallService.recallForMirror(eq(familyId), eq(targetUserId), eq(101L), eq("成长"), anyInt(), anyInt()))
                     .thenReturn(recall(List.of(), List.of(), "成长"));
             stubEmptyStyleSamples(familyId, targetUserId);
@@ -155,8 +152,7 @@ class MirrorContextServiceTest {
 
             FamilyMemberVO target = member(familyId, targetUserId, "target", "目标成员", "MEMBER");
             FamilyMemberVO viewer = member(familyId, 101L, "viewer", "查看者", "MEMBER");
-            when(familyService.getMemberView(familyId, targetUserId)).thenReturn(target);
-            when(familyService.getMemberView(familyId, 101L)).thenReturn(viewer);
+            stubFamilyContext(familyId, targetUserId, target, viewer);
             stubEmptyStyleSamples(familyId, targetUserId);
 
             when(memoryRecallService.recallForMirror(eq(familyId), eq(targetUserId), eq(101L), eq("case11"), anyInt(), anyInt()))
@@ -197,9 +193,7 @@ class MirrorContextServiceTest {
 
             FamilyMemberVO target = member(familyId, targetUserId, "target", "目标成员", null);
             target.setRelationshipLabel("");
-            when(familyService.getMemberView(familyId, targetUserId)).thenReturn(target);
-            when(familyService.getMemberView(familyId, 101L))
-                    .thenThrow(new BusinessException(ErrorCode.NOT_FAMILY_MEMBER));
+            stubFamilyContext(familyId, targetUserId, target, null);
             when(memoryRecallService.recallForMirror(eq(familyId), eq(targetUserId), eq(101L), eq("空画像"), anyInt(), anyInt()))
                     .thenReturn(recall(List.of(), List.of(), "空画像"));
             stubEmptyStyleSamples(familyId, targetUserId);
@@ -224,8 +218,7 @@ class MirrorContextServiceTest {
 
             FamilyMemberVO target = member(familyId, targetUserId, "target", "目标成员", "MEMBER");
             FamilyMemberVO viewer = member(familyId, 101L, "viewer", "查看者", "MEMBER");
-            when(familyService.getMemberView(familyId, targetUserId)).thenReturn(target);
-            when(familyService.getMemberView(familyId, 101L)).thenReturn(viewer);
+            stubFamilyContext(familyId, targetUserId, target, viewer);
             DiaryEntry selfDiary = diary(1L, familyId, targetUserId, "本人记录内容", "FAMILY_VISIBLE");
             DiaryEntry relatedDiary = diary(2L, familyId, targetUserId, "家人补充内容", "FAMILY_VISIBLE");
             relatedDiary.setMetadata(Map.of(
@@ -251,12 +244,12 @@ class MirrorContextServiceTest {
         try (MockedStatic<CurrentUserGuard> currentUserMock = mockStatic(CurrentUserGuard.class)) {
             currentUserMock.when(CurrentUserGuard::currentUserId).thenReturn(101L);
             MirrorContextService service = service();
-            when(familyService.getMemberView(10L, 999L))
+            when(familyService.load(10L, 999L, 101L))
                     .thenThrow(new BusinessException(ErrorCode.NOT_FAMILY_MEMBER));
 
             assertThrows(BusinessException.class, () -> service.getContext(10L, 999L, "任何问题"));
 
-            verify(familyService).checkMembership(10L);
+            verify(familyService).load(10L, 999L, 101L);
         }
     }
 
@@ -276,6 +269,15 @@ class MirrorContextServiceTest {
         when(diaryStyleFacade.findActiveByFamilyAndUser(familyId, targetUserId, 80)).thenReturn(List.of());
         when(memoryStyleFacade.findActiveByFamilyAndUser(familyId, targetUserId, 80)).thenReturn(List.of());
         when(growthStyleFacade.findActiveByFamilyAndTarget(familyId, targetUserId, 80)).thenReturn(List.of());
+    }
+
+    private void stubFamilyContext(
+            Long familyId,
+            Long targetUserId,
+            FamilyMemberVO target,
+            FamilyMemberVO viewer) {
+        when(familyService.load(familyId, targetUserId, 101L))
+                .thenReturn(new MirrorFamilyContextFacade.MirrorFamilyContext(target, viewer));
     }
 
     private static AuthorizedMemoryRecallResult recall(List<DiaryEntry> diaries, List<MemoryEntry> memories, String query) {

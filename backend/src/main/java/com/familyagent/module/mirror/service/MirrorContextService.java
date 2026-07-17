@@ -1,6 +1,5 @@
 package com.familyagent.module.mirror.service;
 
-import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.facade.MirrorStyleDiaryFacade;
@@ -18,7 +17,6 @@ import com.familyagent.module.mirror.repository.MirrorAgentDataRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -41,21 +39,12 @@ public class MirrorContextService {
 
     public MirrorContextResponse getContext(Long familyId, Long targetUserId, String query) {
         Long viewerUserId = CurrentUserGuard.currentUserId();
-        familyContextFacade.checkMembership(familyId);
-
-        FamilyMemberVO target = familyContextFacade.getMemberView(familyId, targetUserId);
-        FamilyMemberVO viewer;
-        try {
-            viewer = familyContextFacade.getMemberView(familyId, viewerUserId);
-        } catch (BusinessException ignored) {
-            viewer = null;
-        }
-        List<FamilyMemberVO> membersForLabels = new ArrayList<>();
-        membersForLabels.add(target);
-        if (viewer != null) {
-            membersForLabels.add(viewer);
-        }
-        familyContextFacade.attachRelationshipLabels(familyId, viewerUserId, membersForLabels);
+        MirrorFamilyContextFacade.MirrorFamilyContext familyContext = familyContextFacade.load(
+                familyId,
+                targetUserId,
+                viewerUserId);
+        FamilyMemberVO target = familyContext.target();
+        FamilyMemberVO viewer = familyContext.viewer();
 
         AuthorizedMemoryRecallResult recall = memoryRecallFacade.recallForMirror(
                 familyId,
