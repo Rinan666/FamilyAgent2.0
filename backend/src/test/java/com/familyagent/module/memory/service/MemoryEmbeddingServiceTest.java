@@ -15,6 +15,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -25,6 +27,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -144,13 +147,48 @@ class MemoryEmbeddingServiceTest {
     }
 
     @Test
+    void index_shouldRejectReportedEmbeddingDimensionMismatch() throws Exception {
+        when(jdbcTemplate.queryForObject(any(String.class), eq(Long.class), anyLong(), anyLong(), any(), anyLong(), any()))
+                .thenReturn(123L);
+        EmbeddingResponse response = embeddingResponse(
+                true,
+                false,
+                Collections.nCopies(1536, 0.1),
+                "test-model");
+        response.setDimensions(128);
+        when(aiServiceClient.embedText(any())).thenReturn(response);
+
+        MemoryEmbeddingService service = new MemoryEmbeddingService(
+                aiServiceClient,
+                jdbcTemplate,
+                objectMapper,
+                diaryRepository,
+                memoryRepository,
+                growthRecordRepository,
+                familyService,
+                asyncProcessor);
+
+        Method index = MemoryEmbeddingService.class.getDeclaredMethod(
+                "index", String.class, Long.class, Long.class, Long.class, String.class);
+        index.setAccessible(true);
+        index.invoke(service, "DIARY", 44L, 11L, 34L, "manual diary text");
+
+        verify(jdbcTemplate).update(
+                org.mockito.ArgumentMatchers.contains("SET status = 'FAILED'"),
+                org.mockito.ArgumentMatchers.any(),
+                eq(123L));
+    }
+
+    @Test
     void index_shouldRejectNonFiniteEmbeddingValues() throws Exception {
+        List<Double> values = new ArrayList<>(Collections.nCopies(1536, 0.1));
+        values.set(0, Double.NaN);
         when(jdbcTemplate.queryForObject(any(String.class), eq(Long.class), anyLong(), anyLong(), any(), anyLong(), any()))
                 .thenReturn(123L);
         when(aiServiceClient.embedText(any())).thenReturn(embeddingResponse(
                 true,
                 false,
-                List.of(0.1, Double.NaN),
+                values,
                 "test-model"));
 
         MemoryEmbeddingService service = new MemoryEmbeddingService(
@@ -172,6 +210,43 @@ class MemoryEmbeddingServiceTest {
                 org.mockito.ArgumentMatchers.contains("SET status = 'FAILED'"),
                 org.mockito.ArgumentMatchers.any(),
                 eq(123L));
+    }
+
+    @Test
+    void index_shouldRejectZeroEmbeddingVector() throws Exception {
+        when(jdbcTemplate.queryForObject(any(String.class), eq(Long.class), anyLong(), anyLong(), any(), anyLong(), any()))
+                .thenReturn(123L);
+        when(aiServiceClient.embedText(any())).thenReturn(embeddingResponse(
+                true,
+                false,
+                Collections.nCopies(1536, 0.0),
+                "test-model"));
+
+        MemoryEmbeddingService service = new MemoryEmbeddingService(
+                aiServiceClient,
+                jdbcTemplate,
+                objectMapper,
+                diaryRepository,
+                memoryRepository,
+                growthRecordRepository,
+                familyService,
+                asyncProcessor);
+
+        Method index = MemoryEmbeddingService.class.getDeclaredMethod(
+                "index", String.class, Long.class, Long.class, Long.class, String.class);
+        index.setAccessible(true);
+        index.invoke(service, "DIARY", 44L, 11L, 34L, "manual diary text");
+
+        verify(jdbcTemplate).update(
+                org.mockito.ArgumentMatchers.contains("SET status = 'FAILED'"),
+                org.mockito.ArgumentMatchers.any(),
+                eq(123L));
+        verify(jdbcTemplate, never()).update(
+                org.mockito.ArgumentMatchers.contains("status = 'READY'"),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any());
     }
 
     private static EmbeddingResponse embeddingResponse(boolean success, boolean degraded, List<Double> embedding, String model) {

@@ -3,7 +3,15 @@ from starlette.requests import Request
 import pytest
 
 from app.api import embedding
-from app.api.embedding import EmbedRequest, _dashscope_multimodal_dimension, _embed, _embedding_provider, _hash_embedding
+from app.api.embedding import (
+    ERROR_DIMENSION_MISMATCH,
+    ERROR_INVALID_VECTOR,
+    EmbedRequest,
+    _dashscope_multimodal_dimension,
+    _embed,
+    _embedding_provider,
+    _hash_embedding,
+)
 
 
 def test_hash_embedding_is_stable_and_normalized():
@@ -45,6 +53,38 @@ async def test_external_embedding_provider_failure_is_not_hash_fallback(monkeypa
 
 
 @pytest.mark.asyncio
+async def test_external_embedding_dimension_mismatch_is_not_padded(monkeypatch):
+    async def short_embedding(*args, **kwargs):
+        return {"data": [{"embedding": [0.1, 0.2]}]}
+
+    monkeypatch.setattr(embedding.litellm, "aembedding", short_embedding)
+
+    with pytest.raises(HTTPException) as exc:
+        await _embed("family memory", "openai/text-embedding-3-small", 128)
+
+    assert exc.value.status_code == 502
+    assert exc.value.detail == ERROR_DIMENSION_MISMATCH
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "values",
+    ([0.0] * 128, [float("nan")] + [0.1] * 127, [float("inf")] + [0.1] * 127),
+)
+async def test_external_embedding_invalid_vector_is_rejected(monkeypatch, values):
+    async def invalid_embedding(*args, **kwargs):
+        return {"data": [{"embedding": values}]}
+
+    monkeypatch.setattr(embedding.litellm, "aembedding", invalid_embedding)
+
+    with pytest.raises(HTTPException) as exc:
+        await _embed("family memory", "openai/text-embedding-3-small", 128)
+
+    assert exc.value.status_code == 502
+    assert exc.value.detail == ERROR_INVALID_VECTOR
+
+
+@pytest.mark.asyncio
 async def test_dashscope_missing_key_is_not_hash_fallback(monkeypatch):
     monkeypatch.setattr(embedding.settings, "dashscope_api_key", None)
 
@@ -75,6 +115,17 @@ def test_embedding_router_requires_backend_token_verification():
 
 def test_qwen3_vl_embedding_allows_1536_dimensions():
     assert _dashscope_multimodal_dimension("qwen3-vl-embedding", 1536) == 1536
+
+
+@pytest.mark.asyncio
+async def test_qwen3_vl_embedding_rejects_unsupported_dimension_before_provider_call(monkeypatch):
+    monkeypatch.setattr(embedding.settings, "dashscope_api_key", "token")
+
+    with pytest.raises(HTTPException) as exc:
+        await _embed("family memory", "dashscope-multimodal/qwen3-vl-embedding", 128)
+
+    assert exc.value.status_code == 502
+    assert exc.value.detail == ERROR_DIMENSION_MISMATCH
 
 
 @pytest.mark.asyncio

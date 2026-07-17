@@ -22,6 +22,9 @@ from app.utils.safety_limits import enforce_ai_concurrency, enforce_embedding_ra
 
 logger = logging.getLogger("familyagent.ai.api.embedding")
 
+ERROR_DIMENSION_MISMATCH = "EMBEDDING_DIMENSION_MISMATCH"
+ERROR_INVALID_VECTOR = "EMBEDDING_INVALID_VECTOR"
+
 router = APIRouter(dependencies=[
     Depends(verify_token_or_internal_service),
     Depends(enforce_embedding_rate_limit),
@@ -121,6 +124,8 @@ def _embedding_provider(model: str) -> str:
 
 
 def _embedding_error_code(exc: HTTPException) -> str:
+    if exc.detail in {ERROR_DIMENSION_MISMATCH, ERROR_INVALID_VECTOR}:
+        return str(exc.detail)
     if exc.status_code == 503:
         return "EMBEDDING_PROVIDER_UNAVAILABLE"
     return "EMBEDDING_GENERATION_FAILED"
@@ -132,26 +137,30 @@ def _elapsed_ms(started_at: float) -> int:
 
 async def _embed(text: str, model: str, dimensions: int) -> list[float]:
     if model.startswith("local/"):
-        return _hash_embedding(text, dimensions)
-    if model.startswith("dashscope-multimodal/"):
-        return await _dashscope_multimodal_embedding(
+        values = _hash_embedding(text, dimensions)
+    elif model.startswith("dashscope-multimodal/"):
+        values = await _dashscope_multimodal_embedding(
             text,
             model.removeprefix("dashscope-multimodal/"),
             dimensions,
         )
-    if model.startswith("dashscope/"):
-        return await _dashscope_embedding(text, model.removeprefix("dashscope/"), dimensions)
-
-    try:
-        response = await asyncio.wait_for(
-            litellm.aembedding(model=model, input=[text]),
-            timeout=settings.ai_embedding_timeout_seconds,
+    elif model.startswith("dashscope/"):
+        values = await _dashscope_embedding(
+            text,
+            model.removeprefix("dashscope/"),
+            dimensions,
         )
-        values = response["data"][0]["embedding"]
-        return _fit_dimensions([float(item) for item in values], dimensions)
-    except Exception as error:
-        logger.warning("LiteLLM embedding failed: errorType=%s", type(error).__name__)
-        raise HTTPException(status_code=503, detail="Embedding provider unavailable")
+    else:
+        try:
+            response = await asyncio.wait_for(
+                litellm.aembedding(model=model, input=[text]),
+                timeout=settings.ai_embedding_timeout_seconds,
+            )
+            values = [float(item) for item in response["data"][0]["embedding"]]
+        except Exception as error:
+            logger.warning("LiteLLM embedding failed: errorType=%s", type(error).__name__)
+            raise HTTPException(status_code=503, detail="Embedding provider unavailable")
+    return _validate_embedding(values, dimensions)
 
 
 async def _dashscope_embedding(text: str, model: str, dimensions: int) -> list[float]:
@@ -177,18 +186,20 @@ async def _dashscope_embedding(text: str, model: str, dimensions: int) -> list[f
             response.raise_for_status()
             data = response.json()
             values = data["data"][0]["embedding"]
-            return _fit_dimensions([float(item) for item in values], dimensions)
+            return [float(item) for item in values]
     except Exception as error:
         logger.warning("DashScope embedding failed: errorType=%s", type(error).__name__)
         raise HTTPException(status_code=503, detail="Embedding provider unavailable")
 
 
 async def _dashscope_multimodal_embedding(text: str, model: str, dimensions: int) -> list[float]:
+    request_dimension = _dashscope_multimodal_dimension(model, dimensions)
+    if request_dimension != dimensions:
+        raise HTTPException(status_code=502, detail=ERROR_DIMENSION_MISMATCH)
     if not settings.dashscope_api_key:
         logger.warning("DASHSCOPE_API_KEY is missing")
         raise HTTPException(status_code=503, detail="Embedding provider is not configured")
 
-    request_dimension = _dashscope_multimodal_dimension(model, dimensions)
     try:
         async with httpx.AsyncClient(timeout=settings.ai_embedding_timeout_seconds) as client:
             response = await client.post(
@@ -212,7 +223,7 @@ async def _dashscope_multimodal_embedding(text: str, model: str, dimensions: int
             response.raise_for_status()
             data = response.json()
             values = data["output"]["embeddings"][0]["embedding"]
-            return _fit_dimensions([float(item) for item in values], dimensions)
+            return [float(item) for item in values]
     except Exception as error:
         logger.warning(
             "DashScope multimodal embedding failed: errorType=%s",
@@ -257,12 +268,11 @@ def _tokens(text: str) -> list[str]:
     return words + char_chunks
 
 
-def _fit_dimensions(values: list[float], dimensions: int) -> list[float]:
-    if len(values) == dimensions:
-        return values
-    if len(values) > dimensions:
-        fitted = values[:dimensions]
-    else:
-        fitted = values + [0.0] * (dimensions - len(values))
-    norm = math.sqrt(sum(value * value for value in fitted)) or 1.0
-    return [round(value / norm, 8) for value in fitted]
+def _validate_embedding(values: list[float], dimensions: int) -> list[float]:
+    if len(values) != dimensions:
+        raise HTTPException(status_code=502, detail=ERROR_DIMENSION_MISMATCH)
+    if not all(math.isfinite(value) for value in values):
+        raise HTTPException(status_code=502, detail=ERROR_INVALID_VECTOR)
+    if not any(value != 0.0 for value in values):
+        raise HTTPException(status_code=502, detail=ERROR_INVALID_VECTOR)
+    return values

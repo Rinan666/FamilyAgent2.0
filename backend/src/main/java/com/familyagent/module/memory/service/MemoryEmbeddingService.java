@@ -184,32 +184,15 @@ public class MemoryEmbeddingService {
                     .familyId(familyId)
                     .userId(userId)
                     .build());
-            if (response == null || !response.isSuccess()) {
-                markFailed(embeddingId, response == null ? "embedding failed" : nonBlank(response.getError(), "embedding failed"));
+            EmbeddingVectorValidator.Result validation = EmbeddingVectorValidator.validate(
+                    response,
+                    EMBEDDING_DIMENSIONS);
+            if (!validation.valid()) {
+                markFailed(embeddingId, validation.error());
                 return;
             }
 
-            if (response.isDegraded()) {
-                markFailed(embeddingId, nonBlank(response.getError(), "embedding degraded"));
-                return;
-            }
-
-            List<Double> values = response.getEmbedding();
-            if (values == null || values.isEmpty()) {
-                markFailed(embeddingId, "embedding response is empty");
-                return;
-            }
-            if (values.size() != EMBEDDING_DIMENSIONS) {
-                markFailed(embeddingId, "embedding dimension mismatch: " + values.size());
-                return;
-            }
-            for (Double value : values) {
-                if (value == null || !Double.isFinite(value)) {
-                    markFailed(embeddingId, "embedding contains non-finite values");
-                    return;
-                }
-            }
-
+            List<Double> values = validation.values();
             String vector = toVectorLiteral(values);
             String model = nonBlank(response.getModel(), "");
             String metadata = objectMapper.writeValueAsString(Map.of(
