@@ -15,6 +15,7 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.web.client.RestTemplate;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -50,14 +51,15 @@ class AIServiceClientTest {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(10_000);
         requestFactory.setReadTimeout(5_000);
+        RestTemplate restTemplate = new RestTemplateBuilder().requestFactory(() -> requestFactory).build();
+        RestTemplate streamRestTemplate = new RestTemplateBuilder().requestFactory(() -> requestFactory).build();
+        AIClientRequestSupport support = new AIClientRequestSupport(baseUrl(), internalToken, meterRegistry);
         return new AIServiceClient(
-                new RestTemplateBuilder().requestFactory(() -> requestFactory).build(),
-                new RestTemplateBuilder().requestFactory(() -> requestFactory).build(),
-                baseUrl(),
-                internalToken,
-                objectMapper,
-                meterRegistry,
-                mock(SaveMemoryPlanClient.class));
+                mock(SaveMemoryPlanClient.class),
+                new AIChatStreamClient(streamRestTemplate, objectMapper, support),
+                new AIEmbeddingClient(restTemplate, support),
+                new AIHealthClient(restTemplate, support),
+                support);
     }
 
     @Test
@@ -192,14 +194,14 @@ class AIServiceClientTest {
         SaveMemoryPlanClient planClient = mock(SaveMemoryPlanClient.class);
         when(planClient.plan(any(), eq("request-1")))
                 .thenThrow(new AIServiceInputRejectedException("内容疑似低俗暗语"));
+        RestTemplate restTemplate = mock(RestTemplate.class);
+        AIClientRequestSupport support = new AIClientRequestSupport("http://ai-service", "token", meterRegistry);
         AIServiceClient client = new AIServiceClient(
-                mock(org.springframework.web.client.RestTemplate.class),
-                mock(org.springframework.web.client.RestTemplate.class),
-                "http://ai-service",
-                "token",
-                objectMapper,
-                meterRegistry,
-                planClient);
+                planClient,
+                new AIChatStreamClient(restTemplate, objectMapper, support),
+                new AIEmbeddingClient(restTemplate, support),
+                new AIHealthClient(restTemplate, support),
+                support);
 
         com.familyagent.common.exception.BusinessException error = assertThrows(
                 com.familyagent.common.exception.BusinessException.class,

@@ -45,6 +45,10 @@ class AIServiceClientResilienceTest {
             .withBean(ObjectMapper.class, ObjectMapper::new)
             .withBean(MeterRegistry.class, SimpleMeterRegistry::new)
             .withBean(SaveMemoryPlanClient.class, () -> mock(SaveMemoryPlanClient.class))
+            .withBean(AIClientRequestSupport.class)
+            .withBean(AIChatStreamClient.class)
+            .withBean(AIEmbeddingClient.class)
+            .withBean(AIHealthClient.class)
             .withBean(AIServiceClient.class)
             .withPropertyValues(
                     "ai-service.base-url=http://127.0.0.1:1",
@@ -62,13 +66,14 @@ class AIServiceClientResilienceTest {
 
         contextRunner.run(context -> {
             AIServiceClient client = context.getBean(AIServiceClient.class);
+            AIEmbeddingClient embeddingClient = context.getBean(AIEmbeddingClient.class);
 
             EmbeddingResponse response = client.embedText(EmbeddingRequest.builder()
                     .text("family memory")
                     .dimensions(1536)
                     .build());
 
-            assertTrue(AopUtils.isAopProxy(client));
+            assertTrue(AopUtils.isAopProxy(embeddingClient));
             assertFalse(response.isSuccess());
             verify(aiRestTemplate, times(2)).postForEntity(anyString(), any(), eq(EmbeddingResponse.class));
         });
