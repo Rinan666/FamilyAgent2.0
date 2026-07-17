@@ -110,6 +110,32 @@ services:
     networks:
       - fa-network
 
+  provider-sampled-eval:
+    profiles:
+      - ai-monitoring
+    build:
+      context: ./ai-service
+      args:
+        PYTHON_IMAGE: ${DOCKER_PYTHON_IMAGE:-python:3.12-slim}
+        DEBIAN_MIRROR: ${DOCKER_DEBIAN_MIRROR:-}
+        PIP_INDEX_URL: ${DOCKER_PIP_INDEX_URL:-https://pypi.org/simple}
+        PIP_VERSION: ${DOCKER_PIP_VERSION:-25.1.1}
+    restart: "no"
+    env_file:
+      - ${STACK_ENV_FILE:-.env}
+    environment:
+      APP_ENV: ${APP_ENV:-prod}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      PROVIDER_SAMPLED_EVAL_ENABLED: ${PROVIDER_SAMPLED_EVAL_ENABLED:-false}
+      PROVIDER_SAMPLED_EVAL_CASE_LIMIT: ${PROVIDER_SAMPLED_EVAL_CASE_LIMIT:-2}
+      PROVIDER_SAMPLED_EVAL_TIMEOUT_SECONDS: ${PROVIDER_SAMPLED_EVAL_TIMEOUT_SECONDS:-20}
+    command:
+      - python
+      - -m
+      - app.monitoring.provider_sampled_eval
+    networks:
+      - fa-network
+
   backend:
     build:
       context: ./backend
