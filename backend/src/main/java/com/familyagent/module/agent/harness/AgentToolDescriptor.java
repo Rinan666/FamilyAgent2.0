@@ -14,6 +14,20 @@ public record AgentToolDescriptor(
         Class<?> outputType,
         AgentToolSideEffect sideEffect,
         AgentToolConfirmationRequirement confirmationRequirement,
-        AgentToolPrivacyLevel privacyLevel
+        AgentToolPrivacyLevel privacyLevel,
+        String version
 ) {
+
+    public static final String DEFAULT_VERSION = "1.0.0";
+
+    public AgentToolDescriptor(
+            String name,
+            String description,
+            Class<?> inputType,
+            Class<?> outputType,
+            AgentToolSideEffect sideEffect,
+            AgentToolConfirmationRequirement confirmationRequirement,
+            AgentToolPrivacyLevel privacyLevel) {
+        this(name, description, inputType, outputType, sideEffect, confirmationRequirement, privacyLevel, DEFAULT_VERSION);
+    }
 }

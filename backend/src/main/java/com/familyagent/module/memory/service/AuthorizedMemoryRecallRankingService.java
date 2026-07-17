@@ -25,6 +25,7 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class AuthorizedMemoryRecallRankingService {
 
+    public static final String ALGORITHM_VERSION = "authorized-memory-recall.v1";
     private static final double MAX_VECTOR_DISTANCE = 0.72;
 
     private final AuthorizedMemoryRecallEmbeddingService embeddingService;

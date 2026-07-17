@@ -7,6 +7,8 @@ import com.familyagent.module.agent.harness.constant.AgentToolErrorCode;
 import com.familyagent.module.agent.harness.dto.AgentToolCallRequest;
 import com.familyagent.module.agent.harness.dto.AgentToolCallResult;
 import com.familyagent.module.agent.harness.entity.AgentToolConfirmationRecord;
+import com.familyagent.module.agent.harness.entity.AgentToolCallRecord;
+import com.familyagent.module.agent.harness.provenance.AgentRecordProvenanceWriter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,6 +31,7 @@ public class AgentToolExecutor {
     private final AgentToolConfirmationService confirmationService;
     private final AgentToolErrorMapper errorMapper;
     private final AgentToolDescriptorFactory descriptorFactory;
+    private final AgentRecordProvenanceWriter provenanceWriter;
 
     @Transactional
     public <I, O> AgentToolCallResult<O> execute(AgentToolCallRequest<I> request) {
@@ -96,13 +99,14 @@ public class AgentToolExecutor {
             @SuppressWarnings("unchecked")
             AgentTool<I, O> tool = (AgentTool<I, O>) rawTool;
             O output = tool.execute(request.context(), request.input());
-            recordAudit(
+            AgentToolCallRecord toolCall = recordAudit(
                     request.context(),
                     descriptor,
                     request.input(),
                     AgentToolCallStatus.SUCCEEDED,
                     null,
                     confirmationId);
+            provenanceWriter.recordCreatedOutput(request.context(), descriptor, toolCall, output);
             if (completeRunAfterTool) {
                 runLifecycleService.succeed(request.context());
             }
@@ -128,7 +132,7 @@ public class AgentToolExecutor {
         }
     }
 
-    private void recordAudit(
+    private AgentToolCallRecord recordAudit(
             AgentRunContext context,
             AgentToolDescriptor descriptor,
             Object input,
@@ -136,10 +140,9 @@ public class AgentToolExecutor {
             String errorCode,
             Long confirmationId) {
         if (confirmationId == null) {
-            auditService.record(context, descriptor, input, status, errorCode);
-            return;
+            return auditService.record(context, descriptor, input, status, errorCode);
         }
-        auditService.record(context, descriptor, input, status, errorCode, confirmationId);
+        return auditService.record(context, descriptor, input, status, errorCode, confirmationId);
     }
 
     private void failRunIfOwned(AgentRunContext context, String errorCode, boolean completeRunAfterTool) {

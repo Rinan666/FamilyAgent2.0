@@ -17,11 +17,12 @@ import com.familyagent.module.memory.facade.AgentMemoryContextFacade;
 import com.familyagent.module.memory.facade.AgentMemoryContextErrorCode;
 import com.familyagent.module.memory.facade.AgentMemoryContextResult;
 import com.familyagent.module.memory.dto.EmbeddingCallObservation;
+import com.familyagent.module.memory.dto.MemoryRecallContextMetadata;
+import com.familyagent.module.memory.dto.MemoryRecallRagMetadata;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -65,12 +66,12 @@ class RecallFamilyMemoryToolTest {
                 List.of("earlier turn")))
                 .thenReturn(new com.familyagent.module.memory.facade.AgentMemoryContextResult(
                         "family_memory_hits:\n1. bedtime",
-                        Map.of("rag", Map.of("memoryCount", 1))));
+                        metadataWithMemoryCount(1)));
 
         RecallFamilyMemoryOutput output = tool.execute(context, input);
 
         assertEquals("family_memory_hits:\n1. bedtime", output.context());
-        assertEquals(Map.of("rag", Map.of("memoryCount", 1)), output.metadata());
+        assertEquals(1, output.metadata().rag().memoryCount());
         assertEquals(AgentToolName.RECALL_FAMILY_MEMORY.value(), tool.descriptor().name());
         assertEquals(AgentToolSideEffect.READ_ONLY, tool.descriptor().sideEffect());
         assertEquals(AgentToolConfirmationRequirement.NOT_REQUIRED, tool.descriptor().confirmationRequirement());
@@ -99,7 +100,7 @@ class RecallFamilyMemoryToolTest {
         RecallFamilyMemoryOutput output = tool.execute(context, input);
 
         assertEquals("", output.context());
-        assertFalse(output.metadata().containsKey("retrievalQuery"));
+        assertEquals(null, output.metadata().retrievalQuery());
         verify(traceRecorder).failDegraded(span, AgentMemoryContextErrorCode.RECALL_FAILED.code());
         verify(traceRecorder, never()).succeed(span);
     }
@@ -139,7 +140,7 @@ class RecallFamilyMemoryToolTest {
         when(memoryContextFacade.buildFamilyAgentContextResult(10L, 101L, "hello", List.of()))
                 .thenReturn(new AgentMemoryContextResult(
                         "",
-                        Map.of(),
+                        MemoryRecallContextMetadata.empty(),
                         true,
                         null,
                         embeddingObservation));
@@ -170,5 +171,11 @@ class RecallFamilyMemoryToolTest {
                 "FamilyAgent",
                 "chat_stream",
                 false);
+    }
+
+    private static MemoryRecallContextMetadata metadataWithMemoryCount(int memoryCount) {
+        return new MemoryRecallContextMetadata(
+                new MemoryRecallRagMetadata(null, 0, 0, memoryCount, 0, 0, 0, memoryCount, List.of()),
+                null);
     }
 }

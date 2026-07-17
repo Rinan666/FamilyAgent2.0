@@ -6,6 +6,7 @@ import time
 from datetime import UTC, datetime
 
 from app.runtime.artifact_versions import FAMILY_CHAT_PROMPT_VERSION
+from app.runtime.core_output_manifest import BACKEND_RECALL_ALGORITHM_VERSION
 from app.runtime.skill_manifest import (
     ORGANIZE_DRAFT_MANIFEST,
     PERSONA_MATERIAL_DRAFT_MANIFEST,
@@ -55,6 +56,11 @@ DEFAULT_ARTIFACTS = (
         kind=EvalArtifactKind.PROMPT,
         name="family_chat.system",
         version=FAMILY_CHAT_PROMPT_VERSION,
+    ),
+    EvalArtifactVersion(
+        kind=EvalArtifactKind.ALGORITHM,
+        name="memory_recall_ranking",
+        version=BACKEND_RECALL_ALGORITHM_VERSION,
     ),
     EvalArtifactVersion(
         kind=EvalArtifactKind.SKILL,

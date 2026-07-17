@@ -63,6 +63,6 @@ public class AgentChatMemoryContextResolver {
         if (!result.success() || result.data() == null) {
             return AgentChatMemoryResolution.empty();
         }
-        return new AgentChatMemoryResolution(result.data().context(), result.data().metadata());
+        return new AgentChatMemoryResolution(result.data().context(), result.data().metadata().toMap());
     }
 }

@@ -18,16 +18,16 @@ public class AgentToolAuditService {
     private final AgentToolCallRecordRepository repository;
     private final AgentToolInputSummarizer inputSummarizer;
 
-    public void record(
+    public AgentToolCallRecord record(
             AgentRunContext context,
             AgentToolDescriptor descriptor,
             Object input,
             AgentToolCallStatus status,
             String errorCode) {
-        record(context, descriptor, input, status, errorCode, null);
+        return record(context, descriptor, input, status, errorCode, null);
     }
 
-    public void record(
+    public AgentToolCallRecord record(
             AgentRunContext context,
             AgentToolDescriptor descriptor,
             Object input,
@@ -45,5 +45,6 @@ public class AgentToolAuditService {
         record.setStatus(status.name());
         record.setErrorCode(inputSummarizer.trim(errorCode, ERROR_CODE_LIMIT));
         repository.insert(record);
+        return record;
     }
 }

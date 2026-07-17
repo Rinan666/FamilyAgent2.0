@@ -66,6 +66,7 @@ public class AgentSaveMemoryPlanAssembler {
         metadata.setAgentRunId(agentRunId);
         metadata.setSkillVersion(AgentSaveMemorySkillContract.SKILL_VERSION);
         metadata.setPromptVersion(AgentSaveMemorySkillContract.PROMPT_VERSION);
+        metadata.setSchemaVersion(AgentSaveMemorySkillContract.SCHEMA_VERSION);
         return metadata;
     }
 }

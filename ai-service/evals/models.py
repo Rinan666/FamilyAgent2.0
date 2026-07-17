@@ -31,6 +31,7 @@ class EvalArtifactKind(StrEnum):
     PROMPT = "PROMPT"
     SCHEMA = "SCHEMA"
     SKILL = "SKILL"
+    ALGORITHM = "ALGORITHM"
 
 
 class EvalGateName(StrEnum):

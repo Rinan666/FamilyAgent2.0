@@ -10,6 +10,8 @@ import com.familyagent.module.agent.harness.dto.RecallFamilyMemoryInput;
 import com.familyagent.module.agent.harness.dto.RecallFamilyMemoryOutput;
 import com.familyagent.module.family.facade.AgentPersonaContextFacade;
 import com.familyagent.module.mirror.facade.AgentMirrorContextFacade;
+import com.familyagent.module.memory.dto.MemoryRecallContextMetadata;
+import com.familyagent.module.memory.dto.MemoryRecallRagMetadata;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -103,14 +105,16 @@ class AgentChatMemoryContextResolverTest {
         when(toolExecutor.execute(org.mockito.ArgumentMatchers.any()))
                 .thenReturn(AgentToolCallResult.success(new RecallFamilyMemoryOutput(
                         "family context",
-                        Map.of("rag", Map.of("memoryCount", 1)))));
+                        new MemoryRecallContextMetadata(
+                                new MemoryRecallRagMetadata(null, 0, 0, 1, 0, 0, 0, 1, List.of()),
+                                null))));
 
         AgentChatMemoryResolution resolution = resolver.resolve(request, runContext());
 
         assertTrue(resolution.context().contains("persona context"));
         assertTrue(resolution.context().contains("family_visible_reference"));
         assertTrue(resolution.context().contains("family context"));
-        assertEquals(Map.of("rag", Map.of("memoryCount", 1)), resolution.metadata());
+        assertEquals(1, ((Map<?, ?>) resolution.metadata().get("rag")).get("memoryCount"));
     }
 
     private AgentChatStreamRequest familyMemoryRequest() {

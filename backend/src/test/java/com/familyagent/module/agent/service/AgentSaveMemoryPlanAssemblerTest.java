@@ -29,6 +29,7 @@ class AgentSaveMemoryPlanAssemblerTest {
         assertEquals(91L, run.getMetadata().getAgentRunId());
         assertEquals("1.0.0", run.getMetadata().getSkillVersion());
         assertEquals("memory.save_plan.v1", run.getMetadata().getPromptVersion());
+        assertEquals("save_tool_plan.schema.v1", run.getMetadata().getSchemaVersion());
     }
 
     @Test

@@ -9,15 +9,15 @@ public enum AgentDraftSkillContract {
     ORGANIZE_DRAFT(
             "organize_draft",
             "1.0.0",
-            "memory.organize_draft.v1",
-            "organized_draft.schema.v1",
+            AgentAiArtifactVersions.ORGANIZE_DRAFT_PROMPT,
+            AgentAiArtifactVersions.ORGANIZED_DRAFT_SCHEMA,
             "skill.organize_draft",
             "organize_draft"),
     PERSONA_MATERIAL_DRAFT(
             "persona_material_draft",
             "1.0.0",
-            "persona.material_draft.v1",
-            "persona_material_draft.schema.v1",
+            AgentAiArtifactVersions.PERSONA_MATERIAL_PROMPT,
+            AgentAiArtifactVersions.PERSONA_MATERIAL_SCHEMA,
             "skill.persona_material_draft",
             "persona_material_draft");
 

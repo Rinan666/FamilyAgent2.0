@@ -2,78 +2,65 @@ package com.familyagent.module.memory.facade;
 
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
 import com.familyagent.module.memory.dto.EmbeddingCallObservation;
+import com.familyagent.module.memory.dto.MemoryRecallContextMetadata;
+import com.familyagent.module.memory.dto.MemoryRecallRagMetadata;
 
-import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 public record AgentMemoryContextResult(
         String context,
-        Map<String, Object> metadata,
+        MemoryRecallContextMetadata metadata,
         boolean success,
         String errorCode,
         EmbeddingCallObservation embeddingObservation) {
 
     public AgentMemoryContextResult {
         context = context == null ? "" : context;
-        metadata = metadata == null
-                ? Map.of()
-                : Collections.unmodifiableMap(new LinkedHashMap<>(metadata));
+        metadata = metadata == null ? MemoryRecallContextMetadata.empty() : metadata;
         errorCode = errorCode == null || errorCode.isBlank() ? null : errorCode.trim();
     }
 
-    public AgentMemoryContextResult(String context, Map<String, Object> metadata) {
+    public AgentMemoryContextResult(String context, MemoryRecallContextMetadata metadata) {
         this(context, metadata, true, null, null);
     }
 
     public AgentMemoryContextResult(
             String context,
-            Map<String, Object> metadata,
+            MemoryRecallContextMetadata metadata,
             boolean success,
             String errorCode) {
         this(context, metadata, success, errorCode, null);
     }
 
     public static AgentMemoryContextResult empty() {
-        return new AgentMemoryContextResult("", Map.of());
+        return new AgentMemoryContextResult("", MemoryRecallContextMetadata.empty());
     }
 
     public static AgentMemoryContextResult failed(AgentMemoryContextErrorCode errorCode) {
-        return new AgentMemoryContextResult("", Map.of(), false, errorCode.code(), null);
+        return new AgentMemoryContextResult("", MemoryRecallContextMetadata.empty(), false, errorCode.code(), null);
     }
 
     public static AgentMemoryContextResult fromRecall(String context, AuthorizedMemoryRecallResult recall) {
         if (recall == null) {
-            return new AgentMemoryContextResult(context, Map.of());
+            return new AgentMemoryContextResult(context, MemoryRecallContextMetadata.empty());
         }
 
-        Map<String, Object> rag = new LinkedHashMap<>();
-        putIfNotBlank(rag, "retrievalMode", recall.getRetrievalMode());
-        rag.put("embeddingReadyCount", recall.getEmbeddingReadyCount());
-        rag.put("diaryCount", recall.getDiaryCount());
-        rag.put("memoryCount", recall.getMemoryCount());
-        rag.put("growthRecordCount", recall.getGrowthRecordCount());
-        rag.put("libraryCount", 0);
-        rag.put("sessionSavedCount", 0);
-        rag.put("totalReferenceCount",
-                recall.getDiaryCount() + recall.getMemoryCount() + recall.getGrowthRecordCount());
-        rag.put("sources", recall.getSources() == null ? List.of() : recall.getSources());
-
-        Map<String, Object> metadata = new LinkedHashMap<>();
-        metadata.put("rag", rag);
-        putIfNotBlank(metadata, "retrievalQuery", recall.getQuery());
+        MemoryRecallRagMetadata rag = new MemoryRecallRagMetadata(
+                recall.getRetrievalMode(),
+                recall.getEmbeddingReadyCount(),
+                recall.getDiaryCount(),
+                recall.getMemoryCount(),
+                recall.getGrowthRecordCount(),
+                0,
+                0,
+                recall.getDiaryCount() + recall.getMemoryCount() + recall.getGrowthRecordCount(),
+                recall.getSources() == null ? List.of() : recall.getSources());
         return new AgentMemoryContextResult(
                 context,
-                metadata,
+                new MemoryRecallContextMetadata(rag, recall.getQuery()),
                 true,
                 null,
                 recall.getEmbeddingObservation());
     }
 
-    private static void putIfNotBlank(Map<String, Object> data, String key, String value) {
-        if (value != null && !value.isBlank()) {
-            data.put(key, value.trim());
-        }
-    }
 }

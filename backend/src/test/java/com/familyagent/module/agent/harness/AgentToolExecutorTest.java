@@ -10,7 +10,9 @@ import com.familyagent.module.agent.harness.constant.AgentToolPrivacyLevel;
 import com.familyagent.module.agent.harness.constant.AgentToolSideEffect;
 import com.familyagent.module.agent.harness.dto.AgentToolCallRequest;
 import com.familyagent.module.agent.harness.dto.AgentToolCallResult;
+import com.familyagent.module.agent.harness.entity.AgentToolCallRecord;
 import com.familyagent.module.agent.harness.entity.AgentToolConfirmationRecord;
+import com.familyagent.module.agent.harness.provenance.AgentRecordProvenanceWriter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -35,6 +37,7 @@ class AgentToolExecutorTest {
     @Mock private AgentRunLifecycleService runLifecycleService;
     @Mock private AgentToolPermissionGate permissionGate;
     @Mock private AgentToolAuditService auditService;
+    @Mock private AgentRecordProvenanceWriter provenanceWriter;
     @Mock private AgentConfirmationPolicy confirmationPolicy;
     @Mock private AgentToolConfirmationService confirmationService;
     private final AgentToolInputValidator inputValidator = new AgentToolInputValidator();
@@ -58,6 +61,11 @@ class AgentToolExecutorTest {
         doReturn(tool).when(registry).require(EchoTool.NAME);
         when(confirmationPolicy.evaluate(tracedContext, tool.descriptor(), input))
                 .thenReturn(AgentConfirmationStatus.NOT_REQUIRED);
+        AgentToolCallRecord toolCall = new AgentToolCallRecord();
+        toolCall.setId(88L);
+        when(auditService.record(
+                tracedContext, tool.descriptor(), input, AgentToolCallStatus.SUCCEEDED, null))
+                .thenReturn(toolCall);
         AgentToolExecutor executor = executor();
 
         AgentToolCallResult<EchoOutput> result = executor.execute(new AgentToolCallRequest<>(
@@ -69,6 +77,7 @@ class AgentToolExecutorTest {
         assertEquals("hello", result.data().value());
         verify(permissionGate).assertAllowed(tracedContext, tool.descriptor(), input);
         verify(auditService).record(tracedContext, tool.descriptor(), input, AgentToolCallStatus.SUCCEEDED, null);
+        verify(provenanceWriter).recordCreatedOutput(tracedContext, tool.descriptor(), toolCall, result.data());
         verify(runLifecycleService).succeed(tracedContext);
     }
 
@@ -178,7 +187,8 @@ class AgentToolExecutorTest {
                 confirmationPolicy,
                 confirmationService,
                 errorMapper,
-                descriptorFactory);
+                descriptorFactory,
+                provenanceWriter);
 
         AgentToolCallResult<EchoOutput> result = executor.execute(new AgentToolCallRequest<>(
                 EchoTool.NAME,
@@ -248,7 +258,8 @@ class AgentToolExecutorTest {
                 confirmationPolicy,
                 confirmationService,
                 errorMapper,
-                descriptorFactory);
+                descriptorFactory,
+                provenanceWriter);
     }
 
     private record EchoInput(String value) {
