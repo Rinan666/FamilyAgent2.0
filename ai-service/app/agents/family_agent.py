@@ -8,8 +8,9 @@ from typing import AsyncIterator
 from app.config import settings
 from app.llm.client import llm_client
 from app.llm.observation import LLMCallObservation
-from app.runtime.artifact_versions import FAMILY_CHAT_PROMPT_VERSION
 from app.llm.prompts.chat import build_family_agent_system_prompt
+from app.runtime.artifact_versions import FAMILY_CHAT_PROMPT_VERSION
+from app.runtime.trace_observation import TraceObservation
 from app.services.web_search import build_web_search_context
 from app.utils.safety_limits import (
     validate_no_prompt_leak_attempt,
@@ -84,20 +85,18 @@ class FamilyAgent:
                 except asyncio.TimeoutError:
                     yield {
                         "type": "metadata",
-                        "trace_observation": {
-                            "stepType": "WEB_SEARCH",
-                            "operation": "web_search.public",
-                            "provider": None,
-                            "model": None,
-                            "latencyMs": max(
+                        "trace_observation": TraceObservation(
+                            stepType="WEB_SEARCH",
+                            operation="web_search.public",
+                            latencyMs=max(
                                 0,
                                 round(settings.web_search_stream_metadata_timeout_seconds * 1000),
                             ),
-                            "success": False,
-                            "errorCode": "WEB_SEARCH_METADATA_TIMEOUT",
-                            "degraded": True,
-                            "privacyCategories": ["PUBLIC_DATA"],
-                        },
+                            success=False,
+                            errorCode="WEB_SEARCH_METADATA_TIMEOUT",
+                            degraded=True,
+                            privacyCategories=["PUBLIC_DATA"],
+                        ),
                     }
                     yield {
                         "type": "metadata",

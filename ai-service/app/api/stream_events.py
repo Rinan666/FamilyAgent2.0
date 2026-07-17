@@ -7,7 +7,9 @@ import json
 import logging
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
+
+from app.runtime.trace_observation import TraceObservation
 
 logger = logging.getLogger("familyagent.ai.api.stream_events")
 SSE_KEEPALIVE_SECONDS = 10.0
@@ -21,20 +23,7 @@ class StreamContentEvent(BaseModel):
     runId: int | None = None
 
 
-class StreamTraceObservation(BaseModel):
-    stepType: Literal["LLM", "WEB_SEARCH"]
-    operation: str = Field(min_length=1, max_length=120)
-    provider: str | None = Field(default=None, max_length=80)
-    model: str | None = Field(default=None, max_length=160)
-    promptVersion: str | None = Field(default=None, max_length=80)
-    skillVersion: str | None = Field(default=None, max_length=40)
-    latencyMs: int | None = Field(default=None, ge=0)
-    success: bool
-    errorCode: str | None = Field(default=None, max_length=80)
-    degraded: bool = False
-    privacyCategories: list[Literal["FAMILY_DATA", "PUBLIC_DATA"]] = Field(
-        default_factory=list,
-    )
+StreamTraceObservation = TraceObservation
 
 
 class StreamDoneEvent(BaseModel):

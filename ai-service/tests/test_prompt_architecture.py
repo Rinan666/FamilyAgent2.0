@@ -100,18 +100,16 @@ async def test_family_agent_flushes_llm_observations_before_stream_failure(monke
         async for chunk in family_agent.chat_stream(member_message="analyze this conflict"):
             chunks.append(chunk)
 
-    assert chunks[-1] == {
-        "type": "metadata",
-        "trace_observation": {
-            "stepType": "LLM",
-            "operation": "llm.chat_stream",
-            "provider": "dashscope",
-            "model": "dashscope/qwen-flash",
-            "promptVersion": "family_chat.system.v1",
-            "latencyMs": 7,
-            "success": False,
-            "errorCode": "AI_PROVIDER_ERROR",
-            "degraded": False,
-            "privacyCategories": ["FAMILY_DATA"],
-        },
+    assert chunks[-1]["type"] == "metadata"
+    assert chunks[-1]["trace_observation"].model_dump(exclude_none=True) == {
+        "stepType": "LLM",
+        "operation": "llm.chat_stream",
+        "provider": "dashscope",
+        "model": "dashscope/qwen-flash",
+        "promptVersion": "family_chat.system.v1",
+        "latencyMs": 7,
+        "success": False,
+        "errorCode": "AI_PROVIDER_ERROR",
+        "degraded": False,
+        "privacyCategories": ["FAMILY_DATA"],
     }

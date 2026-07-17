@@ -17,6 +17,7 @@ from urllib.parse import quote_plus, urlparse
 import httpx
 
 from app.config import settings
+from app.runtime.trace_observation import TraceObservation
 from app.utils.privacy_guard import redact_ai_bound_text
 
 logger = logging.getLogger("familyagent.ai.web_search")
@@ -121,18 +122,17 @@ class WebSearchContext:
     error_code: str | None = None
     degraded: bool = False
 
-    def as_trace_observation(self) -> dict[str, object]:
-        return {
-            "stepType": "WEB_SEARCH",
-            "operation": "web_search.public",
-            "provider": self.provider,
-            "model": None,
-            "latencyMs": self.latency_ms,
-            "success": self.success,
-            "errorCode": self.error_code,
-            "degraded": self.degraded,
-            "privacyCategories": ["PUBLIC_DATA"],
-        }
+    def as_trace_observation(self) -> TraceObservation:
+        return TraceObservation(
+            stepType="WEB_SEARCH",
+            operation="web_search.public",
+            provider=self.provider,
+            latencyMs=self.latency_ms,
+            success=self.success,
+            errorCode=self.error_code,
+            degraded=self.degraded,
+            privacyCategories=["PUBLIC_DATA"],
+        )
 
 
 def is_thinking_mode(response_mode: str | None) -> bool:

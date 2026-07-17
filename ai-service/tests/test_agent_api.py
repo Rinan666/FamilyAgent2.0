@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.api import agent
+from app.runtime.trace_observation import TraceObservation
 
 
 class _Request:
@@ -71,6 +72,24 @@ def test_agent_router_accepts_internal_service_token():
     dependencies = [item.dependency for item in agent.router.dependencies]
 
     assert agent.verify_token_or_internal_service in dependencies
+
+
+def test_trace_observation_accepts_legacy_dict_without_leaking_extra_fields():
+    observation = agent.validate_trace_observation({
+        "stepType": "WEB_SEARCH",
+        "operation": "web_search.public",
+        "success": False,
+        "errorCode": "WEB_SEARCH_QUERY_REJECTED",
+        "degraded": True,
+        "privacyCategories": ["PUBLIC_DATA"],
+        "rawQuery": "private family query",
+    })
+
+    assert observation is not None
+    payload = observation.model_dump(exclude_none=True)
+    assert payload["errorCode"] == "WEB_SEARCH_QUERY_REJECTED"
+    assert "rawQuery" not in payload
+    assert "private family query" not in str(payload)
 
 
 def _parse_sse_data(body: str) -> list[dict]:
@@ -157,16 +176,16 @@ async def test_stream_chat_moves_internal_trace_observations_to_done_event(monke
     async def observed_chat_stream(**kwargs):
         yield {
             "type": "metadata",
-            "trace_observation": {
-                "stepType": "LLM",
-                "operation": "llm.chat_stream",
-                "provider": "provider",
-                "model": "provider/model",
-                "success": True,
-                "latencyMs": 12,
-                "degraded": False,
-                "privacyCategories": ["FAMILY_DATA"],
-            },
+            "trace_observation": TraceObservation(
+                stepType="LLM",
+                operation="llm.chat_stream",
+                provider="provider",
+                model="provider/model",
+                success=True,
+                latencyMs=12,
+                degraded=False,
+                privacyCategories=["FAMILY_DATA"],
+            ),
         }
         yield {"type": "content", "content": "hello"}
 

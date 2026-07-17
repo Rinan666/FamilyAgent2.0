@@ -132,7 +132,7 @@ async def stream_chat(request: AgentChatRequest, http_request: Request):
                 ):
                     if isinstance(chunk, dict) and chunk.get("type") == "metadata":
                         trace_observation = chunk.get("trace_observation")
-                        if isinstance(trace_observation, dict):
+                        if trace_observation is not None:
                             validated_observation = validate_trace_observation(trace_observation)
                             if validated_observation is not None:
                                 trace_observations.append(validated_observation)

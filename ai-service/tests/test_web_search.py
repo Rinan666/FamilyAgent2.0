@@ -15,6 +15,7 @@ from app.services.web_search import (
     rewrite_public_search_query,
     search_public_web,
 )
+from app.runtime.trace_observation import TraceObservation
 
 
 def test_needs_web_search_for_time_sensitive_query():
@@ -121,6 +122,17 @@ async def test_web_search_observation_marks_disabled_provider_as_degraded(monkey
     assert context.success is False
     assert context.error_code == "WEB_SEARCH_DISABLED"
     assert context.degraded is True
+    observation = context.as_trace_observation()
+    assert isinstance(observation, TraceObservation)
+    assert observation.model_dump(exclude_none=True) == {
+        "stepType": "WEB_SEARCH",
+        "operation": "web_search.public",
+        "latencyMs": observation.latencyMs,
+        "success": False,
+        "errorCode": "WEB_SEARCH_DISABLED",
+        "degraded": True,
+        "privacyCategories": ["PUBLIC_DATA"],
+    }
 
 
 @pytest.mark.asyncio
