@@ -5,6 +5,7 @@ import com.familyagent.infra.ai.dto.EmbeddingResponse;
 import com.familyagent.module.diary.facade.MemoryIndexDiaryFacade;
 import com.familyagent.module.family.facade.FamilyMembershipFacade;
 import com.familyagent.module.growth.facade.MemoryIndexGrowthFacade;
+import com.familyagent.module.memory.dto.RebuildEmbeddingResponse;
 import com.familyagent.module.memory.repository.MemoryEmbeddingWriteRepository;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
 import org.junit.jupiter.api.Test;
@@ -17,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -33,9 +35,24 @@ class MemoryEmbeddingServiceTest {
     @Mock private MemoryEntryRepository memoryRepository;
     @Mock private MemoryIndexGrowthFacade growthRecordRepository;
     @Mock private FamilyMembershipFacade familyMembershipFacade;
+    @Mock private MemoryIndexRebuildService indexRebuildService;
 
     // In a unit test without Spring proxies, @Async methods execute synchronously.
     private final EmbeddingAsyncProcessor asyncProcessor = new EmbeddingAsyncProcessor();
+
+    @Test
+    void rebuildFamilyIndexes_shouldDelegateToIndexRebuildService() {
+        RebuildEmbeddingResponse response = RebuildEmbeddingResponse.builder()
+                .familyId(10L)
+                .indexedCount(3)
+                .build();
+        when(indexRebuildService.rebuildFamilyIndexes(10L, 500)).thenReturn(response);
+
+        RebuildEmbeddingResponse result = service().rebuildFamilyIndexes(10L, 500);
+
+        assertEquals(response, result);
+        verify(indexRebuildService).rebuildFamilyIndexes(10L, 500);
+    }
 
     @Test
     void index_shouldRejectDegradedEmbeddingResponse() throws Exception {
@@ -161,7 +178,8 @@ class MemoryEmbeddingServiceTest {
                 memoryRepository,
                 growthRecordRepository,
                 familyMembershipFacade,
-                asyncProcessor);
+                asyncProcessor,
+                indexRebuildService);
     }
 
     private static void invokeIndex(MemoryEmbeddingService service) throws Exception {
