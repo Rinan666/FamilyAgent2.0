@@ -2,6 +2,7 @@ package com.familyagent.module.memory.facade;
 
 import com.familyagent.common.constant.EntityStatus;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
+import com.familyagent.module.memory.dto.RecallSourceSummary;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.service.AuthorizedMemoryRecallService;
 import org.junit.jupiter.api.Test;
@@ -76,5 +77,37 @@ class AgentMemoryContextFacadeTest {
         assertEquals(AgentMemoryContextErrorCode.RECALL_FAILED.code(), result.errorCode());
         assertEquals("", result.context());
         assertTrue(result.metadata().isEmpty());
+    }
+
+    @Test
+    void buildFamilyAgentContextResult_mapsRecallMetadataToFacadeContract() {
+        RecallSourceSummary source = RecallSourceSummary.builder()
+                .id("memory-9")
+                .sourceType("FAMILY_EXPERIENCE")
+                .title("Bedtime routine")
+                .topics(List.of("HEALTH"))
+                .scenes(List.of("health"))
+                .build();
+        when(recallService.recallForFamily(10L, 101L, "bedtime", "FAMILY_AGENT", 8, 8))
+                .thenReturn(AuthorizedMemoryRecallResult.builder()
+                        .memories(List.of())
+                        .diaries(List.of())
+                        .growthRecords(List.of())
+                        .retrievalMode("VECTOR_WITH_TEXT_FALLBACK")
+                        .embeddingReadyCount(12)
+                        .query("bedtime health")
+                        .sources(List.of(source))
+                        .build());
+
+        AgentMemoryContextResult result = facade.buildFamilyAgentContextResult(
+                10L,
+                101L,
+                "bedtime",
+                List.of());
+
+        assertEquals("bedtime health", result.metadata().retrievalQuery());
+        assertEquals(12, result.metadata().rag().embeddingReadyCount());
+        assertEquals("memory-9", result.metadata().rag().sources().get(0).id());
+        assertEquals(List.of("HEALTH"), result.metadata().rag().sources().get(0).topics());
     }
 }

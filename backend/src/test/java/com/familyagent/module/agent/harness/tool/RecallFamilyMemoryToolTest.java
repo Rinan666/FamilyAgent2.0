@@ -17,8 +17,8 @@ import com.familyagent.module.memory.facade.AgentMemoryContextFacade;
 import com.familyagent.module.memory.facade.AgentMemoryContextErrorCode;
 import com.familyagent.module.memory.facade.AgentMemoryContextResult;
 import com.familyagent.module.memory.dto.EmbeddingCallObservation;
-import com.familyagent.module.memory.dto.MemoryRecallContextMetadata;
-import com.familyagent.module.memory.dto.MemoryRecallRagMetadata;
+import com.familyagent.module.memory.facade.AgentMemoryContextMetadata;
+import com.familyagent.module.memory.facade.AgentMemoryRagMetadata;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -140,7 +140,7 @@ class RecallFamilyMemoryToolTest {
         when(memoryContextFacade.buildFamilyAgentContextResult(10L, 101L, "hello", List.of()))
                 .thenReturn(new AgentMemoryContextResult(
                         "",
-                        MemoryRecallContextMetadata.empty(),
+                        AgentMemoryContextMetadata.empty(),
                         true,
                         null,
                         embeddingObservation));
@@ -173,9 +173,9 @@ class RecallFamilyMemoryToolTest {
                 false);
     }
 
-    private static MemoryRecallContextMetadata metadataWithMemoryCount(int memoryCount) {
-        return new MemoryRecallContextMetadata(
-                new MemoryRecallRagMetadata(null, 0, 0, memoryCount, 0, 0, 0, memoryCount, List.of()),
+    private static AgentMemoryContextMetadata metadataWithMemoryCount(int memoryCount) {
+        return new AgentMemoryContextMetadata(
+                new AgentMemoryRagMetadata(null, 0, 0, memoryCount, 0, 0, 0, memoryCount, List.of()),
                 null);
     }
 }

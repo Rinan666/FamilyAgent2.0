@@ -1,20 +1,16 @@
 package com.familyagent.module.agent.service;
 
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import com.familyagent.module.memory.facade.AgentMemoryContextMetadata;
 
-public record AgentChatMemoryResolution(String context, Map<String, Object> metadata) {
+public record AgentChatMemoryResolution(String context, AgentMemoryContextMetadata metadata) {
 
     public AgentChatMemoryResolution {
         context = context == null ? "" : context;
-        metadata = metadata == null
-                ? Map.of()
-                : Collections.unmodifiableMap(new LinkedHashMap<>(metadata));
+        metadata = metadata == null ? AgentMemoryContextMetadata.empty() : metadata;
     }
 
     public static AgentChatMemoryResolution contextOnly(String context) {
-        return new AgentChatMemoryResolution(context, Map.of());
+        return new AgentChatMemoryResolution(context, AgentMemoryContextMetadata.empty());
     }
 
     public static AgentChatMemoryResolution empty() {

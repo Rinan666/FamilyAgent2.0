@@ -5,12 +5,14 @@ import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.infra.ai.AIServiceClient;
 import com.familyagent.infra.ai.dto.AgentChatStreamPayload;
+import com.familyagent.module.agent.dto.AgentChatMetadataEvent;
 import com.familyagent.module.agent.dto.AgentChatStreamRequest;
 import com.familyagent.module.agent.harness.AgentRunContext;
 import com.familyagent.module.agent.service.AgentChatMemoryResolution;
 import com.familyagent.module.agent.service.AgentChatMemoryContextResolver;
 import com.familyagent.module.agent.service.AgentChatRunService;
 import com.familyagent.module.agent.service.AgentChatStreamTracker;
+import com.familyagent.module.memory.facade.AgentMemoryContextMetadata;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
@@ -32,8 +34,6 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -166,18 +166,14 @@ public class AgentChatController {
 
     private void writeMetadataEvent(
             OutputStream outputStream,
-            Map<String, Object> metadata,
+            AgentMemoryContextMetadata metadata,
             String requestId,
             Long runId) throws IOException {
-        Map<String, Object> payload = metadata == null
-                ? new LinkedHashMap<>()
-                : new LinkedHashMap<>(metadata);
-        payload.put("type", "metadata");
-        payload.put("requestId", normalizeRequestId(requestId));
-        if (runId != null) {
-            payload.put("runId", runId);
-        }
-        outputStream.write(("data: " + objectMapper.writeValueAsString(payload) + "\n\n")
+        AgentChatMetadataEvent event = AgentChatMetadataEvent.create(
+                metadata,
+                normalizeRequestId(requestId),
+                runId);
+        outputStream.write(("data: " + objectMapper.writeValueAsString(event) + "\n\n")
                 .getBytes(StandardCharsets.UTF_8));
         outputStream.flush();
     }

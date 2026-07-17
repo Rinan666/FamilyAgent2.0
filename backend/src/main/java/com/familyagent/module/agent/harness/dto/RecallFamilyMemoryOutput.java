@@ -1,15 +1,15 @@
 package com.familyagent.module.agent.harness.dto;
 
-import com.familyagent.module.memory.dto.MemoryRecallContextMetadata;
+import com.familyagent.module.memory.facade.AgentMemoryContextMetadata;
 
-public record RecallFamilyMemoryOutput(String context, MemoryRecallContextMetadata metadata) {
+public record RecallFamilyMemoryOutput(String context, AgentMemoryContextMetadata metadata) {
 
     public RecallFamilyMemoryOutput(String context) {
-        this(context, MemoryRecallContextMetadata.empty());
+        this(context, AgentMemoryContextMetadata.empty());
     }
 
     public RecallFamilyMemoryOutput {
         context = context == null ? "" : context;
-        metadata = metadata == null ? MemoryRecallContextMetadata.empty() : metadata;
+        metadata = metadata == null ? AgentMemoryContextMetadata.empty() : metadata;
     }
 }
