@@ -4,10 +4,10 @@ import com.familyagent.infra.ai.AIServiceClient;
 import com.familyagent.infra.ai.dto.EmbeddingRequest;
 import com.familyagent.infra.ai.dto.EmbeddingResponse;
 import com.familyagent.module.diary.entity.DiaryEntry;
-import com.familyagent.module.diary.repository.DiaryEntryRepository;
+import com.familyagent.module.diary.facade.MemoryIndexDiaryFacade;
 import com.familyagent.module.family.facade.FamilyMembershipFacade;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
-import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
+import com.familyagent.module.growth.facade.MemoryIndexGrowthFacade;
 import com.familyagent.module.memory.dto.RebuildEmbeddingResponse;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEmbeddingWriteRepository;
@@ -35,18 +35,18 @@ public class MemoryEmbeddingService {
 
     private final AIServiceClient aiServiceClient;
     private final MemoryEmbeddingWriteRepository embeddingWriteRepository;
-    private final DiaryEntryRepository diaryRepository;
+    private final MemoryIndexDiaryFacade diaryIndexFacade;
     private final MemoryEntryRepository memoryRepository;
-    private final GrowthGuardRecordRepository growthRecordRepository;
+    private final MemoryIndexGrowthFacade growthIndexFacade;
     private final FamilyMembershipFacade familyMembershipFacade;
     private final EmbeddingAsyncProcessor asyncProcessor;
 
     public RebuildEmbeddingResponse rebuildFamilyEmbeddings(Long familyId, int limit) {
         familyMembershipFacade.checkMembership(familyId);
         int normalizedLimit = normalizeLimit(limit);
-        List<DiaryEntry> diaries = diaryRepository.findActiveByFamilyForIndexing(familyId, normalizedLimit);
+        List<DiaryEntry> diaries = diaryIndexFacade.findActiveByFamily(familyId, normalizedLimit);
         List<MemoryEntry> memories = memoryRepository.findActiveByFamilyForIndexing(familyId, normalizedLimit);
-        List<GrowthGuardRecord> growthRecords = growthRecordRepository.findActiveByFamilyForIndexing(familyId, normalizedLimit);
+        List<GrowthGuardRecord> growthRecords = growthIndexFacade.findActiveByFamily(familyId, normalizedLimit);
         diaries.forEach(this::indexDiaryAfterCommit);
         memories.forEach(this::indexMemoryAfterCommit);
         growthRecords.forEach(this::indexGrowthAfterCommit);
@@ -62,9 +62,9 @@ public class MemoryEmbeddingService {
     public RebuildEmbeddingResponse rebuildFamilyIndexes(Long familyId, int limit) {
         familyMembershipFacade.checkMembership(familyId);
         int normalizedLimit = normalizeLimit(limit);
-        List<DiaryEntry> diaries = diaryRepository.findActiveByFamilyForIndexing(familyId, normalizedLimit);
+        List<DiaryEntry> diaries = diaryIndexFacade.findActiveByFamily(familyId, normalizedLimit);
         List<MemoryEntry> memories = memoryRepository.findActiveByFamilyForIndexing(familyId, normalizedLimit);
-        List<GrowthGuardRecord> growthRecords = growthRecordRepository.findActiveByFamilyForIndexing(familyId, normalizedLimit);
+        List<GrowthGuardRecord> growthRecords = growthIndexFacade.findActiveByFamily(familyId, normalizedLimit);
 
         diaries.forEach(this::rebuildDiaryIndex);
         memories.forEach(this::rebuildMemoryIndex);
@@ -89,7 +89,7 @@ public class MemoryEmbeddingService {
                 textFromMap(entry.getStructured(), "entryType", "DAILY"),
                 entry.getMood(),
                 entry.getTags()));
-        diaryRepository.updateById(entry);
+        diaryIndexFacade.update(entry);
     }
 
     private void rebuildMemoryIndex(MemoryEntry entry) {
@@ -115,7 +115,7 @@ public class MemoryEmbeddingService {
                 record.getCategory(),
                 record.getSeverity() == null ? 3 : record.getSeverity(),
                 record.getObservedAt()));
-        growthRecordRepository.updateById(record);
+        growthIndexFacade.update(record);
     }
 
     public void indexDiaryAfterCommit(DiaryEntry entry) {

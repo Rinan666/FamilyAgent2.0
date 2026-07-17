@@ -2,9 +2,9 @@ package com.familyagent.module.memory.service;
 
 import com.familyagent.infra.ai.AIServiceClient;
 import com.familyagent.infra.ai.dto.EmbeddingResponse;
-import com.familyagent.module.diary.repository.DiaryEntryRepository;
+import com.familyagent.module.diary.facade.MemoryIndexDiaryFacade;
 import com.familyagent.module.family.facade.FamilyMembershipFacade;
-import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
+import com.familyagent.module.growth.facade.MemoryIndexGrowthFacade;
 import com.familyagent.module.memory.repository.MemoryEmbeddingWriteRepository;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
 import org.junit.jupiter.api.Test;
@@ -29,9 +29,9 @@ class MemoryEmbeddingServiceTest {
 
     @Mock private AIServiceClient aiServiceClient;
     @Mock private MemoryEmbeddingWriteRepository embeddingWriteRepository;
-    @Mock private DiaryEntryRepository diaryRepository;
+    @Mock private MemoryIndexDiaryFacade diaryRepository;
     @Mock private MemoryEntryRepository memoryRepository;
-    @Mock private GrowthGuardRecordRepository growthRecordRepository;
+    @Mock private MemoryIndexGrowthFacade growthRecordRepository;
     @Mock private FamilyMembershipFacade familyMembershipFacade;
 
     // In a unit test without Spring proxies, @Async methods execute synchronously.
