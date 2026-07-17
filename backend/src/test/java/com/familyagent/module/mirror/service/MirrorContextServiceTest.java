@@ -5,14 +5,14 @@ import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.diary.entity.DiaryEntry;
-import com.familyagent.module.diary.repository.DiaryEntryRepository;
+import com.familyagent.module.diary.facade.MirrorStyleDiaryFacade;
 import com.familyagent.module.family.dto.FamilyMemberVO;
 import com.familyagent.module.family.service.FamilyService;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
-import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
+import com.familyagent.module.growth.facade.MirrorStyleGrowthFacade;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
 import com.familyagent.module.memory.entity.MemoryEntry;
-import com.familyagent.module.memory.repository.MemoryEntryRepository;
+import com.familyagent.module.memory.facade.MirrorStyleMemoryFacade;
 import com.familyagent.module.memory.service.AuthorizedMemoryRecallService;
 import com.familyagent.module.mirror.dto.MirrorContextResponse;
 import com.familyagent.module.mirror.repository.MirrorAgentDataRepository;
@@ -43,9 +43,9 @@ import static org.mockito.Mockito.when;
 class MirrorContextServiceTest {
 
     @Mock private FamilyService familyService;
-    @Mock private DiaryEntryRepository diaryRepository;
-    @Mock private MemoryEntryRepository memoryRepository;
-    @Mock private GrowthGuardRecordRepository growthRecordRepository;
+    @Mock private MirrorStyleDiaryFacade diaryStyleFacade;
+    @Mock private MirrorStyleMemoryFacade memoryStyleFacade;
+    @Mock private MirrorStyleGrowthFacade growthStyleFacade;
     @Mock private AuthorizedMemoryRecallService memoryRecallService;
     @Mock private MirrorAgentDataRepository mirrorAgentDataRepository;
 
@@ -73,13 +73,13 @@ class MirrorContextServiceTest {
                             .query("选择")
                             .embeddingReadyCount(0)
                             .build());
-            when(diaryRepository.findActiveByFamilyAndUserForStyle(eq(familyId), eq(targetUserId), anyInt()))
+            when(diaryStyleFacade.findActiveByFamilyAndUser(eq(familyId), eq(targetUserId), anyInt()))
                     .thenReturn(List.of(
                             diary(11L, familyId, targetUserId, privatePhrase + "。我当时很担心，也反复问自己为什么。", "PRIVATE"),
                             diary(12L, familyId, targetUserId, "我后来觉得，选择要慢一点，先想后果，再行动。", "PRIVATE")));
-            when(memoryRepository.findActiveByFamilyAndUserForStyle(eq(familyId), eq(targetUserId), anyInt()))
+            when(memoryStyleFacade.findActiveByFamilyAndUser(eq(familyId), eq(targetUserId), anyInt()))
                     .thenReturn(List.of(memory(13L, familyId, targetUserId, "私有经验", privateMemoryPhrase + "；如果重来，我会先问清楚边界。")));
-            when(growthRecordRepository.findActiveByFamilyAndTargetForStyle(eq(familyId), eq(targetUserId), anyInt()))
+            when(growthStyleFacade.findActiveByFamilyAndTarget(eq(familyId), eq(targetUserId), anyInt()))
                     .thenReturn(List.of(growth(14L, familyId, targetUserId, "EMOTION", privateGrowthPhrase)));
 
             MirrorContextResponse response = service.getContext(familyId, targetUserId, "选择");
@@ -115,9 +115,7 @@ class MirrorContextServiceTest {
             when(familyService.getMemberView(familyId, 101L)).thenReturn(viewer);
             when(memoryRecallService.recallForMirror(eq(familyId), eq(targetUserId), eq(101L), eq("   "), anyInt(), anyInt()))
                     .thenReturn(recall(List.of(), List.of(), "   "));
-            when(diaryRepository.findActiveByFamilyAndUserForStyle(eq(familyId), eq(targetUserId), anyInt())).thenReturn(List.of());
-            when(memoryRepository.findActiveByFamilyAndUserForStyle(eq(familyId), eq(targetUserId), anyInt())).thenReturn(List.of());
-            when(growthRecordRepository.findActiveByFamilyAndTargetForStyle(eq(familyId), eq(targetUserId), anyInt())).thenReturn(List.of());
+            stubEmptyStyleSamples(familyId, targetUserId);
 
             MirrorContextResponse response = service.getContext(familyId, targetUserId, "   ");
 
@@ -140,9 +138,7 @@ class MirrorContextServiceTest {
             when(familyService.getMemberView(familyId, 101L)).thenReturn(viewer);
             when(memoryRecallService.recallForMirror(eq(familyId), eq(targetUserId), eq(101L), eq("成长"), anyInt(), anyInt()))
                     .thenReturn(recall(List.of(), List.of(), "成长"));
-            when(diaryRepository.findActiveByFamilyAndUserForStyle(eq(familyId), eq(targetUserId), anyInt())).thenReturn(List.of());
-            when(memoryRepository.findActiveByFamilyAndUserForStyle(eq(familyId), eq(targetUserId), anyInt())).thenReturn(List.of());
-            when(growthRecordRepository.findActiveByFamilyAndTargetForStyle(eq(familyId), eq(targetUserId), anyInt())).thenReturn(List.of());
+            stubEmptyStyleSamples(familyId, targetUserId);
             MirrorContextResponse response = service.getContext(familyId, targetUserId, "成长");
 
             assertTrue(response.getLibraryItems().isEmpty());
@@ -161,9 +157,7 @@ class MirrorContextServiceTest {
             FamilyMemberVO viewer = member(familyId, 101L, "viewer", "查看者", "MEMBER");
             when(familyService.getMemberView(familyId, targetUserId)).thenReturn(target);
             when(familyService.getMemberView(familyId, 101L)).thenReturn(viewer);
-            when(diaryRepository.findActiveByFamilyAndUserForStyle(eq(familyId), eq(targetUserId), anyInt())).thenReturn(List.of());
-            when(memoryRepository.findActiveByFamilyAndUserForStyle(eq(familyId), eq(targetUserId), anyInt())).thenReturn(List.of());
-            when(growthRecordRepository.findActiveByFamilyAndTargetForStyle(eq(familyId), eq(targetUserId), anyInt())).thenReturn(List.of());
+            stubEmptyStyleSamples(familyId, targetUserId);
 
             when(memoryRecallService.recallForMirror(eq(familyId), eq(targetUserId), eq(101L), eq("case11"), anyInt(), anyInt()))
                     .thenReturn(recall(List.of(diary(1L, familyId, targetUserId, "d1", "FAMILY_VISIBLE")),
@@ -208,9 +202,7 @@ class MirrorContextServiceTest {
                     .thenThrow(new BusinessException(ErrorCode.NOT_FAMILY_MEMBER));
             when(memoryRecallService.recallForMirror(eq(familyId), eq(targetUserId), eq(101L), eq("空画像"), anyInt(), anyInt()))
                     .thenReturn(recall(List.of(), List.of(), "空画像"));
-            when(diaryRepository.findActiveByFamilyAndUserForStyle(eq(familyId), eq(targetUserId), anyInt())).thenReturn(List.of());
-            when(memoryRepository.findActiveByFamilyAndUserForStyle(eq(familyId), eq(targetUserId), anyInt())).thenReturn(List.of());
-            when(growthRecordRepository.findActiveByFamilyAndTargetForStyle(eq(familyId), eq(targetUserId), anyInt())).thenReturn(List.of());
+            stubEmptyStyleSamples(familyId, targetUserId);
             when(mirrorAgentDataRepository.findVisibleByFamilyAndTarget(familyId, targetUserId, 101L)).thenReturn(null);
 
             MirrorContextResponse response = service.getContext(familyId, targetUserId, "空画像");
@@ -243,9 +235,7 @@ class MirrorContextServiceTest {
                     "妈妈"));
             when(memoryRecallService.recallForMirror(eq(familyId), eq(targetUserId), eq(101L), eq("总结"), anyInt(), anyInt()))
                     .thenReturn(recall(List.of(selfDiary, relatedDiary), List.of(), "总结"));
-            when(diaryRepository.findActiveByFamilyAndUserForStyle(eq(familyId), eq(targetUserId), anyInt())).thenReturn(List.of());
-            when(memoryRepository.findActiveByFamilyAndUserForStyle(eq(familyId), eq(targetUserId), anyInt())).thenReturn(List.of());
-            when(growthRecordRepository.findActiveByFamilyAndTargetForStyle(eq(familyId), eq(targetUserId), anyInt())).thenReturn(List.of());
+            stubEmptyStyleSamples(familyId, targetUserId);
 
             MirrorContextResponse response = service.getContext(familyId, targetUserId, "总结");
 
@@ -274,12 +264,18 @@ class MirrorContextServiceTest {
         MirrorContextPromptBuilder promptBuilder = new MirrorContextPromptBuilder();
         return new MirrorContextService(
                 familyService,
-                diaryRepository,
-                memoryRepository,
-                growthRecordRepository,
+                diaryStyleFacade,
+                memoryStyleFacade,
+                growthStyleFacade,
                 memoryRecallService,
                 mirrorAgentDataRepository,
                 promptBuilder);
+    }
+
+    private void stubEmptyStyleSamples(Long familyId, Long targetUserId) {
+        when(diaryStyleFacade.findActiveByFamilyAndUser(familyId, targetUserId, 80)).thenReturn(List.of());
+        when(memoryStyleFacade.findActiveByFamilyAndUser(familyId, targetUserId, 80)).thenReturn(List.of());
+        when(growthStyleFacade.findActiveByFamilyAndTarget(familyId, targetUserId, 80)).thenReturn(List.of());
     }
 
     private static AuthorizedMemoryRecallResult recall(List<DiaryEntry> diaries, List<MemoryEntry> memories, String query) {
