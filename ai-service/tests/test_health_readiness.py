@@ -31,6 +31,18 @@ def test_readiness_reports_required_configuration():
     assert result.checks.internal_service_auth == ReadinessCheckState.CONFIGURED
 
 
+def test_liveness_endpoint_returns_typed_response():
+    response = TestClient(app).get("/ai/health")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "healthy"
+    assert payload["service"] == "familyagent-ai"
+    assert payload["version"] == "0.1.0"
+    assert isinstance(payload["uptime_seconds"], float)
+    assert payload["default_model"]
+
+
 def test_readiness_fails_when_primary_provider_key_is_missing():
     result = ReadinessService(_settings(dashscope_api_key=None)).evaluate()
 

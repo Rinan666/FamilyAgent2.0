@@ -28,3 +28,12 @@ class ReadinessChecks(BaseModel):
 class ReadinessResponse(BaseModel):
     status: ReadinessStatus
     checks: ReadinessChecks
+
+
+class LivenessResponse(BaseModel):
+    status: str
+    service: str
+    version: str
+    environment: str
+    uptime_seconds: float
+    default_model: str

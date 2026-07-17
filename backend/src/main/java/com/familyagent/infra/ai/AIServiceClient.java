@@ -2,6 +2,7 @@ package com.familyagent.infra.ai;
 
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
+import com.familyagent.infra.ai.dto.AIHealthResponse;
 import com.familyagent.infra.ai.dto.AgentChatStreamPayload;
 import com.familyagent.infra.ai.dto.EmbeddingRequest;
 import com.familyagent.infra.ai.dto.EmbeddingResponse;
@@ -11,7 +12,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.io.OutputStream;
-import java.util.Map;
 
 /**
  * Compatibility facade for backend callers of the Python AI service.
@@ -66,7 +66,7 @@ public class AIServiceClient {
         return embeddingClient.embedText(request);
     }
 
-    public Map<String, Object> healthCheck() {
+    public AIHealthResponse healthCheck() {
         return healthClient.healthCheck();
     }
 }

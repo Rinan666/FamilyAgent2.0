@@ -1,11 +1,10 @@
 package com.familyagent.infra.ai;
 
+import com.familyagent.infra.ai.dto.AIHealthResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
-
-import java.util.Map;
 
 @Slf4j
 @Component
@@ -21,13 +20,17 @@ public class AIHealthClient {
         this.support = support;
     }
 
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> healthCheck() {
+    public AIHealthResponse healthCheck() {
         try {
-            return restTemplate.getForObject(support.url("/ai/health"), Map.class);
+            AIHealthResponse response = restTemplate.getForObject(
+                    support.url("/ai/health"),
+                    AIHealthResponse.class);
+            return response == null
+                    ? AIHealthResponse.down(AIClientRequestSupport.ERROR_AI_SERVICE)
+                    : response;
         } catch (Exception error) {
             log.error("AI service health check failed: errorType={}", error.getClass().getSimpleName());
-            return Map.of("status", "DOWN", "errorCode", AIClientRequestSupport.ERROR_AI_SERVICE);
+            return AIHealthResponse.down(AIClientRequestSupport.ERROR_AI_SERVICE);
         }
     }
 }

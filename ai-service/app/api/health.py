@@ -6,7 +6,7 @@ import time
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from app.api.health_models import ReadinessResponse, ReadinessStatus
+from app.api.health_models import LivenessResponse, ReadinessResponse, ReadinessStatus
 from app.config import settings
 from app.services.readiness import ReadinessService
 
@@ -16,18 +16,18 @@ readiness_service = ReadinessService(settings)
 _start_time = time.time()
 
 
-@router.get("/health")
-async def health_check():
+@router.get("/health", response_model=LivenessResponse)
+async def health_check() -> LivenessResponse:
     """Basic liveness check."""
     uptime = time.time() - _start_time
-    return {
-        "status": "healthy",
-        "service": "familyagent-ai",
-        "version": "0.1.0",
-        "environment": settings.app_env,
-        "uptime_seconds": round(uptime, 1),
-        "default_model": settings.default_llm_model,
-    }
+    return LivenessResponse(
+        status="healthy",
+        service="familyagent-ai",
+        version="0.1.0",
+        environment=settings.app_env,
+        uptime_seconds=round(uptime, 1),
+        default_model=settings.default_llm_model,
+    )
 
 
 @router.get(
