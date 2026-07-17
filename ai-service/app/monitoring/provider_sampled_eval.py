@@ -168,10 +168,17 @@ def _elapsed_ms(started_at: float) -> int:
     return max(0, round((time.monotonic() - started_at) * 1000))
 
 
-async def _main() -> None:
+def report_exit_code(report: ProviderSampledEvalReport) -> int:
+    if report.status in {ProviderSampleStatus.DISABLED, ProviderSampleStatus.PASSED}:
+        return 0
+    return 1
+
+
+async def _main() -> int:
     report = await ProviderSampledEval().run()
     print(json.dumps(report.as_dict(), ensure_ascii=False))
+    return report_exit_code(report)
 
 
 if __name__ == "__main__":
-    asyncio.run(_main())
+    raise SystemExit(asyncio.run(_main()))

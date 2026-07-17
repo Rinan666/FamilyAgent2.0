@@ -1,7 +1,11 @@
 import pytest
 
 from app.llm.observation import LLMCallObservation
-from app.monitoring.provider_synthetic_monitor import SyntheticProviderMonitor
+from app.monitoring.provider_synthetic_monitor import (
+    ProviderMonitorStatus,
+    SyntheticProviderMonitor,
+    report_exit_code,
+)
 
 
 class _ObservedClient:
@@ -31,6 +35,7 @@ async def test_monitor_distinguishes_primary_failure_and_fallback_success(monkey
     assert report.success is True
     assert report.degraded is True
     assert len(report.attempts) == 2
+    assert report_exit_code(report) == 0
     assert "provider output" not in str(report.as_dict())
 
 
@@ -47,7 +52,21 @@ async def test_monitor_reports_all_provider_failure_without_output(monkeypatch):
     assert report.status == "FAILED"
     assert report.success is False
     assert report.error_code == "AI_PROVIDER_ERROR"
+    assert report_exit_code(report) == 1
     assert "response body" not in str(report.as_dict())
+
+
+@pytest.mark.asyncio
+async def test_monitor_disabled_is_a_clean_noop(monkeypatch):
+    monkeypatch.setattr(
+        "app.monitoring.provider_synthetic_monitor.settings.provider_monitor_enabled",
+        False,
+    )
+
+    report = await SyntheticProviderMonitor(_ObservedClient([])).run()
+
+    assert report.status == ProviderMonitorStatus.DISABLED
+    assert report_exit_code(report) == 0
 
 
 def observation(model, success, degraded, error_code):

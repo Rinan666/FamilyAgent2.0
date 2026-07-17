@@ -8,6 +8,7 @@ from app.monitoring.provider_sampled_eval import (
     ProviderProbeResponse,
     ProviderSampleStatus,
     ProviderSampledEval,
+    report_exit_code,
 )
 
 
@@ -46,6 +47,7 @@ async def test_sampled_eval_is_disabled_without_provider_calls(monkeypatch):
 
     assert report.status == ProviderSampleStatus.DISABLED
     assert report.executed_case_count == 0
+    assert report_exit_code(report) == 0
     assert client.cases == []
 
 
@@ -60,6 +62,7 @@ async def test_sampled_eval_passes_fixed_public_cases_with_bounded_cost(monkeypa
     assert report.success is True
     assert report.configured_case_count == MAX_CASES
     assert report.executed_case_count == MAX_CASES
+    assert report_exit_code(report) == 0
     assert report.max_output_token_budget <= MAX_CASES * MAX_CASE_TOKENS
     assert all(case.max_tokens <= MAX_CASE_TOKENS for case in client.cases)
     assert all(result.attempt_count == 1 for result in report.results)
@@ -79,6 +82,7 @@ async def test_sampled_eval_stops_on_mismatch_without_reporting_output(monkeypat
     assert report.status == ProviderSampleStatus.FAILED
     assert report.executed_case_count == 1
     assert report.error_code == "AI_EVAL_RESPONSE_MISMATCH"
+    assert report_exit_code(report) == 1
     assert "private unexpected output" not in str(report.as_dict())
 
 
@@ -95,6 +99,7 @@ async def test_sampled_eval_rejects_unsafe_budget_configuration(monkeypatch):
 
     assert report.status == ProviderSampleStatus.CONFIG_INVALID
     assert report.error_code == "AI_EVAL_CONFIG_INVALID"
+    assert report_exit_code(report) == 1
     assert client.cases == []
 
 
@@ -107,6 +112,7 @@ async def test_sampled_eval_hides_provider_exception_detail(monkeypatch):
 
     assert report.status == ProviderSampleStatus.FAILED
     assert report.error_code == "AI_PROVIDER_ERROR"
+    assert report_exit_code(report) == 1
     assert "private provider response" not in str(report.as_dict())
 
 
@@ -122,6 +128,7 @@ async def test_sampled_eval_exposes_timeout_without_retry(monkeypatch):
 
     assert report.status == ProviderSampleStatus.FAILED
     assert report.error_code == "AI_TIMEOUT"
+    assert report_exit_code(report) == 1
     assert report.executed_case_count == 1
     assert report.results[0].attempt_count == 1
 

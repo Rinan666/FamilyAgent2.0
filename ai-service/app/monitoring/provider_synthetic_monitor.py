@@ -6,12 +6,20 @@ import asyncio
 import json
 import uuid
 from dataclasses import asdict, dataclass
+from enum import StrEnum
 
 from app.config import settings
 from app.llm.client import LLMClient, llm_client
 from app.llm.observation import LLMCallObservation
 
 MONITOR_MESSAGE = "Reply with OK."
+
+
+class ProviderMonitorStatus(StrEnum):
+    DISABLED = "DISABLED"
+    PRIMARY_SUCCESS = "PRIMARY_SUCCESS"
+    FALLBACK_SUCCESS = "FALLBACK_SUCCESS"
+    FAILED = "FAILED"
 
 
 @dataclass(frozen=True)
@@ -27,7 +35,7 @@ class ProviderMonitorAttempt:
 @dataclass(frozen=True)
 class ProviderMonitorReport:
     monitor_run_id: str
-    status: str
+    status: ProviderMonitorStatus
     success: bool
     degraded: bool
     error_code: str | None
@@ -46,7 +54,7 @@ class SyntheticProviderMonitor:
         if not settings.provider_monitor_enabled:
             return ProviderMonitorReport(
                 monitor_run_id=monitor_run_id,
-                status="DISABLED",
+                status=ProviderMonitorStatus.DISABLED,
                 success=False,
                 degraded=False,
                 error_code=None,
@@ -73,7 +81,11 @@ class SyntheticProviderMonitor:
         if successful is not None:
             return ProviderMonitorReport(
                 monitor_run_id=monitor_run_id,
-                status="FALLBACK_SUCCESS" if successful.degraded else "PRIMARY_SUCCESS",
+                status=(
+                    ProviderMonitorStatus.FALLBACK_SUCCESS
+                    if successful.degraded
+                    else ProviderMonitorStatus.PRIMARY_SUCCESS
+                ),
                 success=True,
                 degraded=successful.degraded,
                 error_code=None,
@@ -81,7 +93,7 @@ class SyntheticProviderMonitor:
             )
         return ProviderMonitorReport(
             monitor_run_id=monitor_run_id,
-            status="FAILED",
+            status=ProviderMonitorStatus.FAILED,
             success=False,
             degraded=False,
             error_code=error_code or _last_error(attempts),
@@ -107,10 +119,17 @@ def _last_error(attempts: tuple[ProviderMonitorAttempt, ...]) -> str:
     )
 
 
-async def _main() -> None:
+def report_exit_code(report: ProviderMonitorReport) -> int:
+    if report.status == ProviderMonitorStatus.DISABLED or report.success:
+        return 0
+    return 1
+
+
+async def _main() -> int:
     report = await SyntheticProviderMonitor().run()
     print(json.dumps(report.as_dict(), ensure_ascii=False))
+    return report_exit_code(report)
 
 
 if __name__ == "__main__":
-    asyncio.run(_main())
+    raise SystemExit(asyncio.run(_main()))
