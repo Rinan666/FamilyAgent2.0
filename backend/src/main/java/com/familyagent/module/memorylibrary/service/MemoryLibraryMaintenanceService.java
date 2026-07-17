@@ -13,11 +13,11 @@ import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.facade.MemoryLibraryGrowthFacade;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.facade.MemoryIndexingFacade;
+import com.familyagent.module.memory.facade.MemoryLibraryEmbeddingFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryMemoryFacade;
 import com.familyagent.module.memory.service.MemoryIndexMetadataBuilder;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryUpdateRequest;
 import lombok.RequiredArgsConstructor;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,7 +46,7 @@ public class MemoryLibraryMaintenanceService {
     private final MemoryLibraryMemoryFacade memoryEntryRepository;
     private final MemoryLibraryGrowthFacade growthFacade;
     private final MemoryIndexingFacade memoryEmbeddingService;
-    private final JdbcTemplate jdbcTemplate;
+    private final MemoryLibraryEmbeddingFacade embeddingFacade;
 
     @Transactional
     public void updateItem(MemoryLibraryUpdateRequest request) {
@@ -158,7 +158,7 @@ public class MemoryLibraryMaintenanceService {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can delete this diary");
-        deleteEmbeddings("DIARY", diaryId);
+        embeddingFacade.deleteDiaryIndex(diaryId);
         diaryFacade.delete(diaryId);
     }
 
@@ -233,7 +233,7 @@ public class MemoryLibraryMaintenanceService {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can delete this memory");
-        deleteEmbeddings("MEMORY", memoryId);
+        embeddingFacade.deleteMemoryIndex(memoryId);
         memoryEntryRepository.delete(memoryId);
     }
 
@@ -291,12 +291,8 @@ public class MemoryLibraryMaintenanceService {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         MemoryLibrarySupport.ensureCreator(record.getCreatedBy(), "Only the creator can delete this growth record");
-        deleteEmbeddings("GROWTH_OBSERVATION", recordId);
+        embeddingFacade.deleteGrowthIndex(recordId);
         growthFacade.delete(recordId);
-    }
-
-    private void deleteEmbeddings(String sourceType, Long sourceId) {
-        jdbcTemplate.update("DELETE FROM memory_embeddings WHERE source_type = ? AND source_id = ?", sourceType, sourceId);
     }
 
     private static String requiredBody(String body) {

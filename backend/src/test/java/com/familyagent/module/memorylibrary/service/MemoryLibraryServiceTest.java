@@ -12,6 +12,7 @@ import com.familyagent.module.growth.repository.GrowthGuardStalenessVoteReposito
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEntryVoteRepository;
 import com.familyagent.module.memory.facade.MemoryIndexingFacade;
+import com.familyagent.module.memory.facade.MemoryLibraryEmbeddingFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryMemoryFacade;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryItem;
 import com.familyagent.module.memorylibrary.dto.MemoryLibrarySearchRequest;
@@ -49,6 +50,7 @@ class MemoryLibraryServiceTest {
     @Mock private MemoryEntryVoteRepository memoryEntryVoteRepository;
     @Mock private GrowthGuardStalenessVoteRepository growthGuardStalenessVoteRepository;
     @Mock private MemoryIndexingFacade memoryEmbeddingService;
+    @Mock private MemoryLibraryEmbeddingFacade embeddingFacade;
     @Spy  private ObjectMapper objectMapper = new ObjectMapper();
 
     // --- MemoryLibraryQueryService ---
@@ -154,7 +156,7 @@ class MemoryLibraryServiceTest {
     void deleteArchivedLibraryItem_deletesArchivedMemoryAndEmbeddings() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
                 familyService, diaryFacade, memoryEntryRepository,
-                growthFacade, memoryEmbeddingService, jdbcTemplate);
+                growthFacade, memoryEmbeddingService, embeddingFacade);
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(101L);
@@ -168,9 +170,7 @@ class MemoryLibraryServiceTest {
             maintenanceService.deleteArchivedItem(10L, "memory-88");
 
             verify(familyService).checkMembership(10L);
-            verify(jdbcTemplate).update(
-                    "DELETE FROM memory_embeddings WHERE source_type = ? AND source_id = ?",
-                    "MEMORY", 88L);
+            verify(embeddingFacade).deleteMemoryIndex(88L);
             verify(memoryEntryRepository).delete(88L);
         }
     }
@@ -179,7 +179,7 @@ class MemoryLibraryServiceTest {
     void deleteArchivedLibraryItem_rejectsActiveMemory() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
                 familyService, diaryFacade, memoryEntryRepository,
-                growthFacade, memoryEmbeddingService, jdbcTemplate);
+                growthFacade, memoryEmbeddingService, embeddingFacade);
 
         MemoryEntry entry = new MemoryEntry();
         entry.setId(88L);
@@ -200,7 +200,7 @@ class MemoryLibraryServiceTest {
     void deleteArchivedLibraryItem_deletesActiveLegacyAiSummary() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
                 familyService, diaryFacade, memoryEntryRepository,
-                growthFacade, memoryEmbeddingService, jdbcTemplate);
+                growthFacade, memoryEmbeddingService, embeddingFacade);
 
         MemoryEntry entry = new MemoryEntry();
         entry.setId(89L);
@@ -216,9 +216,7 @@ class MemoryLibraryServiceTest {
             maintenanceService.deleteArchivedItem(10L, "memory-89");
 
             verify(familyService).checkMembership(10L);
-            verify(jdbcTemplate).update(
-                    "DELETE FROM memory_embeddings WHERE source_type = ? AND source_id = ?",
-                    "MEMORY", 89L);
+            verify(embeddingFacade).deleteMemoryIndex(89L);
             verify(memoryEntryRepository).delete(89L);
         }
     }
@@ -227,7 +225,7 @@ class MemoryLibraryServiceTest {
     void updateLibraryItem_updatesActiveMemoryAndSchedulesReindex() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
                 familyService, diaryFacade, memoryEntryRepository,
-                growthFacade, memoryEmbeddingService, jdbcTemplate);
+                growthFacade, memoryEmbeddingService, embeddingFacade);
 
         MemoryEntry entry = new MemoryEntry();
         entry.setId(88L);
@@ -268,7 +266,7 @@ class MemoryLibraryServiceTest {
     void updateLibraryItem_rejectsArchivedMemory() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
                 familyService, diaryFacade, memoryEntryRepository,
-                growthFacade, memoryEmbeddingService, jdbcTemplate);
+                growthFacade, memoryEmbeddingService, embeddingFacade);
 
         MemoryEntry entry = new MemoryEntry();
         entry.setId(88L);
@@ -294,7 +292,7 @@ class MemoryLibraryServiceTest {
     void updateLibraryItem_rejectsNonAuthorEvenWhenFamilyMember() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
                 familyService, diaryFacade, memoryEntryRepository,
-                growthFacade, memoryEmbeddingService, jdbcTemplate);
+                growthFacade, memoryEmbeddingService, embeddingFacade);
 
         MemoryEntry entry = new MemoryEntry();
         entry.setId(88L);

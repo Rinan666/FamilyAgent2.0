@@ -20,4 +20,6 @@ public interface MemoryEmbeddingWriteRepository {
             int dimensions);
 
     void markFailed(Long id, String error);
+
+    void deleteBySource(String sourceType, Long sourceId);
 }

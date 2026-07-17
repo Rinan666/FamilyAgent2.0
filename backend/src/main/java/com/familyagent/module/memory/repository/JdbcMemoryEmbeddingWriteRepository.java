@@ -93,6 +93,14 @@ public class JdbcMemoryEmbeddingWriteRepository implements MemoryEmbeddingWriteR
                 """, metadata, id);
     }
 
+    @Override
+    public void deleteBySource(String sourceType, Long sourceId) {
+        jdbcTemplate.update(
+                "DELETE FROM memory_embeddings WHERE source_type = ? AND source_id = ?",
+                sourceType,
+                sourceId);
+    }
+
     private void supersedeOlderPending(String sourceType, Long sourceId, String contentHash) {
         try {
             SupersededMetadata metadata = new SupersededMetadata(

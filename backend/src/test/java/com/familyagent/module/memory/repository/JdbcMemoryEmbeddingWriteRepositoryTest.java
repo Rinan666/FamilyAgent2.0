@@ -109,6 +109,18 @@ class JdbcMemoryEmbeddingWriteRepositoryTest {
                 objectMapper.readTree(String.valueOf(metadataCaptor.getValue())));
     }
 
+    @Test
+    void deleteBySource_shouldDeleteAllRowsForSource() {
+        JdbcMemoryEmbeddingWriteRepository repository = repository();
+
+        repository.deleteBySource("MEMORY", 88L);
+
+        verify(jdbcTemplate).update(
+                "DELETE FROM memory_embeddings WHERE source_type = ? AND source_id = ?",
+                "MEMORY",
+                88L);
+    }
+
     private JdbcMemoryEmbeddingWriteRepository repository() {
         return new JdbcMemoryEmbeddingWriteRepository(jdbcTemplate, objectMapper);
     }
