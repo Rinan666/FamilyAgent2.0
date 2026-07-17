@@ -1,34 +1,20 @@
 package com.familyagent.module.memory.service;
 
-import com.familyagent.module.diary.entity.DiaryEntry;
-import com.familyagent.module.diary.facade.MemoryRecallDiaryFacade;
 import com.familyagent.module.family.facade.FamilyMembershipFacade;
-import com.familyagent.module.growth.entity.GrowthGuardRecord;
-import com.familyagent.module.growth.facade.MemoryRecallGrowthFacade;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
-import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEmbeddingRepository;
-import com.familyagent.module.memory.repository.MemoryEntryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class AuthorizedMemoryRecallService {
 
-    private static final int CANDIDATE_MULTIPLIER = 5;
-
-    private final MemoryRecallDiaryFacade diaryRecallFacade;
-    private final MemoryEntryRepository memoryRepository;
-    private final MemoryRecallGrowthFacade growthRecallFacade;
+    private final AuthorizedMemoryRecallCandidateLoader candidateLoader;
     private final MemoryEmbeddingRepository embeddingRepository;
     private final FamilyMembershipFacade familyMembershipFacade;
-    private final AuthorizedMemoryRecallSocialSupport socialSupport;
     private final AuthorizedMemoryRecallRankingService rankingService;
     private final AuthorizedMemoryRecallSourceAssembler sourceAssembler;
     private final AuthorizedMemoryRecallQueryPolicy queryPolicy;
@@ -78,7 +64,11 @@ public class AuthorizedMemoryRecallService {
             return emptyRecall(normalizedQuery, "SKIPPED_UNRELATED_QUERY");
         }
 
-        RecallCandidates candidates = loadFamilyCandidates(familyId, viewerUserId, diaryLimit, memoryLimit);
+        AuthorizedMemoryRecallCandidateLoader.RecallCandidates candidates = candidateLoader.loadFamily(
+                familyId,
+                viewerUserId,
+                diaryLimit,
+                memoryLimit);
         return buildRecallResult(familyId, normalizedQuery, diaryLimit, memoryLimit, candidates);
     }
 
@@ -94,54 +84,13 @@ public class AuthorizedMemoryRecallService {
             return emptyRecall(normalizedQuery, "SKIPPED_UNRELATED_QUERY");
         }
 
-        RecallCandidates candidates = loadMirrorCandidates(familyId, targetUserId, viewerUserId, diaryLimit, memoryLimit);
+        AuthorizedMemoryRecallCandidateLoader.RecallCandidates candidates = candidateLoader.loadMirror(
+                familyId,
+                targetUserId,
+                viewerUserId,
+                diaryLimit,
+                memoryLimit);
         return buildRecallResult(familyId, normalizedQuery, diaryLimit, memoryLimit, candidates);
-    }
-
-    private RecallCandidates loadFamilyCandidates(Long familyId, Long viewerUserId, int diaryLimit, int memoryLimit) {
-        int diaryCandidateLimit = Math.max(diaryLimit * CANDIDATE_MULTIPLIER, diaryLimit);
-        int memoryCandidateLimit = Math.max(memoryLimit * CANDIDATE_MULTIPLIER, memoryLimit);
-        List<DiaryEntry> diaryCandidates = diaryRecallFacade.findVisibleByFamily(
-                familyId,
-                viewerUserId,
-                diaryCandidateLimit);
-        List<MemoryEntry> memoryCandidates = memoryRepository.findActiveFamilyMemories(
-                familyId,
-                viewerUserId,
-                memoryCandidateLimit);
-        List<GrowthGuardRecord> growthCandidates = growthRecallFacade.findVisibleByFamily(
-                familyId,
-                viewerUserId,
-                memoryCandidateLimit);
-        socialSupport.attachSocialWeights(memoryCandidates, growthCandidates, viewerUserId);
-        return new RecallCandidates(diaryCandidates, memoryCandidates, growthCandidates);
-    }
-
-    private RecallCandidates loadMirrorCandidates(
-            Long familyId,
-            Long targetUserId,
-            Long viewerUserId,
-            int diaryLimit,
-            int memoryLimit) {
-        int diaryCandidateLimit = Math.max(diaryLimit * CANDIDATE_MULTIPLIER, diaryLimit);
-        int memoryCandidateLimit = Math.max(memoryLimit * CANDIDATE_MULTIPLIER, memoryLimit);
-        List<DiaryEntry> diaryCandidates = diaryRecallFacade.findVisibleByFamilyAndTarget(
-                familyId,
-                targetUserId,
-                viewerUserId,
-                diaryCandidateLimit);
-        List<DiaryEntry> relatedDiaryCandidates = diaryRecallFacade.findVisibleRelatedByFamilyAndTarget(
-                familyId,
-                targetUserId,
-                viewerUserId,
-                diaryCandidateLimit);
-        diaryCandidates = mergeDiaryCandidates(diaryCandidates, relatedDiaryCandidates);
-        List<GrowthGuardRecord> growthCandidates = growthRecallFacade.findVisibleByFamily(
-                familyId,
-                viewerUserId,
-                memoryCandidateLimit);
-        socialSupport.attachSocialWeights(List.of(), growthCandidates, viewerUserId);
-        return new RecallCandidates(diaryCandidates, List.of(), growthCandidates);
     }
 
     private AuthorizedMemoryRecallResult buildRecallResult(
@@ -149,7 +98,7 @@ public class AuthorizedMemoryRecallService {
             String normalizedQuery,
             int diaryLimit,
             int memoryLimit,
-            RecallCandidates candidates) {
+            AuthorizedMemoryRecallCandidateLoader.RecallCandidates candidates) {
         long readyEmbeddings = embeddingRepository.countReadyByFamilyId(familyId);
         AuthorizedMemoryRecallRankingService.RankedRecall ranked = rankingService.rank(
                 familyId,
@@ -178,34 +127,6 @@ public class AuthorizedMemoryRecallService {
                 .build();
     }
 
-    private static List<DiaryEntry> mergeDiaryCandidates(
-            List<DiaryEntry> selfAuthored,
-            List<DiaryEntry> relatedByFamily) {
-        Map<Long, DiaryEntry> byId = new LinkedHashMap<>();
-        for (DiaryEntry entry : selfAuthored) {
-            if (entry != null && entry.getId() != null) {
-                byId.put(entry.getId(), withMirrorSource(entry, "SELF_AUTHORED"));
-            }
-        }
-        for (DiaryEntry entry : relatedByFamily) {
-            if (entry != null && entry.getId() != null && !byId.containsKey(entry.getId())) {
-                byId.put(entry.getId(), withMirrorSource(entry, "RELATED_BY_FAMILY"));
-            }
-        }
-        return new ArrayList<>(byId.values());
-    }
-
-    @SuppressWarnings("unchecked")
-    private static DiaryEntry withMirrorSource(DiaryEntry entry, String sourceType) {
-        Map<String, Object> metadata = new LinkedHashMap<>();
-        if (entry.getMetadata() instanceof Map<?, ?> map) {
-            metadata.putAll((Map<String, Object>) map);
-        }
-        metadata.put("mirrorSourceType", sourceType);
-        entry.setMetadata(metadata);
-        return entry;
-    }
-
     private static AuthorizedMemoryRecallResult emptyRecall(String query, String retrievalMode) {
         return AuthorizedMemoryRecallResult.builder()
                 .diaries(List.of())
@@ -220,9 +141,4 @@ public class AuthorizedMemoryRecallService {
                 .embeddingReadyCount(0)
                 .build();
     }
-
-    private record RecallCandidates(
-            List<DiaryEntry> diaries,
-            List<MemoryEntry> memories,
-            List<GrowthGuardRecord> growthRecords) {}
 }

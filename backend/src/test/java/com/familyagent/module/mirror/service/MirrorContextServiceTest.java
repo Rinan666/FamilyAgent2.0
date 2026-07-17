@@ -1,5 +1,6 @@
 package com.familyagent.module.mirror.service;
 
+import com.familyagent.common.constant.DiaryRecallSource;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
@@ -235,7 +236,11 @@ class MirrorContextServiceTest {
             when(familyService.getMemberView(familyId, 101L)).thenReturn(viewer);
             DiaryEntry selfDiary = diary(1L, familyId, targetUserId, "本人记录内容", "FAMILY_VISIBLE");
             DiaryEntry relatedDiary = diary(2L, familyId, targetUserId, "家人补充内容", "FAMILY_VISIBLE");
-            relatedDiary.setMetadata(Map.of("mirrorSourceType", "RELATED_BY_FAMILY", "relatedMemberName", "妈妈"));
+            relatedDiary.setMetadata(Map.of(
+                    DiaryRecallSource.METADATA_KEY,
+                    DiaryRecallSource.RELATED_BY_FAMILY.name(),
+                    "relatedMemberName",
+                    "妈妈"));
             when(memoryRecallService.recallForMirror(eq(familyId), eq(targetUserId), eq(101L), eq("总结"), anyInt(), anyInt()))
                     .thenReturn(recall(List.of(selfDiary, relatedDiary), List.of(), "总结"));
             when(diaryRepository.findActiveByFamilyAndUserForStyle(eq(familyId), eq(targetUserId), anyInt())).thenReturn(List.of());

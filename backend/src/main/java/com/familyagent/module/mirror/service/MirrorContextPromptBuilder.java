@@ -1,5 +1,6 @@
 package com.familyagent.module.mirror.service;
 
+import com.familyagent.common.constant.DiaryRecallSource;
 import com.familyagent.common.constant.MemoryType;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.family.dto.FamilyMemberVO;
@@ -753,7 +754,10 @@ public class MirrorContextPromptBuilder {
     }
 
     private static boolean isRelatedDiary(DiaryEntry entry) {
-        return "RELATED_BY_FAMILY".equals(textFromMap(entry == null ? null : entry.getMetadata(), "mirrorSourceType", ""));
+        return DiaryRecallSource.RELATED_BY_FAMILY.name().equals(textFromMap(
+                entry == null ? null : entry.getMetadata(),
+                DiaryRecallSource.METADATA_KEY,
+                ""));
     }
 
     private static String mapText(Map<String, Object> map, int maxLength) {
