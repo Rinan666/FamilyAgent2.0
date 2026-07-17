@@ -30,6 +30,7 @@ public class AuthorizedMemoryRecallService {
     private final FamilyMembershipFacade familyMembershipFacade;
     private final AuthorizedMemoryRecallSocialSupport socialSupport;
     private final AuthorizedMemoryRecallRankingService rankingService;
+    private final AuthorizedMemoryRecallSourceAssembler sourceAssembler;
     private final AuthorizedMemoryRecallQueryPolicy queryPolicy;
 
     public AuthorizedMemoryRecallResult recallForFamily(
@@ -166,7 +167,7 @@ public class AuthorizedMemoryRecallService {
                 .diaryCount(ranked.diaries().size())
                 .memoryCount(ranked.memories().size())
                 .growthRecordCount(ranked.growthRecords().size())
-                .sources(rankingService.buildSourceSummaries(
+                .sources(sourceAssembler.assemble(
                         ranked.diaries(),
                         ranked.memories(),
                         ranked.growthRecords()))

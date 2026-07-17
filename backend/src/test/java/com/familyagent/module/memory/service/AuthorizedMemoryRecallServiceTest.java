@@ -45,6 +45,7 @@ class AuthorizedMemoryRecallServiceTest {
     @Mock private FamilyMembershipFacade familyMembershipFacade;
     @Mock private AuthorizedMemoryRecallSocialSupport socialSupport;
     @Mock private AuthorizedMemoryRecallRankingService rankingService;
+    @Mock private AuthorizedMemoryRecallSourceAssembler sourceAssembler;
     @Spy private AuthorizedMemoryRecallQueryPolicy queryPolicy = new AuthorizedMemoryRecallQueryPolicy();
     @InjectMocks private AuthorizedMemoryRecallService recallService;
 
@@ -95,7 +96,7 @@ class AuthorizedMemoryRecallServiceTest {
                         List.of(visibleMemory),
                         List.of(),
                         false));
-        when(rankingService.buildSourceSummaries(List.of(), List.of(visibleMemory), List.of()))
+        when(sourceAssembler.assemble(List.of(), List.of(visibleMemory), List.of()))
                 .thenReturn(List.of());
 
         AuthorizedMemoryRecallResult result = recallService.recallForFamily(
@@ -138,7 +139,7 @@ class AuthorizedMemoryRecallServiceTest {
                         List.of(visibleMemory),
                         List.of(),
                         false));
-        when(rankingService.buildSourceSummaries(List.of(), List.of(visibleMemory), List.of()))
+        when(sourceAssembler.assemble(List.of(), List.of(visibleMemory), List.of()))
                 .thenReturn(summaries);
 
         AuthorizedMemoryRecallResult result = recallService.recallForFamily(
@@ -197,7 +198,7 @@ class AuthorizedMemoryRecallServiceTest {
                         List.of(visibleMemory),
                         List.of(growthObservation),
                         false));
-        when(rankingService.buildSourceSummaries(List.of(visibleDiary), List.of(visibleMemory), List.of(growthObservation)))
+        when(sourceAssembler.assemble(List.of(visibleDiary), List.of(visibleMemory), List.of(growthObservation)))
                 .thenReturn(List.of());
 
         AuthorizedMemoryRecallResult result = recallService.recallForFamily(
@@ -256,7 +257,7 @@ class AuthorizedMemoryRecallServiceTest {
                         List.of(),
                         List.of(growthObservation),
                         false));
-        when(rankingService.buildSourceSummaries(List.of(targetDiary, relatedDiary), List.of(), List.of(growthObservation)))
+        when(sourceAssembler.assemble(List.of(targetDiary, relatedDiary), List.of(), List.of(growthObservation)))
                 .thenReturn(List.of());
 
         AuthorizedMemoryRecallResult result = recallService.recallForMirror(
@@ -296,7 +297,7 @@ class AuthorizedMemoryRecallServiceTest {
                         List.of(memory),
                         List.of(),
                         false));
-        when(rankingService.buildSourceSummaries(List.of(), List.of(memory), List.of()))
+        when(sourceAssembler.assemble(List.of(), List.of(memory), List.of()))
                 .thenReturn(List.of());
 
         recallService.recallForFamily(familyId, viewerUserId, "tooth", 3, 2);
@@ -325,7 +326,7 @@ class AuthorizedMemoryRecallServiceTest {
                         List.of(),
                         true,
                         embeddingObservation));
-        when(rankingService.buildSourceSummaries(List.of(), List.of(), List.of()))
+        when(sourceAssembler.assemble(List.of(), List.of(), List.of()))
                 .thenReturn(List.of());
 
         AuthorizedMemoryRecallResult result = recallService.recallForFamily(
@@ -360,7 +361,7 @@ class AuthorizedMemoryRecallServiceTest {
                         List.of(visibleMemory),
                         List.of(),
                         false));
-        when(rankingService.buildSourceSummaries(List.of(), List.of(visibleMemory), List.of()))
+        when(sourceAssembler.assemble(List.of(), List.of(visibleMemory), List.of()))
                 .thenReturn(List.of());
 
         AuthorizedMemoryRecallResult result = recallService.recallForFamily(
