@@ -12,8 +12,8 @@ import com.familyagent.module.family.facade.MemoryLibraryFamilyFacade;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
 import com.familyagent.module.memory.entity.MemoryEntry;
-import com.familyagent.module.memory.repository.MemoryEntryRepository;
 import com.familyagent.module.memory.facade.MemoryIndexingFacade;
+import com.familyagent.module.memory.facade.MemoryLibraryMemoryFacade;
 import com.familyagent.module.memory.service.MemoryIndexMetadataBuilder;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryUpdateRequest;
 import lombok.RequiredArgsConstructor;
@@ -43,7 +43,7 @@ public class MemoryLibraryMaintenanceService {
 
     private final MemoryLibraryFamilyFacade familyService;
     private final DiaryEntryRepository diaryEntryRepository;
-    private final MemoryEntryRepository memoryEntryRepository;
+    private final MemoryLibraryMemoryFacade memoryEntryRepository;
     private final GrowthGuardRecordRepository growthRecordRepository;
     private final MemoryIndexingFacade memoryEmbeddingService;
     private final JdbcTemplate jdbcTemplate;
@@ -163,7 +163,7 @@ public class MemoryLibraryMaintenanceService {
     }
 
     private void archiveMemory(Long familyId, Long memoryId) {
-        MemoryEntry entry = memoryEntryRepository.selectById(memoryId);
+        MemoryEntry entry = memoryEntryRepository.findById(memoryId);
         if (entry == null || !familyId.equals(entry.getFamilyId()) || !EntityStatus.ACTIVE.name().equals(entry.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
@@ -174,11 +174,11 @@ public class MemoryLibraryMaintenanceService {
         metadata.put("archiveSource", "MEMORY_LIBRARY_MAINTENANCE");
         entry.setMetadata(metadata);
         entry.setStatus(EntityStatus.ARCHIVED.name());
-        memoryEntryRepository.updateById(entry);
+        memoryEntryRepository.update(entry);
     }
 
     private void updateMemory(MemoryLibraryUpdateRequest request, Long memoryId) {
-        MemoryEntry entry = memoryEntryRepository.selectById(memoryId);
+        MemoryEntry entry = memoryEntryRepository.findById(memoryId);
         if (entry == null || !request.getFamilyId().equals(entry.getFamilyId()) || !EntityStatus.ACTIVE.name().equals(entry.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
@@ -203,12 +203,12 @@ public class MemoryLibraryMaintenanceService {
                 entry.getSummary(),
                 entry.getType(),
                 entry.getImportance() == null ? 3 : entry.getImportance()));
-        memoryEntryRepository.updateById(entry);
+        memoryEntryRepository.update(entry);
         memoryEmbeddingService.indexMemoryAfterCommit(entry);
     }
 
     private void restoreMemory(Long familyId, Long memoryId) {
-        MemoryEntry entry = memoryEntryRepository.selectById(memoryId);
+        MemoryEntry entry = memoryEntryRepository.findById(memoryId);
         if (entry == null || !familyId.equals(entry.getFamilyId()) || !EntityStatus.ARCHIVED.name().equals(entry.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
@@ -219,11 +219,11 @@ public class MemoryLibraryMaintenanceService {
         metadata.put("restoreSource", "MEMORY_LIBRARY_ARCHIVE_BOX");
         entry.setMetadata(metadata);
         entry.setStatus(EntityStatus.ACTIVE.name());
-        memoryEntryRepository.updateById(entry);
+        memoryEntryRepository.update(entry);
     }
 
     private void deleteArchivedMemory(Long familyId, Long memoryId) {
-        MemoryEntry entry = memoryEntryRepository.selectById(memoryId);
+        MemoryEntry entry = memoryEntryRepository.findById(memoryId);
         boolean activeLegacyAiSummary = entry != null
                 && familyId.equals(entry.getFamilyId())
                 && EntityStatus.ACTIVE.name().equals(entry.getStatus())
@@ -234,7 +234,7 @@ public class MemoryLibraryMaintenanceService {
         }
         MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can delete this memory");
         deleteEmbeddings("MEMORY", memoryId);
-        memoryEntryRepository.deleteById(memoryId);
+        memoryEntryRepository.delete(memoryId);
     }
 
     private void archiveGrowthRecord(Long familyId, Long recordId) {

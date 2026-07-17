@@ -10,9 +10,9 @@ import com.familyagent.module.family.facade.MemoryLibraryFamilyFacade;
 import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
 import com.familyagent.module.growth.repository.GrowthGuardStalenessVoteRepository;
 import com.familyagent.module.memory.entity.MemoryEntry;
-import com.familyagent.module.memory.repository.MemoryEntryRepository;
 import com.familyagent.module.memory.repository.MemoryEntryVoteRepository;
 import com.familyagent.module.memory.facade.MemoryIndexingFacade;
+import com.familyagent.module.memory.facade.MemoryLibraryMemoryFacade;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryItem;
 import com.familyagent.module.memorylibrary.dto.MemoryLibrarySearchRequest;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryUpdateRequest;
@@ -44,7 +44,7 @@ class MemoryLibraryServiceTest {
     @Mock private JdbcTemplate jdbcTemplate;
     @Mock private MemoryLibraryFamilyFacade familyService;
     @Mock private DiaryEntryRepository diaryEntryRepository;
-    @Mock private MemoryEntryRepository memoryEntryRepository;
+    @Mock private MemoryLibraryMemoryFacade memoryEntryRepository;
     @Mock private GrowthGuardRecordRepository growthRecordRepository;
     @Mock private MemoryEntryVoteRepository memoryEntryVoteRepository;
     @Mock private GrowthGuardStalenessVoteRepository growthGuardStalenessVoteRepository;
@@ -163,7 +163,7 @@ class MemoryLibraryServiceTest {
             entry.setFamilyId(10L);
             entry.setUserId(101L);
             entry.setStatus("ARCHIVED");
-            when(memoryEntryRepository.selectById(88L)).thenReturn(entry);
+            when(memoryEntryRepository.findById(88L)).thenReturn(entry);
 
             maintenanceService.deleteArchivedItem(10L, "memory-88");
 
@@ -171,7 +171,7 @@ class MemoryLibraryServiceTest {
             verify(jdbcTemplate).update(
                     "DELETE FROM memory_embeddings WHERE source_type = ? AND source_id = ?",
                     "MEMORY", 88L);
-            verify(memoryEntryRepository).deleteById(88L);
+            verify(memoryEntryRepository).delete(88L);
         }
     }
 
@@ -186,14 +186,14 @@ class MemoryLibraryServiceTest {
         entry.setFamilyId(10L);
         entry.setUserId(101L);
         entry.setStatus("ACTIVE");
-        when(memoryEntryRepository.selectById(88L)).thenReturn(entry);
+        when(memoryEntryRepository.findById(88L)).thenReturn(entry);
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> maintenanceService.deleteArchivedItem(10L, "memory-88"));
 
         assertEquals(ErrorCode.NOT_FOUND.getCode(), exception.getCode());
         verify(familyService).checkMembership(10L);
-        verify(memoryEntryRepository, never()).deleteById(88L);
+        verify(memoryEntryRepository, never()).delete(88L);
     }
 
     @Test
@@ -208,7 +208,7 @@ class MemoryLibraryServiceTest {
         entry.setUserId(101L);
         entry.setStatus("ACTIVE");
         entry.setMetadata(java.util.Map.of("source", MemoryLibrarySupport.LEGACY_AI_SUMMARY_SOURCE));
-        when(memoryEntryRepository.selectById(89L)).thenReturn(entry);
+        when(memoryEntryRepository.findById(89L)).thenReturn(entry);
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(101L);
@@ -219,7 +219,7 @@ class MemoryLibraryServiceTest {
             verify(jdbcTemplate).update(
                     "DELETE FROM memory_embeddings WHERE source_type = ? AND source_id = ?",
                     "MEMORY", 89L);
-            verify(memoryEntryRepository).deleteById(89L);
+            verify(memoryEntryRepository).delete(89L);
         }
     }
 
@@ -238,7 +238,7 @@ class MemoryLibraryServiceTest {
         entry.setScope("FAMILY_VISIBLE");
         entry.setImportance(3);
         entry.setContent("old content");
-        when(memoryEntryRepository.selectById(88L)).thenReturn(entry);
+        when(memoryEntryRepository.findById(88L)).thenReturn(entry);
 
         MemoryLibraryUpdateRequest request = new MemoryLibraryUpdateRequest();
         request.setFamilyId(10L);
@@ -259,7 +259,7 @@ class MemoryLibraryServiceTest {
             assertEquals("VALUE", entry.getType());
             assertEquals("CARE_VISIBLE", entry.getScope());
             assertEquals(List.of("family", "shared"), ((java.util.Map<?, ?>) entry.getMetadata()).get("tags"));
-            verify(memoryEntryRepository).updateById(entry);
+            verify(memoryEntryRepository).update(entry);
             verify(memoryEmbeddingService).indexMemoryAfterCommit(entry);
         }
     }
@@ -275,7 +275,7 @@ class MemoryLibraryServiceTest {
         entry.setFamilyId(10L);
         entry.setUserId(101L);
         entry.setStatus("ARCHIVED");
-        when(memoryEntryRepository.selectById(88L)).thenReturn(entry);
+        when(memoryEntryRepository.findById(88L)).thenReturn(entry);
 
         MemoryLibraryUpdateRequest request = new MemoryLibraryUpdateRequest();
         request.setFamilyId(10L);
@@ -286,7 +286,7 @@ class MemoryLibraryServiceTest {
                 () -> maintenanceService.updateItem(request));
 
         assertEquals(ErrorCode.NOT_FOUND.getCode(), exception.getCode());
-        verify(memoryEntryRepository, never()).updateById(entry);
+        verify(memoryEntryRepository, never()).update(entry);
         verify(memoryEmbeddingService, never()).indexMemoryAfterCommit(any());
     }
 
@@ -303,7 +303,7 @@ class MemoryLibraryServiceTest {
         entry.setStatus("ACTIVE");
         entry.setType("ELDER_ADVICE");
         entry.setScope("FAMILY_VISIBLE");
-        when(memoryEntryRepository.selectById(88L)).thenReturn(entry);
+        when(memoryEntryRepository.findById(88L)).thenReturn(entry);
 
         MemoryLibraryUpdateRequest request = new MemoryLibraryUpdateRequest();
         request.setFamilyId(10L);
@@ -320,7 +320,7 @@ class MemoryLibraryServiceTest {
         }
 
         verify(familyService).checkMembership(10L);
-        verify(memoryEntryRepository, never()).updateById(entry);
+        verify(memoryEntryRepository, never()).update(entry);
         verify(memoryEmbeddingService, never()).indexMemoryAfterCommit(any());
     }
 

@@ -5,8 +5,8 @@ import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.family.facade.MemoryLibraryFamilyFacade;
 import com.familyagent.module.memory.entity.MemoryEntry;
-import com.familyagent.module.memory.repository.MemoryEntryRepository;
 import com.familyagent.module.memory.facade.MemoryIndexingFacade;
+import com.familyagent.module.memory.facade.MemoryLibraryMemoryFacade;
 import com.familyagent.module.memory.service.MemoryIndexMetadataBuilder;
 import com.familyagent.module.memorylibrary.dto.MemoryLibrarySearchRequest;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +24,7 @@ import java.util.Map;
 public class MemoryLibraryClassicalizeService {
 
     private final MemoryLibraryFamilyFacade familyService;
-    private final MemoryEntryRepository memoryEntryRepository;
+    private final MemoryLibraryMemoryFacade memoryEntryRepository;
     private final MemoryIndexingFacade memoryEmbeddingService;
 
     @Transactional
@@ -72,7 +72,7 @@ public class MemoryLibraryClassicalizeService {
         entry.setMetadata(MemoryIndexMetadataBuilder.enrichFamilyMemory(
                 metadata, entry.getContent(), entry.getSummary(),
                 entry.getType(), entry.getImportance() == null ? 3 : entry.getImportance()));
-        memoryEntryRepository.updateById(entry);
+        memoryEntryRepository.update(entry);
         memoryEmbeddingService.indexMemoryAfterCommit(entry);
     }
 
@@ -85,7 +85,7 @@ public class MemoryLibraryClassicalizeService {
     }
 
     private MemoryEntry requireActiveFamilyMemory(Long familyId, Long memoryId) {
-        MemoryEntry entry = memoryEntryRepository.selectById(memoryId);
+        MemoryEntry entry = memoryEntryRepository.findById(memoryId);
         if (entry == null || !familyId.equals(entry.getFamilyId())
                 || !"ACTIVE".equals(entry.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
