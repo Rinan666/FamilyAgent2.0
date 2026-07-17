@@ -3,7 +3,9 @@ package com.familyagent.module.agent.controller;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
+import com.familyagent.infra.ai.AIStreamEventEncoder;
 import com.familyagent.infra.ai.AIServiceClient;
+import com.familyagent.infra.ai.dto.AIStreamErrorEvent;
 import com.familyagent.infra.ai.dto.AgentChatStreamPayload;
 import com.familyagent.module.agent.dto.AgentChatMetadataEvent;
 import com.familyagent.module.agent.dto.AgentChatStreamRequest;
@@ -157,7 +159,9 @@ public class AgentChatController {
 
     private void writeErrorEvent(OutputStream outputStream, String requestId, Long runId) {
         try {
-            outputStream.write(streamErrorEvent(requestId, runId).getBytes(StandardCharsets.UTF_8));
+            outputStream.write(AIStreamEventEncoder.encode(
+                    objectMapper,
+                    AIStreamErrorEvent.unavailable(normalizeRequestId(requestId), runId)));
             outputStream.flush();
         } catch (IOException ioException) {
             log.warn("Failed to send downstream SSE error event", ioException);
@@ -173,26 +177,8 @@ public class AgentChatController {
                 metadata,
                 normalizeRequestId(requestId),
                 runId);
-        outputStream.write(("data: " + objectMapper.writeValueAsString(event) + "\n\n")
-                .getBytes(StandardCharsets.UTF_8));
+        outputStream.write(AIStreamEventEncoder.encode(objectMapper, event));
         outputStream.flush();
-    }
-
-    private String streamErrorEvent(String requestId, Long runId) {
-        String runField = runId == null ? "" : ",\"runId\":" + runId;
-        return "data: {\"type\":\"error\",\"error\":true,\"code\":\"AI_STREAM_UNAVAILABLE\","
-                + "\"message\":\"AI service unavailable, please retry later.\",\"retryable\":true,"
-                + "\"degraded\":false,\"requestId\":\"" + escapeJson(normalizeRequestId(requestId)) + "\""
-                + runField + "}\n\n";
-    }
-
-    private String escapeJson(String value) {
-        String text = value == null ? "" : value;
-        return text
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\r", "\\r")
-                .replace("\n", "\\n");
     }
 
     private String toJsonString(String value) {

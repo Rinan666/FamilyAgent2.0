@@ -3,6 +3,7 @@ package com.familyagent.infra.ai;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.infra.ai.dto.AgentChatStreamPayload;
+import com.familyagent.infra.ai.dto.AIStreamErrorEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.extern.slf4j.Slf4j;
@@ -161,27 +162,13 @@ public class AIChatStreamClient {
         log.warn("AI chat stream fallback triggered: requestId={}, runId={}, errorType={}",
                 effectiveRequestId, runId, error.getClass().getSimpleName());
         try {
-            downstream.write(streamErrorEvent(effectiveRequestId, runId).getBytes(StandardCharsets.UTF_8));
+            downstream.write(AIStreamEventEncoder.encode(
+                    objectMapper,
+                    AIStreamErrorEvent.unavailable(effectiveRequestId, runId)));
             downstream.flush();
         } catch (IOException ignored) {
             // Downstream is already closed.
         }
-    }
-
-    private static String streamErrorEvent(String requestId, Long runId) {
-        String runField = runId == null ? "" : ",\"runId\":" + runId;
-        return "data: {\"type\":\"error\",\"error\":true,\"code\":\"AI_STREAM_UNAVAILABLE\","
-                + "\"message\":\"AI service unavailable, please retry later.\",\"retryable\":true,"
-                + "\"degraded\":false,\"requestId\":\"" + escapeJson(requestId) + "\""
-                + runField + "}\n\n";
-    }
-
-    private static String escapeJson(String value) {
-        return value == null ? "" : value
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\r", "\\r")
-                .replace("\n", "\\n");
     }
 
     private static BusinessException unavailable() {
