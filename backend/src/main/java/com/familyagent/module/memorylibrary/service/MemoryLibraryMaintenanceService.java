@@ -13,7 +13,7 @@ import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
-import com.familyagent.module.memory.service.MemoryEmbeddingService;
+import com.familyagent.module.memory.facade.MemoryIndexingFacade;
 import com.familyagent.module.memory.service.MemoryIndexMetadataBuilder;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryUpdateRequest;
 import lombok.RequiredArgsConstructor;
@@ -45,7 +45,7 @@ public class MemoryLibraryMaintenanceService {
     private final DiaryEntryRepository diaryEntryRepository;
     private final MemoryEntryRepository memoryEntryRepository;
     private final GrowthGuardRecordRepository growthRecordRepository;
-    private final MemoryEmbeddingService memoryEmbeddingService;
+    private final MemoryIndexingFacade memoryEmbeddingService;
     private final JdbcTemplate jdbcTemplate;
 
     @Transactional

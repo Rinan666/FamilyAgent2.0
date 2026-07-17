@@ -5,7 +5,7 @@ import com.familyagent.module.diary.dto.CreateDiaryEntryRequest;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.repository.DiaryEntryRepository;
 import com.familyagent.module.family.service.FamilyService;
-import com.familyagent.module.memory.service.MemoryEmbeddingService;
+import com.familyagent.module.memory.facade.MemoryIndexingFacade;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -30,7 +30,7 @@ class DiaryEntryServiceTest {
 
     @Mock private DiaryEntryRepository diaryRepository;
     @Mock private FamilyService familyService;
-    @Mock private MemoryEmbeddingService memoryEmbeddingService;
+    @Mock private MemoryIndexingFacade memoryEmbeddingService;
 
     @Test
     void create_shouldMergeOnlyManualSelfDiaryWhenThereIsExactlyOneCandidate() {

@@ -11,7 +11,7 @@ import com.familyagent.module.diary.dto.UpdateDiaryEntryRequest;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.repository.DiaryEntryRepository;
 import com.familyagent.module.family.service.FamilyService;
-import com.familyagent.module.memory.service.MemoryEmbeddingService;
+import com.familyagent.module.memory.facade.MemoryIndexingFacade;
 import com.familyagent.module.memory.service.MemoryIndexMetadataBuilder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -47,7 +47,7 @@ public class DiaryEntryService {
 
     private final DiaryEntryRepository diaryRepository;
     private final FamilyService familyService;
-    private final MemoryEmbeddingService memoryEmbeddingService;
+    private final MemoryIndexingFacade memoryEmbeddingService;
 
     @Transactional
     public DiaryEntry create(CreateDiaryEntryRequest request) {

@@ -12,7 +12,7 @@ import com.familyagent.module.growth.repository.GrowthGuardStalenessVoteReposito
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
 import com.familyagent.module.memory.repository.MemoryEntryVoteRepository;
-import com.familyagent.module.memory.service.MemoryEmbeddingService;
+import com.familyagent.module.memory.facade.MemoryIndexingFacade;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryItem;
 import com.familyagent.module.memorylibrary.dto.MemoryLibrarySearchRequest;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryUpdateRequest;
@@ -48,7 +48,7 @@ class MemoryLibraryServiceTest {
     @Mock private GrowthGuardRecordRepository growthRecordRepository;
     @Mock private MemoryEntryVoteRepository memoryEntryVoteRepository;
     @Mock private GrowthGuardStalenessVoteRepository growthGuardStalenessVoteRepository;
-    @Mock private MemoryEmbeddingService memoryEmbeddingService;
+    @Mock private MemoryIndexingFacade memoryEmbeddingService;
     @Spy  private ObjectMapper objectMapper = new ObjectMapper();
 
     // --- MemoryLibraryQueryService ---

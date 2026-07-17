@@ -6,7 +6,7 @@ import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.family.service.FamilyService;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
-import com.familyagent.module.memory.service.MemoryEmbeddingService;
+import com.familyagent.module.memory.facade.MemoryIndexingFacade;
 import com.familyagent.module.memory.service.MemoryIndexMetadataBuilder;
 import com.familyagent.module.memorylibrary.dto.MemoryLibrarySearchRequest;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +25,7 @@ public class MemoryLibraryClassicalizeService {
 
     private final FamilyService familyService;
     private final MemoryEntryRepository memoryEntryRepository;
-    private final MemoryEmbeddingService memoryEmbeddingService;
+    private final MemoryIndexingFacade memoryEmbeddingService;
 
     @Transactional
     public void classicalize(
