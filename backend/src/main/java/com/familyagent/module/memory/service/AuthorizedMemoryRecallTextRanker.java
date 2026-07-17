@@ -3,6 +3,7 @@ package com.familyagent.module.memory.service;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.memory.entity.MemoryEntry;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -10,13 +11,15 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
 @Component
+@RequiredArgsConstructor
 public class AuthorizedMemoryRecallTextRanker {
+
+    private final AuthorizedMemoryRecallScorer scorer;
 
     public RankedCandidates rank(
             List<DiaryEntry> diaryCandidates,
@@ -40,7 +43,7 @@ public class AuthorizedMemoryRecallTextRanker {
                         || !supportedGrowthIds.isEmpty());
     }
 
-    private static List<Long> supportedDiaryIds(
+    private List<Long> supportedDiaryIds(
             List<DiaryEntry> candidates,
             List<Long> vectorIds,
             String query) {
@@ -53,12 +56,12 @@ public class AuthorizedMemoryRecallTextRanker {
         return vectorIds.stream()
                 .filter(id -> {
                     DiaryEntry entry = byId.get(id);
-                    return entry != null && hasSupport(diarySearchText(entry), entry.getMetadata(), query);
+                    return entry != null && scorer.supports(entry, query);
                 })
                 .toList();
     }
 
-    private static List<Long> supportedMemoryIds(
+    private List<Long> supportedMemoryIds(
             List<MemoryEntry> candidates,
             List<Long> vectorIds,
             String query) {
@@ -71,12 +74,12 @@ public class AuthorizedMemoryRecallTextRanker {
         return vectorIds.stream()
                 .filter(id -> {
                     MemoryEntry entry = byId.get(id);
-                    return entry != null && hasSupport(memorySearchText(entry), entry.getMetadata(), query);
+                    return entry != null && scorer.supports(entry, query);
                 })
                 .toList();
     }
 
-    private static List<Long> supportedGrowthIds(
+    private List<Long> supportedGrowthIds(
             List<GrowthGuardRecord> candidates,
             List<Long> vectorIds,
             String query) {
@@ -89,18 +92,12 @@ public class AuthorizedMemoryRecallTextRanker {
         return vectorIds.stream()
                 .filter(id -> {
                     GrowthGuardRecord record = byId.get(id);
-                    return record != null && hasSupport(growthSearchText(record), record.getMetadata(), query);
+                    return record != null && scorer.supports(record, query);
                 })
                 .toList();
     }
 
-    private static boolean hasSupport(String text, Object metadata, String query) {
-        return query != null
-                && !query.isBlank()
-                && (score(text, query) > 0 || MemoryIndexMetadataBuilder.indexBoost(metadata, query) > 0);
-    }
-
-    private static List<DiaryEntry> mergeDiaries(
+    private List<DiaryEntry> mergeDiaries(
             List<DiaryEntry> candidates,
             List<Long> vectorIds,
             String query,
@@ -129,13 +126,13 @@ public class AuthorizedMemoryRecallTextRanker {
         }
         return result.stream()
                 .sorted(Comparator
-                        .comparingDouble((DiaryEntry entry) -> weightedDiaryScore(entry, query)).reversed()
+                        .comparingDouble((DiaryEntry entry) -> scorer.score(entry, query)).reversed()
                         .thenComparing(DiaryEntry::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .limit(limit)
                 .toList();
     }
 
-    private static List<MemoryEntry> mergeMemories(
+    private List<MemoryEntry> mergeMemories(
             List<MemoryEntry> candidates,
             List<Long> vectorIds,
             String query,
@@ -164,14 +161,14 @@ public class AuthorizedMemoryRecallTextRanker {
         }
         return result.stream()
                 .sorted(Comparator
-                        .comparingDouble((MemoryEntry entry) -> weightedMemoryScore(entry, query)).reversed()
+                        .comparingDouble((MemoryEntry entry) -> scorer.score(entry, query)).reversed()
                         .thenComparing(MemoryEntry::getImportance, Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(MemoryEntry::getUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .limit(limit)
                 .toList();
     }
 
-    private static List<GrowthGuardRecord> mergeGrowthRecords(
+    private List<GrowthGuardRecord> mergeGrowthRecords(
             List<GrowthGuardRecord> candidates,
             List<Long> vectorIds,
             String query,
@@ -200,7 +197,7 @@ public class AuthorizedMemoryRecallTextRanker {
         }
         return result.stream()
                 .sorted(Comparator
-                        .comparingDouble((GrowthGuardRecord record) -> weightedGrowthScore(record, query)).reversed()
+                        .comparingDouble((GrowthGuardRecord record) -> scorer.score(record, query)).reversed()
                         .thenComparing(GrowthGuardRecord::getSeverity, Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(GrowthGuardRecord::getObservedAt, Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(GrowthGuardRecord::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
@@ -208,127 +205,43 @@ public class AuthorizedMemoryRecallTextRanker {
                 .toList();
     }
 
-    private static List<DiaryEntry> rankDiaries(List<DiaryEntry> entries, String query, int limit) {
+    private List<DiaryEntry> rankDiaries(List<DiaryEntry> entries, String query, int limit) {
         return entries.stream()
                 .filter(Objects::nonNull)
-                .filter(entry -> query.isBlank() || weightedDiaryScore(entry, query) > 0)
+                .filter(entry -> query.isBlank() || scorer.score(entry, query) > 0)
                 .sorted(Comparator
-                        .comparingDouble((DiaryEntry entry) -> weightedDiaryScore(entry, query)).reversed()
+                        .comparingDouble((DiaryEntry entry) -> scorer.score(entry, query)).reversed()
                         .thenComparing(DiaryEntry::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .limit(limit)
                 .toList();
     }
 
-    private static List<MemoryEntry> rankMemories(List<MemoryEntry> entries, String query, int limit) {
+    private List<MemoryEntry> rankMemories(List<MemoryEntry> entries, String query, int limit) {
         return entries.stream()
                 .filter(Objects::nonNull)
-                .filter(entry -> query.isBlank() || weightedMemoryScore(entry, query) > 0)
+                .filter(entry -> query.isBlank() || scorer.score(entry, query) > 0)
                 .sorted(Comparator
-                        .comparingDouble((MemoryEntry entry) -> weightedMemoryScore(entry, query)).reversed()
+                        .comparingDouble((MemoryEntry entry) -> scorer.score(entry, query)).reversed()
                         .thenComparing(MemoryEntry::getImportance, Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(MemoryEntry::getUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .limit(limit)
                 .toList();
     }
 
-    private static List<GrowthGuardRecord> rankGrowthRecords(
+    private List<GrowthGuardRecord> rankGrowthRecords(
             List<GrowthGuardRecord> entries,
             String query,
             int limit) {
         return entries.stream()
                 .filter(Objects::nonNull)
-                .filter(record -> query.isBlank() || weightedGrowthScore(record, query) > 0)
+                .filter(record -> query.isBlank() || scorer.score(record, query) > 0)
                 .sorted(Comparator
-                        .comparingDouble((GrowthGuardRecord record) -> weightedGrowthScore(record, query)).reversed()
+                        .comparingDouble((GrowthGuardRecord record) -> scorer.score(record, query)).reversed()
                         .thenComparing(GrowthGuardRecord::getSeverity, Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(GrowthGuardRecord::getObservedAt, Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(GrowthGuardRecord::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .limit(limit)
                 .toList();
-    }
-
-    private static double weightedDiaryScore(DiaryEntry entry, String query) {
-        int baseScore = score(diarySearchText(entry), query)
-                + MemoryIndexMetadataBuilder.indexBoost(entry.getMetadata(), query);
-        return baseScore * MemoryIndexMetadataBuilder.relevanceWeight(entry.getMetadata(), entry.getCreatedAt());
-    }
-
-    private static double weightedMemoryScore(MemoryEntry entry, String query) {
-        int baseScore = score(memorySearchText(entry), query)
-                + MemoryIndexMetadataBuilder.indexBoost(entry.getMetadata(), query);
-        return baseScore * MemoryIndexMetadataBuilder.relevanceWeight(
-                entry.getMetadata(),
-                entry.getUpdatedAt() == null ? entry.getCreatedAt() : entry.getUpdatedAt());
-    }
-
-    private static double weightedGrowthScore(GrowthGuardRecord record, String query) {
-        int baseScore = score(growthSearchText(record), query)
-                + MemoryIndexMetadataBuilder.indexBoost(record.getMetadata(), query);
-        return baseScore * MemoryIndexMetadataBuilder.relevanceWeight(
-                record.getMetadata(),
-                record.getObservedAt() == null ? record.getCreatedAt() : record.getObservedAt().atStartOfDay());
-    }
-
-    private static int score(String text, String query) {
-        if (query.isBlank()) {
-            return 0;
-        }
-        String target = normalize(text);
-        int score = target.contains(query) ? 20 : 0;
-        for (String token : query.split("\\s+")) {
-            if (token.length() >= 2 && target.contains(token)) {
-                score += Math.min(10, token.length());
-            }
-        }
-        for (int index = 0; index < query.length(); index += 2) {
-            String piece = query.substring(index, Math.min(index + 2, query.length()));
-            if (piece.length() == 2 && target.contains(piece)) {
-                score += 1;
-            }
-        }
-        return score;
-    }
-
-    private static String diarySearchText(DiaryEntry entry) {
-        return entry.getRawText()
-                + " " + mapText(entry.getStructured())
-                + " " + mapText(entry.getMetadata())
-                + " " + String.join(" ", entry.getTags() == null ? new String[0] : entry.getTags());
-    }
-
-    private static String memorySearchText(MemoryEntry entry) {
-        return entry.getContent() + " " + entry.getSummary() + " " + mapText(entry.getMetadata());
-    }
-
-    private static String growthSearchText(GrowthGuardRecord record) {
-        return record.getContent()
-                + " " + record.getCategory()
-                + " " + record.getSeverity()
-                + " " + record.getObservedAt()
-                + " " + mapText(record.getMetadata());
-    }
-
-    private static String mapText(Object value) {
-        if (value instanceof Map<?, ?> map) {
-            StringBuilder builder = new StringBuilder();
-            for (Object item : map.values()) {
-                if (item != null) {
-                    builder.append(item).append(' ');
-                }
-            }
-            return builder.toString();
-        }
-        return value == null ? "" : String.valueOf(value);
-    }
-
-    private static String normalize(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value.toLowerCase(Locale.ROOT)
-                .replaceAll("[\\p{Punct}，。！？；：“”‘’（）【】《》]", " ")
-                .replaceAll("\\s+", " ")
-                .trim();
     }
 
     public record RankedCandidates(

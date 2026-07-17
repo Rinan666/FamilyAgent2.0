@@ -12,7 +12,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AuthorizedMemoryRecallTextRankerTest {
 
-    private final AuthorizedMemoryRecallTextRanker ranker = new AuthorizedMemoryRecallTextRanker();
+    private final AuthorizedMemoryRecallTextRanker ranker =
+            new AuthorizedMemoryRecallTextRanker(new AuthorizedMemoryRecallScorer());
 
     @Test
     void rank_shouldRejectVectorOnlyCandidateWithoutTextOrIndexSupport() {

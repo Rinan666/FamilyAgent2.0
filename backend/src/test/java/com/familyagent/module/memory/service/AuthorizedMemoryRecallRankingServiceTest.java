@@ -37,7 +37,7 @@ class AuthorizedMemoryRecallRankingServiceTest {
         AuthorizedMemoryRecallRankingService service = new AuthorizedMemoryRecallRankingService(
                 embeddingService,
                 vectorRepository,
-                new AuthorizedMemoryRecallTextRanker());
+                new AuthorizedMemoryRecallTextRanker(new AuthorizedMemoryRecallScorer()));
 
         AuthorizedMemoryRecallRankingService.RankedRecall result = service.rank(
                 10L,
@@ -71,7 +71,7 @@ class AuthorizedMemoryRecallRankingServiceTest {
         AuthorizedMemoryRecallRankingService service = new AuthorizedMemoryRecallRankingService(
                 embeddingService,
                 vectorRepository,
-                new AuthorizedMemoryRecallTextRanker());
+                new AuthorizedMemoryRecallTextRanker(new AuthorizedMemoryRecallScorer()));
 
         AuthorizedMemoryRecallRankingService.RankedRecall result = service.rank(
                 10L,
@@ -112,7 +112,7 @@ class AuthorizedMemoryRecallRankingServiceTest {
         AuthorizedMemoryRecallRankingService service = new AuthorizedMemoryRecallRankingService(
                 embeddingService,
                 vectorRepository,
-                new AuthorizedMemoryRecallTextRanker());
+                new AuthorizedMemoryRecallTextRanker(new AuthorizedMemoryRecallScorer()));
 
         AuthorizedMemoryRecallRankingService.RankedRecall result = service.rank(
                 10L,

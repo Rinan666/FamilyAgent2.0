@@ -12,6 +12,7 @@ import com.familyagent.module.memory.eval.dto.MemoryRecallQualityEvalReport;
 import com.familyagent.module.memory.repository.MemoryRecallVectorRepository;
 import com.familyagent.module.memory.service.AuthorizedMemoryRecallEmbeddingService;
 import com.familyagent.module.memory.service.AuthorizedMemoryRecallRankingService;
+import com.familyagent.module.memory.service.AuthorizedMemoryRecallScorer;
 import com.familyagent.module.memory.service.AuthorizedMemoryRecallTextRanker;
 import org.junit.jupiter.api.Test;
 
@@ -40,7 +41,7 @@ class AuthorizedMemoryRecallQualityEvalTest {
             new AuthorizedMemoryRecallRankingService(
                     embeddingService,
                     vectorRepository,
-                    new AuthorizedMemoryRecallTextRanker());
+                    new AuthorizedMemoryRecallTextRanker(new AuthorizedMemoryRecallScorer()));
     private final MemoryRecallQualityEvalService evalService = new MemoryRecallQualityEvalService();
 
     @Test
