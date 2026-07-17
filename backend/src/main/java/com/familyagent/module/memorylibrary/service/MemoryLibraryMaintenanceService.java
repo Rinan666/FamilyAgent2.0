@@ -7,7 +7,7 @@ import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.diary.entity.DiaryEntry;
-import com.familyagent.module.diary.repository.DiaryEntryRepository;
+import com.familyagent.module.diary.facade.MemoryLibraryDiaryFacade;
 import com.familyagent.module.family.facade.MemoryLibraryFamilyFacade;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
@@ -42,7 +42,7 @@ public class MemoryLibraryMaintenanceService {
             "POSTURE", "DENTAL", "VISION", "SLEEP", "EXERCISE", "SCREEN_TIME", "EMOTION", "COMMUNICATION", "OTHER");
 
     private final MemoryLibraryFamilyFacade familyService;
-    private final DiaryEntryRepository diaryEntryRepository;
+    private final MemoryLibraryDiaryFacade diaryFacade;
     private final MemoryLibraryMemoryFacade memoryEntryRepository;
     private final GrowthGuardRecordRepository growthRecordRepository;
     private final MemoryIndexingFacade memoryEmbeddingService;
@@ -98,7 +98,7 @@ public class MemoryLibraryMaintenanceService {
     }
 
     private void archiveDiary(Long familyId, Long diaryId) {
-        DiaryEntry entry = diaryEntryRepository.selectById(diaryId);
+        DiaryEntry entry = diaryFacade.findById(diaryId);
         if (entry == null || !familyId.equals(entry.getFamilyId()) || isArchivedMetadata(entry.getMetadata())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
@@ -109,11 +109,11 @@ public class MemoryLibraryMaintenanceService {
         metadata.put("archivedAt", LocalDateTime.now().toString());
         metadata.put("archiveSource", "MEMORY_LIBRARY_MAINTENANCE");
         entry.setMetadata(metadata);
-        diaryEntryRepository.updateById(entry);
+        diaryFacade.update(entry);
     }
 
     private void updateDiary(MemoryLibraryUpdateRequest request, Long diaryId) {
-        DiaryEntry entry = diaryEntryRepository.selectById(diaryId);
+        DiaryEntry entry = diaryFacade.findById(diaryId);
         if (entry == null || !request.getFamilyId().equals(entry.getFamilyId()) || isArchivedMetadata(entry.getMetadata())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
@@ -133,12 +133,12 @@ public class MemoryLibraryMaintenanceService {
                 type,
                 entry.getMood(),
                 tags));
-        diaryEntryRepository.updateById(entry);
+        diaryFacade.update(entry);
         memoryEmbeddingService.indexDiaryAfterCommit(entry);
     }
 
     private void restoreDiary(Long familyId, Long diaryId) {
-        DiaryEntry entry = diaryEntryRepository.selectById(diaryId);
+        DiaryEntry entry = diaryFacade.findById(diaryId);
         if (entry == null || !familyId.equals(entry.getFamilyId()) || !isArchivedMetadata(entry.getMetadata())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
@@ -149,17 +149,17 @@ public class MemoryLibraryMaintenanceService {
         metadata.put("restoredAt", LocalDateTime.now().toString());
         metadata.put("restoreSource", "MEMORY_LIBRARY_ARCHIVE_BOX");
         entry.setMetadata(metadata);
-        diaryEntryRepository.updateById(entry);
+        diaryFacade.update(entry);
     }
 
     private void deleteArchivedDiary(Long familyId, Long diaryId) {
-        DiaryEntry entry = diaryEntryRepository.selectById(diaryId);
+        DiaryEntry entry = diaryFacade.findById(diaryId);
         if (entry == null || !familyId.equals(entry.getFamilyId()) || !isArchivedMetadata(entry.getMetadata())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can delete this diary");
         deleteEmbeddings("DIARY", diaryId);
-        diaryEntryRepository.deleteById(diaryId);
+        diaryFacade.delete(diaryId);
     }
 
     private void archiveMemory(Long familyId, Long memoryId) {

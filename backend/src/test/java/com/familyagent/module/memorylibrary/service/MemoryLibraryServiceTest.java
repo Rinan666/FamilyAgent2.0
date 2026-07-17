@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.response.PageResult;
-import com.familyagent.module.diary.repository.DiaryEntryRepository;
+import com.familyagent.module.diary.facade.MemoryLibraryDiaryFacade;
 import com.familyagent.module.family.facade.MemoryLibraryFamilyFacade;
 import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
 import com.familyagent.module.growth.repository.GrowthGuardStalenessVoteRepository;
@@ -43,7 +43,7 @@ class MemoryLibraryServiceTest {
 
     @Mock private JdbcTemplate jdbcTemplate;
     @Mock private MemoryLibraryFamilyFacade familyService;
-    @Mock private DiaryEntryRepository diaryEntryRepository;
+    @Mock private MemoryLibraryDiaryFacade diaryFacade;
     @Mock private MemoryLibraryMemoryFacade memoryEntryRepository;
     @Mock private GrowthGuardRecordRepository growthRecordRepository;
     @Mock private MemoryEntryVoteRepository memoryEntryVoteRepository;
@@ -153,7 +153,7 @@ class MemoryLibraryServiceTest {
     @Test
     void deleteArchivedLibraryItem_deletesArchivedMemoryAndEmbeddings() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
-                familyService, diaryEntryRepository, memoryEntryRepository,
+                familyService, diaryFacade, memoryEntryRepository,
                 growthRecordRepository, memoryEmbeddingService, jdbcTemplate);
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
@@ -178,7 +178,7 @@ class MemoryLibraryServiceTest {
     @Test
     void deleteArchivedLibraryItem_rejectsActiveMemory() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
-                familyService, diaryEntryRepository, memoryEntryRepository,
+                familyService, diaryFacade, memoryEntryRepository,
                 growthRecordRepository, memoryEmbeddingService, jdbcTemplate);
 
         MemoryEntry entry = new MemoryEntry();
@@ -199,7 +199,7 @@ class MemoryLibraryServiceTest {
     @Test
     void deleteArchivedLibraryItem_deletesActiveLegacyAiSummary() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
-                familyService, diaryEntryRepository, memoryEntryRepository,
+                familyService, diaryFacade, memoryEntryRepository,
                 growthRecordRepository, memoryEmbeddingService, jdbcTemplate);
 
         MemoryEntry entry = new MemoryEntry();
@@ -226,7 +226,7 @@ class MemoryLibraryServiceTest {
     @Test
     void updateLibraryItem_updatesActiveMemoryAndSchedulesReindex() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
-                familyService, diaryEntryRepository, memoryEntryRepository,
+                familyService, diaryFacade, memoryEntryRepository,
                 growthRecordRepository, memoryEmbeddingService, jdbcTemplate);
 
         MemoryEntry entry = new MemoryEntry();
@@ -267,7 +267,7 @@ class MemoryLibraryServiceTest {
     @Test
     void updateLibraryItem_rejectsArchivedMemory() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
-                familyService, diaryEntryRepository, memoryEntryRepository,
+                familyService, diaryFacade, memoryEntryRepository,
                 growthRecordRepository, memoryEmbeddingService, jdbcTemplate);
 
         MemoryEntry entry = new MemoryEntry();
@@ -293,7 +293,7 @@ class MemoryLibraryServiceTest {
     @Test
     void updateLibraryItem_rejectsNonAuthorEvenWhenFamilyMember() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
-                familyService, diaryEntryRepository, memoryEntryRepository,
+                familyService, diaryFacade, memoryEntryRepository,
                 growthRecordRepository, memoryEmbeddingService, jdbcTemplate);
 
         MemoryEntry entry = new MemoryEntry();
