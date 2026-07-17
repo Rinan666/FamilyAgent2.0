@@ -1,0 +1,177 @@
+"""Cost-bounded real-provider evaluation with fixed public fixtures."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import time
+import uuid
+
+import litellm
+
+from app.config import settings
+from app.monitoring.provider_sampled_eval_models import (
+    MAX_CASES,
+    MAX_CASE_TOKENS,
+    MAX_TIMEOUT_SECONDS,
+    PUBLIC_SAMPLE_CASES,
+    ProviderProbeClient,
+    ProviderProbeResponse,
+    ProviderSampleCase,
+    ProviderSampleErrorCode,
+    ProviderSampleResult,
+    ProviderSampleStatus,
+    ProviderSampledEvalReport,
+)
+
+
+class LiteLLMProviderProbeClient:
+    """Call the primary model once without retry or fallback."""
+
+    async def complete(self, case: ProviderSampleCase) -> ProviderProbeResponse:
+        model = settings.default_llm_model
+        started_at = time.monotonic()
+        response = await litellm.acompletion(
+            model=model,
+            messages=[{"role": "user", "content": case.prompt}],
+            temperature=0,
+            max_tokens=case.max_tokens,
+        )
+        return ProviderProbeResponse(
+            content=response.choices[0].message.content or "",
+            provider=_provider_name(model),
+            model=model,
+            latency_ms=max(0, round((time.monotonic() - started_at) * 1000)),
+        )
+
+
+class ProviderSampledEval:
+    def __init__(self, client: ProviderProbeClient | None = None):
+        self._client = client or LiteLLMProviderProbeClient()
+
+    async def run(self) -> ProviderSampledEvalReport:
+        eval_run_id = str(uuid.uuid4())
+        if not settings.provider_sampled_eval_enabled:
+            return _empty_report(eval_run_id, ProviderSampleStatus.DISABLED)
+
+        cases = _configured_cases()
+        if cases is None:
+            return _empty_report(
+                eval_run_id,
+                ProviderSampleStatus.CONFIG_INVALID,
+                ProviderSampleErrorCode.CONFIG_INVALID,
+            )
+
+        results: list[ProviderSampleResult] = []
+        for case in cases:
+            result = await self._run_case(case)
+            results.append(result)
+            if not result.passed:
+                break
+
+        passed = len(results) == len(cases) and all(item.passed for item in results)
+        return ProviderSampledEvalReport(
+            eval_run_id=eval_run_id,
+            status=ProviderSampleStatus.PASSED if passed else ProviderSampleStatus.FAILED,
+            success=passed,
+            configured_case_count=len(cases),
+            executed_case_count=len(results),
+            max_output_token_budget=sum(case.max_tokens for case in cases),
+            error_code=None if passed else results[-1].error_code,
+            results=tuple(results),
+        )
+
+    async def _run_case(self, case: ProviderSampleCase) -> ProviderSampleResult:
+        started_at = time.monotonic()
+        try:
+            async with asyncio.timeout(settings.provider_sampled_eval_timeout_seconds):
+                response = await self._client.complete(case)
+        except TimeoutError:
+            return _failed_result(
+                case,
+                ProviderSampleErrorCode.TIMEOUT,
+                _elapsed_ms(started_at),
+            )
+        except Exception:
+            return _failed_result(
+                case,
+                ProviderSampleErrorCode.PROVIDER_ERROR,
+                _elapsed_ms(started_at),
+            )
+
+        passed = response.content.strip() == case.expected_output
+        return ProviderSampleResult(
+            case_id=case.case_id,
+            passed=passed,
+            provider=response.provider,
+            model=response.model,
+            latency_ms=response.latency_ms,
+            max_tokens=case.max_tokens,
+            attempt_count=1,
+            degraded=False,
+            error_code=None if passed else ProviderSampleErrorCode.RESPONSE_MISMATCH,
+        )
+
+
+def _configured_cases() -> tuple[ProviderSampleCase, ...] | None:
+    case_limit = settings.provider_sampled_eval_case_limit
+    timeout = settings.provider_sampled_eval_timeout_seconds
+    if not 1 <= case_limit <= MAX_CASES or not 0 < timeout <= MAX_TIMEOUT_SECONDS:
+        return None
+    cases = PUBLIC_SAMPLE_CASES[:case_limit]
+    if any(case.max_tokens > MAX_CASE_TOKENS for case in cases):
+        return None
+    return cases
+
+
+def _empty_report(
+    eval_run_id: str,
+    status: ProviderSampleStatus,
+    error_code: ProviderSampleErrorCode | None = None,
+) -> ProviderSampledEvalReport:
+    return ProviderSampledEvalReport(
+        eval_run_id=eval_run_id,
+        status=status,
+        success=False,
+        configured_case_count=0,
+        executed_case_count=0,
+        max_output_token_budget=0,
+        error_code=error_code,
+        results=(),
+    )
+
+
+def _failed_result(
+    case: ProviderSampleCase,
+    error_code: ProviderSampleErrorCode,
+    latency_ms: int,
+) -> ProviderSampleResult:
+    model = settings.default_llm_model
+    return ProviderSampleResult(
+        case_id=case.case_id,
+        passed=False,
+        provider=_provider_name(model),
+        model=model,
+        latency_ms=latency_ms,
+        max_tokens=case.max_tokens,
+        attempt_count=1,
+        degraded=False,
+        error_code=error_code,
+    )
+
+
+def _provider_name(model: str) -> str:
+    return model.split("/", 1)[0].strip() if "/" in model else "unknown"
+
+
+def _elapsed_ms(started_at: float) -> int:
+    return max(0, round((time.monotonic() - started_at) * 1000))
+
+
+async def _main() -> None:
+    report = await ProviderSampledEval().run()
+    print(json.dumps(report.as_dict(), ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    asyncio.run(_main())

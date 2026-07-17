@@ -66,6 +66,11 @@ class Settings(BaseSettings):
     provider_monitor_timeout_seconds: float = 30.0
     provider_monitor_max_tokens: int = 8
 
+    # Sampled provider evaluation (fixed public fixtures, never used by readiness)
+    provider_sampled_eval_enabled: bool = False
+    provider_sampled_eval_timeout_seconds: float = 20.0
+    provider_sampled_eval_case_limit: int = 2
+
     # Math sandbox
     math_sandbox_timeout: int = 5
     math_sandbox_max_memory_mb: int = 256
