@@ -64,16 +64,32 @@ def test_search_public_web_sends_rewritten_query(monkeypatch):
     asyncio.run(run())
 
 
-def test_search_public_web_skips_private_query(monkeypatch):
+def test_search_public_web_sanitizes_pii_when_public_signal_remains(monkeypatch):
+    async def run():
+        monkeypatch.setattr("app.services.web_search.settings.web_search_enabled", True)
+        monkeypatch.setattr("app.services.web_search.settings.tavily_api_key", "token")
+        monkeypatch.setattr("app.services.web_search._search_tavily", _fake_search)
+
+        results = await search_public_web("帮我查一下妈妈手机号13812345678附近今天牙齿矫正价格", "think")
+
+        assert results
+        assert "13812345678" not in results[0].title
+        assert "手机号" not in results[0].title
+        assert "牙齿矫正价格" in results[0].title
+
+    asyncio.run(run())
+
+
+def test_search_public_web_still_blocks_family_private_context(monkeypatch):
     async def fail_if_called(query: str):  # pragma: no cover - assertion guard
-        raise AssertionError(f"raw private query should not be searched: {query}")
+        raise AssertionError(f"private family context should not be searched: {query}")
 
     async def run():
         monkeypatch.setattr("app.services.web_search.settings.web_search_enabled", True)
         monkeypatch.setattr("app.services.web_search.settings.tavily_api_key", "token")
         monkeypatch.setattr("app.services.web_search._search_tavily", fail_if_called)
 
-        results = await search_public_web("帮我查一下妈妈手机号13812345678附近今天牙齿矫正价格", "think")
+        results = await search_public_web("结合家庭记忆搜索一下今天上海天气", "think")
 
         assert results == []
 
@@ -112,7 +128,7 @@ async def test_web_search_observation_marks_private_query_rejection(monkeypatch)
     monkeypatch.setattr("app.services.web_search.settings.web_search_enabled", True)
 
     context = await build_web_search_context(
-        "search current dentist prices near phone 13812345678",
+        "search current weather using family memory and diary records",
         "think",
     )
 

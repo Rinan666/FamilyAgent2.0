@@ -40,9 +40,23 @@ PRIVATE_SAVE_OR_MEMORY_PATTERNS = [
     r"刚才.*(说|讲|聊).*记",
 ]
 
-PRIVATE_WEB_SEARCH_BLOCK_PATTERNS = [
+HARD_PRIVATE_WEB_SEARCH_PATTERNS = [
     r"日记|聊天记录|家庭记忆|家族记忆|照护记录|病历|体检报告",
-    r"手机号|身份证|住址|地址|家住|住在|邮箱",
+    r"\bdiar(?:y|ies)\b|\bchat\s+(?:history|records?)\b|"
+    r"\bfamily\s+memor(?:y|ies)\b|\bcare\s+records?\b|"
+    r"\bmedical\s+records?\b|\bhealth\s+reports?\b",
+]
+
+PRIVATE_IDENTIFIER_LABEL_PATTERN = re.compile(
+    r"手机号|身份证|住址|地址|家住|住在|邮箱|"
+    r"\bphone(?:\s+number)?\b|\bmobile(?:\s+number)?\b|"
+    r"\bidentity\s+number\b|\baddress\b|\bemail\b",
+    re.IGNORECASE,
+)
+
+PRIVATE_WEB_SEARCH_BLOCK_PATTERNS = [
+    *HARD_PRIVATE_WEB_SEARCH_PATTERNS,
+    PRIVATE_IDENTIFIER_LABEL_PATTERN.pattern,
 ]
 
 _SEARCH_FILLER_PATTERN = re.compile(
@@ -154,6 +168,7 @@ def rewrite_public_search_query(query: str) -> str:
     guarded = redact_ai_bound_text(normalized, max_length=240)
     public_query = guarded.text
     public_query = re.sub(r"\[[^\]]+\]", " ", public_query)
+    public_query = PRIVATE_IDENTIFIER_LABEL_PATTERN.sub(" ", public_query)
     public_query = _SEARCH_FILLER_PATTERN.sub(" ", public_query)
     public_query = re.sub(r"\s+", " ", public_query).strip(" ，。！？,.?;；：:")
     return public_query[:160]
@@ -209,11 +224,8 @@ async def _search_public_web_observed(
         return [], None, True, None
     if not settings.web_search_enabled:
         return [], None, False, "WEB_SEARCH_DISABLED"
-    if is_private_web_search_query(query):
-        logger.info("Web search skipped because query contains private markers")
-        return [], None, False, "WEB_SEARCH_QUERY_REJECTED"
     public_query = rewrite_public_search_query(query)
-    if len(public_query) < 3:
+    if len(public_query) < 3 or is_private_web_search_query(public_query):
         logger.info("Web search skipped because query rewrite produced no public query")
         return [], None, False, "WEB_SEARCH_QUERY_REJECTED"
     provider = "tavily" if settings.tavily_api_key else settings.web_search_provider.lower()
