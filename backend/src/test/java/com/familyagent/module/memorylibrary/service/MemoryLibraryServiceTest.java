@@ -7,7 +7,7 @@ import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.response.PageResult;
 import com.familyagent.module.diary.facade.MemoryLibraryDiaryFacade;
 import com.familyagent.module.family.facade.MemoryLibraryFamilyFacade;
-import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
+import com.familyagent.module.growth.facade.MemoryLibraryGrowthFacade;
 import com.familyagent.module.growth.repository.GrowthGuardStalenessVoteRepository;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEntryVoteRepository;
@@ -45,7 +45,7 @@ class MemoryLibraryServiceTest {
     @Mock private MemoryLibraryFamilyFacade familyService;
     @Mock private MemoryLibraryDiaryFacade diaryFacade;
     @Mock private MemoryLibraryMemoryFacade memoryEntryRepository;
-    @Mock private GrowthGuardRecordRepository growthRecordRepository;
+    @Mock private MemoryLibraryGrowthFacade growthFacade;
     @Mock private MemoryEntryVoteRepository memoryEntryVoteRepository;
     @Mock private GrowthGuardStalenessVoteRepository growthGuardStalenessVoteRepository;
     @Mock private MemoryIndexingFacade memoryEmbeddingService;
@@ -154,7 +154,7 @@ class MemoryLibraryServiceTest {
     void deleteArchivedLibraryItem_deletesArchivedMemoryAndEmbeddings() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
                 familyService, diaryFacade, memoryEntryRepository,
-                growthRecordRepository, memoryEmbeddingService, jdbcTemplate);
+                growthFacade, memoryEmbeddingService, jdbcTemplate);
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(101L);
@@ -179,7 +179,7 @@ class MemoryLibraryServiceTest {
     void deleteArchivedLibraryItem_rejectsActiveMemory() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
                 familyService, diaryFacade, memoryEntryRepository,
-                growthRecordRepository, memoryEmbeddingService, jdbcTemplate);
+                growthFacade, memoryEmbeddingService, jdbcTemplate);
 
         MemoryEntry entry = new MemoryEntry();
         entry.setId(88L);
@@ -200,7 +200,7 @@ class MemoryLibraryServiceTest {
     void deleteArchivedLibraryItem_deletesActiveLegacyAiSummary() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
                 familyService, diaryFacade, memoryEntryRepository,
-                growthRecordRepository, memoryEmbeddingService, jdbcTemplate);
+                growthFacade, memoryEmbeddingService, jdbcTemplate);
 
         MemoryEntry entry = new MemoryEntry();
         entry.setId(89L);
@@ -227,7 +227,7 @@ class MemoryLibraryServiceTest {
     void updateLibraryItem_updatesActiveMemoryAndSchedulesReindex() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
                 familyService, diaryFacade, memoryEntryRepository,
-                growthRecordRepository, memoryEmbeddingService, jdbcTemplate);
+                growthFacade, memoryEmbeddingService, jdbcTemplate);
 
         MemoryEntry entry = new MemoryEntry();
         entry.setId(88L);
@@ -268,7 +268,7 @@ class MemoryLibraryServiceTest {
     void updateLibraryItem_rejectsArchivedMemory() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
                 familyService, diaryFacade, memoryEntryRepository,
-                growthRecordRepository, memoryEmbeddingService, jdbcTemplate);
+                growthFacade, memoryEmbeddingService, jdbcTemplate);
 
         MemoryEntry entry = new MemoryEntry();
         entry.setId(88L);
@@ -294,7 +294,7 @@ class MemoryLibraryServiceTest {
     void updateLibraryItem_rejectsNonAuthorEvenWhenFamilyMember() {
         MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
                 familyService, diaryFacade, memoryEntryRepository,
-                growthRecordRepository, memoryEmbeddingService, jdbcTemplate);
+                growthFacade, memoryEmbeddingService, jdbcTemplate);
 
         MemoryEntry entry = new MemoryEntry();
         entry.setId(88L);

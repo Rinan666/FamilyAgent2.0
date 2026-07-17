@@ -10,7 +10,7 @@ import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.facade.MemoryLibraryDiaryFacade;
 import com.familyagent.module.family.facade.MemoryLibraryFamilyFacade;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
-import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
+import com.familyagent.module.growth.facade.MemoryLibraryGrowthFacade;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.facade.MemoryIndexingFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryMemoryFacade;
@@ -44,7 +44,7 @@ public class MemoryLibraryMaintenanceService {
     private final MemoryLibraryFamilyFacade familyService;
     private final MemoryLibraryDiaryFacade diaryFacade;
     private final MemoryLibraryMemoryFacade memoryEntryRepository;
-    private final GrowthGuardRecordRepository growthRecordRepository;
+    private final MemoryLibraryGrowthFacade growthFacade;
     private final MemoryIndexingFacade memoryEmbeddingService;
     private final JdbcTemplate jdbcTemplate;
 
@@ -238,17 +238,17 @@ public class MemoryLibraryMaintenanceService {
     }
 
     private void archiveGrowthRecord(Long familyId, Long recordId) {
-        GrowthGuardRecord record = growthRecordRepository.selectById(recordId);
+        GrowthGuardRecord record = growthFacade.findById(recordId);
         if (record == null || !familyId.equals(record.getFamilyId()) || !EntityStatus.ACTIVE.name().equals(record.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         MemoryLibrarySupport.ensureCreator(record.getCreatedBy(), "Only the creator can archive this growth record");
         record.setStatus(EntityStatus.ARCHIVED.name());
-        growthRecordRepository.updateById(record);
+        growthFacade.update(record);
     }
 
     private void updateGrowthRecord(MemoryLibraryUpdateRequest request, Long recordId) {
-        GrowthGuardRecord record = growthRecordRepository.selectById(recordId);
+        GrowthGuardRecord record = growthFacade.findById(recordId);
         if (record == null || !request.getFamilyId().equals(record.getFamilyId()) || !EntityStatus.ACTIVE.name().equals(record.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
@@ -271,28 +271,28 @@ public class MemoryLibraryMaintenanceService {
                 record.getCategory(),
                 record.getSeverity() == null ? 3 : record.getSeverity(),
                 record.getObservedAt()));
-        growthRecordRepository.updateById(record);
+        growthFacade.update(record);
         memoryEmbeddingService.indexGrowthAfterCommit(record);
     }
 
     private void restoreGrowthRecord(Long familyId, Long recordId) {
-        GrowthGuardRecord record = growthRecordRepository.selectById(recordId);
+        GrowthGuardRecord record = growthFacade.findById(recordId);
         if (record == null || !familyId.equals(record.getFamilyId()) || !EntityStatus.ARCHIVED.name().equals(record.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         MemoryLibrarySupport.ensureCreator(record.getCreatedBy(), "Only the creator can restore this growth record");
         record.setStatus(EntityStatus.ACTIVE.name());
-        growthRecordRepository.updateById(record);
+        growthFacade.update(record);
     }
 
     private void deleteArchivedGrowthRecord(Long familyId, Long recordId) {
-        GrowthGuardRecord record = growthRecordRepository.selectById(recordId);
+        GrowthGuardRecord record = growthFacade.findById(recordId);
         if (record == null || !familyId.equals(record.getFamilyId()) || !EntityStatus.ARCHIVED.name().equals(record.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         MemoryLibrarySupport.ensureCreator(record.getCreatedBy(), "Only the creator can delete this growth record");
         deleteEmbeddings("GROWTH_OBSERVATION", recordId);
-        growthRecordRepository.deleteById(recordId);
+        growthFacade.delete(recordId);
     }
 
     private void deleteEmbeddings(String sourceType, Long sourceId) {
