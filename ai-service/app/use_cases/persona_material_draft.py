@@ -1,7 +1,6 @@
 """Application use case for the persona-material-draft skill."""
 
 import logging
-from typing import Any
 
 from app.api.memory_contracts import PERSONA_MATERIAL_DRAFT_SCHEMA
 from app.api.memory_models import PersonaMaterialDraftRequest
@@ -11,7 +10,7 @@ from app.runtime.draft_prompt_renderer import PersonaMaterialPromptRenderer
 from app.runtime.output_parser import SkillOutputParseError
 from app.runtime.skill_error import SkillErrorCode
 from app.runtime.skill_registry import SkillRuntime
-from app.runtime.skill_response import skill_failure
+from app.runtime.skill_response import skill_failure, skill_success
 
 logger = logging.getLogger("familyagent.ai.use_cases.persona_material_draft")
 
@@ -31,7 +30,7 @@ class PersonaMaterialDraftUseCase:
         self,
         request: PersonaMaterialDraftRequest,
         llm_client: LLMClient,
-    ) -> dict[str, Any]:
+    ) -> dict[str, object]:
         try:
             return await self._skill_runtime.execute(lambda: self._organize(request, llm_client))
         except TimeoutError:
@@ -42,7 +41,7 @@ class PersonaMaterialDraftUseCase:
         self,
         request: PersonaMaterialDraftRequest,
         llm_client: LLMClient,
-    ) -> dict[str, Any]:
+    ) -> dict[str, object]:
         content = request.content.strip()
         profile = request.profile.model_dump()
         try:
@@ -69,7 +68,7 @@ class PersonaMaterialDraftUseCase:
                 fallback_profile=profile,
                 fallback_content=content,
             )
-            return {"success": True, "data": data}
+            return skill_success(data)
         except SkillOutputParseError as error:
             logger.error("Persona-material output invalid: errorType=%s", type(error).__name__)
             return skill_failure(

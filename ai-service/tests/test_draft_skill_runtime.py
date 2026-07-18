@@ -127,7 +127,7 @@ def test_draft_output_parsers_apply_deterministic_bounds():
 
     assert organized.title == "未命名记录"
     assert organized.diary_entry_type == "DAILY"
-    assert persona["profile"]["name"] == "外公"
+    assert persona.profile.name == "外公"
 
 
 @pytest.mark.asyncio
@@ -157,6 +157,40 @@ async def test_organize_draft_success_serializes_stable_typed_contract(monkeypat
     assert response["success"] is True
     assert response["data"]["diary_entry_type"] == "LESSON"
     assert response["data"]["growth_severity"] == 2
+
+
+@pytest.mark.asyncio
+async def test_persona_material_success_serializes_stable_typed_contract(monkeypatch):
+    async def valid_chat(**_kwargs):
+        return json.dumps({
+            "profile": {
+                "name": "Grandfather",
+                "description": "Kept careful records for the family shop.",
+                "era_identity": "Shopkeeper",
+                "values": "Clarity and responsibility",
+                "speaking_style": "Direct and practical",
+                "personality": "Patient",
+            },
+            "materials": [{
+                "title": "Clear accounts",
+                "content": "Every family expense should be recorded clearly.",
+                "tags": ["responsibility"],
+            }],
+            "reason": "A reusable family value",
+        })
+
+    monkeypatch.setattr(memory.llm_client, "chat", valid_chat)
+
+    response = await memory.organize_persona_material_draft(
+        PersonaMaterialDraftRequest(
+            content="Grandfather taught the family to keep every account clear."
+        )
+    )
+
+    assert set(response) == {"success", "data"}
+    assert response["success"] is True
+    assert response["data"]["profile"]["name"] == "Grandfather"
+    assert response["data"]["materials"][0]["title"] == "Clear accounts"
 
 
 @pytest.mark.asyncio

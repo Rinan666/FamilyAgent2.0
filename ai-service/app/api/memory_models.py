@@ -82,6 +82,35 @@ class PersonaProfileInput(BaseModel):
     personality: str = ""
 
 
+class PersonaProfileData(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    description: str
+    era_identity: str
+    values: str
+    speaking_style: str
+    personality: str
+
+
+class PersonaMaterialData(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    title: str
+    content: str
+    tags: list[str]
+
+
+class PersonaMaterialDraftData(BaseModel):
+    """Sanitized persona material payload returned to backend callers."""
+
+    model_config = ConfigDict(frozen=True)
+
+    profile: PersonaProfileData
+    materials: list[PersonaMaterialData]
+    reason: str
+
+
 class PersonaMaterialDraftRequest(BaseModel):
     content: str = Field(..., min_length=8)
     profile: PersonaProfileInput = Field(default_factory=PersonaProfileInput)
