@@ -12,6 +12,7 @@ import com.familyagent.module.memory.facade.MemoryIndexingFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryEmbeddingFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryIndexMetadataFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryMemoryFacade;
+import com.familyagent.module.memorylibrary.dto.MemoryLibraryAuditMetadata;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryUpdateRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -36,11 +37,11 @@ public class MemoryLibraryMemoryCommandService {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can archive this memory");
-        Map<String, Object> metadata = MemoryLibrarySupport.mutableMap(entry.getMetadata());
-        metadata.put("archivedBy", CurrentUserGuard.currentUserId());
-        metadata.put("archivedAt", LocalDateTime.now().toString());
-        metadata.put("archiveSource", MemoryLibraryMetadataSource.MEMORY_LIBRARY_MAINTENANCE.name());
-        entry.setMetadata(metadata);
+        entry.setMetadata(new MemoryLibraryAuditMetadata(
+                CurrentUserGuard.currentUserId(),
+                LocalDateTime.now(),
+                MemoryLibraryMetadataSource.MEMORY_LIBRARY_MAINTENANCE)
+                .mergeArchive(entry.getMetadata(), null));
         entry.setStatus(EntityStatus.ARCHIVED.name());
         memoryFacade.update(entry);
     }
@@ -86,11 +87,11 @@ public class MemoryLibraryMemoryCommandService {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can restore this memory");
-        Map<String, Object> metadata = MemoryLibrarySupport.mutableMap(entry.getMetadata());
-        metadata.put("restoredBy", CurrentUserGuard.currentUserId());
-        metadata.put("restoredAt", LocalDateTime.now().toString());
-        metadata.put("restoreSource", MemoryLibraryMetadataSource.MEMORY_LIBRARY_ARCHIVE_BOX.name());
-        entry.setMetadata(metadata);
+        entry.setMetadata(new MemoryLibraryAuditMetadata(
+                CurrentUserGuard.currentUserId(),
+                LocalDateTime.now(),
+                MemoryLibraryMetadataSource.MEMORY_LIBRARY_ARCHIVE_BOX)
+                .mergeRestore(entry.getMetadata(), null));
         entry.setStatus(EntityStatus.ACTIVE.name());
         memoryFacade.update(entry);
     }

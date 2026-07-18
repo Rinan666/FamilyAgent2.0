@@ -11,12 +11,12 @@ import com.familyagent.module.diary.facade.MemoryLibraryDiaryFacade;
 import com.familyagent.module.memory.facade.MemoryIndexingFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryEmbeddingFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryIndexMetadataFacade;
+import com.familyagent.module.memorylibrary.dto.MemoryLibraryAuditMetadata;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryUpdateRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
-import java.util.Map;
 import java.util.Set;
 
 @Component
@@ -38,12 +38,11 @@ public class MemoryLibraryDiaryCommandService {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can archive this diary");
-        Map<String, Object> metadata = MemoryLibrarySupport.mutableMap(entry.getMetadata());
-        metadata.put("status", EntityStatus.ARCHIVED.name());
-        metadata.put("archivedBy", CurrentUserGuard.currentUserId());
-        metadata.put("archivedAt", LocalDateTime.now().toString());
-        metadata.put("archiveSource", MemoryLibraryMetadataSource.MEMORY_LIBRARY_MAINTENANCE.name());
-        entry.setMetadata(metadata);
+        entry.setMetadata(new MemoryLibraryAuditMetadata(
+                CurrentUserGuard.currentUserId(),
+                LocalDateTime.now(),
+                MemoryLibraryMetadataSource.MEMORY_LIBRARY_MAINTENANCE)
+                .mergeArchive(entry.getMetadata(), EntityStatus.ARCHIVED));
         diaryFacade.update(entry);
     }
 
@@ -83,12 +82,11 @@ public class MemoryLibraryDiaryCommandService {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can restore this diary");
-        Map<String, Object> metadata = MemoryLibrarySupport.mutableMap(entry.getMetadata());
-        metadata.put("status", EntityStatus.ACTIVE.name());
-        metadata.put("restoredBy", CurrentUserGuard.currentUserId());
-        metadata.put("restoredAt", LocalDateTime.now().toString());
-        metadata.put("restoreSource", MemoryLibraryMetadataSource.MEMORY_LIBRARY_ARCHIVE_BOX.name());
-        entry.setMetadata(metadata);
+        entry.setMetadata(new MemoryLibraryAuditMetadata(
+                CurrentUserGuard.currentUserId(),
+                LocalDateTime.now(),
+                MemoryLibraryMetadataSource.MEMORY_LIBRARY_ARCHIVE_BOX)
+                .mergeRestore(entry.getMetadata(), EntityStatus.ACTIVE));
         diaryFacade.update(entry);
     }
 

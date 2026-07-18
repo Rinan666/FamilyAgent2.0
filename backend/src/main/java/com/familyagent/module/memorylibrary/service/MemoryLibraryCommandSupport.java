@@ -5,6 +5,7 @@ import com.familyagent.common.constant.MemoryLibraryMetadataSource;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
+import com.familyagent.module.memorylibrary.dto.MemoryLibraryAuditMetadata;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -57,11 +58,11 @@ final class MemoryLibraryCommandSupport {
     }
 
     static Map<String, Object> editMetadata(Object metadata) {
-        Map<String, Object> next = MemoryLibrarySupport.mutableMap(metadata);
-        next.put("lastEditedBy", CurrentUserGuard.currentUserId());
-        next.put("lastEditedAt", LocalDateTime.now().toString());
-        next.put("editSource", MemoryLibraryMetadataSource.MEMORY_LIBRARY_MAINTENANCE.name());
-        return next;
+        return new MemoryLibraryAuditMetadata(
+                CurrentUserGuard.currentUserId(),
+                LocalDateTime.now(),
+                MemoryLibraryMetadataSource.MEMORY_LIBRARY_MAINTENANCE)
+                .mergeEdit(metadata);
     }
 
     static String summaryFrom(String title, String body) {
