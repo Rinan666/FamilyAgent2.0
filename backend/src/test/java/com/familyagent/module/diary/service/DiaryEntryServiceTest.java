@@ -2,6 +2,7 @@ package com.familyagent.module.diary.service;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.familyagent.module.diary.dto.CreateDiaryEntryRequest;
+import com.familyagent.module.diary.dto.DiaryEntryMetadata;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.repository.DiaryEntryRepository;
 import com.familyagent.module.family.service.FamilyService;
@@ -184,7 +185,7 @@ class DiaryEntryServiceTest {
         request.setEntryType("DAILY");
         request.setTitle("今天的小事");
         request.setVisibility("PRIVATE");
-        request.setMetadata(metadata);
+        request.setMetadata(DiaryEntryMetadata.fromMap(metadata));
         return request;
     }
 

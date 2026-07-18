@@ -7,6 +7,7 @@ import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.response.PageResult;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.diary.dto.CreateDiaryEntryRequest;
+import com.familyagent.module.diary.dto.DiaryEntryMetadata;
 import com.familyagent.module.diary.dto.UpdateDiaryEntryRequest;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.repository.DiaryEntryRepository;
@@ -17,9 +18,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
-import java.time.OffsetDateTime;
-import java.time.format.DateTimeParseException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -39,8 +37,6 @@ public class DiaryEntryService {
     private static final int SINGLE_ENTRY_MAX_CHARS = 300;
     private static final int MERGED_ENTRY_MAX_CHARS = 600;
     private static final int MAX_ENTRIES_PER_DAY = 10;
-    private static final String MANUAL_DIARY_SOURCE = "DIARY_MANUAL";
-    private static final String MERGE_POLICY = "MANUAL_SELF_SINGLE_CANDIDATE";
     private static final Set<String> VISIBILITIES = MemoryScope.diaryNames();
     private static final Set<String> ENTRY_TYPES = Set.of(
             "DAILY", "IMPORTANT_EVENT", "LESSON", "EMOTION", "MESSAGE_TO_FAMILY", "SELF_REFLECTION");
@@ -60,17 +56,24 @@ public class DiaryEntryService {
         }
 
         String visibility = normalizeVisibility(request.getVisibility());
-        String diaryDate = resolveDiaryDate(request);
+        DiaryEntryMetadata inputMetadata = request.getMetadata();
+        String diaryDate = DiaryEntryMetadataSupport.resolveDiaryDate(inputMetadata);
         String incomingTitle = firstLineOrBlank(blankToNull(request.getTitle()), request.getContent());
         String incomingContent = localCompress("", request.getContent().trim(), SINGLE_ENTRY_MAX_CHARS);
-        Map<String, Object> requestMetadata = buildMetadata(request, diaryDate);
-        DiaryEntry existing = findEligibleMergeCandidate(request, userId, visibility, diaryDate, requestMetadata);
+        Map<String, Object> requestMetadata = DiaryEntryMetadataSupport.build(
+                inputMetadata,
+                diaryDate,
+                SINGLE_ENTRY_MAX_CHARS,
+                MERGED_ENTRY_MAX_CHARS);
+        DiaryEntry existing = findEligibleMergeCandidate(
+                request, userId, visibility, diaryDate, inputMetadata);
         if (existing != null) {
             String mergedContent = localCompress(
                     existing.getRawText(),
                     incomingContent,
                     MERGED_ENTRY_MAX_CHARS);
-            Map<String, Object> metadata = mergeMetadata(existing.getMetadata(), requestMetadata);
+            Map<String, Object> metadata = DiaryEntryMetadataSupport.merge(
+                    existing.getMetadata(), requestMetadata);
             metadata.put("autoMerged", true);
             metadata.put("mergedCount", asInt(metadata.get("mergedCount"), 1) + 1);
             metadata.put("lastMergedAt", java.time.LocalDateTime.now().toString());
@@ -102,7 +105,7 @@ public class DiaryEntryService {
         entry.setVisibility(visibility);
         entry.setPrivacyLevel(visibility);
         entry.setPermissionScope(Map.of());
-        entry.setSource(resolveEntrySource(requestMetadata));
+        entry.setSource(DiaryEntryMetadataSupport.resolveEntrySource(inputMetadata));
         entry.setMetadata(MemoryIndexMetadataBuilder.enrichDiary(
                 requestMetadata,
                 entry.getRawText(),
@@ -159,7 +162,7 @@ public class DiaryEntryService {
         entry.setVisibility(visibility);
         entry.setPrivacyLevel(visibility);
         entry.setMetadata(MemoryIndexMetadataBuilder.enrichDiary(
-                mergeMetadata(entry.getMetadata(), request.getMetadata()),
+                DiaryEntryMetadataSupport.merge(entry.getMetadata(), request.getMetadata()),
                 entry.getRawText(),
                 String.valueOf(((Map<?, ?>) entry.getStructured()).get("entryType")),
                 entry.getMood(),
@@ -191,24 +194,12 @@ public class DiaryEntryService {
         return structured;
     }
 
-    private static Map<String, Object> buildMetadata(CreateDiaryEntryRequest request, String diaryDate) {
-        Map<String, Object> metadata = request.getMetadata() == null ? new HashMap<>() : new HashMap<>(request.getMetadata());
-        metadata.putIfAbsent("status", EntityStatus.ACTIVE.name());
-        metadata.put("sourceModule", "DIARY");
-        metadata.put("diaryDate", diaryDate);
-        metadata.putIfAbsent("mergePolicy", MERGE_POLICY);
-        metadata.putIfAbsent("source", MANUAL_DIARY_SOURCE);
-        metadata.putIfAbsent("singleMaxChars", SINGLE_ENTRY_MAX_CHARS);
-        metadata.putIfAbsent("mergedMaxChars", MERGED_ENTRY_MAX_CHARS);
-        return metadata;
-    }
-
     private DiaryEntry findEligibleMergeCandidate(
             CreateDiaryEntryRequest request,
             Long userId,
             String visibility,
             String diaryDate,
-            Map<String, Object> metadata) {
+            DiaryEntryMetadata metadata) {
         if (!shouldAutoMerge(request, metadata)) {
             return null;
         }
@@ -220,42 +211,9 @@ public class DiaryEntryService {
         return candidates.size() == 1 ? candidates.get(0) : null;
     }
 
-    private static boolean shouldAutoMerge(CreateDiaryEntryRequest request, Map<String, Object> metadata) {
-        if (metadata != null && Boolean.TRUE.equals(metadata.get("disableAutoMerge"))) {
-            return false;
-        }
-        if (hasRelatedUser(metadata)) {
-            return false;
-        }
-        if (!MANUAL_DIARY_SOURCE.equals(resolveEntrySource(metadata))) {
-            return false;
-        }
-        return "DAILY".equals(normalizeEntryType(request.getEntryType()));
-    }
-
-    private static boolean hasRelatedUser(Map<String, Object> metadata) {
-        Object relatedUserId = metadata == null ? null : metadata.get("relatedUserId");
-        if (relatedUserId == null) {
-            return false;
-        }
-        String text = String.valueOf(relatedUserId).trim();
-        return !text.isEmpty() && !"0".equals(text);
-    }
-
-    private static String resolveEntrySource(Map<String, Object> metadata) {
-        Object source = metadata == null ? null : metadata.get("source");
-        String normalized = source == null ? "" : String.valueOf(source).trim().toUpperCase(Locale.ROOT);
-        return normalized.isEmpty() ? MANUAL_DIARY_SOURCE : normalized;
-    }
-
-    private static Map<String, Object> mergeMetadata(Object currentMetadata, Map<String, Object> nextMetadata) {
-        Map<String, Object> metadata = toMutableMap(currentMetadata);
-        if (nextMetadata != null) {
-            metadata.putAll(nextMetadata);
-        }
-        metadata.putIfAbsent("status", EntityStatus.ACTIVE.name());
-        metadata.put("sourceModule", "DIARY");
-        return metadata;
+    private static boolean shouldAutoMerge(CreateDiaryEntryRequest request, DiaryEntryMetadata metadata) {
+        return DiaryEntryMetadataSupport.allowsAutoMerge(metadata)
+                && "DAILY".equals(normalizeEntryType(request.getEntryType()));
     }
 
     private static String normalizeVisibility(String visibility) {
@@ -282,43 +240,6 @@ public class DiaryEntryService {
         }
         long totalPages = (total + pageSize - 1L) / pageSize;
         return Math.min(normalizedPage, totalPages);
-    }
-
-    private static String resolveDiaryDate(CreateDiaryEntryRequest request) {
-        Object eventAt = request.getMetadata() == null ? null : firstNonNull(
-                request.getMetadata().get("eventAt"),
-                request.getMetadata().get("recordedAt"),
-                request.getMetadata().get("savedFromFamilyChatAt"));
-        LocalDate date = parseDate(eventAt);
-        return (date == null ? LocalDate.now() : date).toString();
-    }
-
-    private static Object firstNonNull(Object... values) {
-        for (Object value : values) {
-            if (value != null && !String.valueOf(value).isBlank()) {
-                return value;
-            }
-        }
-        return null;
-    }
-
-    private static LocalDate parseDate(Object value) {
-        if (value == null) {
-            return null;
-        }
-        String text = String.valueOf(value).trim();
-        if (text.length() >= 10) {
-            try {
-                return LocalDate.parse(text.substring(0, 10));
-            } catch (DateTimeParseException ignored) {
-                // Try ISO date-time below.
-            }
-        }
-        try {
-            return OffsetDateTime.parse(text).toLocalDate();
-        } catch (DateTimeParseException ignored) {
-            return null;
-        }
     }
 
     private static String chooseEntryType(DiaryEntry existing, String nextEntryType) {

@@ -63,7 +63,7 @@ class WriteMemoryCommandServiceTest {
         ArgumentCaptor<CreateDiaryEntryRequest> requestCaptor =
                 ArgumentCaptor.forClass(CreateDiaryEntryRequest.class);
         verify(diaryEntryFacade).create(requestCaptor.capture());
-        Map<String, Object> persistedMetadata = requestCaptor.getValue().getMetadata();
+        Map<String, Object> persistedMetadata = requestCaptor.getValue().getMetadata().toMap();
         assertEquals("WRITE_MEMORY_SIMPLIFIED", persistedMetadata.get("source"));
         assertEquals("Taylor", persistedMetadata.get("authorName"));
         assertEquals(true, persistedMetadata.get("legacyFlag"));

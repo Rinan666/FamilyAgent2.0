@@ -70,8 +70,8 @@ class CreateDiaryEntryToolTest {
         assertEquals("calm", request.getMood());
         assertEquals(List.of("bedtime"), request.getTags());
         assertEquals("FAMILY_SHARED", request.getVisibility());
-        assertEquals("FAMILY_COMPANION_TOOL", request.getMetadata().get("source"));
-        assertEquals("DIARY", request.getMetadata().get("plannedTool"));
+        assertEquals("FAMILY_COMPANION_TOOL", request.getMetadata().getSource());
+        assertEquals("DIARY", request.getMetadata().toMap().get("plannedTool"));
         assertEquals(88L, output.diaryEntryId());
     }
 

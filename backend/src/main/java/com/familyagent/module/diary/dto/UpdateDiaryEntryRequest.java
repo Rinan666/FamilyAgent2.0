@@ -4,7 +4,6 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 import java.util.List;
-import java.util.Map;
 
 @Data
 public class UpdateDiaryEntryRequest {
@@ -17,5 +16,5 @@ public class UpdateDiaryEntryRequest {
     private String mood;
     private List<String> tags;
     private String visibility;
-    private Map<String, Object> metadata;
+    private DiaryEntryMetadata metadata;
 }

@@ -12,6 +12,7 @@ import com.familyagent.module.agent.harness.constant.AgentToolSideEffect;
 import com.familyagent.module.agent.harness.dto.CreateDiaryEntryInput;
 import com.familyagent.module.agent.harness.dto.CreateDiaryEntryOutput;
 import com.familyagent.module.diary.dto.CreateDiaryEntryRequest;
+import com.familyagent.module.diary.dto.DiaryEntryMetadata;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.facade.AgentDiaryEntryFacade;
 import lombok.RequiredArgsConstructor;
@@ -56,7 +57,7 @@ class CreateDiaryEntryTool implements AgentTool<CreateDiaryEntryInput, CreateDia
         request.setTags(input.tags());
         request.setVisibility(input.visibility());
         if (input.metadata() != null) {
-            request.setMetadata(input.metadata().toMap());
+            request.setMetadata(DiaryEntryMetadata.fromMap(input.metadata().toMap()));
         }
         DiaryEntry entry = diaryEntryFacade.create(request);
         return new CreateDiaryEntryOutput(entry.getId());

@@ -5,6 +5,7 @@ import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.diary.dto.CreateDiaryEntryRequest;
+import com.familyagent.module.diary.dto.DiaryEntryMetadata;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.facade.AgentDiaryEntryFacade;
 import com.familyagent.module.growth.dto.CreateGrowthGuardRecordRequest;
@@ -70,7 +71,7 @@ public class WriteMemoryCommandService {
         if (request.getRelatedUserId() != null) {
             metadata.put("relatedUserId", request.getRelatedUserId());
         }
-        diaryRequest.setMetadata(metadata);
+        diaryRequest.setMetadata(DiaryEntryMetadata.fromMap(metadata));
         DiaryEntry entry = diaryEntryFacade.create(diaryRequest);
         return new WriteMemoryResult(
                 "DIARY_ENTRY",

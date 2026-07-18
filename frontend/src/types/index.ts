@@ -304,10 +304,19 @@ export interface CreateDiaryEntryRequest {
   mood?: string;
   tags?: string[];
   visibility?: DiaryVisibility;
-  metadata?: Record<string, unknown>;
+  metadata?: DiaryEntryMetadata;
 }
 
 export type UpdateDiaryEntryRequest = Omit<CreateDiaryEntryRequest, 'familyId'>;
+
+export interface DiaryEntryMetadata extends WriteMemoryMetadata {
+  relatedUserId?: number;
+  relatedMemberName?: string | null;
+  eventAt?: string;
+  recordedAt?: string;
+  savedFromFamilyChatAt?: string;
+  disableAutoMerge?: boolean;
+}
 
 export interface ChatMessage {
   id: string;
