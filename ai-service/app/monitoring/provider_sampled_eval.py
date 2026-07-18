@@ -11,6 +11,7 @@ import uuid
 import litellm
 
 from app.config import settings
+from app.llm.completion_config import provider_completion
 from app.monitoring.provider_sampled_eval_models import (
     MAX_CASES,
     MAX_CASE_TOKENS,
@@ -26,13 +27,13 @@ from app.monitoring.provider_sampled_eval_models import (
 )
 
 
-class LiteLLMProviderProbeClient:
+class DefaultProviderProbeClient:
     """Call the primary model once without retry or fallback."""
 
     async def complete(self, case: ProviderSampleCase) -> ProviderProbeResponse:
         model = settings.default_llm_model
         started_at = time.monotonic()
-        response = await litellm.acompletion(
+        response = await provider_completion(
             model=model,
             messages=[{"role": "user", "content": case.prompt}],
             temperature=0,
@@ -46,13 +47,13 @@ class LiteLLMProviderProbeClient:
             latency_ms=max(0, round((time.monotonic() - started_at) * 1000)),
             input_tokens=input_tokens,
             output_tokens=output_tokens,
-            cost_usd=_completion_cost(response),
+            cost_usd=_completion_cost(response, model),
         )
 
 
 class ProviderSampledEval:
     def __init__(self, client: ProviderProbeClient | None = None):
-        self._client = client or LiteLLMProviderProbeClient()
+        self._client = client or DefaultProviderProbeClient()
 
     async def run(self) -> ProviderSampledEvalReport:
         eval_run_id = str(uuid.uuid4())
@@ -201,7 +202,9 @@ def _usage_value(usage: object, field: str) -> int | None:
     return parsed if parsed >= 0 else None
 
 
-def _completion_cost(response: object) -> float | None:
+def _completion_cost(response: object, model: str) -> float | None:
+    if model.lower().startswith("dashscope/"):
+        return None
     try:
         cost = float(litellm.completion_cost(completion_response=response))
     except Exception:

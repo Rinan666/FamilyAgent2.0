@@ -27,7 +27,7 @@ async def test_chat_stream_observes_primary_failure_and_fallback_success(monkeyp
             raise RuntimeError("primary unavailable")
         return _stream("fallback response")
 
-    monkeypatch.setattr("app.llm.client.litellm.acompletion", fake_completion)
+    monkeypatch.setattr("app.llm.client.provider_completion", fake_completion)
     observations = []
 
     chunks = [chunk async for chunk in client.chat_stream(
@@ -54,7 +54,7 @@ async def test_chat_stream_observes_all_provider_failures(monkeypatch, caplog):
     async def fake_completion(**kwargs):
         raise RuntimeError(f"{kwargs['model']} unavailable")
 
-    monkeypatch.setattr("app.llm.client.litellm.acompletion", fake_completion)
+    monkeypatch.setattr("app.llm.client.provider_completion", fake_completion)
     observations = []
 
     with pytest.raises(RuntimeError, match="LLM stream provider unavailable"):
@@ -82,7 +82,7 @@ async def test_chat_does_not_log_provider_exception_details(monkeypatch, caplog)
     async def fake_completion(**kwargs):
         raise RuntimeError("private non-stream provider detail")
 
-    monkeypatch.setattr("app.llm.client.litellm.acompletion", fake_completion)
+    monkeypatch.setattr("app.llm.client.provider_completion", fake_completion)
 
     with pytest.raises(RetryError):
         await client.chat([{"role": "user", "content": "hello"}])
@@ -103,7 +103,7 @@ async def test_chat_observes_primary_failure_and_fallback_success(monkeypatch):
         choice = type("Choice", (), {"message": message})()
         return type("Response", (), {"choices": [choice]})()
 
-    monkeypatch.setattr("app.llm.client.litellm.acompletion", fake_completion)
+    monkeypatch.setattr("app.llm.client.provider_completion", fake_completion)
     observations = []
 
     result = await client.chat(

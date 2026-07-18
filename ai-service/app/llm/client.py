@@ -7,10 +7,10 @@ import time
 from collections.abc import Callable
 from typing import AsyncIterator, Optional
 
-import litellm
 from tenacity import retry, retry_if_not_exception_type, stop_after_attempt, wait_exponential
 
 from app.config import settings
+from app.llm.completion_config import provider_completion
 from app.llm.observation import LLMCallObservation
 from app.utils.safety_limits import (
     PromptLeakAttemptError,
@@ -69,7 +69,7 @@ class LLMClient:
 
         try:
             response = await with_hard_timeout(
-                litellm.acompletion(**kwargs),
+                provider_completion(**kwargs),
                 label="LLM chat",
             )
             content = response.choices[0].message.content
@@ -157,7 +157,7 @@ class LLMClient:
 
         try:
             response = await with_hard_timeout(
-                litellm.acompletion(
+                provider_completion(
                     model=model,
                     messages=messages,
                     temperature=temperature,

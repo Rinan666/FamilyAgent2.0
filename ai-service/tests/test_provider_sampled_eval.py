@@ -3,7 +3,7 @@ import asyncio
 import pytest
 
 from app.monitoring.provider_sampled_eval import (
-    LiteLLMProviderProbeClient,
+    DefaultProviderProbeClient,
     MAX_CASES,
     MAX_CASE_TOKENS,
     ProviderProbeResponse,
@@ -125,6 +125,29 @@ async def test_sampled_eval_hides_provider_exception_detail(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_sampled_eval_transport_failure_does_not_write_exception_detail(
+    monkeypatch,
+    capsys,
+):
+    _enable(monkeypatch)
+
+    async def fail_completion(**_kwargs):
+        raise RuntimeError("private transport response")
+
+    monkeypatch.setattr(
+        "app.monitoring.provider_sampled_eval.provider_completion",
+        fail_completion,
+    )
+
+    report = await ProviderSampledEval().run()
+    captured = capsys.readouterr()
+
+    assert report.error_code == "AI_PROVIDER_ERROR"
+    assert "private transport response" not in captured.out
+    assert "private transport response" not in captured.err
+
+
+@pytest.mark.asyncio
 async def test_sampled_eval_exposes_timeout_without_retry(monkeypatch):
     _enable(monkeypatch)
     monkeypatch.setattr(
@@ -161,15 +184,19 @@ async def test_litellm_probe_collects_usage_without_reporting_content(monkeypatc
         return _Response()
 
     monkeypatch.setattr(
-        "app.monitoring.provider_sampled_eval.litellm.acompletion",
+        "app.monitoring.provider_sampled_eval.provider_completion",
         fake_completion,
     )
     monkeypatch.setattr(
         "app.monitoring.provider_sampled_eval.litellm.completion_cost",
         lambda **_kwargs: 0.00000321,
     )
+    monkeypatch.setattr(
+        "app.monitoring.provider_sampled_eval.settings.default_llm_model",
+        "openai/public-low-cost-model",
+    )
 
-    response = await LiteLLMProviderProbeClient().complete(PUBLIC_SAMPLE_CASES[0])
+    response = await DefaultProviderProbeClient().complete(PUBLIC_SAMPLE_CASES[0])
 
     assert response.content == "OK"
     assert response.input_tokens == 9
