@@ -3,6 +3,7 @@ import asyncio
 import pytest
 
 from app.monitoring.provider_sampled_eval import (
+    LiteLLMProviderProbeClient,
     MAX_CASES,
     MAX_CASE_TOKENS,
     ProviderProbeResponse,
@@ -10,6 +11,7 @@ from app.monitoring.provider_sampled_eval import (
     ProviderSampledEval,
     report_exit_code,
 )
+from app.monitoring.provider_sampled_eval_models import PUBLIC_SAMPLE_CASES
 
 
 class _ProbeClient:
@@ -27,6 +29,9 @@ class _ProbeClient:
             provider="public-provider",
             model="public-provider/low-cost-model",
             latency_ms=7,
+            input_tokens=6,
+            output_tokens=2,
+            cost_usd=0.000001,
         )
 
 
@@ -64,6 +69,9 @@ async def test_sampled_eval_passes_fixed_public_cases_with_bounded_cost(monkeypa
     assert report.executed_case_count == MAX_CASES
     assert report_exit_code(report) == 0
     assert report.max_output_token_budget <= MAX_CASES * MAX_CASE_TOKENS
+    assert report.total_input_tokens == 12
+    assert report.total_output_tokens == 4
+    assert report.estimated_cost_usd == 0.000002
     assert all(case.max_tokens <= MAX_CASE_TOKENS for case in client.cases)
     assert all(result.attempt_count == 1 for result in report.results)
     assert all(result.degraded is False for result in report.results)
@@ -131,6 +139,42 @@ async def test_sampled_eval_exposes_timeout_without_retry(monkeypatch):
     assert report_exit_code(report) == 1
     assert report.executed_case_count == 1
     assert report.results[0].attempt_count == 1
+
+
+@pytest.mark.asyncio
+async def test_litellm_probe_collects_usage_without_reporting_content(monkeypatch):
+    class _Usage:
+        prompt_tokens = 9
+        completion_tokens = 1
+
+    class _Message:
+        content = "OK"
+
+    class _Choice:
+        message = _Message()
+
+    class _Response:
+        choices = [_Choice()]
+        usage = _Usage()
+
+    async def fake_completion(**_kwargs):
+        return _Response()
+
+    monkeypatch.setattr(
+        "app.monitoring.provider_sampled_eval.litellm.acompletion",
+        fake_completion,
+    )
+    monkeypatch.setattr(
+        "app.monitoring.provider_sampled_eval.litellm.completion_cost",
+        lambda **_kwargs: 0.00000321,
+    )
+
+    response = await LiteLLMProviderProbeClient().complete(PUBLIC_SAMPLE_CASES[0])
+
+    assert response.content == "OK"
+    assert response.input_tokens == 9
+    assert response.output_tokens == 1
+    assert response.cost_usd == 0.00000321
 
 
 def _enable(monkeypatch):

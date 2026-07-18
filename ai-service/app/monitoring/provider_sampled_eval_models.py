@@ -55,6 +55,9 @@ class ProviderProbeResponse:
     provider: str
     model: str
     latency_ms: int
+    input_tokens: int | None
+    output_tokens: int | None
+    cost_usd: float | None
 
 
 class ProviderProbeClient(Protocol):
@@ -72,6 +75,9 @@ class ProviderSampleResult:
     attempt_count: int
     degraded: bool
     error_code: str | None
+    input_tokens: int | None
+    output_tokens: int | None
+    cost_usd: float | None
 
 
 @dataclass(frozen=True)
@@ -82,6 +88,9 @@ class ProviderSampledEvalReport:
     configured_case_count: int
     executed_case_count: int
     max_output_token_budget: int
+    total_input_tokens: int | None
+    total_output_tokens: int | None
+    estimated_cost_usd: float | None
     error_code: str | None
     results: tuple[ProviderSampleResult, ...]
 
