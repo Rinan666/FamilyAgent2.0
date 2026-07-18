@@ -1,6 +1,7 @@
 package com.familyagent.module.memorylibrary.service;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.response.PageResult;
@@ -8,12 +9,14 @@ import com.familyagent.module.diary.facade.MemoryLibraryDiaryFacade;
 import com.familyagent.module.family.facade.MemoryLibraryFamilyFacade;
 import com.familyagent.module.growth.facade.MemoryLibraryGrowthStalenessFacade;
 import com.familyagent.module.growth.facade.MemoryLibraryGrowthFacade;
+import com.familyagent.module.growth.dto.GrowthStalenessStats;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.facade.MemoryIndexingFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryEmbeddingFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryIndexMetadataFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryMemoryFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryVoteFacade;
+import com.familyagent.module.memory.dto.MemoryVoteStats;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryItem;
 import com.familyagent.module.memorylibrary.dto.MemoryLibrarySearchRequest;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryUpdateRequest;
@@ -28,6 +31,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
@@ -126,6 +130,60 @@ class MemoryLibraryServiceTest {
             assertEquals(0L, result.getTotal());
             verify(familyService).checkMembership(10L);
         }
+    }
+
+    @Test
+    void search_attachesTypedSocialStatsWithCompatibleJsonShape() throws Exception {
+        MemoryLibraryQueryService queryService = new MemoryLibraryQueryService(
+                queryGateway,
+                familyService,
+                memoryVoteFacade,
+                growthStalenessFacade);
+        MemoryLibraryItem memoryItem = MemoryLibraryItem.builder()
+                .id("memory-88")
+                .sourceType("FAMILY_EXPERIENCE")
+                .metadata(java.util.Map.of())
+                .build();
+        MemoryLibraryItem growthItem = MemoryLibraryItem.builder()
+                .id("growth-55")
+                .sourceType("GROWTH_OBSERVATION")
+                .metadata(java.util.Map.of())
+                .build();
+        when(queryGateway.query(any())).thenReturn(
+                new MemoryLibraryQueryGateway.QueryResult(List.of(memoryItem, growthItem), 2L));
+        when(memoryVoteFacade.getStats(88L, 101L))
+                .thenReturn(new MemoryVoteStats(88L, 2, 1, 1, 1.3, null));
+        when(growthStalenessFacade.getStats(55L, 101L))
+                .thenReturn(new GrowthStalenessStats(55L, 3, 0.6, true));
+        MemoryLibrarySearchRequest request = new MemoryLibrarySearchRequest();
+        request.setFamilyId(10L);
+
+        try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
+            stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(101L);
+            queryService.search(request);
+        }
+
+        ObjectMapper objectMapper = new ObjectMapper();
+        Object voteStats = memoryItem.getMetadata().get("voteStats");
+        Object stalenessStats = growthItem.getMetadata().get("stalenessStats");
+        assertTrue(voteStats instanceof MemoryVoteStats);
+        assertTrue(stalenessStats instanceof GrowthStalenessStats);
+        assertEquals(
+                objectMapper.valueToTree(java.util.Map.of(
+                        "memoryId", 88L,
+                        "upVotes", 2,
+                        "downVotes", 1,
+                        "voteScore", 1,
+                        "consensusWeight", 1.3,
+                        "myVote", "")),
+                objectMapper.valueToTree(voteStats));
+        assertEquals(
+                objectMapper.valueToTree(java.util.Map.of(
+                        "recordId", 55L,
+                        "staleVotes", 3,
+                        "stalenessWeight", 0.6,
+                        "myVoted", true)),
+                objectMapper.valueToTree(stalenessStats));
     }
 
     @Test

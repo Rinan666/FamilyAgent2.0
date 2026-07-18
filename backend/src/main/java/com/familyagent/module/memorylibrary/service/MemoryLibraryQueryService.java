@@ -90,22 +90,13 @@ public class MemoryLibraryQueryService {
         if ("memory".equals(parsed.prefix()) && "FAMILY_EXPERIENCE".equals(item.getSourceType())) {
             MemoryVoteStats stats = memoryVoteFacade.getStats(parsed.id(), viewerUserId);
             if (stats == null) stats = new MemoryVoteStats(parsed.id(), 0, 0, 0, 1.0, null);
-            metadata.put("voteStats", Map.of(
-                    "memoryId", parsed.id(),
-                    "upVotes", stats.getUpVotes(),
-                    "downVotes", stats.getDownVotes(),
-                    "voteScore", stats.getVoteScore(),
-                    "consensusWeight", stats.getConsensusWeight(),
-                    "myVote", stats.getMyVote() == null ? "" : stats.getMyVote()));
+            if (stats.getMyVote() == null) stats.setMyVote("");
+            metadata.put("voteStats", stats);
         }
         if ("growth".equals(parsed.prefix()) && "GROWTH_OBSERVATION".equals(item.getSourceType())) {
             GrowthStalenessStats stats = growthStalenessFacade.getStats(parsed.id(), viewerUserId);
             if (stats == null) stats = new GrowthStalenessStats(parsed.id(), 0, 1.0, false);
-            metadata.put("stalenessStats", Map.of(
-                    "recordId", parsed.id(),
-                    "staleVotes", stats.getStaleVotes(),
-                    "stalenessWeight", stats.getStalenessWeight(),
-                    "myVoted", stats.isMyVoted()));
+            metadata.put("stalenessStats", stats);
         }
         item.setMetadata(metadata);
     }
