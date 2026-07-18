@@ -1,7 +1,6 @@
 """Application use case for the save-memory planning skill."""
 
 import logging
-from typing import Any
 
 from app.api.memory_archive_helpers import _compact_transcript
 from app.api.memory_contracts import SAVE_TOOL_PLAN_SCHEMA
@@ -10,12 +9,13 @@ from app.api.memory_helpers import (
     _should_skip_save_planning,
     _unavailable_save_tool_plan,
 )
-from app.api.memory_models import SaveToolPlanRequest
+from app.api.memory_models import SaveToolPlanData, SaveToolPlanRequest
 from app.llm.client import LLMClient
 from app.runtime.output_parser import SaveMemoryOutputParser, SkillOutputParseError
 from app.runtime.prompt_renderer import SaveMemoryPromptRenderer
 from app.runtime.skill_error import SkillErrorCode
 from app.runtime.skill_registry import SkillRuntime
+from app.runtime.skill_response import skill_data_failure, skill_success
 from app.utils.input_guard import InputGuardError, enforce_input_guard
 from app.utils.privacy_guard import redact_with_note
 
@@ -35,22 +35,26 @@ class SaveMemoryPlanUseCase:
         self._prompt_renderer = prompt_renderer
         self._output_parser = output_parser
 
-    async def execute(self, request: SaveToolPlanRequest, llm_client: LLMClient) -> dict[str, Any]:
+    async def execute(self, request: SaveToolPlanRequest, llm_client: LLMClient) -> dict[str, object]:
         try:
             return await self._skill_runtime.execute(lambda: self._plan(request, llm_client))
         except TimeoutError:
             logger.warning("Save memory skill timed out")
             return self._failure(SkillErrorCode.TIMEOUT)
 
-    async def _plan(self, request: SaveToolPlanRequest, llm_client: LLMClient) -> dict[str, Any]:
+    async def _plan(self, request: SaveToolPlanRequest, llm_client: LLMClient) -> dict[str, object]:
         try:
             message = redact_with_note(request.message, max_length=3000).text
             enforce_input_guard(message)
             compact_context = _compact_transcript(request.conversation_context)
             if _should_skip_save_planning(message, compact_context):
-                return self._success(_blocked_save_tool_plan(
-                    "当前消息缺乏具体经历、对象、行为变化或可跟进信号，第一道意图审查已拦截。"
-                ))
+                return self._success(
+                    SaveToolPlanData.model_validate(
+                        _blocked_save_tool_plan(
+                            "当前消息缺乏具体经历、对象、行为变化或可跟进信号，第一道意图审查已拦截。"
+                        )
+                    )
+                )
 
             try:
                 raw = await llm_client.chat(
@@ -84,14 +88,13 @@ class SaveMemoryPlanUseCase:
             raise
 
     @staticmethod
-    def _success(data: dict[str, Any]) -> dict[str, Any]:
-        return {"success": True, "data": data}
+    def _success(data: SaveToolPlanData) -> dict[str, object]:
+        return skill_success(data)
 
     @staticmethod
-    def _failure(error_code: SkillErrorCode) -> dict[str, Any]:
-        return {
-            "success": False,
-            "data": _unavailable_save_tool_plan(),
-            "errorCode": error_code.value,
-            "error": "Save-memory planning unavailable",
-        }
+    def _failure(error_code: SkillErrorCode) -> dict[str, object]:
+        return skill_data_failure(
+            SaveToolPlanData.model_validate(_unavailable_save_tool_plan()),
+            error_code,
+            "Save-memory planning unavailable",
+        )

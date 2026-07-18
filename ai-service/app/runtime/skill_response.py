@@ -25,9 +25,30 @@ class SkillFailureResponse(BaseModel):
     error: str
 
 
+class SkillDataFailureResponse(BaseModel, Generic[DataT]):
+    model_config = ConfigDict(frozen=True)
+
+    success: Literal[False] = False
+    data: DataT
+    errorCode: SkillErrorCode
+    error: str
+
+
 def skill_success(data: DataT) -> dict[str, object]:
     return SkillSuccessResponse(data=data).model_dump(mode="json")
 
 
 def skill_failure(error_code: SkillErrorCode, message: str) -> dict[str, object]:
     return SkillFailureResponse(errorCode=error_code, error=message).model_dump(mode="json")
+
+
+def skill_data_failure(
+    data: DataT,
+    error_code: SkillErrorCode,
+    message: str,
+) -> dict[str, object]:
+    return SkillDataFailureResponse(
+        data=data,
+        errorCode=error_code,
+        error=message,
+    ).model_dump(mode="json")

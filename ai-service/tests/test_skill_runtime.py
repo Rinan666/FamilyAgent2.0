@@ -114,5 +114,5 @@ def test_save_memory_output_parser_keeps_injection_rejection():
         '"visibility": "FAMILY_VISIBLE", "scope": "FAMILY_VISIBLE"}'
     )
 
-    assert parsed["should_save"] is False
-    assert parsed["tool"] == "NONE"
+    assert parsed.should_save is False
+    assert parsed.tool == "NONE"

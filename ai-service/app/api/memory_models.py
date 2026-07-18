@@ -1,7 +1,47 @@
 """Typed contracts for the family memory API."""
-from typing import Literal
+from typing import Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field
+
+DiaryEntryType: TypeAlias = Literal[
+    "DAILY",
+    "IMPORTANT_EVENT",
+    "LESSON",
+    "EMOTION",
+    "MESSAGE_TO_FAMILY",
+    "SELF_REFLECTION",
+]
+Visibility: TypeAlias = Literal[
+    "PRIVATE",
+    "FAMILY_VISIBLE",
+    "CARE_VISIBLE",
+    "LEGACY_VISIBLE",
+]
+MemoryType: TypeAlias = Literal[
+    "FAMILY_STORY",
+    "ELDER_ADVICE",
+    "HEALTH_REMINDER",
+    "GROWTH_RISK",
+    "VALUE",
+    "PLAN",
+]
+MemoryScope: TypeAlias = Literal[
+    "PRIVATE",
+    "CARE_VISIBLE",
+    "FAMILY_VISIBLE",
+    "PARENT_VISIBLE",
+]
+GrowthCategory: TypeAlias = Literal[
+    "POSTURE",
+    "DENTAL",
+    "VISION",
+    "SLEEP",
+    "EXERCISE",
+    "SCREEN_TIME",
+    "EMOTION",
+    "COMMUNICATION",
+    "OTHER",
+]
 
 
 class SaveToolPlanRequest(BaseModel):
@@ -29,45 +69,11 @@ class OrganizedDraftData(BaseModel):
     title: str
     content: str
     tags: list[str]
-    diary_entry_type: Literal[
-        "DAILY",
-        "IMPORTANT_EVENT",
-        "LESSON",
-        "EMOTION",
-        "MESSAGE_TO_FAMILY",
-        "SELF_REFLECTION",
-    ]
-    diary_visibility: Literal[
-        "PRIVATE",
-        "FAMILY_VISIBLE",
-        "CARE_VISIBLE",
-        "LEGACY_VISIBLE",
-    ]
-    memory_type: Literal[
-        "FAMILY_STORY",
-        "ELDER_ADVICE",
-        "HEALTH_REMINDER",
-        "GROWTH_RISK",
-        "VALUE",
-        "PLAN",
-    ]
-    memory_scope: Literal[
-        "PRIVATE",
-        "CARE_VISIBLE",
-        "FAMILY_VISIBLE",
-        "PARENT_VISIBLE",
-    ]
-    growth_category: Literal[
-        "POSTURE",
-        "DENTAL",
-        "VISION",
-        "SLEEP",
-        "EXERCISE",
-        "SCREEN_TIME",
-        "EMOTION",
-        "COMMUNICATION",
-        "OTHER",
-    ]
+    diary_entry_type: DiaryEntryType
+    diary_visibility: Visibility
+    memory_type: MemoryType
+    memory_scope: MemoryScope
+    growth_category: GrowthCategory
     growth_severity: int = Field(ge=1, le=5)
     scenario: str
     reason: str
@@ -115,3 +121,25 @@ class PersonaMaterialDraftRequest(BaseModel):
     content: str = Field(..., min_length=8)
     profile: PersonaProfileInput = Field(default_factory=PersonaProfileInput)
     family_context: str = ""
+
+
+class SaveToolPlanData(BaseModel):
+    """Sanitized save-plan payload, including safe failure fallback data."""
+
+    model_config = ConfigDict(frozen=True)
+
+    should_save: bool
+    tool: Literal["NONE", "DIARY", "FAMILY_MEMORY", "GROWTH_GUARD"]
+    content: str
+    title: str
+    summary: str
+    visibility: Visibility
+    entry_type: DiaryEntryType
+    memory_type: MemoryType
+    scope: MemoryScope
+    category: GrowthCategory
+    severity: int = Field(ge=1, le=5)
+    importance: int = Field(ge=1, le=5)
+    tags: list[str]
+    reason: str
+    confirmation_message: str
