@@ -9,6 +9,11 @@ from app.api.memory import (
     _sanitize_save_tool_plan,
     plan_agent_save_tool,
 )
+from app.api.memory_save_signals import _looks_like_save_command_only
+
+
+def test_save_to_memory_library_command_is_detected_as_command_only():
+    assert _looks_like_save_command_only("保存到记忆库吧") is True
 
 
 def test_growth_observation_overrides_wrong_diary_tool():
@@ -326,7 +331,7 @@ async def test_bare_save_command_with_valuable_context_extracts_context(monkeypa
 
     response = await plan_agent_save_tool(
         SaveToolPlanRequest(
-            message="保存一下",
+            message="保存到记忆库吧",
             conversation_context=[
                 {
                     "role": "user",
@@ -347,8 +352,10 @@ async def test_bare_save_command_with_valuable_context_extracts_context(monkeypa
     assert response["success"] is True
     assert response["data"]["should_save"] is True
     assert response["data"]["tool"] == "FAMILY_MEMORY"
-    assert "保存一下" not in response["data"]["content"]
+    assert "保存到记忆库吧" not in response["data"]["content"]
     assert "应用题" in response["data"]["content"]
+    assert response["data"]["confirmation_message"] == "建议保存为经验沉淀，等待后端执行结果。"
+    assert "已保存" not in response["data"]["confirmation_message"]
 
 
 def test_durable_emotion_auto_saves_even_when_model_is_conservative():

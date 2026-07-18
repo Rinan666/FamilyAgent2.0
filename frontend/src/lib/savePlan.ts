@@ -55,7 +55,7 @@ const GROWTH_CATEGORIES = new Set<GrowthGuardCategory>([
   'OTHER',
 ]);
 
-const EXPLICIT_SAVE_COMMAND_PATTERN = /^(?:请|麻烦)?(?:你)?(?:帮我|替我|给我)?(?:把)?(?:刚才|上面|上文|前面|这段|这条|这个|这些|那段|那条|那件事)?(?:的)?(?:内容|对话|记录|记忆|经历|事情|话)?(?:保存|保存成记忆|存起来|记一下|记下来|记录下来|留个记录|留作记录|沉淀下来|加入记忆库|放到记忆库|收进记忆库)(?:一下|起来|吧|为记忆|到记忆库)?[。.!！?？]*$/;
+const EXPLICIT_SAVE_COMMAND_PATTERN = /^(?:请|麻烦)?(?:你)?(?:帮我|替我|给我)?(?:把)?(?:刚才|上面|上文|前面|这段|这条|这个|这些|那段|那条|那件事)?(?:的)?(?:内容|对话|记录|记忆|经历|事情|话)?(?:保存|保存成记忆|存起来|记一下|记下来|记录下来|留个记录|留作记录|沉淀下来|加入记忆库|放到记忆库|收进记忆库)(?:一下|起来|为记忆|到记忆库)?(?:吧)?[。.!！?？]*$/;
 
 export type SavedRecordType = 'DIARY_ENTRY' | 'FAMILY_MEMORY' | 'GROWTH_GUARD' | 'NONE';
 
@@ -63,6 +63,12 @@ export type SavePlanPersistenceDecision = {
   plan: AgentSaveToolPlan;
   shouldPersist: boolean;
   skippedDetail: string;
+};
+
+export type AgentSubmissionRoute = {
+  content: string;
+  kind: 'chat' | 'explicit_save';
+  conversationContext: ChatMessage[];
 };
 
 export type AgentSaveMemoryToolRequestContext = {
@@ -95,6 +101,21 @@ export function isExplicitSaveMemoryCommand(value: string) {
   const normalized = value.trim().replace(/\s+/g, '');
   if (!normalized || normalized.length > 40) return false;
   return EXPLICIT_SAVE_COMMAND_PATTERN.test(normalized);
+}
+
+export function routeAgentSubmission(
+  value: string,
+  messages: readonly ChatMessage[],
+): AgentSubmissionRoute {
+  const content = value.trim();
+  const isExplicitSave = isExplicitSaveMemoryCommand(content);
+  return {
+    content,
+    kind: isExplicitSave ? 'explicit_save' : 'chat',
+    conversationContext: isExplicitSave
+      ? messages.filter((message) => message.role !== 'system').slice(-10)
+      : [],
+  };
 }
 
 export function buildRelevantSaveContext(message: ChatMessage, messages: readonly ChatMessage[]) {
@@ -133,7 +154,7 @@ export function normalizeSaveToolPlan(plan: AgentSaveToolPlan): AgentSaveToolPla
       ? plan.tags.map((tag) => String(tag).trim()).filter(Boolean).slice(0, 6)
       : [],
     reason: String(plan.reason || '').trim().slice(0, 120),
-    confirmation_message: String(plan.confirmation_message || defaultSaveConfirmation(tool)).trim().slice(0, 120),
+    confirmation_message: defaultSaveConfirmation(shouldSave ? tool : 'NONE'),
   };
 }
 
@@ -349,9 +370,9 @@ function defaultSaveTitle(tool: AgentSaveTool) {
 
 function defaultSaveConfirmation(tool: AgentSaveTool) {
   return {
-    DIARY: '已保存为日记。',
-    FAMILY_MEMORY: '已保存为家庭记忆。',
-    GROWTH_GUARD: '已保存为成长观察。',
+    DIARY: '建议保存为日记，等待后端执行结果。',
+    FAMILY_MEMORY: '建议保存为家庭记忆，等待后端执行结果。',
+    GROWTH_GUARD: '建议保存为成长观察，等待后端执行结果。',
     NONE: '这条消息无需保存。',
   }[tool];
 }

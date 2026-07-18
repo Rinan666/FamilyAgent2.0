@@ -7,6 +7,7 @@ import {
   buildWriteMemorySaveRequest,
   isExplicitSaveMemoryCommand,
   normalizeSaveToolPlan,
+  routeAgentSubmission,
   savePlanPersistenceDecision,
   savePlanDetail,
   savedRecordType,
@@ -276,5 +277,41 @@ describe('savePlan helpers', () => {
     expect(isExplicitSaveMemoryCommand('怎么保存到本地？')).toBe(false);
     expect(isExplicitSaveMemoryCommand('我今天学会了保存文件的快捷键')).toBe(false);
     expect(isExplicitSaveMemoryCommand('请把今天的作业保存到电脑桌面')).toBe(false);
+  });
+
+  it('routes explicit save commands with prior non-system context instead of chat', () => {
+    const messages = [
+      { id: 'system', role: 'system' as const, content: 'internal marker', timestamp: '2026-07-01' },
+      ...Array.from({ length: 11 }, (_, index) => ({
+        id: `message-${index}`,
+        role: index % 2 === 0 ? 'user' as const : 'assistant' as const,
+        content: `context ${index}`,
+        timestamp: '2026-07-01',
+      })),
+    ];
+
+    const routed = routeAgentSubmission(' 保存到记忆库吧 ', messages);
+
+    expect(routed.kind).toBe('explicit_save');
+    expect(routed.content).toBe('保存到记忆库吧');
+    expect(routed.conversationContext).toHaveLength(10);
+    expect(routed.conversationContext[0].id).toBe('message-1');
+    expect(routed.conversationContext.some((message) => message.role === 'system')).toBe(false);
+  });
+
+  it('keeps ordinary messages on the chat route', () => {
+    const routed = routeAgentSubmission('怎么保存到本地？', []);
+
+    expect(routed.kind).toBe('chat');
+    expect(routed.conversationContext).toEqual([]);
+  });
+
+  it('never preserves a model claim that planning already saved data', () => {
+    const normalized = normalizeSaveToolPlan(plan({
+      confirmation_message: '已经完整归档到家庭记忆库。',
+    }));
+
+    expect(normalized.confirmation_message).toBe('建议保存为日记，等待后端执行结果。');
+    expect(normalized.confirmation_message).not.toContain('已保存');
   });
 });

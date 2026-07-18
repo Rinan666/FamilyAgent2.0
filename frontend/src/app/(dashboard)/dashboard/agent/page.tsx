@@ -46,7 +46,7 @@ import { loadSessionMessagesChronologically } from '@/lib/sessionHistory';
 import {
   buildAgentSaveMemoryToolRequest,
   buildRelevantSaveContext,
-  isExplicitSaveMemoryCommand,
+  routeAgentSubmission,
   savePlanDetail,
   savePlanPersistenceDecision,
   savedRecordType,
@@ -233,8 +233,6 @@ export default function AgentPage() {
 
   const routePromptAppliedRef = useRef('');
   const sessionSavedMemoriesRef = useRef<SessionSavedMemory[]>([]);
-  const pendingExplicitSaveRef = useRef<{ messageText: string; context: ChatMessage[] } | null>(null);
-  const handledExplicitSaveMessageIdsRef = useRef<Set<string>>(new Set());
   const createSessionPromiseRef = useRef<Promise<ChatSessionDetail> | null>(null);
   const sessionGenerationRef = useRef(0);
   const sessionIdRef = useRef<number | null>(null);
@@ -260,6 +258,7 @@ export default function AgentPage() {
   const [isContextOpen, setIsContextOpen] = useState(false);
   const [responseMode, setResponseMode] = useState<AgentResponseMode>('think');
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
+  const [isProcessingSaveCommand, setIsProcessingSaveCommand] = useState(false);
 
   const {
     viewerRole,
@@ -698,8 +697,6 @@ export default function AgentPage() {
     setSessionError('');
     setSaveFeedback({});
     sessionSavedMemoriesRef.current = [];
-    pendingExplicitSaveRef.current = null;
-    handledExplicitSaveMessageIdsRef.current.clear();
     setIsSessionsOpen(false);
     setIsContextOpen(false);
     autoRestoreFamilyIdRef.current = null;
@@ -758,39 +755,7 @@ export default function AgentPage() {
     setSessionError('');
     setSaveFeedback({});
     sessionSavedMemoriesRef.current = [];
-    pendingExplicitSaveRef.current = null;
-    handledExplicitSaveMessageIdsRef.current.clear();
   }, [discardStreaming, reset, setSessionId]);
-
-  const handleSubmit = useCallback(async () => {
-    const content = input.trim();
-    if (!content || isStreaming) return;
-    pendingExplicitSaveRef.current = isExplicitSaveMemoryCommand(content)
-      ? {
-          messageText: content,
-          context: useChatStore.getState().messages
-            .filter((message) => message.role !== 'system')
-            .slice(-10),
-        }
-      : null;
-    setInput('');
-    try {
-      await sendMessage(content);
-    } catch {
-      // The append pipeline already surfaces save failures inline.
-    }
-  }, [input, isStreaming, sendMessage]);
-
-  const handleInputKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (!isPlainEnter(event)) return;
-
-    event.preventDefault();
-    if (isStreaming) {
-      stopStreaming();
-      return;
-    }
-    void handleSubmit();
-  }, [handleSubmit, isStreaming, stopStreaming]);
 
   const loadAllSessionMessages = useCallback((targetSessionId: number) => (
     loadSessionMessagesChronologically(sessionApi.getSessionMessages, targetSessionId, 40)
@@ -816,8 +781,6 @@ export default function AgentPage() {
       setActiveSessionDetail(detail);
       setSaveFeedback({});
       sessionSavedMemoriesRef.current = [];
-      pendingExplicitSaveRef.current = null;
-      handledExplicitSaveMessageIdsRef.current.clear();
       upsertSession(detail);
     } catch (error) {
       if (sessionGenerationRef.current === generation) {
@@ -1237,20 +1200,44 @@ export default function AgentPage() {
     }
   }, [activeFamilyId, saveFeedback]);
 
-  useEffect(() => {
-    if (isStreaming) return;
-    const pending = pendingExplicitSaveRef.current;
-    if (!pending) return;
+  const handleSubmit = useCallback(async () => {
+    if (isStreaming || isProcessingSaveCommand) return;
+    const submission = routeAgentSubmission(input, useChatStore.getState().messages);
+    if (!submission.content) return;
 
-    const userMessage = [...messages]
-      .reverse()
-      .find((message) => message.role === 'user' && message.content.trim() === pending.messageText);
-    if (!userMessage || handledExplicitSaveMessageIdsRef.current.has(userMessage.id)) return;
+    setInput('');
+    if (submission.kind === 'explicit_save') {
+      setIsProcessingSaveCommand(true);
+      const userMessage = useChatStore.getState().addMessage('user', submission.content);
+      const persistenceTask = appendSessionMessages([userMessage]).catch(() => undefined);
+      try {
+        await handleSaveMessage(userMessage, submission.conversationContext);
+      } finally {
+        setIsProcessingSaveCommand(false);
+        void persistenceTask;
+      }
+      return;
+    }
 
-    handledExplicitSaveMessageIdsRef.current.add(userMessage.id);
-    pendingExplicitSaveRef.current = null;
-    void handleSaveMessage(userMessage, pending.context);
-  }, [handleSaveMessage, isStreaming, messages]);
+    try {
+      await sendMessage(submission.content);
+    } catch {
+      // The chat pipeline already surfaces provider failures inline.
+    }
+  }, [appendSessionMessages, handleSaveMessage, input, isProcessingSaveCommand, isStreaming, sendMessage]);
+
+  const handleInputKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!isPlainEnter(event)) return;
+
+    event.preventDefault();
+    if (isStreaming) {
+      stopStreaming();
+      return;
+    }
+    if (!isProcessingSaveCommand) {
+      void handleSubmit();
+    }
+  }, [handleSubmit, isProcessingSaveCommand, isStreaming, stopStreaming]);
 
   const selectorOptions = useMemo(
     () => members.filter((member) => member.userId !== selfUserId),
@@ -1358,7 +1345,7 @@ export default function AgentPage() {
                 stopStreaming();
                 return;
               }
-              void handleSubmit();
+              if (!isProcessingSaveCommand) void handleSubmit();
             }}
             className="shrink-0 bg-white px-3 pb-3 pt-2 md:px-5 md:pb-5"
           >
@@ -1369,7 +1356,7 @@ export default function AgentPage() {
                 onChange={(event) => setInput(event.target.value)}
                 onKeyDown={handleInputKeyDown}
                 placeholder="发消息或按住说话"
-                disabled={isStreaming}
+                disabled={isStreaming || isProcessingSaveCommand}
                 rows={1}
                 className="max-h-36 min-h-12 w-full resize-none overflow-y-auto rounded-[20px] border-0 bg-white px-3 py-2 text-base leading-7 text-stone-900 outline-none transition placeholder:text-stone-400 disabled:bg-stone-50"
               />
@@ -1393,7 +1380,7 @@ export default function AgentPage() {
                     <button
                       type="button"
                       onClick={() => setResponseMode('quick')}
-                      disabled={isStreaming}
+                      disabled={isStreaming || isProcessingSaveCommand}
                       className={cn(
                         'inline-flex h-7 items-center rounded-full px-3 text-xs font-medium transition',
                         responseMode === 'quick'
@@ -1406,7 +1393,7 @@ export default function AgentPage() {
                     <button
                       type="button"
                       onClick={() => setResponseMode('think')}
-                      disabled={isStreaming}
+                      disabled={isStreaming || isProcessingSaveCommand}
                       className={cn(
                         'inline-flex h-7 items-center rounded-full px-3 text-xs font-medium transition',
                         responseMode === 'think'
@@ -1424,18 +1411,22 @@ export default function AgentPage() {
                     compact
                     className="[&>button]:h-9 [&>button]:w-9 [&>button]:rounded-full [&>button]:border-stone-200 [&>button]:bg-stone-50 [&>button]:text-stone-600 [&>button:hover]:bg-stone-100"
                     onTranscript={(text) => setInput((current) => (current ? `${current}\n${text}` : text))}
-                    disabled={isStreaming}
+                    disabled={isStreaming || isProcessingSaveCommand}
                   />
                   <button
                     type="submit"
-                    disabled={isStreaming ? false : !input.trim()}
+                    disabled={isProcessingSaveCommand || (isStreaming ? false : !input.trim())}
                     className={cn(
                       'inline-flex h-9 min-w-9 items-center justify-center gap-2 rounded-full px-3 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50',
                       isStreaming ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-700 hover:bg-emerald-800',
                     )}
-                    aria-label={isStreaming ? '停止输出' : '发送消息'}
+                    aria-label={isStreaming ? '停止输出' : isProcessingSaveCommand ? '正在保存' : '发送消息'}
                   >
-                    {isStreaming ? <Square className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+                    {isStreaming
+                      ? <Square className="h-4 w-4" />
+                      : isProcessingSaveCommand
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : <Send className="h-4 w-4" />}
                   </button>
                 </div>
               </div>

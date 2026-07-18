@@ -68,6 +68,7 @@ async def test_family_agent_chat_stream_builds_messages_without_behavior_drift(m
     assert captured["messages"][0]["role"] == "system"
     assert "MirrorAgent" in captured["messages"][0]["content"]
     assert "授权上下文" in captured["messages"][0]["content"]
+    assert "没有收到工具执行成功结果时" in captured["messages"][0]["content"]
     assert captured["messages"][1] == {"role": "assistant", "content": "之前的上下文"}
     assert captured["messages"][2] == {"role": "user", "content": "请帮我分析这段家庭冲突"}
 

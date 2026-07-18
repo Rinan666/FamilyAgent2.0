@@ -96,9 +96,7 @@ def _sanitize_save_tool_plan(data: dict) -> dict:
         "importance": _bounded_int(data.get("importance"), 1, 5, 3),
         "tags": _compact_string_list(data.get("tags"), 6, 18),
         "reason": _save_plan_reason(data.get("reason"), tool),
-        "confirmation_message": str(
-            data.get("confirmation_message", _default_save_confirmation(tool))
-        ).strip()[:120] or _default_save_confirmation(tool),
+        "confirmation_message": _default_save_confirmation(tool),
     }
 
 def _normalize_save_content(value: object, *, max_chars: int = 1200) -> str:
@@ -274,9 +272,9 @@ def _default_save_title(tool: str) -> str:
 
 def _default_save_confirmation(tool: str) -> str:
     return {
-        "DIARY": "已保存为每日记录。",
-        "FAMILY_MEMORY": "已保存为经验沉淀。",
-        "GROWTH_GUARD": "已保存为成长观察。",
+        "DIARY": "建议保存为每日记录，等待后端执行结果。",
+        "FAMILY_MEMORY": "建议保存为经验沉淀，等待后端执行结果。",
+        "GROWTH_GUARD": "建议保存为成长观察，等待后端执行结果。",
     }.get(tool, "这条消息不需要保存。")
 
 def _compact_string_list(value: object, limit: int, max_len: int) -> list[str]:

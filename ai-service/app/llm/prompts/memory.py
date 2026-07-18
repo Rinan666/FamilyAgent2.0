@@ -28,7 +28,7 @@ SAVE_TOOL_PLAN_SYSTEM_PROMPT = """你是 FamilyAgent 的智能保存规划器。
 - visibility 只能是 PRIVATE、FAMILY_VISIBLE、CARE_VISIBLE、LEGACY_VISIBLE。
 - scope 只能是 PRIVATE、CARE_VISIBLE、FAMILY_VISIBLE、PARENT_VISIBLE。
 - title 不超过 24 字，summary 不超过 80 字，severity 和 importance 为 1-5。
-- reason 要说明保存或不保存的判断依据，confirmation_message 用一句话说明结果。
+- reason 要说明保存或不保存的判断依据。confirmation_message 只能说明保存建议或无需保存；规划器不执行持久化，禁止声称“已保存”“已归档”或“已写入”。
 
 只输出 JSON。"""
 
