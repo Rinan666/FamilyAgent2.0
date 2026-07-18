@@ -19,7 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      DEFAULT_LLM_MODEL: ${{ vars.PROVIDER_SAMPLED_EVAL_MODEL || 'dashscope/qwen-flash' }}
+      APP_ENV: production
+      PROVIDER_SAMPLED_EVAL_MODEL: ${{ vars.PROVIDER_SAMPLED_EVAL_MODEL || 'dashscope/qwen-flash' }}
       PROVIDER_SAMPLED_EVAL_CASE_LIMIT: "2"
       PROVIDER_SAMPLED_EVAL_TIMEOUT_SECONDS: "20"
 

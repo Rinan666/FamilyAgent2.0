@@ -68,6 +68,7 @@ class Settings(BaseSettings):
 
     # Sampled provider evaluation (fixed public fixtures, never used by readiness)
     provider_sampled_eval_enabled: bool = False
+    provider_sampled_eval_model: str = "dashscope/qwen-flash"
     provider_sampled_eval_timeout_seconds: float = 20.0
     provider_sampled_eval_case_limit: int = 2
 

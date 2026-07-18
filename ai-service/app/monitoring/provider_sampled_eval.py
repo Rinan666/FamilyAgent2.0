@@ -9,6 +9,7 @@ import time
 import uuid
 
 import litellm
+from openai import AuthenticationError, PermissionDeniedError, RateLimitError
 
 from app.config import settings
 from app.llm.completion_config import provider_completion
@@ -16,8 +17,12 @@ from app.monitoring.provider_sampled_eval_models import (
     MAX_CASES,
     MAX_CASE_TOKENS,
     MAX_TIMEOUT_SECONDS,
+    PROVIDER_SAMPLED_EVAL_SCHEMA_VERSION,
+    PUBLIC_SAMPLE_FIXTURE_VERSION,
     PUBLIC_SAMPLE_CASES,
+    ProviderProbeAuthenticationError,
     ProviderProbeClient,
+    ProviderProbeRateLimitError,
     ProviderProbeResponse,
     ProviderSampleCase,
     ProviderSampleErrorCode,
@@ -31,15 +36,20 @@ class DefaultProviderProbeClient:
     """Call the primary model once without retry or fallback."""
 
     async def complete(self, case: ProviderSampleCase) -> ProviderProbeResponse:
-        model = settings.default_llm_model
+        model = settings.provider_sampled_eval_model
         started_at = time.monotonic()
-        response = await provider_completion(
-            model=model,
-            messages=[{"role": "user", "content": case.prompt}],
-            temperature=0,
-            max_tokens=case.max_tokens,
-            extra_body={"enable_thinking": False},
-        )
+        try:
+            response = await provider_completion(
+                model=model,
+                messages=[{"role": "user", "content": case.prompt}],
+                temperature=0,
+                max_tokens=case.max_tokens,
+                extra_body={"enable_thinking": False},
+            )
+        except (AuthenticationError, PermissionDeniedError) as error:
+            raise ProviderProbeAuthenticationError from error
+        except RateLimitError as error:
+            raise ProviderProbeRateLimitError from error
         input_tokens, output_tokens = _token_usage(response)
         return ProviderProbeResponse(
             content=response.choices[0].message.content or "",
@@ -78,7 +88,10 @@ class ProviderSampledEval:
 
         passed = len(results) == len(cases) and all(item.passed for item in results)
         return ProviderSampledEvalReport(
+            schema_version=PROVIDER_SAMPLED_EVAL_SCHEMA_VERSION,
+            fixture_version=PUBLIC_SAMPLE_FIXTURE_VERSION,
             eval_run_id=eval_run_id,
+            model=settings.provider_sampled_eval_model,
             status=ProviderSampleStatus.PASSED if passed else ProviderSampleStatus.FAILED,
             success=passed,
             configured_case_count=len(cases),
@@ -100,6 +113,18 @@ class ProviderSampledEval:
             return _failed_result(
                 case,
                 ProviderSampleErrorCode.TIMEOUT,
+                _elapsed_ms(started_at),
+            )
+        except ProviderProbeAuthenticationError:
+            return _failed_result(
+                case,
+                ProviderSampleErrorCode.AUTHENTICATION_ERROR,
+                _elapsed_ms(started_at),
+            )
+        except ProviderProbeRateLimitError:
+            return _failed_result(
+                case,
+                ProviderSampleErrorCode.RATE_LIMITED,
                 _elapsed_ms(started_at),
             )
         except Exception:
@@ -141,7 +166,12 @@ class ProviderSampledEval:
 def _configured_cases() -> tuple[ProviderSampleCase, ...] | None:
     case_limit = settings.provider_sampled_eval_case_limit
     timeout = settings.provider_sampled_eval_timeout_seconds
-    if not 1 <= case_limit <= MAX_CASES or not 0 < timeout <= MAX_TIMEOUT_SECONDS:
+    model = settings.provider_sampled_eval_model.strip()
+    if (
+        not 1 <= case_limit <= MAX_CASES
+        or not 0 < timeout <= MAX_TIMEOUT_SECONDS
+        or "/" not in model
+    ):
         return None
     cases = PUBLIC_SAMPLE_CASES[:case_limit]
     if any(case.max_tokens > MAX_CASE_TOKENS for case in cases):
@@ -155,7 +185,10 @@ def _empty_report(
     error_code: ProviderSampleErrorCode | None = None,
 ) -> ProviderSampledEvalReport:
     return ProviderSampledEvalReport(
+        schema_version=PROVIDER_SAMPLED_EVAL_SCHEMA_VERSION,
+        fixture_version=PUBLIC_SAMPLE_FIXTURE_VERSION,
         eval_run_id=eval_run_id,
+        model=settings.provider_sampled_eval_model,
         status=status,
         success=False,
         configured_case_count=0,
@@ -174,7 +207,7 @@ def _failed_result(
     error_code: ProviderSampleErrorCode,
     latency_ms: int,
 ) -> ProviderSampleResult:
-    model = settings.default_llm_model
+    model = settings.provider_sampled_eval_model
     return ProviderSampleResult(
         case_id=case.case_id,
         passed=False,

@@ -1,12 +1,16 @@
 import asyncio
 
+import httpx
 import pytest
+from openai import AuthenticationError, RateLimitError
 
 from app.monitoring.provider_sampled_eval import (
     DefaultProviderProbeClient,
     MAX_CASES,
     MAX_CASE_TOKENS,
+    ProviderProbeAuthenticationError,
     ProviderProbeResponse,
+    ProviderProbeRateLimitError,
     ProviderSampleStatus,
     ProviderSampledEval,
     report_exit_code,
@@ -66,6 +70,9 @@ async def test_sampled_eval_passes_fixed_public_cases_with_bounded_cost(monkeypa
 
     assert report.status == ProviderSampleStatus.PASSED
     assert report.success is True
+    assert report.schema_version == "provider.sampled-eval.v1"
+    assert report.fixture_version == "provider.public-fixtures.v1"
+    assert report.model == "dashscope/qwen-flash"
     assert report.configured_case_count == MAX_CASES
     assert report.executed_case_count == MAX_CASES
     assert report_exit_code(report) == 0
@@ -126,6 +133,22 @@ async def test_sampled_eval_rejects_unsafe_budget_configuration(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_sampled_eval_rejects_unqualified_model_configuration(monkeypatch):
+    _enable(monkeypatch)
+    monkeypatch.setattr(
+        "app.monitoring.provider_sampled_eval.settings.provider_sampled_eval_model",
+        "qwen-flash",
+    )
+    client = _ProbeClient(outputs=("OK", "42"))
+
+    report = await ProviderSampledEval(client).run()
+
+    assert report.status == ProviderSampleStatus.CONFIG_INVALID
+    assert report.error_code == "AI_EVAL_CONFIG_INVALID"
+    assert client.cases == []
+
+
+@pytest.mark.asyncio
 async def test_sampled_eval_hides_provider_exception_detail(monkeypatch):
     _enable(monkeypatch)
     client = _ProbeClient(error=RuntimeError("private provider response"))
@@ -136,6 +159,61 @@ async def test_sampled_eval_hides_provider_exception_detail(monkeypatch):
     assert report.error_code == "AI_PROVIDER_ERROR"
     assert report_exit_code(report) == 1
     assert "private provider response" not in str(report.as_dict())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("error", "expected_code"),
+    [
+        (ProviderProbeAuthenticationError(), "AI_PROVIDER_AUTHENTICATION_ERROR"),
+        (ProviderProbeRateLimitError(), "AI_PROVIDER_RATE_LIMITED"),
+    ],
+)
+async def test_sampled_eval_classifies_actionable_provider_failures(
+    monkeypatch,
+    error,
+    expected_code,
+):
+    _enable(monkeypatch)
+
+    report = await ProviderSampledEval(_ProbeClient(error=error)).run()
+
+    assert report.error_code == expected_code
+    assert report.results[0].error_code == expected_code
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("error_type", "status_code", "expected_code"),
+    [
+        (AuthenticationError, 401, "AI_PROVIDER_AUTHENTICATION_ERROR"),
+        (RateLimitError, 429, "AI_PROVIDER_RATE_LIMITED"),
+    ],
+)
+async def test_default_probe_translates_openai_provider_errors(
+    monkeypatch,
+    error_type,
+    status_code,
+    expected_code,
+):
+    _enable(monkeypatch)
+    response = httpx.Response(
+        status_code,
+        request=httpx.Request("POST", "https://provider.example/v1/chat"),
+    )
+
+    async def fail_completion(**_kwargs):
+        raise error_type("private provider detail", response=response, body={})
+
+    monkeypatch.setattr(
+        "app.monitoring.provider_sampled_eval.provider_completion",
+        fail_completion,
+    )
+
+    report = await ProviderSampledEval().run()
+
+    assert report.error_code == expected_code
+    assert "private provider detail" not in str(report.as_dict())
 
 
 @pytest.mark.asyncio
@@ -207,7 +285,7 @@ async def test_litellm_probe_collects_usage_without_reporting_content(monkeypatc
         lambda **_kwargs: 0.00000321,
     )
     monkeypatch.setattr(
-        "app.monitoring.provider_sampled_eval.settings.default_llm_model",
+        "app.monitoring.provider_sampled_eval.settings.provider_sampled_eval_model",
         "openai/public-low-cost-model",
     )
 
@@ -227,4 +305,8 @@ def _enable(monkeypatch):
     monkeypatch.setattr(
         "app.monitoring.provider_sampled_eval.settings.provider_sampled_eval_case_limit",
         MAX_CASES,
+    )
+    monkeypatch.setattr(
+        "app.monitoring.provider_sampled_eval.settings.provider_sampled_eval_model",
+        "dashscope/qwen-flash",
     )

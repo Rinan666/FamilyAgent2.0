@@ -9,6 +9,8 @@ from typing import Protocol
 MAX_CASES = 2
 MAX_CASE_TOKENS = 8
 MAX_TIMEOUT_SECONDS = 60.0
+PROVIDER_SAMPLED_EVAL_SCHEMA_VERSION = "provider.sampled-eval.v1"
+PUBLIC_SAMPLE_FIXTURE_VERSION = "provider.public-fixtures.v1"
 
 
 class ProviderSampleStatus(StrEnum):
@@ -23,7 +25,17 @@ class ProviderSampleErrorCode(StrEnum):
     RESPONSE_MISMATCH = "AI_EVAL_RESPONSE_MISMATCH"
     TOKEN_BUDGET_EXCEEDED = "AI_EVAL_TOKEN_BUDGET_EXCEEDED"
     TIMEOUT = "AI_TIMEOUT"
+    AUTHENTICATION_ERROR = "AI_PROVIDER_AUTHENTICATION_ERROR"
+    RATE_LIMITED = "AI_PROVIDER_RATE_LIMITED"
     PROVIDER_ERROR = "AI_PROVIDER_ERROR"
+
+
+class ProviderProbeAuthenticationError(RuntimeError):
+    """Provider rejected the configured credential or permission."""
+
+
+class ProviderProbeRateLimitError(RuntimeError):
+    """Provider rejected the probe because of rate limiting."""
 
 
 @dataclass(frozen=True)
@@ -83,7 +95,10 @@ class ProviderSampleResult:
 
 @dataclass(frozen=True)
 class ProviderSampledEvalReport:
+    schema_version: str
+    fixture_version: str
     eval_run_id: str
+    model: str
     status: ProviderSampleStatus
     success: bool
     configured_case_count: int
