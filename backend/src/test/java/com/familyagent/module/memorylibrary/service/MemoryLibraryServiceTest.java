@@ -303,13 +303,17 @@ class MemoryLibraryServiceTest {
                 memoryEntryRepository,
                 memoryEmbeddingService,
                 embeddingFacade);
+        MemoryLibraryDiaryCommandService diaryCommands = new MemoryLibraryDiaryCommandService(
+                diaryFacade,
+                memoryEmbeddingService,
+                embeddingFacade);
         return new MemoryLibraryMaintenanceService(
                 familyService,
-                diaryFacade,
                 growthFacade,
                 memoryEmbeddingService,
                 embeddingFacade,
-                memoryCommands);
+                memoryCommands,
+                diaryCommands);
     }
 
 }
