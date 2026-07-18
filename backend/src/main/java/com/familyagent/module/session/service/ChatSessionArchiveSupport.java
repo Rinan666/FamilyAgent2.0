@@ -1,6 +1,7 @@
 package com.familyagent.module.session.service;
 
 import com.familyagent.module.session.dto.ChatSessionArchiveMetadata;
+import com.familyagent.module.session.dto.ChatSessionArchiveSummaryData;
 import com.familyagent.module.session.entity.ChatSession;
 import com.familyagent.module.session.entity.ChatSessionArchive;
 import com.familyagent.module.session.entity.ChatSessionMessage;
@@ -12,7 +13,6 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -54,7 +54,7 @@ class ChatSessionArchiveSupport {
                 return;
             }
 
-            Map<String, Object> summaryData = archiveSummaryService.summarize(session, chunk);
+            ChatSessionArchiveSummaryData summaryData = archiveSummaryService.summarize(session, chunk);
             String objectKey = archiveStorageService.writeTranscript(sessionId, startSeq, endSeq, chunk);
 
             ChatSessionArchive archive = new ChatSessionArchive();
@@ -62,13 +62,13 @@ class ChatSessionArchiveSupport {
             archive.setStartSeq(startSeq);
             archive.setEndSeq(endSeq);
             archive.setSummary(ChatSessionSupportUtils.stringValue(
-                    summaryData.get("summary"),
+                    summaryData.summary(),
                     ChatSessionSupportUtils.buildRollingSummary(chunk)));
             archive.setObjectKey(objectKey);
             archive.setMessageCount(chunk.size());
             archive.setTokenCount(chunk.stream().map(ChatSessionMessage::getTokenCount).filter(Objects::nonNull).mapToInt(Integer::intValue).sum());
             archive.setCreatedAt(LocalDateTime.now());
-            archive.setMetadata(new LinkedHashMap<>(summaryData));
+            archive.setMetadata(summaryData.toMetadataMap());
             archiveRepository.insert(archive);
 
             messageRepository.deleteSeqRange(sessionId, startSeq, endSeq);
@@ -78,7 +78,7 @@ class ChatSessionArchiveSupport {
             session.setArchiveStatus("READY");
             if (ChatSessionSupportUtils.blankToNull(session.getTitle()) == null) {
                 session.setTitle(ChatSessionSupportUtils.blankToNull(
-                        ChatSessionSupportUtils.stringValue(summaryData.get("titleSuggestion"), "")));
+                        ChatSessionSupportUtils.stringValue(summaryData.titleSuggestion(), "")));
             }
             if (ChatSessionSupportUtils.blankToNull(session.getSummary()) == null) {
                 session.setSummary(archive.getSummary());

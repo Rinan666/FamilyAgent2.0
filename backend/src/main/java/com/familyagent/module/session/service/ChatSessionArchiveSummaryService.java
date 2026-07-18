@@ -1,23 +1,21 @@
 package com.familyagent.module.session.service;
 
+import com.familyagent.module.session.dto.ChatSessionArchiveSummaryData;
 import com.familyagent.module.session.entity.ChatSession;
 import com.familyagent.module.session.entity.ChatSessionMessage;
 import org.springframework.stereotype.Service;
 
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 @Service
 public class ChatSessionArchiveSummaryService {
 
-    public Map<String, Object> summarize(ChatSession session, List<ChatSessionMessage> messages) {
-        Map<String, Object> fallback = new LinkedHashMap<>();
-        fallback.put("summary", fallbackSummary(messages));
-        fallback.put("titleSuggestion", session.getTitle() == null ? fallbackTitle(messages) : session.getTitle());
-        fallback.put("focusTopics", List.of("family_chat"));
-        fallback.put("confidence", "FALLBACK");
-        return fallback;
+    public ChatSessionArchiveSummaryData summarize(ChatSession session, List<ChatSessionMessage> messages) {
+        return new ChatSessionArchiveSummaryData(
+                fallbackSummary(messages),
+                session.getTitle() == null ? fallbackTitle(messages) : session.getTitle(),
+                List.of("family_chat"),
+                "FALLBACK");
     }
 
     private static String fallbackSummary(List<ChatSessionMessage> messages) {
