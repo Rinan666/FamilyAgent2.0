@@ -167,6 +167,8 @@ class LLMClient:
                 label="LLM stream startup",
             )
             async for chunk in stream_with_timeouts(response, label="LLM stream"):
+                if not chunk.choices:
+                    continue
                 delta = chunk.choices[0].delta
                 if delta.content:
                     yield delta.content

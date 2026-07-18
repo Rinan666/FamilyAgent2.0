@@ -11,9 +11,36 @@ class _Chunk:
         })()]
 
 
-async def _stream(*contents: str):
-    for content in contents:
-        yield _Chunk(content)
+class _EmptyChoicesChunk:
+    choices = []
+
+
+async def _stream(*chunks):
+    for chunk in chunks:
+        yield chunk if hasattr(chunk, "choices") else _Chunk(chunk)
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_ignores_openai_usage_chunks_without_choices(monkeypatch):
+    client = LLMClient()
+    client.default_model = "dashscope/model"
+    client.fallback_model = "dashscope/model"
+
+    async def fake_completion(**kwargs):
+        return _stream("first", _EmptyChoicesChunk(), "second")
+
+    monkeypatch.setattr("app.llm.client.provider_completion", fake_completion)
+    observations = []
+
+    chunks = [chunk async for chunk in client.chat_stream(
+        [{"role": "user", "content": "hello"}],
+        observation_sink=observations.append,
+    )]
+
+    assert chunks == ["first", "second"]
+    assert [(item.success, item.error_code, item.degraded) for item in observations] == [
+        (True, None, False),
+    ]
 
 
 @pytest.mark.asyncio
