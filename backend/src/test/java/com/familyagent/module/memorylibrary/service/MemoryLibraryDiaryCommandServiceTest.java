@@ -5,6 +5,7 @@ import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.facade.MemoryLibraryDiaryFacade;
 import com.familyagent.module.memory.facade.MemoryIndexingFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryEmbeddingFacade;
+import com.familyagent.module.memory.facade.MemoryLibraryIndexMetadataFacade;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryUpdateRequest;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
@@ -43,7 +44,8 @@ class MemoryLibraryDiaryCommandServiceTest {
         MemoryLibraryDiaryCommandService service = new MemoryLibraryDiaryCommandService(
                 diaryFacade,
                 indexingFacade,
-                embeddingFacade);
+                embeddingFacade,
+                new MemoryLibraryIndexMetadataFacade());
 
         try (MockedStatic<StpUtil> stp = mockStatic(StpUtil.class)) {
             stp.when(StpUtil::getLoginIdAsLong).thenReturn(101L);
@@ -72,7 +74,8 @@ class MemoryLibraryDiaryCommandServiceTest {
         MemoryLibraryDiaryCommandService service = new MemoryLibraryDiaryCommandService(
                 diaryFacade,
                 indexingFacade,
-                embeddingFacade);
+                embeddingFacade,
+                new MemoryLibraryIndexMetadataFacade());
 
         try (MockedStatic<StpUtil> stp = mockStatic(StpUtil.class)) {
             stp.when(StpUtil::getLoginIdAsLong).thenReturn(101L);

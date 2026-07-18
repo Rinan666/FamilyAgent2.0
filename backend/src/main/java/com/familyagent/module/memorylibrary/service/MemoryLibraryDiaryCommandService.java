@@ -9,7 +9,7 @@ import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.facade.MemoryLibraryDiaryFacade;
 import com.familyagent.module.memory.facade.MemoryIndexingFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryEmbeddingFacade;
-import com.familyagent.module.memory.service.MemoryIndexMetadataBuilder;
+import com.familyagent.module.memory.facade.MemoryLibraryIndexMetadataFacade;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryUpdateRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -28,6 +28,7 @@ public class MemoryLibraryDiaryCommandService {
     private final MemoryLibraryDiaryFacade diaryFacade;
     private final MemoryIndexingFacade indexingFacade;
     private final MemoryLibraryEmbeddingFacade embeddingFacade;
+    private final MemoryLibraryIndexMetadataFacade metadataFacade;
 
     public void archive(Long familyId, Long diaryId) {
         DiaryEntry entry = diaryFacade.findById(diaryId);
@@ -64,7 +65,7 @@ public class MemoryLibraryDiaryCommandService {
         entry.setTags(tags);
         entry.setVisibility(visibility);
         entry.setPrivacyLevel(visibility);
-        entry.setMetadata(MemoryIndexMetadataBuilder.enrichDiary(
+        entry.setMetadata(metadataFacade.enrichDiary(
                 MemoryLibraryCommandSupport.editMetadata(entry.getMetadata()),
                 entry.getRawText(),
                 type,

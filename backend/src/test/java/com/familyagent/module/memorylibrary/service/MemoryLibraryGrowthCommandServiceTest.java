@@ -5,6 +5,7 @@ import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.facade.MemoryLibraryGrowthFacade;
 import com.familyagent.module.memory.facade.MemoryIndexingFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryEmbeddingFacade;
+import com.familyagent.module.memory.facade.MemoryLibraryIndexMetadataFacade;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryUpdateRequest;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
@@ -44,7 +45,8 @@ class MemoryLibraryGrowthCommandServiceTest {
         MemoryLibraryGrowthCommandService service = new MemoryLibraryGrowthCommandService(
                 growthFacade,
                 indexingFacade,
-                embeddingFacade);
+                embeddingFacade,
+                new MemoryLibraryIndexMetadataFacade());
 
         try (MockedStatic<StpUtil> stp = mockStatic(StpUtil.class)) {
             stp.when(StpUtil::getLoginIdAsLong).thenReturn(101L);
@@ -73,7 +75,8 @@ class MemoryLibraryGrowthCommandServiceTest {
         MemoryLibraryGrowthCommandService service = new MemoryLibraryGrowthCommandService(
                 growthFacade,
                 indexingFacade,
-                embeddingFacade);
+                embeddingFacade,
+                new MemoryLibraryIndexMetadataFacade());
 
         try (MockedStatic<StpUtil> stp = mockStatic(StpUtil.class)) {
             stp.when(StpUtil::getLoginIdAsLong).thenReturn(101L);

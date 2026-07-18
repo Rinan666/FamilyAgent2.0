@@ -8,7 +8,7 @@ import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.facade.MemoryLibraryGrowthFacade;
 import com.familyagent.module.memory.facade.MemoryIndexingFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryEmbeddingFacade;
-import com.familyagent.module.memory.service.MemoryIndexMetadataBuilder;
+import com.familyagent.module.memory.facade.MemoryLibraryIndexMetadataFacade;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryUpdateRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -28,6 +28,7 @@ public class MemoryLibraryGrowthCommandService {
     private final MemoryLibraryGrowthFacade growthFacade;
     private final MemoryIndexingFacade indexingFacade;
     private final MemoryLibraryEmbeddingFacade embeddingFacade;
+    private final MemoryLibraryIndexMetadataFacade metadataFacade;
 
     public void archive(Long familyId, Long recordId) {
         GrowthGuardRecord record = findRecord(familyId, recordId, EntityStatus.ACTIVE);
@@ -59,7 +60,7 @@ public class MemoryLibraryGrowthCommandService {
         record.setContent(MemoryLibraryCommandSupport.requiredBody(request.getBody()));
         record.setCategory(category);
         record.setVisibility(visibility);
-        record.setMetadata(MemoryIndexMetadataBuilder.enrichGrowth(
+        record.setMetadata(metadataFacade.enrichGrowth(
                 metadata,
                 record.getContent(),
                 record.getCategory(),

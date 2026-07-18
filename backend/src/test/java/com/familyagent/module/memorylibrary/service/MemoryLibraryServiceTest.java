@@ -11,6 +11,7 @@ import com.familyagent.module.growth.facade.MemoryLibraryGrowthFacade;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.facade.MemoryIndexingFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryEmbeddingFacade;
+import com.familyagent.module.memory.facade.MemoryLibraryIndexMetadataFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryMemoryFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryVoteFacade;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryItem;
@@ -45,6 +46,7 @@ class MemoryLibraryServiceTest {
     @Mock private MemoryLibraryGrowthStalenessFacade growthStalenessFacade;
     @Mock private MemoryIndexingFacade memoryEmbeddingService;
     @Mock private MemoryLibraryEmbeddingFacade embeddingFacade;
+    private final MemoryLibraryIndexMetadataFacade metadataFacade = new MemoryLibraryIndexMetadataFacade();
 
     // --- MemoryLibraryQueryService ---
 
@@ -302,15 +304,18 @@ class MemoryLibraryServiceTest {
         MemoryLibraryMemoryCommandService memoryCommands = new MemoryLibraryMemoryCommandService(
                 memoryEntryRepository,
                 memoryEmbeddingService,
-                embeddingFacade);
+                embeddingFacade,
+                metadataFacade);
         MemoryLibraryDiaryCommandService diaryCommands = new MemoryLibraryDiaryCommandService(
                 diaryFacade,
                 memoryEmbeddingService,
-                embeddingFacade);
+                embeddingFacade,
+                metadataFacade);
         MemoryLibraryGrowthCommandService growthCommands = new MemoryLibraryGrowthCommandService(
                 growthFacade,
                 memoryEmbeddingService,
-                embeddingFacade);
+                embeddingFacade,
+                metadataFacade);
         return new MemoryLibraryMaintenanceService(
                 familyService,
                 memoryCommands,

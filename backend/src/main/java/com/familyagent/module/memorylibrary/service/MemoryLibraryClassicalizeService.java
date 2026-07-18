@@ -6,8 +6,8 @@ import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.family.facade.MemoryLibraryFamilyFacade;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.facade.MemoryIndexingFacade;
+import com.familyagent.module.memory.facade.MemoryLibraryIndexMetadataFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryMemoryFacade;
-import com.familyagent.module.memory.service.MemoryIndexMetadataBuilder;
 import com.familyagent.module.memorylibrary.dto.MemoryLibrarySearchRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -26,6 +26,7 @@ public class MemoryLibraryClassicalizeService {
     private final MemoryLibraryFamilyFacade familyService;
     private final MemoryLibraryMemoryFacade memoryEntryRepository;
     private final MemoryIndexingFacade memoryEmbeddingService;
+    private final MemoryLibraryIndexMetadataFacade metadataFacade;
 
     @Transactional
     public void classicalize(
@@ -69,7 +70,7 @@ public class MemoryLibraryClassicalizeService {
 
         entry.setContent(normalizedText.trim());
         entry.setSummary(MemoryLibrarySupport.truncateText(normalizedSummary, 200));
-        entry.setMetadata(MemoryIndexMetadataBuilder.enrichFamilyMemory(
+        entry.setMetadata(metadataFacade.enrichMemory(
                 metadata, entry.getContent(), entry.getSummary(),
                 entry.getType(), entry.getImportance() == null ? 3 : entry.getImportance()));
         memoryEntryRepository.update(entry);
