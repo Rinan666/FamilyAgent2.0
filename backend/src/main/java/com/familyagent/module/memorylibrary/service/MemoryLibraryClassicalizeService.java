@@ -9,6 +9,7 @@ import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.facade.MemoryIndexingFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryIndexMetadataFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryMemoryFacade;
+import com.familyagent.module.memorylibrary.dto.MemoryClassicalizationMetadata;
 import com.familyagent.module.memorylibrary.dto.MemoryLibrarySearchRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -59,17 +60,15 @@ public class MemoryLibraryClassicalizeService {
                 "只能改写自己创建的经验，或由家族创建者改写");
 
         Map<String, Object> metadata = MemoryLibrarySupport.mutableMap(entry.getMetadata());
-        Map<String, Object> classicalization = MemoryLibrarySupport.mutableMap(metadata.get("classicalization"));
-        classicalization.putIfAbsent("originalContent", entry.getContent());
-        if (MemoryLibrarySupport.blankToNull(entry.getSummary()) != null) {
-            classicalization.putIfAbsent("originalSummary", entry.getSummary());
-        }
-        classicalization.put("plainSummary", normalizedSummary);
-        classicalization.put("styleNote", normalizedStyleNote);
-        classicalization.put("classicalizedAt", LocalDateTime.now().toString());
-        classicalization.put("classicalizedBy", CurrentUserGuard.currentUserId());
-        classicalization.put("source", MemoryLibraryMetadataSource.MEMORY_LIBRARY_CLASSICALIZE.name());
-        metadata.put("classicalization", classicalization);
+        MemoryClassicalizationMetadata classicalization = new MemoryClassicalizationMetadata(
+                entry.getContent(),
+                MemoryLibrarySupport.blankToNull(entry.getSummary()),
+                normalizedSummary,
+                normalizedStyleNote,
+                LocalDateTime.now(),
+                CurrentUserGuard.currentUserId(),
+                MemoryLibraryMetadataSource.MEMORY_LIBRARY_CLASSICALIZE);
+        metadata.put("classicalization", classicalization.mergeInto(metadata.get("classicalization")));
 
         entry.setContent(normalizedText.trim());
         entry.setSummary(MemoryLibrarySupport.truncateText(normalizedSummary, 200));
