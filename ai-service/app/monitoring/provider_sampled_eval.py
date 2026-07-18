@@ -38,6 +38,7 @@ class DefaultProviderProbeClient:
             messages=[{"role": "user", "content": case.prompt}],
             temperature=0,
             max_tokens=case.max_tokens,
+            extra_body={"enable_thinking": False},
         )
         input_tokens, output_tokens = _token_usage(response)
         return ProviderProbeResponse(
@@ -108,7 +109,19 @@ class ProviderSampledEval:
                 _elapsed_ms(started_at),
             )
 
-        passed = response.content.strip() == case.expected_output
+        token_budget_exceeded = (
+            response.output_tokens is not None
+            and response.output_tokens > case.max_tokens
+        )
+        passed = (
+            not token_budget_exceeded
+            and response.content.strip() == case.expected_output
+        )
+        error_code = None
+        if token_budget_exceeded:
+            error_code = ProviderSampleErrorCode.TOKEN_BUDGET_EXCEEDED
+        elif not passed:
+            error_code = ProviderSampleErrorCode.RESPONSE_MISMATCH
         return ProviderSampleResult(
             case_id=case.case_id,
             passed=passed,
@@ -118,7 +131,7 @@ class ProviderSampledEval:
             max_tokens=case.max_tokens,
             attempt_count=1,
             degraded=False,
-            error_code=None if passed else ProviderSampleErrorCode.RESPONSE_MISMATCH,
+            error_code=error_code,
             input_tokens=response.input_tokens,
             output_tokens=response.output_tokens,
             cost_usd=response.cost_usd,

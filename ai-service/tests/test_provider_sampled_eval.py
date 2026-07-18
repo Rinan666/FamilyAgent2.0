@@ -15,9 +15,10 @@ from app.monitoring.provider_sampled_eval_models import PUBLIC_SAMPLE_CASES
 
 
 class _ProbeClient:
-    def __init__(self, outputs=(), error=None):
+    def __init__(self, outputs=(), error=None, output_tokens=2):
         self.outputs = iter(outputs)
         self.error = error
+        self.output_tokens = output_tokens
         self.cases = []
 
     async def complete(self, case):
@@ -30,7 +31,7 @@ class _ProbeClient:
             model="public-provider/low-cost-model",
             latency_ms=7,
             input_tokens=6,
-            output_tokens=2,
+            output_tokens=self.output_tokens,
             cost_usd=0.000001,
         )
 
@@ -92,6 +93,19 @@ async def test_sampled_eval_stops_on_mismatch_without_reporting_output(monkeypat
     assert report.error_code == "AI_EVAL_RESPONSE_MISMATCH"
     assert report_exit_code(report) == 1
     assert "private unexpected output" not in str(report.as_dict())
+
+
+@pytest.mark.asyncio
+async def test_sampled_eval_fails_when_provider_exceeds_token_budget(monkeypatch):
+    _enable(monkeypatch)
+    client = _ProbeClient(outputs=("OK", "42"), output_tokens=99)
+
+    report = await ProviderSampledEval(client).run()
+
+    assert report.status == ProviderSampleStatus.FAILED
+    assert report.executed_case_count == 1
+    assert report.error_code == "AI_EVAL_TOKEN_BUDGET_EXCEEDED"
+    assert report.total_output_tokens == 99
 
 
 @pytest.mark.asyncio
@@ -181,6 +195,7 @@ async def test_litellm_probe_collects_usage_without_reporting_content(monkeypatc
         usage = _Usage()
 
     async def fake_completion(**_kwargs):
+        assert _kwargs["extra_body"] == {"enable_thinking": False}
         return _Response()
 
     monkeypatch.setattr(
