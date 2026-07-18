@@ -530,11 +530,12 @@ export interface CreateFamilyMemoryRequest {
   scope?: MemoryScope;
   summary?: string;
   importance?: number;
-  metadata?: Record<string, unknown>;
+  metadata?: WriteMemoryMetadata;
 }
 
 export interface WriteMemoryMetadata {
   source?: string;
+  sourceDiaryId?: number;
   authorName?: string;
   relatedMemberName?: string | null;
   observerPerspective?: string;

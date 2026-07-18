@@ -66,9 +66,9 @@ class CreateFamilyMemoryToolTest {
         assertEquals("FAMILY_VISIBLE", request.getScope());
         assertEquals("Repair before replacing.", request.getSummary());
         assertEquals(4, request.getImportance());
-        assertEquals("MIRROR_AGENT_TOOL", request.getMetadata().get("source"));
-        assertEquals("FAMILY_MEMORY", request.getMetadata().get("plannedTool"));
-        assertEquals("FAMILY_EXPERIENCE", request.getMetadata().get("sourceType"));
+        assertEquals("MIRROR_AGENT_TOOL", request.getMetadata().getSource());
+        assertEquals("FAMILY_MEMORY", request.getMetadata().toMap().get("plannedTool"));
+        assertEquals("FAMILY_EXPERIENCE", request.getMetadata().toMap().get("sourceType"));
         assertEquals(99L, output.memoryEntryId());
     }
 

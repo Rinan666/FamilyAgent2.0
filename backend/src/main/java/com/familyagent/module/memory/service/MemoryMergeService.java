@@ -59,7 +59,7 @@ public class MemoryMergeService {
                 existing.getSummary(),
                 mergedContent);
 
-        metadata.put("source", "MERGED_HERITAGE");
+        metadata.put("source", HeritageSource.MERGED_HERITAGE.name());
         metadata.put("mergedAt", java.time.LocalDateTime.now().toString());
         metadata.put("mergedReason", "主题相近或解决同一类问题，自动合并为更凝练的家族智慧。");
         metadata.put("mergedSourceCount", intValue(metadata.get("mergedSourceCount")) + 1);

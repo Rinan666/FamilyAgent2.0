@@ -11,6 +11,7 @@ import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.family.facade.FamilyMembershipFacade;
 import com.familyagent.module.memory.dto.CreateFamilyMemoryRequest;
 import com.familyagent.module.memory.dto.CreateMemoryEntryRequest;
+import com.familyagent.module.memory.dto.WriteMemoryMetadata;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
 import lombok.RequiredArgsConstructor;
@@ -56,11 +57,12 @@ public class MemoryService {
         Long userId = CurrentUserGuard.currentUserId();
         familyMembershipFacade.checkMembership(request.getFamilyId());
 
-        Map<String, Object> metadata = buildFamilyMemoryMetadata(request);
-        Object sourceDiaryId = metadata.get("sourceDiaryId");
-        if ("DIARY_PROMOTION".equals(metadata.get("source")) && sourceDiaryId != null) {
+        WriteMemoryMetadata requestMetadata = request.getMetadata();
+        Map<String, Object> metadata = buildFamilyMemoryMetadata(requestMetadata);
+        Long sourceDiaryId = requestMetadata == null ? null : requestMetadata.getSourceDiaryId();
+        if (isDiaryPromotion(requestMetadata) && sourceDiaryId != null) {
             MemoryEntry existing = memoryRepository.findActiveBySourceDiaryId(
-                    request.getFamilyId(), String.valueOf(sourceDiaryId));
+                    request.getFamilyId(), sourceDiaryId.toString());
             if (existing != null) {
                 return existing;
             }
@@ -163,13 +165,18 @@ public class MemoryService {
         return normalized;
     }
 
-    private static Map<String, Object> buildFamilyMemoryMetadata(CreateFamilyMemoryRequest request) {
+    private static Map<String, Object> buildFamilyMemoryMetadata(WriteMemoryMetadata requestMetadata) {
         Map<String, Object> metadata = new HashMap<>();
-        if (request.getMetadata() != null) {
-            metadata.putAll(request.getMetadata());
+        if (requestMetadata != null) {
+            metadata.putAll(requestMetadata.toMap());
         }
         metadata.putIfAbsent("source", HeritageSource.HERITAGE_ENTRY.name());
         return metadata;
+    }
+
+    private static boolean isDiaryPromotion(WriteMemoryMetadata metadata) {
+        return metadata != null
+                && HeritageSource.DIARY_PROMOTION.name().equals(blankToNull(metadata.getSource()));
     }
 
     private static String blankToNull(String value) {

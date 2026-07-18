@@ -97,7 +97,7 @@ public class WriteMemoryCommandService {
             metadata.put("tags", normalizeTags(request.getTags()));
             metadata.putIfAbsent("scenario", String.join(" ", normalizeTags(request.getTags())));
         }
-        memoryRequest.setMetadata(metadata);
+        memoryRequest.setMetadata(WriteMemoryMetadata.fromMap(metadata));
         MemoryEntry entry = memoryService.createFamilyMemory(memoryRequest);
         return new WriteMemoryResult(
                 "FAMILY_MEMORY",

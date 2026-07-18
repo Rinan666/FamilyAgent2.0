@@ -7,7 +7,9 @@ import java.util.stream.Collectors;
 public enum HeritageSource {
     HERITAGE_ENTRY,
     HERITAGE_INTERVIEW,
-    HERITAGE_ATOM;
+    HERITAGE_ATOM,
+    DIARY_PROMOTION,
+    MERGED_HERITAGE;
 
     public static Set<String> names() {
         return Arrays.stream(values()).map(Enum::name).collect(Collectors.toUnmodifiableSet());

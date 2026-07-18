@@ -12,6 +12,7 @@ import com.familyagent.module.agent.harness.constant.AgentToolSideEffect;
 import com.familyagent.module.agent.harness.dto.CreateFamilyMemoryInput;
 import com.familyagent.module.agent.harness.dto.CreateFamilyMemoryOutput;
 import com.familyagent.module.memory.dto.CreateFamilyMemoryRequest;
+import com.familyagent.module.memory.dto.WriteMemoryMetadata;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.facade.AgentFamilyMemoryFacade;
 import lombok.RequiredArgsConstructor;
@@ -55,7 +56,7 @@ class CreateFamilyMemoryTool implements AgentTool<CreateFamilyMemoryInput, Creat
         request.setSummary(input.summary());
         request.setImportance(input.importance());
         if (input.metadata() != null) {
-            request.setMetadata(input.metadata().toMap());
+            request.setMetadata(WriteMemoryMetadata.fromMap(input.metadata().toMap()));
         }
         MemoryEntry entry = familyMemoryFacade.create(request);
         return new CreateFamilyMemoryOutput(entry.getId());

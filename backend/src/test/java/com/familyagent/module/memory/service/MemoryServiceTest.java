@@ -3,6 +3,7 @@ package com.familyagent.module.memory.service;
 import cn.dev33.satoken.stp.StpUtil;
 import com.familyagent.module.family.facade.FamilyMembershipFacade;
 import com.familyagent.module.memory.dto.CreateFamilyMemoryRequest;
+import com.familyagent.module.memory.dto.WriteMemoryMetadata;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
 import com.familyagent.module.memory.repository.MemoryEntryVoteRepository;
@@ -195,7 +196,7 @@ class MemoryServiceTest {
         request.setType("ELDER_ADVICE");
         request.setScope("FAMILY_VISIBLE");
         request.setSummary("选择前先看长期适配");
-        request.setMetadata(metadata);
+        request.setMetadata(WriteMemoryMetadata.fromMap(metadata));
         return request;
     }
 

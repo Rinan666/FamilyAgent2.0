@@ -1,11 +1,10 @@
 package com.familyagent.module.memory.dto;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
-
-import java.util.Map;
 
 @Data
 public class CreateFamilyMemoryRequest {
@@ -27,6 +26,6 @@ public class CreateFamilyMemoryRequest {
     private String summary;
     private Integer importance;
 
-    @Size(max = 50)
-    private Map<String, Object> metadata;
+    @Valid
+    private WriteMemoryMetadata metadata;
 }
