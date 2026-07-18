@@ -1,10 +1,19 @@
-"""Stable structured failure responses for executable AI skills."""
+"""Stable structured responses for executable AI skills."""
 
-from typing import Literal
+from typing import Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict
 
 from .skill_error import SkillErrorCode
+
+DataT = TypeVar("DataT", bound=BaseModel)
+
+
+class SkillSuccessResponse(BaseModel, Generic[DataT]):
+    model_config = ConfigDict(frozen=True)
+
+    success: Literal[True] = True
+    data: DataT
 
 
 class SkillFailureResponse(BaseModel):
@@ -16,5 +25,9 @@ class SkillFailureResponse(BaseModel):
     error: str
 
 
-def skill_failure(error_code: SkillErrorCode, message: str) -> dict:
+def skill_success(data: DataT) -> dict[str, object]:
+    return SkillSuccessResponse(data=data).model_dump(mode="json")
+
+
+def skill_failure(error_code: SkillErrorCode, message: str) -> dict[str, object]:
     return SkillFailureResponse(errorCode=error_code, error=message).model_dump(mode="json")

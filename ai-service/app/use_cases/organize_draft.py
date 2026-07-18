@@ -1,7 +1,6 @@
 """Application use case for the organize-draft skill."""
 
 import logging
-from typing import Any
 
 from app.api.memory_contracts import ORGANIZED_DRAFT_SCHEMA
 from app.api.memory_helpers import _choice
@@ -12,7 +11,7 @@ from app.runtime.draft_prompt_renderer import OrganizeDraftPromptRenderer
 from app.runtime.output_parser import SkillOutputParseError
 from app.runtime.skill_error import SkillErrorCode
 from app.runtime.skill_registry import SkillRuntime
-from app.runtime.skill_response import skill_failure
+from app.runtime.skill_response import skill_failure, skill_success
 
 logger = logging.getLogger("familyagent.ai.use_cases.organize_draft")
 
@@ -28,14 +27,14 @@ class OrganizeDraftUseCase:
         self._prompt_renderer = prompt_renderer
         self._output_parser = output_parser
 
-    async def execute(self, request: OrganizeDraftRequest, llm_client: LLMClient) -> dict[str, Any]:
+    async def execute(self, request: OrganizeDraftRequest, llm_client: LLMClient) -> dict[str, object]:
         try:
             return await self._skill_runtime.execute(lambda: self._organize(request, llm_client))
         except TimeoutError:
             logger.warning("Organize-draft skill timed out")
             return skill_failure(SkillErrorCode.TIMEOUT, "Draft organization unavailable")
 
-    async def _organize(self, request: OrganizeDraftRequest, llm_client: LLMClient) -> dict[str, Any]:
+    async def _organize(self, request: OrganizeDraftRequest, llm_client: LLMClient) -> dict[str, object]:
         content = request.content.strip()
         scene = _choice(request.scene, {"DIARY", "HERITAGE", "GROWTH_GUARD"}, "DIARY")
         try:
@@ -58,7 +57,7 @@ class OrganizeDraftUseCase:
 
         try:
             data = self._output_parser.parse(raw, scene=scene, fallback_content=content)
-            return {"success": True, "data": data}
+            return skill_success(data)
         except SkillOutputParseError as error:
             logger.error("Organize-draft output invalid: errorType=%s", type(error).__name__)
             return skill_failure(SkillErrorCode.INVALID_RESPONSE, "Draft organization unavailable")
