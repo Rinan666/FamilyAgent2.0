@@ -307,13 +307,15 @@ class MemoryLibraryServiceTest {
                 diaryFacade,
                 memoryEmbeddingService,
                 embeddingFacade);
-        return new MemoryLibraryMaintenanceService(
-                familyService,
+        MemoryLibraryGrowthCommandService growthCommands = new MemoryLibraryGrowthCommandService(
                 growthFacade,
                 memoryEmbeddingService,
-                embeddingFacade,
+                embeddingFacade);
+        return new MemoryLibraryMaintenanceService(
+                familyService,
                 memoryCommands,
-                diaryCommands);
+                diaryCommands,
+                growthCommands);
     }
 
 }
