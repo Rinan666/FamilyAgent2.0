@@ -274,9 +274,16 @@ describe('savePlan helpers', () => {
     expect(isExplicitSaveMemoryCommand('给我记一下')).toBe(true);
     expect(isExplicitSaveMemoryCommand('把这段留作记录')).toBe(true);
     expect(isExplicitSaveMemoryCommand('麻烦把这个收进记忆库吧')).toBe(true);
+    expect(isExplicitSaveMemoryCommand(
+      '保存到记忆库：“标题：应用题先复述题意\n内容：孩子最近做应用题总是先抓数字，我让他先复述题意再画线段图，今天列式明显稳定。\n标签：学习、应用题”',
+    )).toBe(true);
+    expect(isExplicitSaveMemoryCommand(
+      '孩子最近做应用题总是先抓数字，我让他先复述题意再画线段图，今天列式明显稳定。请保存到记忆库。',
+    )).toBe(true);
     expect(isExplicitSaveMemoryCommand('怎么保存到本地？')).toBe(false);
     expect(isExplicitSaveMemoryCommand('我今天学会了保存文件的快捷键')).toBe(false);
     expect(isExplicitSaveMemoryCommand('请把今天的作业保存到电脑桌面')).toBe(false);
+    expect(isExplicitSaveMemoryCommand('如何把网页内容保存到记忆库？')).toBe(false);
   });
 
   it('routes explicit save commands with prior non-system context instead of chat', () => {
@@ -297,6 +304,15 @@ describe('savePlan helpers', () => {
     expect(routed.conversationContext).toHaveLength(10);
     expect(routed.conversationContext[0].id).toBe('message-1');
     expect(routed.conversationContext.some((message) => message.role === 'system')).toBe(false);
+  });
+
+  it('routes a structured inline memory command directly to save planning', () => {
+    const content = '保存到记忆库：标题：应用题先复述题意\n内容：孩子最近做应用题总是先抓数字，我让他先复述题意再画线段图，今天列式明显稳定。\n标签：学习、应用题';
+
+    const routed = routeAgentSubmission(content, []);
+
+    expect(routed.kind).toBe('explicit_save');
+    expect(routed.content).toBe(content);
   });
 
   it('keeps ordinary messages on the chat route', () => {

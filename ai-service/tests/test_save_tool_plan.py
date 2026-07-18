@@ -358,6 +358,46 @@ async def test_bare_save_command_with_valuable_context_extracts_context(monkeypa
     assert "已保存" not in response["data"]["confirmation_message"]
 
 
+@pytest.mark.asyncio
+async def test_structured_inline_save_command_reaches_planner(monkeypatch):
+    async def fake_chat(*args, **kwargs):
+        return json.dumps({
+            "should_save": True,
+            "tool": "FAMILY_MEMORY",
+            "content": "孩子最近做应用题总是先抓数字。我让他先复述题意再画线段图，今天列式明显稳定，后面继续观察。",
+            "title": "应用题先复述题意",
+            "summary": "复述题意并画线段图后，孩子列式更稳定。",
+            "visibility": "CARE_VISIBLE",
+            "entry_type": "DAILY",
+            "memory_type": "ELDER_ADVICE",
+            "scope": "CARE_VISIBLE",
+            "category": "OTHER",
+            "severity": 2,
+            "importance": 4,
+            "tags": ["学习", "应用题"],
+            "reason": "包含具体学习问题、干预方法、行为变化和后续观察。",
+            "confirmation_message": "已保存为家庭记忆。",
+        }, ensure_ascii=False)
+
+    monkeypatch.setattr(memory.llm_client, "chat", fake_chat)
+
+    response = await plan_agent_save_tool(
+        SaveToolPlanRequest(
+            message=(
+                "保存到记忆库：标题：应用题先复述题意\n"
+                "内容：孩子最近做应用题总是先抓数字，我让他先复述题意再画线段图，今天列式明显稳定。\n"
+                "标签：学习、应用题"
+            ),
+        )
+    )
+
+    assert response["success"] is True
+    assert response["data"]["should_save"] is True
+    assert response["data"]["tool"] == "FAMILY_MEMORY"
+    assert response["data"]["title"] == "应用题先复述题意"
+    assert "保存到记忆库" not in response["data"]["content"]
+
+
 def test_durable_emotion_auto_saves_even_when_model_is_conservative():
     plan = _sanitize_save_tool_plan({
         "should_save": False,

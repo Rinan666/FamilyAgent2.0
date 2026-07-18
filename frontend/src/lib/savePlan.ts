@@ -56,6 +56,9 @@ const GROWTH_CATEGORIES = new Set<GrowthGuardCategory>([
 ]);
 
 const EXPLICIT_SAVE_COMMAND_PATTERN = /^(?:请|麻烦)?(?:你)?(?:帮我|替我|给我)?(?:把)?(?:刚才|上面|上文|前面|这段|这条|这个|这些|那段|那条|那件事)?(?:的)?(?:内容|对话|记录|记忆|经历|事情|话)?(?:保存|保存成记忆|存起来|记一下|记下来|记录下来|留个记录|留作记录|沉淀下来|加入记忆库|放到记忆库|收进记忆库)(?:一下|起来|为记忆|到记忆库)?(?:吧)?[。.!！?？]*$/;
+const INLINE_SAVE_PREFIX_PATTERN = /^(?:请|麻烦)?(?:你)?(?:帮我|替我|给我)?(?:把)?(?:以下|下面|这条|这段|这份)?(?:内容|记录|记忆|经历|事情|材料)?(?:保存到|加入|放到|收进)(?:家庭)?记忆库(?:里)?(?:一下)?(?:吧)?[：:\s]+/;
+const INLINE_SAVE_SUFFIX_PATTERN = /[，,。；;\n]\s*(?:请|麻烦)?(?:你)?(?:帮我|替我|给我)?(?:把它|将它)?(?:保存到|加入|放到|收进)(?:家庭)?记忆库(?:里)?(?:一下)?(?:吧)?[。.!！?？]*$/;
+const MAX_EXPLICIT_SAVE_COMMAND_LENGTH = 5000;
 
 export type SavedRecordType = 'DIARY_ENTRY' | 'FAMILY_MEMORY' | 'GROWTH_GUARD' | 'NONE';
 
@@ -98,9 +101,21 @@ function boundedInt(value: unknown, fallback: number) {
 }
 
 export function isExplicitSaveMemoryCommand(value: string) {
-  const normalized = value.trim().replace(/\s+/g, '');
-  if (!normalized || normalized.length > 40) return false;
-  return EXPLICIT_SAVE_COMMAND_PATTERN.test(normalized);
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > MAX_EXPLICIT_SAVE_COMMAND_LENGTH) return false;
+
+  const normalized = trimmed.replace(/\s+/g, '');
+  if (normalized.length <= 40 && EXPLICIT_SAVE_COMMAND_PATTERN.test(normalized)) {
+    return true;
+  }
+
+  const prefixPayload = trimmed.replace(INLINE_SAVE_PREFIX_PATTERN, '').trim();
+  if (prefixPayload !== trimmed && prefixPayload.replace(/\s+/g, '').length >= 8) {
+    return true;
+  }
+
+  const suffixPayload = trimmed.replace(INLINE_SAVE_SUFFIX_PATTERN, '').trim();
+  return suffixPayload !== trimmed && suffixPayload.replace(/\s+/g, '').length >= 8;
 }
 
 export function routeAgentSubmission(
