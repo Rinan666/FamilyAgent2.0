@@ -142,9 +142,7 @@ class MemoryLibraryServiceTest {
 
     @Test
     void deleteArchivedLibraryItem_deletesArchivedMemoryAndEmbeddings() {
-        MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
-                familyService, diaryFacade, memoryEntryRepository,
-                growthFacade, memoryEmbeddingService, embeddingFacade);
+        MemoryLibraryMaintenanceService maintenanceService = maintenanceService();
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(101L);
@@ -165,9 +163,7 @@ class MemoryLibraryServiceTest {
 
     @Test
     void deleteArchivedLibraryItem_rejectsActiveMemory() {
-        MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
-                familyService, diaryFacade, memoryEntryRepository,
-                growthFacade, memoryEmbeddingService, embeddingFacade);
+        MemoryLibraryMaintenanceService maintenanceService = maintenanceService();
 
         MemoryEntry entry = new MemoryEntry();
         entry.setId(88L);
@@ -186,9 +182,7 @@ class MemoryLibraryServiceTest {
 
     @Test
     void deleteArchivedLibraryItem_deletesActiveLegacyAiSummary() {
-        MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
-                familyService, diaryFacade, memoryEntryRepository,
-                growthFacade, memoryEmbeddingService, embeddingFacade);
+        MemoryLibraryMaintenanceService maintenanceService = maintenanceService();
 
         MemoryEntry entry = new MemoryEntry();
         entry.setId(89L);
@@ -211,9 +205,7 @@ class MemoryLibraryServiceTest {
 
     @Test
     void updateLibraryItem_updatesActiveMemoryAndSchedulesReindex() {
-        MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
-                familyService, diaryFacade, memoryEntryRepository,
-                growthFacade, memoryEmbeddingService, embeddingFacade);
+        MemoryLibraryMaintenanceService maintenanceService = maintenanceService();
 
         MemoryEntry entry = new MemoryEntry();
         entry.setId(88L);
@@ -252,9 +244,7 @@ class MemoryLibraryServiceTest {
 
     @Test
     void updateLibraryItem_rejectsArchivedMemory() {
-        MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
-                familyService, diaryFacade, memoryEntryRepository,
-                growthFacade, memoryEmbeddingService, embeddingFacade);
+        MemoryLibraryMaintenanceService maintenanceService = maintenanceService();
 
         MemoryEntry entry = new MemoryEntry();
         entry.setId(88L);
@@ -278,9 +268,7 @@ class MemoryLibraryServiceTest {
 
     @Test
     void updateLibraryItem_rejectsNonAuthorEvenWhenFamilyMember() {
-        MemoryLibraryMaintenanceService maintenanceService = new MemoryLibraryMaintenanceService(
-                familyService, diaryFacade, memoryEntryRepository,
-                growthFacade, memoryEmbeddingService, embeddingFacade);
+        MemoryLibraryMaintenanceService maintenanceService = maintenanceService();
 
         MemoryEntry entry = new MemoryEntry();
         entry.setId(88L);
@@ -308,6 +296,20 @@ class MemoryLibraryServiceTest {
         verify(familyService).checkMembership(10L);
         verify(memoryEntryRepository, never()).update(entry);
         verify(memoryEmbeddingService, never()).indexMemoryAfterCommit(any());
+    }
+
+    private MemoryLibraryMaintenanceService maintenanceService() {
+        MemoryLibraryMemoryCommandService memoryCommands = new MemoryLibraryMemoryCommandService(
+                memoryEntryRepository,
+                memoryEmbeddingService,
+                embeddingFacade);
+        return new MemoryLibraryMaintenanceService(
+                familyService,
+                diaryFacade,
+                growthFacade,
+                memoryEmbeddingService,
+                embeddingFacade,
+                memoryCommands);
     }
 
 }

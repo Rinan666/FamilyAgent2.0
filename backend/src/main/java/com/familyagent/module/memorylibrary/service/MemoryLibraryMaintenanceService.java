@@ -2,7 +2,6 @@ package com.familyagent.module.memorylibrary.service;
 
 import com.familyagent.common.constant.EntityStatus;
 import com.familyagent.common.constant.MemoryScope;
-import com.familyagent.common.constant.MemoryType;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
@@ -11,10 +10,8 @@ import com.familyagent.module.diary.facade.MemoryLibraryDiaryFacade;
 import com.familyagent.module.family.facade.MemoryLibraryFamilyFacade;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.facade.MemoryLibraryGrowthFacade;
-import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.facade.MemoryIndexingFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryEmbeddingFacade;
-import com.familyagent.module.memory.facade.MemoryLibraryMemoryFacade;
 import com.familyagent.module.memory.service.MemoryIndexMetadataBuilder;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryUpdateRequest;
 import lombok.RequiredArgsConstructor;
@@ -22,10 +19,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -43,10 +37,10 @@ public class MemoryLibraryMaintenanceService {
 
     private final MemoryLibraryFamilyFacade familyService;
     private final MemoryLibraryDiaryFacade diaryFacade;
-    private final MemoryLibraryMemoryFacade memoryEntryRepository;
     private final MemoryLibraryGrowthFacade growthFacade;
     private final MemoryIndexingFacade memoryEmbeddingService;
     private final MemoryLibraryEmbeddingFacade embeddingFacade;
+    private final MemoryLibraryMemoryCommandService memoryCommands;
 
     @Transactional
     public void updateItem(MemoryLibraryUpdateRequest request) {
@@ -55,7 +49,7 @@ public class MemoryLibraryMaintenanceService {
         MemoryLibrarySupport.ParsedItemId parsed = MemoryLibrarySupport.parseItemId(request.getItemId());
         switch (parsed.prefix()) {
             case "diary" -> updateDiary(request, parsed.id());
-            case "memory" -> updateMemory(request, parsed.id());
+            case "memory" -> memoryCommands.update(request, parsed.id());
             case "growth" -> updateGrowthRecord(request, parsed.id());
             default -> throw new BusinessException(ErrorCode.BAD_REQUEST, "Unsupported memory library item type");
         }
@@ -67,7 +61,7 @@ public class MemoryLibraryMaintenanceService {
         MemoryLibrarySupport.ParsedItemId parsed = MemoryLibrarySupport.parseItemId(itemId);
         switch (parsed.prefix()) {
             case "diary" -> archiveDiary(familyId, parsed.id());
-            case "memory" -> archiveMemory(familyId, parsed.id());
+            case "memory" -> memoryCommands.archive(familyId, parsed.id());
             case "growth" -> archiveGrowthRecord(familyId, parsed.id());
             default -> throw new BusinessException(ErrorCode.BAD_REQUEST, "Unsupported memory library item type");
         }
@@ -79,7 +73,7 @@ public class MemoryLibraryMaintenanceService {
         MemoryLibrarySupport.ParsedItemId parsed = MemoryLibrarySupport.parseItemId(itemId);
         switch (parsed.prefix()) {
             case "diary" -> restoreDiary(familyId, parsed.id());
-            case "memory" -> restoreMemory(familyId, parsed.id());
+            case "memory" -> memoryCommands.restore(familyId, parsed.id());
             case "growth" -> restoreGrowthRecord(familyId, parsed.id());
             default -> throw new BusinessException(ErrorCode.BAD_REQUEST, "Unsupported memory library item type");
         }
@@ -91,7 +85,7 @@ public class MemoryLibraryMaintenanceService {
         MemoryLibrarySupport.ParsedItemId parsed = MemoryLibrarySupport.parseItemId(itemId);
         switch (parsed.prefix()) {
             case "diary" -> deleteArchivedDiary(familyId, parsed.id());
-            case "memory" -> deleteArchivedMemory(familyId, parsed.id());
+            case "memory" -> memoryCommands.deleteArchived(familyId, parsed.id());
             case "growth" -> deleteArchivedGrowthRecord(familyId, parsed.id());
             default -> throw new BusinessException(ErrorCode.BAD_REQUEST, "Unsupported memory library item type");
         }
@@ -99,7 +93,8 @@ public class MemoryLibraryMaintenanceService {
 
     private void archiveDiary(Long familyId, Long diaryId) {
         DiaryEntry entry = diaryFacade.findById(diaryId);
-        if (entry == null || !familyId.equals(entry.getFamilyId()) || isArchivedMetadata(entry.getMetadata())) {
+        if (entry == null || !familyId.equals(entry.getFamilyId())
+                || MemoryLibraryCommandSupport.isArchivedMetadata(entry.getMetadata())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can archive this diary");
@@ -114,21 +109,25 @@ public class MemoryLibraryMaintenanceService {
 
     private void updateDiary(MemoryLibraryUpdateRequest request, Long diaryId) {
         DiaryEntry entry = diaryFacade.findById(diaryId);
-        if (entry == null || !request.getFamilyId().equals(entry.getFamilyId()) || isArchivedMetadata(entry.getMetadata())) {
+        if (entry == null || !request.getFamilyId().equals(entry.getFamilyId())
+                || MemoryLibraryCommandSupport.isArchivedMetadata(entry.getMetadata())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can edit this diary");
-        String body = requiredBody(request.getBody());
-        String type = normalize(request.getType(), "DAILY", DIARY_ENTRY_TYPES, "Diary entry type is not supported");
-        String visibility = normalize(request.getVisibility(), entry.getVisibility(), MemoryScope.diaryNames(), "Diary visibility is not supported");
-        String[] tags = normalizedTags(request.getTags());
+        String body = MemoryLibraryCommandSupport.requiredBody(request.getBody());
+        String type = MemoryLibraryCommandSupport.normalize(
+                request.getType(), "DAILY", DIARY_ENTRY_TYPES, "Diary entry type is not supported");
+        String visibility = MemoryLibraryCommandSupport.normalize(
+                request.getVisibility(), entry.getVisibility(), MemoryScope.diaryNames(),
+                "Diary visibility is not supported");
+        String[] tags = MemoryLibraryCommandSupport.normalizedTags(request.getTags());
         entry.setRawText(body);
-        entry.setStructured(buildDiaryStructured(type, request.getTitle(), body));
+        entry.setStructured(MemoryLibraryCommandSupport.diaryStructured(type, request.getTitle(), body));
         entry.setTags(tags);
         entry.setVisibility(visibility);
         entry.setPrivacyLevel(visibility);
         entry.setMetadata(MemoryIndexMetadataBuilder.enrichDiary(
-                editMetadata(entry.getMetadata()),
+                MemoryLibraryCommandSupport.editMetadata(entry.getMetadata()),
                 entry.getRawText(),
                 type,
                 entry.getMood(),
@@ -139,7 +138,8 @@ public class MemoryLibraryMaintenanceService {
 
     private void restoreDiary(Long familyId, Long diaryId) {
         DiaryEntry entry = diaryFacade.findById(diaryId);
-        if (entry == null || !familyId.equals(entry.getFamilyId()) || !isArchivedMetadata(entry.getMetadata())) {
+        if (entry == null || !familyId.equals(entry.getFamilyId())
+                || !MemoryLibraryCommandSupport.isArchivedMetadata(entry.getMetadata())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can restore this diary");
@@ -154,87 +154,13 @@ public class MemoryLibraryMaintenanceService {
 
     private void deleteArchivedDiary(Long familyId, Long diaryId) {
         DiaryEntry entry = diaryFacade.findById(diaryId);
-        if (entry == null || !familyId.equals(entry.getFamilyId()) || !isArchivedMetadata(entry.getMetadata())) {
+        if (entry == null || !familyId.equals(entry.getFamilyId())
+                || !MemoryLibraryCommandSupport.isArchivedMetadata(entry.getMetadata())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can delete this diary");
         embeddingFacade.deleteDiaryIndex(diaryId);
         diaryFacade.delete(diaryId);
-    }
-
-    private void archiveMemory(Long familyId, Long memoryId) {
-        MemoryEntry entry = memoryEntryRepository.findById(memoryId);
-        if (entry == null || !familyId.equals(entry.getFamilyId()) || !EntityStatus.ACTIVE.name().equals(entry.getStatus())) {
-            throw new BusinessException(ErrorCode.NOT_FOUND);
-        }
-        MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can archive this memory");
-        Map<String, Object> metadata = MemoryLibrarySupport.mutableMap(entry.getMetadata());
-        metadata.put("archivedBy", CurrentUserGuard.currentUserId());
-        metadata.put("archivedAt", LocalDateTime.now().toString());
-        metadata.put("archiveSource", "MEMORY_LIBRARY_MAINTENANCE");
-        entry.setMetadata(metadata);
-        entry.setStatus(EntityStatus.ARCHIVED.name());
-        memoryEntryRepository.update(entry);
-    }
-
-    private void updateMemory(MemoryLibraryUpdateRequest request, Long memoryId) {
-        MemoryEntry entry = memoryEntryRepository.findById(memoryId);
-        if (entry == null || !request.getFamilyId().equals(entry.getFamilyId()) || !EntityStatus.ACTIVE.name().equals(entry.getStatus())) {
-            throw new BusinessException(ErrorCode.NOT_FOUND);
-        }
-        MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can edit this memory");
-        String body = requiredBody(request.getBody());
-        String type = normalize(request.getType(), entry.getType(), MemoryType.names(), "Memory type is not supported");
-        String visibility = normalize(request.getVisibility(), entry.getScope(), MemoryScope.familyNames(), "Memory visibility is not supported");
-        Map<String, Object> metadata = editMetadata(entry.getMetadata());
-        List<String> tags = List.of(normalizedTags(request.getTags()));
-        if (!tags.isEmpty()) {
-            metadata.put("tags", tags);
-        } else {
-            metadata.remove("tags");
-        }
-        entry.setContent(body);
-        entry.setSummary(summaryFrom(request.getTitle(), body));
-        entry.setType(type);
-        entry.setScope(visibility);
-        entry.setMetadata(MemoryIndexMetadataBuilder.enrichFamilyMemory(
-                metadata,
-                entry.getContent(),
-                entry.getSummary(),
-                entry.getType(),
-                entry.getImportance() == null ? 3 : entry.getImportance()));
-        memoryEntryRepository.update(entry);
-        memoryEmbeddingService.indexMemoryAfterCommit(entry);
-    }
-
-    private void restoreMemory(Long familyId, Long memoryId) {
-        MemoryEntry entry = memoryEntryRepository.findById(memoryId);
-        if (entry == null || !familyId.equals(entry.getFamilyId()) || !EntityStatus.ARCHIVED.name().equals(entry.getStatus())) {
-            throw new BusinessException(ErrorCode.NOT_FOUND);
-        }
-        MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can restore this memory");
-        Map<String, Object> metadata = MemoryLibrarySupport.mutableMap(entry.getMetadata());
-        metadata.put("restoredBy", CurrentUserGuard.currentUserId());
-        metadata.put("restoredAt", LocalDateTime.now().toString());
-        metadata.put("restoreSource", "MEMORY_LIBRARY_ARCHIVE_BOX");
-        entry.setMetadata(metadata);
-        entry.setStatus(EntityStatus.ACTIVE.name());
-        memoryEntryRepository.update(entry);
-    }
-
-    private void deleteArchivedMemory(Long familyId, Long memoryId) {
-        MemoryEntry entry = memoryEntryRepository.findById(memoryId);
-        boolean activeLegacyAiSummary = entry != null
-                && familyId.equals(entry.getFamilyId())
-                && EntityStatus.ACTIVE.name().equals(entry.getStatus())
-                && MemoryLibrarySupport.isLegacyAiSummary(entry.getMetadata());
-        if (entry == null || !familyId.equals(entry.getFamilyId())
-                || (!EntityStatus.ARCHIVED.name().equals(entry.getStatus()) && !activeLegacyAiSummary)) {
-            throw new BusinessException(ErrorCode.NOT_FOUND);
-        }
-        MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can delete this memory");
-        embeddingFacade.deleteMemoryIndex(memoryId);
-        memoryEntryRepository.delete(memoryId);
     }
 
     private void archiveGrowthRecord(Long familyId, Long recordId) {
@@ -253,16 +179,20 @@ public class MemoryLibraryMaintenanceService {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         MemoryLibrarySupport.ensureCreator(record.getCreatedBy(), "Only the creator can edit this growth record");
-        String category = normalize(request.getType(), record.getCategory(), GROWTH_CATEGORIES, "Growth category is not supported");
-        String visibility = normalize(request.getVisibility(), record.getVisibility(), MemoryScope.familyNames(), "Growth visibility is not supported");
-        Map<String, Object> metadata = editMetadata(record.getMetadata());
-        List<String> tags = List.of(normalizedTags(request.getTags()));
+        String category = MemoryLibraryCommandSupport.normalize(
+                request.getType(), record.getCategory(), GROWTH_CATEGORIES,
+                "Growth category is not supported");
+        String visibility = MemoryLibraryCommandSupport.normalize(
+                request.getVisibility(), record.getVisibility(), MemoryScope.familyNames(),
+                "Growth visibility is not supported");
+        Map<String, Object> metadata = MemoryLibraryCommandSupport.editMetadata(record.getMetadata());
+        List<String> tags = List.of(MemoryLibraryCommandSupport.normalizedTags(request.getTags()));
         if (!tags.isEmpty()) {
             metadata.put("tags", tags);
         } else {
             metadata.remove("tags");
         }
-        record.setContent(requiredBody(request.getBody()));
+        record.setContent(MemoryLibraryCommandSupport.requiredBody(request.getBody()));
         record.setCategory(category);
         record.setVisibility(visibility);
         record.setMetadata(MemoryIndexMetadataBuilder.enrichGrowth(
@@ -295,66 +225,4 @@ public class MemoryLibraryMaintenanceService {
         growthFacade.delete(recordId);
     }
 
-    private static String requiredBody(String body) {
-        String text = MemoryLibrarySupport.blankToNull(body);
-        if (text == null) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "Memory content cannot be blank");
-        }
-        return text;
-    }
-
-    private static String normalize(String value, String fallback, Set<String> allowed, String errorMessage) {
-        String normalized = MemoryLibrarySupport.blankToNull(value);
-        normalized = normalized == null ? fallback : normalized.toUpperCase(Locale.ROOT);
-        if (normalized == null || !allowed.contains(normalized)) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, errorMessage);
-        }
-        return normalized;
-    }
-
-    private static String[] normalizedTags(List<String> tags) {
-        if (tags == null) return new String[0];
-        return tags.stream()
-                .filter(tag -> tag != null && !tag.isBlank())
-                .map(String::trim)
-                .distinct()
-                .limit(10)
-                .toArray(String[]::new);
-    }
-
-    private static Map<String, Object> buildDiaryStructured(String entryType, String title, String content) {
-        Map<String, Object> structured = new HashMap<>();
-        structured.put("entryType", entryType);
-        structured.put("title", MemoryLibrarySupport.blankToNull(title));
-        structured.put("summary", summaryFrom(title, content));
-        return structured;
-    }
-
-    private static Map<String, Object> editMetadata(Object metadata) {
-        Map<String, Object> next = MemoryLibrarySupport.mutableMap(metadata);
-        next.put("lastEditedBy", CurrentUserGuard.currentUserId());
-        next.put("lastEditedAt", LocalDateTime.now().toString());
-        next.put("editSource", "MEMORY_LIBRARY_MAINTENANCE");
-        return next;
-    }
-
-    private static String summaryFrom(String title, String body) {
-        String text = MemoryLibrarySupport.blankToNull(title);
-        if (text != null) {
-            return text;
-        }
-        return Arrays.stream(requiredBody(body).split("\\R"))
-                .map(String::trim)
-                .filter(line -> !line.isBlank())
-                .findFirst()
-                .map(line -> MemoryLibrarySupport.truncateText(line, 120))
-                .orElse("");
-    }
-
-    private static boolean isArchivedMetadata(Object metadata) {
-        if (metadata instanceof Map<?, ?> map) {
-            return EntityStatus.ARCHIVED.name().equalsIgnoreCase(String.valueOf(map.get("status")));
-        }
-        return false;
-    }
 }
