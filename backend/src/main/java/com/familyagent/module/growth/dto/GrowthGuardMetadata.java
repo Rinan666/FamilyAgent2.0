@@ -1,20 +1,14 @@
 package com.familyagent.module.growth.dto;
 
-import com.fasterxml.jackson.annotation.JsonAnyGetter;
-import com.fasterxml.jackson.annotation.JsonAnySetter;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import lombok.AccessLevel;
+import com.familyagent.common.dto.ExtensibleMetadata;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.ToString;
 
-import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Data
-public class GrowthGuardMetadata {
+@EqualsAndHashCode(callSuper = false)
+public class GrowthGuardMetadata extends ExtensibleMetadata {
 
     private String source;
     private Long relatedUserId;
@@ -22,31 +16,13 @@ public class GrowthGuardMetadata {
     private String sourceType;
     private String followUpStatus;
 
-    @JsonIgnore
-    @EqualsAndHashCode.Exclude
-    @Getter(AccessLevel.NONE)
-    @ToString.Exclude
-    private final Map<String, Object> extra = new LinkedHashMap<>();
-
-    @JsonAnySetter
-    public void putExtra(String key, Object value) {
-        if (key != null && !key.isBlank()) {
-            extra.put(key, value);
-        }
-    }
-
-    @JsonAnyGetter
-    public Map<String, Object> extraProperties() {
-        return Collections.unmodifiableMap(new LinkedHashMap<>(extra));
-    }
-
     public Map<String, Object> toMap() {
-        Map<String, Object> metadata = new LinkedHashMap<>(extra);
-        put(metadata, "source", source);
-        put(metadata, "relatedUserId", relatedUserId);
-        put(metadata, "relatedMemberName", relatedMemberName);
-        put(metadata, "sourceType", sourceType);
-        put(metadata, "followUpStatus", followUpStatus);
+        Map<String, Object> metadata = copyExtraProperties();
+        putIfPresent(metadata, "source", source);
+        putIfPresent(metadata, "relatedUserId", relatedUserId);
+        putIfPresent(metadata, "relatedMemberName", relatedMemberName);
+        putIfPresent(metadata, "sourceType", sourceType);
+        putIfPresent(metadata, "followUpStatus", followUpStatus);
         return metadata;
     }
 
@@ -63,47 +39,19 @@ public class GrowthGuardMetadata {
             return;
         }
         switch (key) {
-            case "source" -> source = text(value);
+            case "source" -> source = textValue(value);
             case "relatedUserId" -> {
                 Long parsed = longValue(value);
                 if (parsed == null && value != null) {
-                    extra.put(key, value);
+                    putExtra(key, value);
                 } else {
                     relatedUserId = parsed;
                 }
             }
-            case "relatedMemberName" -> relatedMemberName = text(value);
-            case "sourceType" -> sourceType = text(value);
-            case "followUpStatus" -> followUpStatus = text(value);
-            default -> extra.put(key, value);
+            case "relatedMemberName" -> relatedMemberName = textValue(value);
+            case "sourceType" -> sourceType = textValue(value);
+            case "followUpStatus" -> followUpStatus = textValue(value);
+            default -> putExtra(key, value);
         }
-    }
-
-    private static String text(Object value) {
-        return value == null ? null : String.valueOf(value);
-    }
-
-    private static Long longValue(Object value) {
-        if (value instanceof Number number) {
-            return number.longValue();
-        }
-        try {
-            return value == null ? null : Long.valueOf(String.valueOf(value).trim());
-        } catch (NumberFormatException ignored) {
-            return null;
-        }
-    }
-
-    private static void put(Map<String, Object> metadata, String key, Object value) {
-        if (value == null) {
-            return;
-        }
-        if (value instanceof String text) {
-            if (!text.isBlank()) {
-                metadata.put(key, text.trim());
-            }
-            return;
-        }
-        metadata.put(key, value);
     }
 }

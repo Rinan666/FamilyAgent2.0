@@ -1,20 +1,14 @@
 package com.familyagent.module.diary.dto;
 
-import com.fasterxml.jackson.annotation.JsonAnyGetter;
-import com.fasterxml.jackson.annotation.JsonAnySetter;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import lombok.AccessLevel;
+import com.familyagent.common.dto.ExtensibleMetadata;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.ToString;
 
-import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Data
-public class DiaryEntryMetadata {
+@EqualsAndHashCode(callSuper = false)
+public class DiaryEntryMetadata extends ExtensibleMetadata {
 
     private String source;
     private Long relatedUserId;
@@ -24,33 +18,15 @@ public class DiaryEntryMetadata {
     private String savedFromFamilyChatAt;
     private Boolean disableAutoMerge;
 
-    @JsonIgnore
-    @EqualsAndHashCode.Exclude
-    @Getter(AccessLevel.NONE)
-    @ToString.Exclude
-    private final Map<String, Object> extra = new LinkedHashMap<>();
-
-    @JsonAnySetter
-    public void putExtra(String key, Object value) {
-        if (key != null && !key.isBlank()) {
-            extra.put(key, value);
-        }
-    }
-
-    @JsonAnyGetter
-    public Map<String, Object> extraProperties() {
-        return Collections.unmodifiableMap(new LinkedHashMap<>(extra));
-    }
-
     public Map<String, Object> toMap() {
-        Map<String, Object> metadata = new LinkedHashMap<>(extra);
-        put(metadata, "source", source);
-        put(metadata, "relatedUserId", relatedUserId);
-        put(metadata, "relatedMemberName", relatedMemberName);
-        put(metadata, "eventAt", eventAt);
-        put(metadata, "recordedAt", recordedAt);
-        put(metadata, "savedFromFamilyChatAt", savedFromFamilyChatAt);
-        put(metadata, "disableAutoMerge", disableAutoMerge);
+        Map<String, Object> metadata = copyExtraProperties();
+        putIfPresent(metadata, "source", source);
+        putIfPresent(metadata, "relatedUserId", relatedUserId);
+        putIfPresent(metadata, "relatedMemberName", relatedMemberName);
+        putIfPresent(metadata, "eventAt", eventAt);
+        putIfPresent(metadata, "recordedAt", recordedAt);
+        putIfPresent(metadata, "savedFromFamilyChatAt", savedFromFamilyChatAt);
+        putIfPresent(metadata, "disableAutoMerge", disableAutoMerge);
         return metadata;
     }
 
@@ -67,73 +43,28 @@ public class DiaryEntryMetadata {
             return;
         }
         switch (key) {
-            case "source" -> source = text(value);
+            case "source" -> source = textValue(value);
             case "relatedUserId" -> {
                 Long parsed = longValue(value);
                 if (parsed == null && value != null) {
-                    extra.put(key, value);
+                    putExtra(key, value);
                 } else {
                     relatedUserId = parsed;
                 }
             }
-            case "relatedMemberName" -> relatedMemberName = text(value);
-            case "eventAt" -> eventAt = text(value);
-            case "recordedAt" -> recordedAt = text(value);
-            case "savedFromFamilyChatAt" -> savedFromFamilyChatAt = text(value);
+            case "relatedMemberName" -> relatedMemberName = textValue(value);
+            case "eventAt" -> eventAt = textValue(value);
+            case "recordedAt" -> recordedAt = textValue(value);
+            case "savedFromFamilyChatAt" -> savedFromFamilyChatAt = textValue(value);
             case "disableAutoMerge" -> {
                 Boolean parsed = booleanValue(value);
                 if (parsed == null && value != null) {
-                    extra.put(key, value);
+                    putExtra(key, value);
                 } else {
                     disableAutoMerge = parsed;
                 }
             }
-            default -> extra.put(key, value);
+            default -> putExtra(key, value);
         }
-    }
-
-    private static String text(Object value) {
-        return value == null ? null : String.valueOf(value);
-    }
-
-    private static Long longValue(Object value) {
-        if (value instanceof Number number) {
-            return number.longValue();
-        }
-        try {
-            return value == null ? null : Long.valueOf(String.valueOf(value).trim());
-        } catch (NumberFormatException ignored) {
-            return null;
-        }
-    }
-
-    private static Boolean booleanValue(Object value) {
-        if (value instanceof Boolean flag) {
-            return flag;
-        }
-        if (value == null) {
-            return null;
-        }
-        String normalized = String.valueOf(value).trim();
-        if ("true".equalsIgnoreCase(normalized)) {
-            return true;
-        }
-        if ("false".equalsIgnoreCase(normalized)) {
-            return false;
-        }
-        return null;
-    }
-
-    private static void put(Map<String, Object> metadata, String key, Object value) {
-        if (value == null) {
-            return;
-        }
-        if (value instanceof String text) {
-            if (!text.isBlank()) {
-                metadata.put(key, text.trim());
-            }
-            return;
-        }
-        metadata.put(key, value);
     }
 }
