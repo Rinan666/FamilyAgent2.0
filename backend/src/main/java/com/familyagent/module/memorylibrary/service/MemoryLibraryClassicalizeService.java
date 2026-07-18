@@ -1,5 +1,6 @@
 package com.familyagent.module.memorylibrary.service;
 
+import com.familyagent.common.constant.MemoryLibraryMetadataSource;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
@@ -49,7 +50,9 @@ public class MemoryLibraryClassicalizeService {
         String normalizedSummary = MemoryLibrarySupport.blankToNull(plainSummary);
         if (normalizedSummary == null) normalizedSummary = MemoryLibrarySupport.previewText(normalizedText, 120);
         String normalizedStyleNote = MemoryLibrarySupport.blankToNull(styleNote);
-        if (normalizedStyleNote == null) normalizedStyleNote = "MEMORY_LIBRARY_CLASSICALIZE";
+        if (normalizedStyleNote == null) {
+            normalizedStyleNote = MemoryLibraryMetadataSource.MEMORY_LIBRARY_CLASSICALIZE.name();
+        }
 
         MemoryEntry entry = requireActiveFamilyExperienceMemory(familyId, parsed.id());
         familyService.ensureCreatorOrOwner(familyId, entry.getUserId(),
@@ -65,7 +68,7 @@ public class MemoryLibraryClassicalizeService {
         classicalization.put("styleNote", normalizedStyleNote);
         classicalization.put("classicalizedAt", LocalDateTime.now().toString());
         classicalization.put("classicalizedBy", CurrentUserGuard.currentUserId());
-        classicalization.put("source", "MEMORY_LIBRARY_CLASSICALIZE");
+        classicalization.put("source", MemoryLibraryMetadataSource.MEMORY_LIBRARY_CLASSICALIZE.name());
         metadata.put("classicalization", classicalization);
 
         entry.setContent(normalizedText.trim());

@@ -1,6 +1,7 @@
 package com.familyagent.module.memorylibrary.service;
 
 import com.familyagent.common.constant.EntityStatus;
+import com.familyagent.common.constant.MemoryLibraryMetadataSource;
 import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
@@ -41,7 +42,7 @@ public class MemoryLibraryDiaryCommandService {
         metadata.put("status", EntityStatus.ARCHIVED.name());
         metadata.put("archivedBy", CurrentUserGuard.currentUserId());
         metadata.put("archivedAt", LocalDateTime.now().toString());
-        metadata.put("archiveSource", "MEMORY_LIBRARY_MAINTENANCE");
+        metadata.put("archiveSource", MemoryLibraryMetadataSource.MEMORY_LIBRARY_MAINTENANCE.name());
         entry.setMetadata(metadata);
         diaryFacade.update(entry);
     }
@@ -86,7 +87,7 @@ public class MemoryLibraryDiaryCommandService {
         metadata.put("status", EntityStatus.ACTIVE.name());
         metadata.put("restoredBy", CurrentUserGuard.currentUserId());
         metadata.put("restoredAt", LocalDateTime.now().toString());
-        metadata.put("restoreSource", "MEMORY_LIBRARY_ARCHIVE_BOX");
+        metadata.put("restoreSource", MemoryLibraryMetadataSource.MEMORY_LIBRARY_ARCHIVE_BOX.name());
         entry.setMetadata(metadata);
         diaryFacade.update(entry);
     }

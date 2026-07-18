@@ -1,6 +1,7 @@
 package com.familyagent.module.memorylibrary.service;
 
 import com.familyagent.common.constant.EntityStatus;
+import com.familyagent.common.constant.MemoryLibraryMetadataSource;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
@@ -59,7 +60,7 @@ final class MemoryLibraryCommandSupport {
         Map<String, Object> next = MemoryLibrarySupport.mutableMap(metadata);
         next.put("lastEditedBy", CurrentUserGuard.currentUserId());
         next.put("lastEditedAt", LocalDateTime.now().toString());
-        next.put("editSource", "MEMORY_LIBRARY_MAINTENANCE");
+        next.put("editSource", MemoryLibraryMetadataSource.MEMORY_LIBRARY_MAINTENANCE.name());
         return next;
     }
 

@@ -1,6 +1,7 @@
 package com.familyagent.module.memorylibrary.service;
 
 import com.familyagent.common.constant.EntityStatus;
+import com.familyagent.common.constant.MemoryLibraryMetadataSource;
 import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.common.constant.MemoryType;
 import com.familyagent.common.exception.BusinessException;
@@ -38,7 +39,7 @@ public class MemoryLibraryMemoryCommandService {
         Map<String, Object> metadata = MemoryLibrarySupport.mutableMap(entry.getMetadata());
         metadata.put("archivedBy", CurrentUserGuard.currentUserId());
         metadata.put("archivedAt", LocalDateTime.now().toString());
-        metadata.put("archiveSource", "MEMORY_LIBRARY_MAINTENANCE");
+        metadata.put("archiveSource", MemoryLibraryMetadataSource.MEMORY_LIBRARY_MAINTENANCE.name());
         entry.setMetadata(metadata);
         entry.setStatus(EntityStatus.ARCHIVED.name());
         memoryFacade.update(entry);
@@ -88,7 +89,7 @@ public class MemoryLibraryMemoryCommandService {
         Map<String, Object> metadata = MemoryLibrarySupport.mutableMap(entry.getMetadata());
         metadata.put("restoredBy", CurrentUserGuard.currentUserId());
         metadata.put("restoredAt", LocalDateTime.now().toString());
-        metadata.put("restoreSource", "MEMORY_LIBRARY_ARCHIVE_BOX");
+        metadata.put("restoreSource", MemoryLibraryMetadataSource.MEMORY_LIBRARY_ARCHIVE_BOX.name());
         entry.setMetadata(metadata);
         entry.setStatus(EntityStatus.ACTIVE.name());
         memoryFacade.update(entry);
