@@ -6,10 +6,10 @@ from app.api.memory_archive_helpers import _compact_transcript
 from app.api.memory_contracts import SAVE_TOOL_PLAN_SCHEMA
 from app.api.memory_helpers import (
     _blocked_save_tool_plan,
-    _should_skip_save_planning,
     _unavailable_save_tool_plan,
 )
 from app.api.memory_models import SaveToolPlanData, SaveToolPlanRequest
+from app.api.memory_save_signals import _should_skip_save_planning
 from app.llm.client import LLMClient
 from app.runtime.output_parser import SaveMemoryOutputParser, SkillOutputParseError
 from app.runtime.prompt_renderer import SaveMemoryPromptRenderer
