@@ -713,7 +713,13 @@ export interface CreateGrowthGuardRecordRequest {
   observedAt?: string;
   followUpAt?: string;
   visibility?: MemoryScope;
-  metadata?: Record<string, unknown>;
+  metadata?: GrowthGuardMetadata;
+}
+
+export interface GrowthGuardMetadata extends WriteMemoryMetadata {
+  relatedUserId?: number;
+  sourceType?: string;
+  followUpStatus?: GrowthFollowUpStatus | string;
 }
 
 export interface WeeklyGrowthReport {

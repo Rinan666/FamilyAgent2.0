@@ -7,7 +7,6 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.time.LocalDate;
-import java.util.Map;
 
 @Data
 public class CreateGrowthGuardRecordRequest {
@@ -30,5 +29,5 @@ public class CreateGrowthGuardRecordRequest {
     private LocalDate observedAt;
     private LocalDate followUpAt;
     private String visibility;
-    private Map<String, Object> metadata;
+    private GrowthGuardMetadata metadata;
 }

@@ -9,6 +9,7 @@ import com.familyagent.module.diary.dto.DiaryEntryMetadata;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.facade.AgentDiaryEntryFacade;
 import com.familyagent.module.growth.dto.CreateGrowthGuardRecordRequest;
+import com.familyagent.module.growth.dto.GrowthGuardMetadata;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.facade.AgentGrowthGuardRecordFacade;
 import com.familyagent.module.memory.dto.CreateFamilyMemoryRequest;
@@ -130,7 +131,7 @@ public class WriteMemoryCommandService {
         if (!normalizeTags(request.getTags()).isEmpty()) {
             metadata.put("tags", normalizeTags(request.getTags()));
         }
-        growthRequest.setMetadata(metadata);
+        growthRequest.setMetadata(GrowthGuardMetadata.fromMap(metadata));
         GrowthGuardRecord record = growthGuardRecordFacade.create(growthRequest);
         return new WriteMemoryResult(
                 "GROWTH_GUARD",

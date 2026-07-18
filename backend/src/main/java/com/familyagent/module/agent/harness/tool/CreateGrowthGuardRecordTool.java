@@ -12,6 +12,7 @@ import com.familyagent.module.agent.harness.constant.AgentToolSideEffect;
 import com.familyagent.module.agent.harness.dto.CreateGrowthGuardRecordInput;
 import com.familyagent.module.agent.harness.dto.CreateGrowthGuardRecordOutput;
 import com.familyagent.module.growth.dto.CreateGrowthGuardRecordRequest;
+import com.familyagent.module.growth.dto.GrowthGuardMetadata;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.facade.AgentGrowthGuardRecordFacade;
 import lombok.RequiredArgsConstructor;
@@ -60,7 +61,7 @@ class CreateGrowthGuardRecordTool implements AgentTool<CreateGrowthGuardRecordIn
         request.setFollowUpAt(input.followUpAt());
         request.setVisibility(input.visibility());
         if (input.metadata() != null) {
-            request.setMetadata(input.metadata().toMap());
+            request.setMetadata(GrowthGuardMetadata.fromMap(input.metadata().toMap()));
         }
         GrowthGuardRecord record = growthGuardRecordFacade.create(request);
         return new CreateGrowthGuardRecordOutput(record.getId());

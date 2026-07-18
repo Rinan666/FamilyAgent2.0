@@ -9,6 +9,7 @@ import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.response.PageResult;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.growth.dto.CreateGrowthGuardRecordRequest;
+import com.familyagent.module.growth.dto.GrowthGuardMetadata;
 import com.familyagent.module.growth.dto.GrowthStalenessStats;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.entity.GrowthGuardStalenessVote;
@@ -72,7 +73,10 @@ public class GrowthGuardService {
         record.setFollowUpAt(request.getFollowUpAt());
         record.setVisibility(normalizeVisibility(request.getVisibility()));
         record.setStatus(EntityStatus.ACTIVE.name());
-        Map<String, Object> metadata = request.getMetadata() == null ? new HashMap<>() : new HashMap<>(request.getMetadata());
+        GrowthGuardMetadata requestMetadata = request.getMetadata();
+        Map<String, Object> metadata = requestMetadata == null
+                ? new HashMap<>()
+                : new HashMap<>(requestMetadata.toMap());
         metadata.putIfAbsent("followUpStatus", FollowUpStatus.PENDING.name());
         record.setMetadata(MemoryIndexMetadataBuilder.enrichGrowth(
                 metadata,

@@ -75,9 +75,9 @@ class CreateGrowthGuardRecordToolTest {
         assertEquals(observedAt, request.getObservedAt());
         assertEquals(followUpAt, request.getFollowUpAt());
         assertEquals("CARE_VISIBLE", request.getVisibility());
-        assertEquals("MIRROR_AGENT_TOOL", request.getMetadata().get("source"));
-        assertEquals("PENDING", request.getMetadata().get("followUpStatus"));
-        assertEquals(202L, request.getMetadata().get("relatedUserId"));
+        assertEquals("MIRROR_AGENT_TOOL", request.getMetadata().getSource());
+        assertEquals("PENDING", request.getMetadata().getFollowUpStatus());
+        assertEquals(202L, request.getMetadata().getRelatedUserId());
         assertEquals(77L, output.growthGuardRecordId());
     }
 

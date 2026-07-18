@@ -1,6 +1,8 @@
 package com.familyagent.module.growth.service;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.familyagent.module.growth.dto.CreateGrowthGuardRecordRequest;
+import com.familyagent.module.growth.dto.GrowthGuardMetadata;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
 import com.familyagent.module.growth.repository.GrowthGuardStalenessVoteRepository;
@@ -9,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
 
@@ -30,6 +33,35 @@ class GrowthGuardServiceTest {
     @Mock private GrowthGuardStalenessVoteRepository stalenessVoteRepository;
     @Mock private PermissionGate permissionGate;
     @Mock private MemoryIndexingFacade memoryEmbeddingService;
+
+    @Test
+    void createRecord_shouldPersistTypedMetadataAndDefaultFollowUpStatus() {
+        GrowthGuardService service = new GrowthGuardService(
+                recordRepository,
+                stalenessVoteRepository,
+                permissionGate,
+                memoryEmbeddingService);
+        CreateGrowthGuardRecordRequest request = new CreateGrowthGuardRecordRequest();
+        request.setFamilyId(1L);
+        request.setTargetUserId(22L);
+        request.setCategory("SLEEP");
+        request.setContent("最近入睡偏晚，需要继续观察。");
+        request.setMetadata(GrowthGuardMetadata.fromMap(Map.of(
+                "source", "MIRROR_AGENT_TOOL",
+                "plannedTool", "GROWTH_GUARD")));
+
+        try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
+            stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
+            service.createRecord(request);
+        }
+
+        ArgumentCaptor<GrowthGuardRecord> captor = ArgumentCaptor.forClass(GrowthGuardRecord.class);
+        verify(recordRepository).insert(captor.capture());
+        Map<?, ?> metadata = (Map<?, ?>) captor.getValue().getMetadata();
+        assertEquals("MIRROR_AGENT_TOOL", metadata.get("source"));
+        assertEquals("GROWTH_GUARD", metadata.get("plannedTool"));
+        assertEquals("PENDING", metadata.get("followUpStatus"));
+    }
 
     @Test
     void searchFamilyRecords_shouldClampPageAndAttachStalenessStats() {
