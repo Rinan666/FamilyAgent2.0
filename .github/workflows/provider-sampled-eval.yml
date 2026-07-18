@@ -15,6 +15,7 @@ concurrency:
 jobs:
   sampled-eval:
     name: Weekly public provider samples
+    if: github.event_name == 'workflow_dispatch' || vars.PROVIDER_SAMPLED_EVAL_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
