@@ -45,7 +45,6 @@ import { isPlainEnter } from '@/lib/formKeyboard';
 import { loadSessionMessagesChronologically } from '@/lib/sessionHistory';
 import {
   buildAgentSaveMemoryToolRequest,
-  buildRelevantSaveContext,
   routeAgentSubmission,
   savePlanDetail,
   savePlanPersistenceDecision,
@@ -915,7 +914,7 @@ export default function AgentPage() {
     }
   }, [appendSessionMessages, isStreaming, members, personas, selfUserId, setMessages, stopStreaming, targetSelection]);
 
-  const handleSaveMessage = useCallback(async (message: ChatMessage, conversationContext?: ChatMessage[]) => {
+  const handleSaveMessage = useCallback(async (message: ChatMessage, conversationContext: ChatMessage[]) => {
     if (!activeFamilyId) {
       setSaveFeedback((current) => ({
         ...current,
@@ -950,7 +949,7 @@ export default function AgentPage() {
         familyId: activeFamilyId,
         message: originalContent,
         familyContext: activeFamily?.name || '',
-        conversationContext: conversationContext ?? buildRelevantSaveContext(message, messages),
+        conversationContext,
         targetMemberName: currentTargetName,
         viewerRole,
         source: currentSkillSource,
@@ -1099,7 +1098,6 @@ export default function AgentPage() {
     activeMembership?.relationshipLabel,
     mirrorTargetUserId,
     mode,
-    messages,
     targetLabel,
     targetMember,
     targetPersona,
@@ -1331,7 +1329,6 @@ export default function AgentPage() {
             mode={mode}
             targetLabel={targetLabel}
             saveFeedback={saveFeedback}
-            onSaveMessage={(message) => { void handleSaveMessage(message); }}
             onDecideSaveConfirmation={(message, confirmationId, decision) => {
               void handleSaveConfirmationDecision(message, confirmationId, decision);
             }}
