@@ -153,11 +153,9 @@ class FamilyLifecycleServiceTest {
         verify(jdbcTemplate).update("DELETE FROM photos WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM family_persona_members WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM growth_guard_reports WHERE family_id = ?", 10L);
-        verify(jdbcTemplate).update("DELETE FROM growth_guard_records WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM memory_embeddings WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM heritage_tasks WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM skill_runs WHERE family_id = ?", 10L);
-        verify(jdbcTemplate).update("DELETE FROM diary_entries WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM memory_entries WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM chat_sessions WHERE family_id = ?", 10L);
         verify(jdbcTemplate).update("DELETE FROM mirror_agent_data WHERE primary_family_id = ?", 10L);

@@ -1,21 +1,17 @@
 package com.familyagent.module.growth.entity;
 
-import com.baomidou.mybatisplus.annotation.FieldFill;
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
-import com.familyagent.common.handler.PgJsonbTypeHandler;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
-@TableName(value = "growth_guard_records", autoResultMap = true)
 public class GrowthGuardRecord {
 
-    @TableId(type = IdType.AUTO)
+    @JsonIgnore
+    private Long memoryEntryId;
+
     private Long id;
 
     private Long familyId;
@@ -29,12 +25,9 @@ public class GrowthGuardRecord {
     private String visibility;
     private String status;
 
-    @TableField(typeHandler = PgJsonbTypeHandler.class)
     private Object metadata;
 
-    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 
-    @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updatedAt;
 }

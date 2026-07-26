@@ -7,14 +7,9 @@ import org.apache.ibatis.annotations.Mapper;
 @Mapper
 public interface AgentRecordProvenanceRepository extends BaseMapper<AgentRecordProvenance> {
 
-    default AgentRecordProvenance findByRecord(AgentCreatedRecordType recordType, Long recordId) {
-        var query = Wrappers.<AgentRecordProvenance>lambdaQuery()
-                .eq(AgentRecordProvenance::getRecordType, recordType.name());
-        switch (recordType) {
-            case MEMORY_ENTRY -> query.eq(AgentRecordProvenance::getMemoryEntryId, recordId);
-            case DIARY_ENTRY -> query.eq(AgentRecordProvenance::getDiaryEntryId, recordId);
-            case GROWTH_GUARD_RECORD -> query.eq(AgentRecordProvenance::getGrowthGuardRecordId, recordId);
-        }
-        return selectOne(query);
+    default AgentRecordProvenance findByRecord(AgentCreatedRecordType recordType, Long memoryEntryId) {
+        return selectOne(Wrappers.<AgentRecordProvenance>lambdaQuery()
+                .eq(AgentRecordProvenance::getRecordType, recordType.name())
+                .eq(AgentRecordProvenance::getMemoryEntryId, memoryEntryId));
     }
 }

@@ -10,8 +10,8 @@ import com.familyagent.module.diary.dto.CreateDiaryEntryRequest;
 import com.familyagent.module.diary.dto.DiaryEntryMetadata;
 import com.familyagent.module.diary.dto.UpdateDiaryEntryRequest;
 import com.familyagent.module.diary.entity.DiaryEntry;
-import com.familyagent.module.diary.repository.DiaryEntryRepository;
 import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.memory.facade.UnifiedDiaryRecordFacade;
 import com.familyagent.module.memory.service.MemoryIndexMetadataBuilder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -40,7 +40,7 @@ public class DiaryEntryService {
     private static final Set<String> ENTRY_TYPES = Set.of(
             "DAILY", "IMPORTANT_EVENT", "LESSON", "EMOTION", "MESSAGE_TO_FAMILY", "SELF_REFLECTION");
 
-    private final DiaryEntryRepository diaryRepository;
+    private final UnifiedDiaryRecordFacade diaryRecords;
     private final FamilyService familyService;
     private final DiaryMemorySyncSupport memorySyncSupport;
 
@@ -49,7 +49,7 @@ public class DiaryEntryService {
         Long userId = CurrentUserGuard.currentUserId();
         familyService.checkMembership(request.getFamilyId());
 
-        if (diaryRepository.countTodayByUser(userId) >= MAX_ENTRIES_PER_DAY) {
+        if (diaryRecords.countTodayByUser(userId) >= MAX_ENTRIES_PER_DAY) {
             throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED,
                     "每天最多记录 " + MAX_ENTRIES_PER_DAY + " 条，请明天再记");
         }
@@ -89,7 +89,6 @@ public class DiaryEntryService {
                     String.valueOf(((Map<?, ?>) existing.getStructured()).get("entryType")),
                     existing.getMood(),
                     existing.getTags()));
-            diaryRepository.updateById(existing);
             memorySyncSupport.sync(existing);
             return existing;
         }
@@ -111,14 +110,13 @@ public class DiaryEntryService {
                 String.valueOf(((Map<?, ?>) entry.getStructured()).get("entryType")),
                 entry.getMood(),
                 entry.getTags()));
-        diaryRepository.insert(entry);
-        memorySyncSupport.sync(entry);
+        memorySyncSupport.create(entry);
         return entry;
     }
 
     public List<DiaryEntry> listFamilyEntries(Long familyId, int limit) {
         familyService.checkMembership(familyId);
-        return diaryRepository.findVisibleByFamily(
+        return diaryRecords.findVisibleByFamily(
                 familyId,
                 CurrentUserGuard.currentUserId(),
                 normalizeLimit(limit));
@@ -129,12 +127,12 @@ public class DiaryEntryService {
         Long viewerUserId = CurrentUserGuard.currentUserId();
         int normalizedPageSize = normalizePageSize(pageSize);
         String normalizedKeyword = normalizeKeyword(keyword);
-        long total = diaryRepository.countVisibleByFamilySearch(familyId, viewerUserId, targetUserId, normalizedKeyword);
+        long total = diaryRecords.countVisibleByFamilySearch(familyId, viewerUserId, targetUserId, normalizedKeyword);
         long resolvedPage = resolvePage(page, normalizedPageSize, total);
         long offset = (resolvedPage - 1L) * normalizedPageSize;
         List<DiaryEntry> items = total == 0
                 ? List.of()
-                : diaryRepository.searchVisibleByFamily(
+                : diaryRecords.searchVisibleByFamily(
                         familyId,
                         viewerUserId,
                         targetUserId,
@@ -146,7 +144,7 @@ public class DiaryEntryService {
 
     @Transactional
     public DiaryEntry update(Long id, UpdateDiaryEntryRequest request) {
-        DiaryEntry entry = diaryRepository.selectById(id);
+        DiaryEntry entry = diaryRecords.findById(id);
         if (entry == null || isArchived(entry)) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
@@ -166,14 +164,13 @@ public class DiaryEntryService {
                 String.valueOf(((Map<?, ?>) entry.getStructured()).get("entryType")),
                 entry.getMood(),
                 entry.getTags()));
-        diaryRepository.updateById(entry);
         memorySyncSupport.sync(entry);
         return entry;
     }
 
     @Transactional
     public void archive(Long id) {
-        DiaryEntry entry = diaryRepository.selectById(id);
+        DiaryEntry entry = diaryRecords.findById(id);
         if (entry == null || isArchived(entry)) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
@@ -181,7 +178,6 @@ public class DiaryEntryService {
         Map<String, Object> metadata = toMutableMap(entry.getMetadata());
         metadata.put("status", EntityStatus.ARCHIVED.name());
         entry.setMetadata(metadata);
-        diaryRepository.updateById(entry);
         memorySyncSupport.sync(entry);
     }
 
@@ -203,7 +199,7 @@ public class DiaryEntryService {
         if (!shouldAutoMerge(request, metadata)) {
             return null;
         }
-        List<DiaryEntry> candidates = diaryRepository.findSameDayMergeCandidates(
+        List<DiaryEntry> candidates = diaryRecords.findSameDayMergeCandidates(
                 request.getFamilyId(),
                 userId,
                 visibility,

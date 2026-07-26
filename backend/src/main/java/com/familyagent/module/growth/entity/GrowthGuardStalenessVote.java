@@ -16,7 +16,7 @@ public class GrowthGuardStalenessVote {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    private Long recordId;
+    private Long memoryEntryId;
     private Long familyId;
     private Long userId;
 

@@ -12,13 +12,16 @@ public interface GrowthGuardStalenessVoteRepository extends BaseMapper<GrowthGua
 
     @Select("""
         SELECT
-          record_id,
+          me.origin_id AS record_id,
           COUNT(*)::int AS stale_votes,
           GREATEST(0.2, 1.0 / (1.0 + COUNT(*) * 0.35)) AS staleness_weight,
-          BOOL_OR(user_id = #{viewerUserId}) AS my_voted
-        FROM growth_guard_staleness_votes
-        WHERE record_id = #{recordId}
-        GROUP BY record_id
+          BOOL_OR(v.user_id = #{viewerUserId}) AS my_voted
+        FROM growth_guard_staleness_votes v
+        JOIN memory_entries me
+          ON me.id = v.memory_entry_id
+         AND me.origin_type = 'GROWTH'
+        WHERE me.origin_id = #{recordId}
+        GROUP BY me.origin_id
         """)
     GrowthStalenessStats statsByRecordId(
             @Param("recordId") Long recordId,

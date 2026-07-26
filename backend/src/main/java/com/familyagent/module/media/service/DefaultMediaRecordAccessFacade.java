@@ -8,13 +8,13 @@ import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.diary.entity.DiaryEntry;
-import com.familyagent.module.diary.repository.DiaryEntryRepository;
 import com.familyagent.module.family.service.CareAuthorizationService;
 import com.familyagent.module.family.service.FamilyService;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
-import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
 import com.familyagent.module.growth.service.PermissionGate;
 import com.familyagent.module.memory.entity.MemoryEntry;
+import com.familyagent.module.memory.facade.UnifiedDiaryRecordFacade;
+import com.familyagent.module.memory.facade.UnifiedGrowthRecordFacade;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -25,8 +25,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class DefaultMediaRecordAccessFacade implements MediaRecordAccessFacade {
 
-    private final DiaryEntryRepository diaryRepository;
-    private final GrowthGuardRecordRepository growthRepository;
+    private final UnifiedDiaryRecordFacade diaryRecords;
+    private final UnifiedGrowthRecordFacade growthRecords;
     private final MemoryEntryRepository memoryRepository;
     private final FamilyService familyService;
     private final CareAuthorizationService careAuthorizationService;
@@ -106,7 +106,7 @@ public class DefaultMediaRecordAccessFacade implements MediaRecordAccessFacade {
     }
 
     private DiaryEntry requireActiveDiary(Long recordId) {
-        DiaryEntry entry = diaryRepository.selectById(recordId);
+        DiaryEntry entry = diaryRecords.findById(recordId);
         if (entry == null || isArchived(entry.getMetadata())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
@@ -114,7 +114,7 @@ public class DefaultMediaRecordAccessFacade implements MediaRecordAccessFacade {
     }
 
     private GrowthGuardRecord requireActiveGrowth(Long recordId) {
-        GrowthGuardRecord record = growthRepository.selectById(recordId);
+        GrowthGuardRecord record = growthRecords.findById(recordId);
         if (record == null || !EntityStatus.ACTIVE.name().equals(record.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }

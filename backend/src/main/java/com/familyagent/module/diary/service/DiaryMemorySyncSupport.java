@@ -7,6 +7,7 @@ import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.module.diary.dto.DiaryEntryMetadata;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.memory.facade.UnifiedMemorySyncFacade;
+import com.familyagent.module.memory.facade.UnifiedMemoryCreateResult;
 import com.familyagent.module.memory.facade.UnifiedMemorySyncMetadata;
 import com.familyagent.module.memory.facade.UnifiedMemorySyncRequest;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +17,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.time.LocalDateTime;
 
 @Component
 @RequiredArgsConstructor
@@ -23,10 +25,24 @@ public class DiaryMemorySyncSupport {
 
     private final UnifiedMemorySyncFacade syncFacade;
 
+    public void create(DiaryEntry entry) {
+        if (entry.getCreatedAt() == null) {
+            entry.setCreatedAt(LocalDateTime.now());
+        }
+        UnifiedMemoryCreateResult result = syncFacade.create(request(entry, null));
+        entry.setId(result.originId());
+        entry.setCreatedAt(result.createdAt());
+        entry.setUpdatedAt(result.updatedAt());
+    }
+
     public void sync(DiaryEntry entry) {
+        syncFacade.sync(request(entry, entry.getId()));
+    }
+
+    private static UnifiedMemorySyncRequest request(DiaryEntry entry, Long originId) {
         Map<String, Object> metadata = metadata(entry.getMetadata());
         DiaryEntryMetadata typedMetadata = DiaryEntryMetadata.fromMap(metadata);
-        syncFacade.sync(new UnifiedMemorySyncRequest(
+        return new UnifiedMemorySyncRequest(
                 entry.getUserId(),
                 entry.getFamilyId(),
                 typedMetadata.getRelatedUserId(),
@@ -37,13 +53,14 @@ public class DiaryMemorySyncSupport {
                 entry.getTags() == null ? List.of() : Arrays.asList(entry.getTags()),
                 entry.getCreatedAt(),
                 MemoryOriginType.DIARY,
-                entry.getId(),
+                originId,
                 UnifiedMemorySyncMetadata.diary(
                         structuredText(entry.getStructured(), "entryType"),
                         entry.getMood(),
                         entry.getSource(),
-                        entry.getVoiceUrl()),
-                archived(metadata) ? EntityStatus.ARCHIVED : EntityStatus.ACTIVE));
+                        entry.getVoiceUrl(),
+                        metadata),
+                archived(metadata) ? EntityStatus.ARCHIVED : EntityStatus.ACTIVE);
     }
 
     public void delete(Long diaryId) {

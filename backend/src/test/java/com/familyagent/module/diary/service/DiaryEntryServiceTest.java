@@ -4,8 +4,8 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.familyagent.module.diary.dto.CreateDiaryEntryRequest;
 import com.familyagent.module.diary.dto.DiaryEntryMetadata;
 import com.familyagent.module.diary.entity.DiaryEntry;
-import com.familyagent.module.diary.repository.DiaryEntryRepository;
 import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.memory.facade.UnifiedDiaryRecordFacade;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -28,14 +28,14 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class DiaryEntryServiceTest {
 
-    @Mock private DiaryEntryRepository diaryRepository;
+    @Mock private UnifiedDiaryRecordFacade diaryRecords;
     @Mock private FamilyService familyService;
     @Mock private DiaryMemorySyncSupport memorySyncSupport;
 
     @Test
     void create_shouldMergeOnlyManualSelfDiaryWhenThereIsExactlyOneCandidate() {
         DiaryEntry existing = existingDiary(99L, "今天早上去买菜");
-        when(diaryRepository.findSameDayMergeCandidates(1L, 10L, "PRIVATE", "2026-06-08"))
+        when(diaryRecords.findSameDayMergeCandidates(1L, 10L, "PRIVATE", "2026-06-08"))
                 .thenReturn(List.of(existing));
         DiaryEntryService service = service();
         CreateDiaryEntryRequest request = manualRequest(Map.of("eventAt", "2026-06-08T09:30:00Z"));
@@ -55,8 +55,7 @@ class DiaryEntryServiceTest {
             assertEquals("MANUAL_SELF_SINGLE_CANDIDATE", metadata.get("mergePolicy"));
         }
 
-        verify(diaryRepository, never()).insert(any(DiaryEntry.class));
-        verify(diaryRepository).updateById(existing);
+        verify(memorySyncSupport, never()).create(any(DiaryEntry.class));
         verify(memorySyncSupport).sync(existing);
     }
 
@@ -64,7 +63,7 @@ class DiaryEntryServiceTest {
     void create_shouldNotMergeWhenThereAreMultipleSameDayCandidates() {
         DiaryEntry existingA = existingDiary(99L, "第一条");
         DiaryEntry existingB = existingDiary(100L, "第二条");
-        when(diaryRepository.findSameDayMergeCandidates(1L, 10L, "PRIVATE", "2026-06-08"))
+        when(diaryRecords.findSameDayMergeCandidates(1L, 10L, "PRIVATE", "2026-06-08"))
                 .thenReturn(List.of(existingA, existingB));
 
         DiaryEntryService service = service();
@@ -76,8 +75,8 @@ class DiaryEntryServiceTest {
             service.create(request);
         }
 
-        verify(diaryRepository).insert(any(DiaryEntry.class));
-        verify(diaryRepository, never()).updateById(any(DiaryEntry.class));
+        verify(memorySyncSupport).create(any(DiaryEntry.class));
+        verify(memorySyncSupport, never()).sync(any(DiaryEntry.class));
     }
 
     @Test
@@ -94,8 +93,8 @@ class DiaryEntryServiceTest {
             service.create(request);
         }
 
-        verify(diaryRepository, never()).findSameDayMergeCandidates(any(), any(), any(), any());
-        verify(diaryRepository).insert(any(DiaryEntry.class));
+        verify(diaryRecords, never()).findSameDayMergeCandidates(any(), any(), any(), any());
+        verify(memorySyncSupport).create(any(DiaryEntry.class));
     }
 
     @Test
@@ -112,8 +111,8 @@ class DiaryEntryServiceTest {
             service.create(request);
         }
 
-        verify(diaryRepository, never()).findSameDayMergeCandidates(any(), any(), any(), any());
-        verify(diaryRepository).insert(any(DiaryEntry.class));
+        verify(diaryRecords, never()).findSameDayMergeCandidates(any(), any(), any(), any());
+        verify(memorySyncSupport).create(any(DiaryEntry.class));
     }
 
     @Test
@@ -128,14 +127,13 @@ class DiaryEntryServiceTest {
         }
 
         ArgumentCaptor<DiaryEntry> captor = ArgumentCaptor.forClass(DiaryEntry.class);
-        verify(diaryRepository).insert(captor.capture());
+        verify(memorySyncSupport).create(captor.capture());
         DiaryEntry saved = captor.getValue();
         assertEquals("DIARY_MANUAL", saved.getSource());
         Map<?, ?> metadata = (Map<?, ?>) saved.getMetadata();
         assertEquals("DIARY_MANUAL", metadata.get("source"));
         assertEquals("MANUAL_SELF_SINGLE_CANDIDATE", metadata.get("mergePolicy"));
         assertFalse(Boolean.TRUE.equals(metadata.get("autoMerged")));
-        verify(memorySyncSupport).sync(saved);
     }
 
     @Test
@@ -152,7 +150,7 @@ class DiaryEntryServiceTest {
         }
 
         ArgumentCaptor<DiaryEntry> captor = ArgumentCaptor.forClass(DiaryEntry.class);
-        verify(diaryRepository).insert(captor.capture());
+        verify(memorySyncSupport).create(captor.capture());
         DiaryEntry saved = captor.getValue();
         Map<?, ?> structured = (Map<?, ?>) saved.getStructured();
         assertEquals("第一行标题", structured.get("title"));
@@ -162,8 +160,8 @@ class DiaryEntryServiceTest {
     void searchFamilyEntries_shouldClampPageAndForwardFilters() {
         DiaryEntryService service = service();
         DiaryEntry entry = existingDiary(201L, "晨练后聊了学校里的事");
-        when(diaryRepository.countVisibleByFamilySearch(1L, 10L, 22L, "晨练")).thenReturn(7L);
-        when(diaryRepository.searchVisibleByFamily(1L, 10L, 22L, "晨练", 6, 6L)).thenReturn(List.of(entry));
+        when(diaryRecords.countVisibleByFamilySearch(1L, 10L, 22L, "晨练")).thenReturn(7L);
+        when(diaryRecords.searchVisibleByFamily(1L, 10L, 22L, "晨练", 6, 6L)).thenReturn(List.of(entry));
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
@@ -180,7 +178,7 @@ class DiaryEntryServiceTest {
 
     private DiaryEntryService service() {
         return new DiaryEntryService(
-                diaryRepository,
+                diaryRecords,
                 familyService,
                 memorySyncSupport);
     }

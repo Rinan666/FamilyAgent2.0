@@ -32,11 +32,9 @@ public class FamilyLifecycleService {
             new TableColumn("photos", "family_id"),
             new TableColumn("family_persona_members", "family_id"),
             new TableColumn("growth_guard_reports", "family_id"),
-            new TableColumn("growth_guard_records", "family_id"),
             new TableColumn("memory_embeddings", "family_id"),
             new TableColumn("heritage_tasks", "family_id"),
             new TableColumn("skill_runs", "family_id"),
-            new TableColumn("diary_entries", "family_id"),
             new TableColumn("memory_entries", "family_id"),
             new TableColumn("chat_sessions", "family_id"),
             new TableColumn("mirror_agent_data", "primary_family_id")

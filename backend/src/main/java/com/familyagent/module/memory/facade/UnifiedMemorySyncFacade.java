@@ -11,6 +11,10 @@ public class UnifiedMemorySyncFacade {
 
     private final UnifiedMemorySyncService syncService;
 
+    public UnifiedMemoryCreateResult create(UnifiedMemorySyncRequest request) {
+        return syncService.create(request);
+    }
+
     public Long sync(UnifiedMemorySyncRequest request) {
         return syncService.sync(request);
     }

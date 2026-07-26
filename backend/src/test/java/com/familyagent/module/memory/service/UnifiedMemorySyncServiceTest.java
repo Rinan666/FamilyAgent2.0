@@ -7,6 +7,7 @@ import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.module.family.facade.FamilyMembershipQueryFacade;
 import com.familyagent.module.memory.entity.MemoryEntry;
+import com.familyagent.module.memory.facade.UnifiedMemoryCreateResult;
 import com.familyagent.module.memory.facade.UnifiedMemorySyncRequest;
 import com.familyagent.module.memory.gateway.UnifiedMemorySyncGateway;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
@@ -47,6 +48,22 @@ class UnifiedMemorySyncServiceTest {
         assertEquals(81L, service.sync(request));
 
         verify(gateway).upsert(request);
+        verify(embeddingService).indexMemoryAfterCommit(entry);
+    }
+
+    @Test
+    void createAllocatesPublicOriginIdAndIndexesCanonicalEntry() {
+        UnifiedMemorySyncRequest request = createRequest("A new observation");
+        LocalDateTime createdAt = LocalDateTime.of(2026, 7, 27, 10, 0);
+        UnifiedMemoryCreateResult created = new UnifiedMemoryCreateResult(181L, 91L, createdAt, createdAt);
+        MemoryEntry entry = entry(181L, EntityStatus.ACTIVE);
+        when(membershipQueryFacade.isMember(1L, 22L)).thenReturn(true);
+        when(gateway.insert(request)).thenReturn(created);
+        when(memoryRepository.selectById(181L)).thenReturn(entry);
+
+        assertEquals(created, service.create(request));
+
+        verify(gateway).insert(request);
         verify(embeddingService).indexMemoryAfterCommit(entry);
     }
 
@@ -107,6 +124,22 @@ class UnifiedMemorySyncServiceTest {
                 MemoryOriginType.GROWTH,
                 77L,
                 status);
+    }
+
+    private static UnifiedMemorySyncRequest createRequest(String content) {
+        return new UnifiedMemorySyncRequest(
+                10L,
+                1L,
+                22L,
+                MemoryContentType.OBSERVATION,
+                MemoryScope.CARE_VISIBLE,
+                "Observation",
+                content,
+                List.of("sleep"),
+                LocalDateTime.of(2026, 7, 27, 10, 0),
+                MemoryOriginType.GROWTH,
+                null,
+                EntityStatus.ACTIVE);
     }
 
     private static MemoryEntry entry(Long id, EntityStatus status) {

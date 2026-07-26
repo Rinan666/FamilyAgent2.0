@@ -12,6 +12,16 @@ import java.util.List;
 public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
 
     @Select("""
+        SELECT id FROM memory_entries
+        WHERE origin_type = #{originType}
+          AND origin_id = #{originId}
+        LIMIT 1
+        """)
+    Long findIdByOrigin(
+            @Param("originType") String originType,
+            @Param("originId") Long originId);
+
+    @Select("""
         SELECT * FROM memory_entries
         WHERE user_id = #{userId}
           AND status = 'ACTIVE'

@@ -28,7 +28,7 @@ public class AuthorizedMemoryRecallCompatibilityProjector {
         return candidates.stream().map(this::growthRecord).toList();
     }
 
-    private DiaryEntry diary(AuthorizedMemoryRecallCandidate candidate) {
+    public DiaryEntry diary(AuthorizedMemoryRecallCandidate candidate) {
         MemoryEntry memory = candidate.entry();
         Map<String, Object> legacy = nestedMap(memory.getMetadata(), "legacyDiary");
         DiaryEntry diary = new DiaryEntry();
@@ -38,11 +38,13 @@ public class AuthorizedMemoryRecallCompatibilityProjector {
         diary.setRawText(memory.getContent());
         diary.setStructured(Map.of(
                 "title", value(memory.getTitle()),
+                "summary", value(memory.getSummary()),
                 "entryType", value(legacy.getOrDefault("entryType", "DAILY"))));
         diary.setMood(text(legacy.get("mood")));
         diary.setTags(memory.getTags());
         diary.setPrivacyLevel(memory.getScope());
         diary.setVisibility(memory.getScope());
+        diary.setPermissionScope(Map.of());
         diary.setSource(text(legacy.get("source")));
         diary.setVoiceUrl(text(legacy.get("voiceUrl")));
         diary.setMetadata(withMirrorSource(memory.getMetadata(), candidate.mirrorSource()));
@@ -51,10 +53,11 @@ public class AuthorizedMemoryRecallCompatibilityProjector {
         return diary;
     }
 
-    private GrowthGuardRecord growthRecord(AuthorizedMemoryRecallCandidate candidate) {
+    public GrowthGuardRecord growthRecord(AuthorizedMemoryRecallCandidate candidate) {
         MemoryEntry memory = candidate.entry();
         Map<String, Object> legacy = nestedMap(memory.getMetadata(), "legacyGrowth");
         GrowthGuardRecord record = new GrowthGuardRecord();
+        record.setMemoryEntryId(memory.getId());
         record.setId(candidate.publicSourceId());
         record.setFamilyId(memory.getFamilyId());
         record.setTargetUserId(candidate.subjectUserId());

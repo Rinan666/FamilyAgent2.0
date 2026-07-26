@@ -23,8 +23,6 @@ public class AgentRecordProvenance {
     private String toolVersion;
     private String recordType;
     private Long memoryEntryId;
-    private Long diaryEntryId;
-    private Long growthGuardRecordId;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

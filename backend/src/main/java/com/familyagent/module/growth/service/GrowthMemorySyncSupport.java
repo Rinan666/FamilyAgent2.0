@@ -6,6 +6,7 @@ import com.familyagent.common.constant.MemoryOriginType;
 import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.memory.facade.UnifiedMemorySyncFacade;
+import com.familyagent.module.memory.facade.UnifiedMemoryCreateResult;
 import com.familyagent.module.memory.facade.UnifiedMemorySyncMetadata;
 import com.familyagent.module.memory.facade.UnifiedMemorySyncRequest;
 import lombok.RequiredArgsConstructor;
@@ -22,9 +23,24 @@ public class GrowthMemorySyncSupport {
 
     private final UnifiedMemorySyncFacade syncFacade;
 
+    public void create(GrowthGuardRecord record) {
+        if (record.getCreatedAt() == null) {
+            record.setCreatedAt(java.time.LocalDateTime.now());
+        }
+        UnifiedMemoryCreateResult result = syncFacade.create(request(record, null));
+        record.setId(result.originId());
+        record.setMemoryEntryId(result.memoryEntryId());
+        record.setCreatedAt(result.createdAt());
+        record.setUpdatedAt(result.updatedAt());
+    }
+
     public void sync(GrowthGuardRecord record) {
+        syncFacade.sync(request(record, record.getId()));
+    }
+
+    private static UnifiedMemorySyncRequest request(GrowthGuardRecord record, Long originId) {
         Map<String, Object> metadata = metadata(record.getMetadata());
-        syncFacade.sync(new UnifiedMemorySyncRequest(
+        return new UnifiedMemorySyncRequest(
                 record.getCreatedBy(),
                 record.getFamilyId(),
                 record.getTargetUserId(),
@@ -35,12 +51,13 @@ public class GrowthMemorySyncSupport {
                 stringList(metadata.get("tags")),
                 record.getObservedAt() == null ? record.getCreatedAt() : record.getObservedAt().atStartOfDay(),
                 MemoryOriginType.GROWTH,
-                record.getId(),
+                originId,
                 UnifiedMemorySyncMetadata.growth(
                         record.getCategory(),
                         record.getSeverity(),
-                        record.getFollowUpAt()),
-                EntityStatus.valueOf(record.getStatus())));
+                        record.getFollowUpAt(),
+                        metadata),
+                EntityStatus.valueOf(record.getStatus()));
     }
 
     public void delete(Long recordId) {

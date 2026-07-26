@@ -7,11 +7,11 @@ import com.familyagent.module.agent.harness.constant.AgentToolPrivacyLevel;
 import com.familyagent.module.agent.harness.constant.AgentToolSideEffect;
 import com.familyagent.module.agent.harness.dto.CreateFamilyMemoryOutput;
 import com.familyagent.module.agent.harness.entity.AgentToolCallRecord;
+import com.familyagent.module.memory.facade.UnifiedMemoryIdentityFacade;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -19,7 +19,10 @@ import static org.mockito.Mockito.verify;
 class AgentRecordProvenanceWriterTest {
 
     private final AgentRecordProvenanceRepository repository = mock(AgentRecordProvenanceRepository.class);
-    private final AgentRecordProvenanceWriter writer = new AgentRecordProvenanceWriter(repository);
+    private final UnifiedMemoryIdentityFacade memoryIdentityFacade = mock(UnifiedMemoryIdentityFacade.class);
+    private final AgentRecordProvenanceWriter writer = new AgentRecordProvenanceWriter(
+            repository,
+            memoryIdentityFacade);
 
     @Test
     void recordCreatedOutputLinksFinalRecordToRunAndToolCall() {
@@ -41,8 +44,6 @@ class AgentRecordProvenanceWriterTest {
         assertEquals(AgentToolDescriptor.DEFAULT_VERSION, record.getToolVersion());
         assertEquals(AgentCreatedRecordType.MEMORY_ENTRY.name(), record.getRecordType());
         assertEquals(901L, record.getMemoryEntryId());
-        assertNull(record.getDiaryEntryId());
-        assertNull(record.getGrowthGuardRecordId());
     }
 
     @Test

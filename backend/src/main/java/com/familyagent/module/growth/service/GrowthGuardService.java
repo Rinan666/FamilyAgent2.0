@@ -13,8 +13,8 @@ import com.familyagent.module.growth.dto.GrowthGuardMetadata;
 import com.familyagent.module.growth.dto.GrowthStalenessStats;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.entity.GrowthGuardStalenessVote;
-import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
 import com.familyagent.module.growth.repository.GrowthGuardStalenessVoteRepository;
+import com.familyagent.module.memory.facade.UnifiedGrowthRecordFacade;
 import com.familyagent.module.memory.service.MemoryIndexMetadataBuilder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -42,7 +42,7 @@ public class GrowthGuardService {
     private static final Set<String> VISIBILITIES = MemoryScope.familyNames();
     private static final Set<String> FOLLOW_UP_STATUSES = FollowUpStatus.names();
 
-    private final GrowthGuardRecordRepository recordRepository;
+    private final UnifiedGrowthRecordFacade growthRecords;
     private final GrowthGuardStalenessVoteRepository stalenessVoteRepository;
     private final PermissionGate permissionGate;
     private final GrowthMemorySyncSupport memorySyncSupport;
@@ -52,7 +52,7 @@ public class GrowthGuardService {
         Long viewerUserId = CurrentUserGuard.currentUserId();
         permissionGate.checkMembership(request.getFamilyId());
 
-        if (recordRepository.countTodayByUser(viewerUserId) >= MAX_RECORDS_PER_DAY) {
+        if (growthRecords.countTodayByUser(viewerUserId) >= MAX_RECORDS_PER_DAY) {
             throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED,
                     "每天最多记录 " + MAX_RECORDS_PER_DAY + " 条观察，请明天再记");
         }
@@ -83,15 +83,14 @@ public class GrowthGuardService {
                 record.getCategory(),
                 record.getSeverity(),
                 record.getObservedAt()));
-        recordRepository.insert(record);
-        memorySyncSupport.sync(record);
+        memorySyncSupport.create(record);
         return record;
     }
 
     public List<GrowthGuardRecord> listFamilyRecords(Long familyId, int limit) {
         permissionGate.checkMembership(familyId);
         Long viewerUserId = CurrentUserGuard.currentUserId();
-        List<GrowthGuardRecord> records = recordRepository.findVisibleByFamily(familyId, viewerUserId, normalizeLimit(limit));
+        List<GrowthGuardRecord> records = growthRecords.findVisibleByFamily(familyId, viewerUserId, normalizeLimit(limit));
         records.forEach(record -> attachStalenessStats(record, viewerUserId));
         return records;
     }
@@ -101,12 +100,12 @@ public class GrowthGuardService {
         Long viewerUserId = CurrentUserGuard.currentUserId();
         int normalizedPageSize = normalizePageSize(pageSize);
         String normalizedKeyword = normalizeKeyword(keyword);
-        long total = recordRepository.countVisibleByFamilySearch(familyId, viewerUserId, targetUserId, normalizedKeyword);
+        long total = growthRecords.countVisibleByFamilySearch(familyId, viewerUserId, targetUserId, normalizedKeyword);
         long resolvedPage = resolvePage(page, normalizedPageSize, total);
         long offset = (resolvedPage - 1L) * normalizedPageSize;
         List<GrowthGuardRecord> items = total == 0
                 ? List.of()
-                : recordRepository.searchVisibleByFamily(
+                : growthRecords.searchVisibleByFamily(
                         familyId,
                         viewerUserId,
                         targetUserId,
@@ -119,7 +118,7 @@ public class GrowthGuardService {
 
     @Transactional
     public GrowthGuardRecord updateFollowUpStatus(Long id, String followUpStatus) {
-        GrowthGuardRecord record = recordRepository.selectById(id);
+        GrowthGuardRecord record = growthRecords.findById(id);
         if (record == null || !EntityStatus.ACTIVE.name().equals(record.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
@@ -127,14 +126,14 @@ public class GrowthGuardService {
         Map<String, Object> metadata = toMutableMap(record.getMetadata());
         metadata.put("followUpStatus", normalizeFollowUpStatus(followUpStatus));
         record.setMetadata(metadata);
-        recordRepository.updateById(record);
+        memorySyncSupport.sync(record);
         return record;
     }
 
     @Transactional
     public GrowthGuardRecord markRecordStale(Long id) {
         Long viewerUserId = CurrentUserGuard.currentUserId();
-        GrowthGuardRecord record = recordRepository.selectById(id);
+        GrowthGuardRecord record = growthRecords.findById(id);
         if (record == null || !EntityStatus.ACTIVE.name().equals(record.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
@@ -143,11 +142,11 @@ public class GrowthGuardService {
 
         GrowthGuardStalenessVote existing = stalenessVoteRepository.selectOne(
                 new LambdaQueryWrapper<GrowthGuardStalenessVote>()
-                        .eq(GrowthGuardStalenessVote::getRecordId, id)
+                        .eq(GrowthGuardStalenessVote::getMemoryEntryId, record.getMemoryEntryId())
                         .eq(GrowthGuardStalenessVote::getUserId, viewerUserId)
                         .last("LIMIT 1"));
         if (existing == null) {
-            insertStalenessVoteIfMissing(id, record.getFamilyId(), viewerUserId);
+            insertStalenessVoteIfMissing(record.getMemoryEntryId(), record.getFamilyId(), viewerUserId);
         }
         attachStalenessStats(record, viewerUserId);
         return record;
@@ -155,13 +154,12 @@ public class GrowthGuardService {
 
     @Transactional
     public void archiveRecord(Long id) {
-        GrowthGuardRecord record = recordRepository.selectById(id);
+        GrowthGuardRecord record = growthRecords.findById(id);
         if (record == null || !EntityStatus.ACTIVE.name().equals(record.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         permissionGate.ensureCanArchiveRecord(record);
         record.setStatus(EntityStatus.ARCHIVED.name());
-        recordRepository.updateById(record);
         memorySyncSupport.sync(record);
     }
 
@@ -234,9 +232,9 @@ public class GrowthGuardService {
         record.setMetadata(metadata);
     }
 
-    private void insertStalenessVoteIfMissing(Long recordId, Long familyId, Long viewerUserId) {
+    private void insertStalenessVoteIfMissing(Long memoryEntryId, Long familyId, Long viewerUserId) {
         GrowthGuardStalenessVote vote = new GrowthGuardStalenessVote();
-        vote.setRecordId(recordId);
+        vote.setMemoryEntryId(memoryEntryId);
         vote.setFamilyId(familyId);
         vote.setUserId(viewerUserId);
         try {
@@ -244,7 +242,7 @@ public class GrowthGuardService {
         } catch (DataIntegrityViolationException ex) {
             GrowthGuardStalenessVote existing = stalenessVoteRepository.selectOne(
                     new LambdaQueryWrapper<GrowthGuardStalenessVote>()
-                            .eq(GrowthGuardStalenessVote::getRecordId, recordId)
+                            .eq(GrowthGuardStalenessVote::getMemoryEntryId, memoryEntryId)
                             .eq(GrowthGuardStalenessVote::getUserId, viewerUserId)
                             .last("LIMIT 1"));
             if (existing == null) {

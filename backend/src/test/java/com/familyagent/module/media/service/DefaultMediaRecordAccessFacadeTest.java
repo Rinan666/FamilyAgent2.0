@@ -5,13 +5,13 @@ import com.familyagent.common.constant.MediaRecordType;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.diary.entity.DiaryEntry;
-import com.familyagent.module.diary.repository.DiaryEntryRepository;
 import com.familyagent.module.family.service.CareAuthorizationService;
 import com.familyagent.module.family.service.FamilyService;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
-import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
 import com.familyagent.module.growth.service.PermissionGate;
 import com.familyagent.module.memory.entity.MemoryEntry;
+import com.familyagent.module.memory.facade.UnifiedDiaryRecordFacade;
+import com.familyagent.module.memory.facade.UnifiedGrowthRecordFacade;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,8 +29,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class DefaultMediaRecordAccessFacadeTest {
 
-    @Mock private DiaryEntryRepository diaryRepository;
-    @Mock private GrowthGuardRecordRepository growthRepository;
+    @Mock private UnifiedDiaryRecordFacade diaryRecords;
+    @Mock private UnifiedGrowthRecordFacade growthRecords;
     @Mock private MemoryEntryRepository memoryRepository;
     @Mock private FamilyService familyService;
     @Mock private CareAuthorizationService careAuthorizationService;
@@ -40,7 +40,7 @@ class DefaultMediaRecordAccessFacadeTest {
     @Test
     void requireWritableDiary_allowsDiaryOwner() {
         DiaryEntry entry = diary(12L, 3L, 42L, "PRIVATE");
-        when(diaryRepository.selectById(12L)).thenReturn(entry);
+        when(diaryRecords.findById(12L)).thenReturn(entry);
 
         try (MockedStatic<CurrentUserGuard> currentUserMock = mockStatic(CurrentUserGuard.class)) {
             currentUserMock.when(CurrentUserGuard::currentUserId).thenReturn(42L);
@@ -56,7 +56,7 @@ class DefaultMediaRecordAccessFacadeTest {
     @Test
     void requireReadableDiary_rejectsPrivateDiaryForOtherUser() {
         DiaryEntry entry = diary(12L, 3L, 42L, "PRIVATE");
-        when(diaryRepository.selectById(12L)).thenReturn(entry);
+        when(diaryRecords.findById(12L)).thenReturn(entry);
 
         try (MockedStatic<CurrentUserGuard> currentUserMock = mockStatic(CurrentUserGuard.class)) {
             currentUserMock.when(CurrentUserGuard::currentUserId).thenReturn(43L);
@@ -68,7 +68,7 @@ class DefaultMediaRecordAccessFacadeTest {
     @Test
     void requireReadableGrowth_usesExistingPermissionGate() {
         GrowthGuardRecord record = growth(12L, 3L, 42L);
-        when(growthRepository.selectById(12L)).thenReturn(record);
+        when(growthRecords.findById(12L)).thenReturn(record);
 
         try (MockedStatic<CurrentUserGuard> currentUserMock = mockStatic(CurrentUserGuard.class)) {
             currentUserMock.when(CurrentUserGuard::currentUserId).thenReturn(43L);

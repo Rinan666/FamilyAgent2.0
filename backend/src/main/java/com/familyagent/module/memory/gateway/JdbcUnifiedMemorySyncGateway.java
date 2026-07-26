@@ -3,6 +3,7 @@ package com.familyagent.module.memory.gateway;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.familyagent.common.constant.MemoryOriginType;
+import com.familyagent.module.memory.facade.UnifiedMemoryCreateResult;
 import com.familyagent.module.memory.facade.UnifiedMemorySyncRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -14,10 +15,21 @@ import java.sql.Array;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Timestamp;
+import java.time.LocalDateTime;
 
 @Repository
 @RequiredArgsConstructor
 public class JdbcUnifiedMemorySyncGateway implements UnifiedMemorySyncGateway {
+
+    private static final String INSERT_SQL = """
+        INSERT INTO memory_entries (
+          user_id, family_id, library_kind, title, related_user_id, type, scope,
+          content, summary, importance, confidence, status, tags, occurred_at,
+          origin_type, origin_id, metadata, created_at, updated_at
+        ) VALUES (?, ?, 'FAMILY', ?, ?, ?, ?, ?, ?, 3, 0.8500, ?, ?, ?, ?,
+          nextval(CAST(? AS regclass)), ?::jsonb, NOW(), NOW())
+        RETURNING id, origin_id, created_at, updated_at
+        """;
 
     private static final String UPSERT_SQL = """
         INSERT INTO memory_entries (
@@ -48,29 +60,22 @@ public class JdbcUnifiedMemorySyncGateway implements UnifiedMemorySyncGateway {
     private final ObjectMapper objectMapper;
 
     @Override
+    public UnifiedMemoryCreateResult insert(UnifiedMemorySyncRequest request) {
+        return jdbcTemplate.execute((PreparedStatementCreator) connection -> {
+            PreparedStatement statement = connection.prepareStatement(INSERT_SQL);
+            bindCommon(statement, connection, request);
+            statement.setString(12, request.originType().name());
+            statement.setString(13, originSequence(request.originType()));
+            statement.setString(14, serializeMetadata(request));
+            return statement;
+        }, (PreparedStatementCallback<UnifiedMemoryCreateResult>) JdbcUnifiedMemorySyncGateway::readCreateResult);
+    }
+
+    @Override
     public Long upsert(UnifiedMemorySyncRequest request) {
         return jdbcTemplate.execute((PreparedStatementCreator) connection -> {
             PreparedStatement statement = connection.prepareStatement(UPSERT_SQL);
-            statement.setLong(1, request.ownerUserId());
-            statement.setLong(2, request.familyId());
-            statement.setString(3, truncate(request.title(), 120));
-            if (request.relatedUserId() == null) {
-                statement.setNull(4, java.sql.Types.BIGINT);
-            } else {
-                statement.setLong(4, request.relatedUserId());
-            }
-            statement.setString(5, request.type().name());
-            statement.setString(6, request.visibility().name());
-            statement.setString(7, request.content());
-            statement.setString(8, summary(request.title(), request.content()));
-            statement.setString(9, request.status().name());
-            Array tags = connection.createArrayOf("text", request.tags().toArray(String[]::new));
-            statement.setArray(10, tags);
-            if (request.occurredAt() == null) {
-                statement.setNull(11, java.sql.Types.TIMESTAMP);
-            } else {
-                statement.setTimestamp(11, Timestamp.valueOf(request.occurredAt()));
-            }
+            bindCommon(statement, connection, request);
             statement.setString(12, request.originType().name());
             statement.setLong(13, request.originId());
             statement.setString(14, serializeMetadata(request));
@@ -99,12 +104,58 @@ public class JdbcUnifiedMemorySyncGateway implements UnifiedMemorySyncGateway {
         }
     }
 
+    private static UnifiedMemoryCreateResult readCreateResult(PreparedStatement statement) throws java.sql.SQLException {
+        try (ResultSet resultSet = statement.executeQuery()) {
+            if (!resultSet.next()) {
+                throw new java.sql.SQLException("Unified memory insert returned no id");
+            }
+            return new UnifiedMemoryCreateResult(
+                    resultSet.getLong("id"),
+                    resultSet.getLong("origin_id"),
+                    localDateTime(resultSet.getTimestamp("created_at")),
+                    localDateTime(resultSet.getTimestamp("updated_at")));
+        }
+    }
+
+    private static void bindCommon(
+            PreparedStatement statement,
+            java.sql.Connection connection,
+            UnifiedMemorySyncRequest request) throws java.sql.SQLException {
+        statement.setLong(1, request.ownerUserId());
+        statement.setLong(2, request.familyId());
+        statement.setString(3, truncate(request.title(), 120));
+        if (request.relatedUserId() == null) {
+            statement.setNull(4, java.sql.Types.BIGINT);
+        } else {
+            statement.setLong(4, request.relatedUserId());
+        }
+        statement.setString(5, request.type().name());
+        statement.setString(6, request.visibility().name());
+        statement.setString(7, request.content());
+        statement.setString(8, summary(request.title(), request.content()));
+        statement.setString(9, request.status().name());
+        Array tags = connection.createArrayOf("text", request.tags().toArray(String[]::new));
+        statement.setArray(10, tags);
+        statement.setTimestamp(11, Timestamp.valueOf(request.occurredAt()));
+    }
+
     private String serializeMetadata(UnifiedMemorySyncRequest request) {
         try {
-            return objectMapper.writeValueAsString(request.metadata());
+            return objectMapper.writeValueAsString(request.metadata().toPersistenceMap());
         } catch (JsonProcessingException error) {
             throw new IllegalStateException("Unified memory metadata serialization failed", error);
         }
+    }
+
+    private static String originSequence(MemoryOriginType originType) {
+        return switch (originType) {
+            case DIARY -> "unified_diary_record_id_seq";
+            case GROWTH -> "unified_growth_record_id_seq";
+        };
+    }
+
+    private static LocalDateTime localDateTime(Timestamp timestamp) {
+        return timestamp == null ? null : timestamp.toLocalDateTime();
     }
 
     private static String summary(String title, String content) {
