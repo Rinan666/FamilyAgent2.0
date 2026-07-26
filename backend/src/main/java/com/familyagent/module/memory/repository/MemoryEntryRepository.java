@@ -354,12 +354,44 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
     @Select("""
         SELECT * FROM memory_entries
         WHERE family_id = #{familyId}
+          AND library_kind = 'FAMILY'
+          AND origin_type = 'DIARY'
           AND user_id = #{userId}
           AND status = 'ACTIVE'
-        ORDER BY importance DESC, updated_at DESC
+        ORDER BY occurred_at DESC, updated_at DESC
         LIMIT #{limit}
         """)
-    List<MemoryEntry> findActiveByFamilyAndUserForStyle(
+    List<MemoryEntry> findActiveDiaryEntriesByAuthorForStyle(
+            @Param("familyId") Long familyId,
+            @Param("userId") Long userId,
+            @Param("limit") int limit);
+
+    @Select("""
+        SELECT * FROM memory_entries
+        WHERE family_id = #{familyId}
+          AND library_kind = 'FAMILY'
+          AND origin_type IS NULL
+          AND user_id = #{userId}
+          AND status = 'ACTIVE'
+        ORDER BY importance DESC, occurred_at DESC, updated_at DESC
+        LIMIT #{limit}
+        """)
+    List<MemoryEntry> findActiveCanonicalEntriesByAuthorForStyle(
+            @Param("familyId") Long familyId,
+            @Param("userId") Long userId,
+            @Param("limit") int limit);
+
+    @Select("""
+        SELECT * FROM memory_entries
+        WHERE family_id = #{familyId}
+          AND library_kind = 'FAMILY'
+          AND origin_type = 'GROWTH'
+          AND COALESCE(related_user_id, user_id) = #{userId}
+          AND status = 'ACTIVE'
+        ORDER BY occurred_at DESC, updated_at DESC
+        LIMIT #{limit}
+        """)
+    List<MemoryEntry> findActiveGrowthEntriesBySubjectForStyle(
             @Param("familyId") Long familyId,
             @Param("userId") Long userId,
             @Param("limit") int limit);

@@ -378,6 +378,12 @@ class DatabaseHealthServiceTest {
 
             assertEquals(true, familySql.indexOf("FROM families f") < familySql.indexOf("LEFT JOIN LATERAL"));
             assertEquals(true, familySql.indexOf("LEFT JOIN LATERAL") < familySql.indexOf("WHERE 1 = 1"));
+            assertEquals(3, countOccurrences(familySql, "SELECT COUNT(*) FROM memory_entries"));
+            assertEquals(true, familySql.contains("me.origin_type = 'DIARY'"));
+            assertEquals(true, familySql.contains("me.origin_type IS NULL"));
+            assertEquals(true, familySql.contains("me.origin_type = 'GROWTH'"));
+            assertEquals(false, familySql.contains("FROM diary_entries"));
+            assertEquals(false, familySql.contains("FROM growth_guard_records"));
         }
     }
 
@@ -430,5 +436,9 @@ class DatabaseHealthServiceTest {
         member.setUserId(userId);
         member.setRole("MEMBER");
         return member;
+    }
+
+    private static int countOccurrences(String value, String token) {
+        return (value.length() - value.replace(token, "").length()) / token.length();
     }
 }

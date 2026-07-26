@@ -5,11 +5,9 @@ import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.diary.entity.DiaryEntry;
-import com.familyagent.module.diary.facade.MirrorStyleDiaryFacade;
 import com.familyagent.module.family.dto.FamilyMemberVO;
 import com.familyagent.module.family.facade.MirrorFamilyContextFacade;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
-import com.familyagent.module.growth.facade.MirrorStyleGrowthFacade;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.facade.MirrorMemoryRecallFacade;
@@ -43,9 +41,7 @@ import static org.mockito.Mockito.when;
 class MirrorContextServiceTest {
 
     @Mock private MirrorFamilyContextFacade familyService;
-    @Mock private MirrorStyleDiaryFacade diaryStyleFacade;
     @Mock private MirrorStyleMemoryFacade memoryStyleFacade;
-    @Mock private MirrorStyleGrowthFacade growthStyleFacade;
     @Mock private MirrorMemoryRecallFacade memoryRecallService;
     @Mock private MirrorAgentDataRepository mirrorAgentDataRepository;
 
@@ -72,14 +68,13 @@ class MirrorContextServiceTest {
                             .query("选择")
                             .embeddingReadyCount(0)
                             .build());
-            when(diaryStyleFacade.findActiveByFamilyAndUser(eq(familyId), eq(targetUserId), anyInt()))
-                    .thenReturn(List.of(
-                            diary(11L, familyId, targetUserId, privatePhrase + "。我当时很担心，也反复问自己为什么。", "PRIVATE"),
-                            diary(12L, familyId, targetUserId, "我后来觉得，选择要慢一点，先想后果，再行动。", "PRIVATE")));
-            when(memoryStyleFacade.findActiveByFamilyAndUser(eq(familyId), eq(targetUserId), anyInt()))
-                    .thenReturn(List.of(memory(13L, familyId, targetUserId, "私有经验", privateMemoryPhrase + "；如果重来，我会先问清楚边界。")));
-            when(growthStyleFacade.findActiveByFamilyAndTarget(eq(familyId), eq(targetUserId), anyInt()))
-                    .thenReturn(List.of(growth(14L, familyId, targetUserId, "EMOTION", privateGrowthPhrase)));
+            when(memoryStyleFacade.load(eq(familyId), eq(targetUserId), anyInt()))
+                    .thenReturn(new MirrorStyleMemoryFacade.MirrorStyleRecords(
+                            List.of(
+                                    diary(11L, familyId, targetUserId, privatePhrase + "。我当时很担心，也反复问自己为什么。", "PRIVATE"),
+                                    diary(12L, familyId, targetUserId, "我后来觉得，选择要慢一点，先想后果，再行动。", "PRIVATE")),
+                            List.of(memory(13L, familyId, targetUserId, "私有经验", privateMemoryPhrase + "；如果重来，我会先问清楚边界。")),
+                            List.of(growth(14L, familyId, targetUserId, "EMOTION", privateGrowthPhrase))));
 
             MirrorContextResponse response = service.getContext(familyId, targetUserId, "选择");
 
@@ -257,18 +252,15 @@ class MirrorContextServiceTest {
         MirrorContextPromptBuilder promptBuilder = new MirrorContextPromptBuilder();
         return new MirrorContextService(
                 familyService,
-                diaryStyleFacade,
                 memoryStyleFacade,
-                growthStyleFacade,
                 memoryRecallService,
                 mirrorAgentDataRepository,
                 promptBuilder);
     }
 
     private void stubEmptyStyleSamples(Long familyId, Long targetUserId) {
-        when(diaryStyleFacade.findActiveByFamilyAndUser(familyId, targetUserId, 80)).thenReturn(List.of());
-        when(memoryStyleFacade.findActiveByFamilyAndUser(familyId, targetUserId, 80)).thenReturn(List.of());
-        when(growthStyleFacade.findActiveByFamilyAndTarget(familyId, targetUserId, 80)).thenReturn(List.of());
+        when(memoryStyleFacade.load(familyId, targetUserId, 80))
+                .thenReturn(new MirrorStyleMemoryFacade.MirrorStyleRecords(List.of(), List.of(), List.of()));
     }
 
     private void stubFamilyContext(

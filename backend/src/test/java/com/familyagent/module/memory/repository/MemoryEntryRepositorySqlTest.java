@@ -27,6 +27,27 @@ class MemoryEntryRepositorySqlTest {
         }
     }
 
+    @Test
+    void styleQueriesUseDisjointUnifiedMemorySources() {
+        String diarySql = normalizedSql("findActiveDiaryEntriesByAuthorForStyle");
+        String memorySql = normalizedSql("findActiveCanonicalEntriesByAuthorForStyle");
+        String growthSql = normalizedSql("findActiveGrowthEntriesBySubjectForStyle");
+
+        assertTrue(diarySql.contains("FROMmemory_entries"));
+        assertTrue(diarySql.contains("origin_type='DIARY'"));
+        assertTrue(diarySql.contains("user_id=#{userId}"));
+        assertTrue(memorySql.contains("FROMmemory_entries"));
+        assertTrue(memorySql.contains("origin_typeISNULL"));
+        assertTrue(memorySql.contains("user_id=#{userId}"));
+        assertTrue(growthSql.contains("FROMmemory_entries"));
+        assertTrue(growthSql.contains("origin_type='GROWTH'"));
+        assertTrue(growthSql.contains("COALESCE(related_user_id,user_id)=#{userId}"));
+    }
+
+    private static String normalizedSql(String methodName) {
+        return selectSql(methodName).replaceAll("\\s+", "");
+    }
+
     private static String selectSql(String methodName) {
         Method method = Arrays.stream(MemoryEntryRepository.class.getDeclaredMethods())
                 .filter(candidate -> candidate.getName().equals(methodName))

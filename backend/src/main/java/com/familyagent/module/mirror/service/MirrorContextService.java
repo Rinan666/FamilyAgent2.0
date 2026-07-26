@@ -2,11 +2,9 @@ package com.familyagent.module.mirror.service;
 
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.diary.entity.DiaryEntry;
-import com.familyagent.module.diary.facade.MirrorStyleDiaryFacade;
 import com.familyagent.module.family.dto.FamilyMemberVO;
 import com.familyagent.module.family.facade.MirrorFamilyContextFacade;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
-import com.familyagent.module.growth.facade.MirrorStyleGrowthFacade;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.facade.MirrorMemoryRecallFacade;
@@ -30,9 +28,7 @@ public class MirrorContextService {
     private static final String DISCLAIMER = "镜像 Agent 不是本人，也不代表本人真实想法；它会用目标成员的授权可见内容回答，并用目标成员的私有记录生成不含原文的风格参考。记录不足时应直接说明不确定。";
 
     private final MirrorFamilyContextFacade familyContextFacade;
-    private final MirrorStyleDiaryFacade diaryStyleFacade;
     private final MirrorStyleMemoryFacade memoryStyleFacade;
-    private final MirrorStyleGrowthFacade growthStyleFacade;
     private final MirrorMemoryRecallFacade memoryRecallFacade;
     private final MirrorAgentDataRepository mirrorAgentDataRepository;
     private final MirrorContextPromptBuilder promptBuilder;
@@ -62,10 +58,14 @@ public class MirrorContextService {
                 familyId,
                 targetUserId,
                 viewerUserId);
+        MirrorStyleMemoryFacade.MirrorStyleRecords styleRecords = memoryStyleFacade.load(
+                familyId,
+                targetUserId,
+                STYLE_LIMIT);
         String privateStyleReference = promptBuilder.buildPrivateStyleReference(
-                diaryStyleFacade.findActiveByFamilyAndUser(familyId, targetUserId, STYLE_LIMIT),
-                memoryStyleFacade.findActiveByFamilyAndUser(familyId, targetUserId, STYLE_LIMIT),
-                growthStyleFacade.findActiveByFamilyAndTarget(familyId, targetUserId, STYLE_LIMIT));
+                styleRecords.diaries(),
+                styleRecords.memories(),
+                styleRecords.growthRecords());
 
         boolean insufficientRecords = diaries.size() < 2 && growthRecords.size() < 2;
         return MirrorContextResponse.builder()

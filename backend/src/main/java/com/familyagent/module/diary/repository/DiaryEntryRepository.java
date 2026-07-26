@@ -246,19 +246,6 @@ public interface DiaryEntryRepository extends BaseMapper<DiaryEntry> {
             @Param("viewerUserId") Long viewerUserId,
             @Param("limit") int limit);
 
-    @Select("""
-        SELECT * FROM diary_entries
-        WHERE family_id = #{familyId}
-          AND user_id = #{userId}
-          AND (metadata->>'status' IS NULL OR metadata->>'status' = 'ACTIVE')
-        ORDER BY created_at DESC
-        LIMIT #{limit}
-        """)
-    List<DiaryEntry> findActiveByFamilyAndUserForStyle(
-            @Param("familyId") Long familyId,
-            @Param("userId") Long userId,
-            @Param("limit") int limit);
-
     @Select("SELECT COUNT(*) FROM diary_entries WHERE user_id = #{userId} AND created_at::date = CURRENT_DATE")
     int countTodayByUser(@Param("userId") Long userId);
 }

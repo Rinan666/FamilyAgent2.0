@@ -149,19 +149,6 @@ public interface GrowthGuardRecordRepository extends BaseMapper<GrowthGuardRecor
             @Param("limit") int limit,
             @Param("offset") long offset);
 
-    @Select("""
-        SELECT * FROM growth_guard_records
-        WHERE family_id = #{familyId}
-          AND target_user_id = #{targetUserId}
-          AND status = 'ACTIVE'
-        ORDER BY observed_at DESC, created_at DESC
-        LIMIT #{limit}
-        """)
-    List<GrowthGuardRecord> findActiveByFamilyAndTargetForStyle(
-            @Param("familyId") Long familyId,
-            @Param("targetUserId") Long targetUserId,
-            @Param("limit") int limit);
-
     @Select("SELECT COUNT(*) FROM growth_guard_records WHERE created_by = #{userId} AND created_at::date = CURRENT_DATE")
     int countTodayByUser(@Param("userId") Long userId);
 }

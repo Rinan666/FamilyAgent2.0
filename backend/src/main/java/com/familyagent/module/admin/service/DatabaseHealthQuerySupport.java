@@ -37,9 +37,9 @@ class DatabaseHealthQuerySupport {
             new TableDefinition("family_members", "Family members", false),
             new TableDefinition("family_relationships", "Relationship labels", false),
             new TableDefinition("care_authorizations", "Care authorizations", false),
-            new TableDefinition("diary_entries", "Life records", false),
-            new TableDefinition("memory_entries", "Family experience", false),
-            new TableDefinition("growth_guard_records", "Growth observations", false),
+            new TableDefinition("diary_entries", "Life records", true),
+            new TableDefinition("memory_entries", "Unified memory records", false),
+            new TableDefinition("growth_guard_records", "Growth observations", true),
             new TableDefinition("memory_embeddings", "RAG embeddings", false),
             new TableDefinition("mirror_agent_data", "Mirror profiles", false),
             new TableDefinition("chat_sessions", "Chat sessions", false),
@@ -72,9 +72,7 @@ class DatabaseHealthQuerySupport {
                         .build())
                 .toList();
 
-        long totalCoreRecords = countTable("diary_entries")
-                + countTable("memory_entries")
-                + countTable("growth_guard_records");
+        long totalCoreRecords = countTable("memory_entries");
         long totalSkillRuns = countTable("skill_runs");
         long failedSkillRuns = countSkillRunsByStatus("FAILED");
         long totalEmbeddings = countTable("memory_embeddings");
@@ -235,9 +233,9 @@ class DatabaseHealthQuerySupport {
                             owner.owner_display_name,
                             COALESCE(owner.owner_count, 0) = 0 AS owner_missing,
                             (SELECT COUNT(*) FROM family_members fm WHERE fm.family_id = f.id) AS member_count,
-                            (SELECT COUNT(*) FROM diary_entries de WHERE de.family_id = f.id) AS diary_count,
-                            (SELECT COUNT(*) FROM memory_entries me WHERE me.family_id = f.id) AS memory_count,
-                            (SELECT COUNT(*) FROM growth_guard_records gr WHERE gr.family_id = f.id) AS growth_record_count,
+                            (SELECT COUNT(*) FROM memory_entries me WHERE me.family_id = f.id AND me.origin_type = 'DIARY') AS diary_count,
+                            (SELECT COUNT(*) FROM memory_entries me WHERE me.family_id = f.id AND me.origin_type IS NULL) AS memory_count,
+                            (SELECT COUNT(*) FROM memory_entries me WHERE me.family_id = f.id AND me.origin_type = 'GROWTH') AS growth_record_count,
                             (SELECT COUNT(*) FROM skill_runs sr WHERE sr.family_id = f.id) AS skill_run_count,
                             (SELECT COUNT(*) FROM skill_runs sr WHERE sr.family_id = f.id AND sr.status = 'FAILED') AS failed_skill_run_count,
                             (SELECT COUNT(*) FROM memory_embeddings em WHERE em.family_id = f.id AND em.status = 'READY') AS ready_embedding_count,
@@ -391,9 +389,9 @@ class DatabaseHealthQuerySupport {
                     owner.owner_display_name,
                     COALESCE(owner.owner_count, 0) = 0 AS owner_missing,
                     (SELECT COUNT(*) FROM family_members fm WHERE fm.family_id = f.id) AS member_count,
-                    (SELECT COUNT(*) FROM diary_entries de WHERE de.family_id = f.id) AS diary_count,
-                    (SELECT COUNT(*) FROM memory_entries me WHERE me.family_id = f.id) AS memory_count,
-                    (SELECT COUNT(*) FROM growth_guard_records gr WHERE gr.family_id = f.id) AS growth_record_count,
+                    (SELECT COUNT(*) FROM memory_entries me WHERE me.family_id = f.id AND me.origin_type = 'DIARY') AS diary_count,
+                    (SELECT COUNT(*) FROM memory_entries me WHERE me.family_id = f.id AND me.origin_type IS NULL) AS memory_count,
+                    (SELECT COUNT(*) FROM memory_entries me WHERE me.family_id = f.id AND me.origin_type = 'GROWTH') AS growth_record_count,
                     (SELECT COUNT(*) FROM skill_runs sr WHERE sr.family_id = f.id) AS skill_run_count,
                     (SELECT COUNT(*) FROM skill_runs sr WHERE sr.family_id = f.id AND sr.status = 'FAILED') AS failed_skill_run_count,
                     (SELECT COUNT(*) FROM memory_embeddings em WHERE em.family_id = f.id AND em.status = 'READY') AS ready_embedding_count,
