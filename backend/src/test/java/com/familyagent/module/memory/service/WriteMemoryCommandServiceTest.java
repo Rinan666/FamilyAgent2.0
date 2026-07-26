@@ -27,6 +27,7 @@ class WriteMemoryCommandServiceTest {
 
     @Mock private AgentDiaryEntryFacade diaryEntryFacade;
     @Mock private MemoryService memoryService;
+    @Mock private PersonalMemoryCommandService personalMemoryCommandService;
     @Mock private AgentGrowthGuardRecordFacade growthGuardRecordFacade;
 
     private WriteMemoryCommandService service;
@@ -36,6 +37,7 @@ class WriteMemoryCommandServiceTest {
         service = new WriteMemoryCommandService(
                 diaryEntryFacade,
                 memoryService,
+                personalMemoryCommandService,
                 growthGuardRecordFacade);
     }
 
@@ -72,6 +74,6 @@ class WriteMemoryCommandServiceTest {
         assertEquals(34L, persistedMetadata.get("relatedUserId"));
         assertEquals(123L, result.getSavedRecordId());
         assertEquals("DIARY_ENTRY", result.getSavedRecordType());
-        verifyNoInteractions(memoryService, growthGuardRecordFacade);
+        verifyNoInteractions(memoryService, personalMemoryCommandService, growthGuardRecordFacade);
     }
 }

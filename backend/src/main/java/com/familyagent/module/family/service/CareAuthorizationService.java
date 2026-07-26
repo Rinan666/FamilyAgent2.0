@@ -1,6 +1,7 @@
 package com.familyagent.module.family.service;
 
 import com.familyagent.common.constant.CareAuthorizationStatus;
+import com.familyagent.common.constant.CareAuthorizationScope;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
@@ -17,16 +18,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 public class CareAuthorizationService {
-
-    public static final String SCOPE_ALL = "ALL";
-    public static final String SCOPE_DIARY = "DIARY";
-    public static final String SCOPE_GROWTH_GUARD = "GROWTH_GUARD";
-    private static final Set<String> SCOPES = Set.of(SCOPE_ALL, SCOPE_DIARY, SCOPE_GROWTH_GUARD);
 
     private final FamilyService familyService;
     private final FamilyMemberRepository memberRepository;
@@ -118,9 +113,9 @@ public class CareAuthorizationService {
 
     private String normalizeScope(String scope) {
         String normalized = scope == null || scope.isBlank()
-                ? SCOPE_GROWTH_GUARD
+                ? CareAuthorizationScope.GROWTH_GUARD.name()
                 : scope.trim().toUpperCase(Locale.ROOT);
-        if (!SCOPES.contains(normalized)) {
+        if (!CareAuthorizationScope.names().contains(normalized)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "照护授权范围不支持");
         }
         return normalized;

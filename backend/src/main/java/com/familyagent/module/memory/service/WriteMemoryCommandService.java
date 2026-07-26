@@ -2,6 +2,7 @@ package com.familyagent.module.memory.service;
 
 import com.familyagent.common.constant.FollowUpStatus;
 import com.familyagent.common.constant.MemoryScope;
+import com.familyagent.common.constant.MemoryLibraryKind;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.diary.dto.CreateDiaryEntryRequest;
@@ -13,6 +14,8 @@ import com.familyagent.module.growth.dto.GrowthGuardMetadata;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.facade.AgentGrowthGuardRecordFacade;
 import com.familyagent.module.memory.dto.CreateFamilyMemoryRequest;
+import com.familyagent.module.memory.dto.CreatePersonalMemoryRequest;
+import com.familyagent.module.memory.dto.PersonalMemoryView;
 import com.familyagent.module.memory.dto.WriteMemoryMetadata;
 import com.familyagent.module.memory.dto.WriteMemoryRequest;
 import com.familyagent.module.memory.dto.WriteMemoryResult;
@@ -36,14 +39,17 @@ public class WriteMemoryCommandService {
 
     private final AgentDiaryEntryFacade diaryEntryFacade;
     private final MemoryService memoryService;
+    private final PersonalMemoryCommandService personalMemoryCommandService;
     private final AgentGrowthGuardRecordFacade growthGuardRecordFacade;
 
     public WriteMemoryCommandService(
             AgentDiaryEntryFacade diaryEntryFacade,
             MemoryService memoryService,
+            PersonalMemoryCommandService personalMemoryCommandService,
             AgentGrowthGuardRecordFacade growthGuardRecordFacade) {
         this.diaryEntryFacade = diaryEntryFacade;
         this.memoryService = memoryService;
+        this.personalMemoryCommandService = personalMemoryCommandService;
         this.growthGuardRecordFacade = growthGuardRecordFacade;
     }
 
@@ -83,6 +89,9 @@ public class WriteMemoryCommandService {
     }
 
     private WriteMemoryResult saveExperience(WriteMemoryRequest request, String category) {
+        if (MemoryLibraryKind.PERSONAL.name().equalsIgnoreCase(blankToNull(request.getMemoryLibrary()))) {
+            return savePersonalMemory(request, category);
+        }
         CreateFamilyMemoryRequest memoryRequest = new CreateFamilyMemoryRequest();
         memoryRequest.setFamilyId(request.getFamilyId());
         memoryRequest.setContent(request.getContent().trim());
@@ -107,6 +116,24 @@ public class WriteMemoryCommandService {
                 category,
                 entry.getScope(),
                 titleOrFallback(request.getTitle(), entry.getSummary(), request.getContent()));
+    }
+
+    private WriteMemoryResult savePersonalMemory(WriteMemoryRequest request, String category) {
+        CreatePersonalMemoryRequest personalRequest = new CreatePersonalMemoryRequest();
+        personalRequest.setContent(request.getContent().trim());
+        personalRequest.setType(blankToNull(request.getPersonalMemoryType()));
+        personalRequest.setVisibility(blankToNull(request.getVisibility()));
+        personalRequest.setSelectedFamilyIds(request.getSelectedFamilyIds());
+        personalRequest.setSummary(summaryOrFallback(request.getTitle(), request.getContent()));
+        personalRequest.setImportance(defaultImportance(request.getPersonalMemoryType()));
+        personalRequest.setMetadata(request.getMetadata());
+        PersonalMemoryView saved = personalMemoryCommandService.create(personalRequest);
+        return new WriteMemoryResult(
+                "PERSONAL_MEMORY",
+                saved.id(),
+                category,
+                saved.visibility(),
+                titleOrFallback(request.getTitle(), saved.summary(), request.getContent()));
     }
 
     private WriteMemoryResult saveObservation(WriteMemoryRequest request, String category) {

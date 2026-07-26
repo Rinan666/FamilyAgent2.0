@@ -26,6 +26,9 @@ public class WriteMemoryRequest {
     private Long relatedUserId;
     private String diaryEntryType;
     private String memoryType;
+    private String personalMemoryType;
+    private String memoryLibrary;
+    private List<Long> selectedFamilyIds;
     private String growthCategory;
 
     @Min(1)

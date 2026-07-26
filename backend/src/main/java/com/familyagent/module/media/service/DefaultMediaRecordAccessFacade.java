@@ -1,6 +1,7 @@
 package com.familyagent.module.media.service;
 
 import com.familyagent.common.constant.EntityStatus;
+import com.familyagent.common.constant.CareAuthorizationScope;
 import com.familyagent.common.constant.MediaRecordType;
 import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.common.exception.BusinessException;
@@ -136,7 +137,7 @@ public class DefaultMediaRecordAccessFacade implements MediaRecordAccessFacade {
                 entry.getFamilyId(),
                 entry.getUserId(),
                 viewerUserId,
-                CareAuthorizationService.SCOPE_DIARY);
+                CareAuthorizationScope.DIARY.name());
     }
 
     private static MediaRecordAccess access(MediaRecordType recordType, Long recordId, Long familyId) {

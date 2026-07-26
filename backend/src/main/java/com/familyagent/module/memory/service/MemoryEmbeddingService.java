@@ -9,6 +9,7 @@ import com.familyagent.module.family.facade.FamilyMembershipFacade;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.facade.MemoryIndexGrowthFacade;
 import com.familyagent.module.memory.dto.RebuildEmbeddingResponse;
+import com.familyagent.common.constant.MemoryLibraryKind;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEmbeddingWriteRepository;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
@@ -112,7 +113,7 @@ public class MemoryEmbeddingService {
     }
 
     private void index(String sourceType, Long sourceId, Long familyId, Long userId, String text) {
-        if (familyId == null || userId == null || isBlank(text)) {
+        if (userId == null || isBlank(text)) {
             return;
         }
         String contentHash = sha256(text);
@@ -168,11 +169,13 @@ public class MemoryEmbeddingService {
 
     private static String buildMemoryText(MemoryEntry entry) {
         return String.join("\n",
-                "类型：家族经验",
-                "主题：" + safe(entry.getType()),
-                "摘要：" + safe(entry.getSummary()),
-                "内容：" + safe(entry.getContent()),
-                "元数据：" + safe(entry.getMetadata()));
+                "library: " + (MemoryLibraryKind.PERSONAL.name().equals(entry.getLibraryKind())
+                        ? "personal memory"
+                        : "family memory"),
+                "type: " + safe(entry.getType()),
+                "summary: " + safe(entry.getSummary()),
+                "content: " + safe(entry.getContent()),
+                "metadata: " + safe(entry.getMetadata()));
     }
 
     private static String buildGrowthText(GrowthGuardRecord record) {

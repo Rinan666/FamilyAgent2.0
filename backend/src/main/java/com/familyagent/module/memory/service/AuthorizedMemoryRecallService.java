@@ -3,7 +3,9 @@ package com.familyagent.module.memory.service;
 import com.familyagent.module.family.facade.FamilyMembershipFacade;
 import com.familyagent.module.family.facade.FamilyRelationshipGraphFacade;
 import com.familyagent.module.family.facade.FamilyRelationshipGraphView;
+import com.familyagent.common.constant.MemoryLibraryKind;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
+import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEmbeddingRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -118,7 +120,12 @@ public class AuthorizedMemoryRecallService {
             int diaryLimit,
             int memoryLimit,
             AuthorizedMemoryRecallCandidateLoader.RecallCandidates candidates) {
-        long readyEmbeddings = embeddingRepository.countReadyByFamilyId(familyId);
+        long readyEmbeddings = embeddingRepository.countReadyForRecall(
+                familyId,
+                candidates.memories().stream()
+                        .filter(memory -> MemoryLibraryKind.PERSONAL.name().equals(memory.getLibraryKind()))
+                        .map(MemoryEntry::getId)
+                        .toList());
         AuthorizedMemoryRecallRankingService.RankedRecall ranked = rankingService.rank(
                 familyId,
                 normalizedQuery,

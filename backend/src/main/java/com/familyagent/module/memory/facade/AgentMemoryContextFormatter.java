@@ -1,6 +1,7 @@
 package com.familyagent.module.memory.facade;
 
 import com.familyagent.common.constant.EntityStatus;
+import com.familyagent.common.constant.MemoryLibraryKind;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
@@ -63,7 +64,9 @@ public class AgentMemoryContextFormatter {
                 continue;
             }
             RecallSourceSummary source = sources.get("memory-" + memory.getId());
-            hits.add(numbered(hits.size(), "[" + textOrDefault(memory.getType(), "MEMORY") + "] "
+            hits.add(numbered(hits.size(), "[" + textOrDefault(memory.getType(), "MEMORY") + "] library="
+                    + memoryLibraryLabel(memory)
+                    + " "
                     + participantAttributes("author", source == null ? null : source.getAuthor(), memory.getUserId())
                     + " " + preview(content)));
         }
@@ -185,6 +188,12 @@ public class AgentMemoryContextFormatter {
 
     private String fallbackParticipant(Long userId) {
         return userId == null ? "unknown_family_member" : "family_user_" + userId;
+    }
+
+    private String memoryLibraryLabel(MemoryEntry memory) {
+        return MemoryLibraryKind.PERSONAL.name().equalsIgnoreCase(memory.getLibraryKind())
+                ? "personal"
+                : "family";
     }
 
     private String quoted(String value) {

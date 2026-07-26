@@ -22,31 +22,96 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
 
     @Select("""
         SELECT * FROM memory_entries
-        WHERE family_id = #{familyId}
+        WHERE user_id = #{userId}
+          AND library_kind = 'PERSONAL'
           AND status = 'ACTIVE'
-          AND type IN ('FAMILY_STORY', 'ELDER_ADVICE', 'HEALTH_REMINDER', 'GROWTH_RISK', 'VALUE')
+        ORDER BY importance DESC, updated_at DESC
+        LIMIT #{limit}
+        """)
+    List<MemoryEntry> findActivePersonalByUserId(
+            @Param("userId") Long userId,
+            @Param("limit") int limit);
+
+    @Select("""
+        SELECT * FROM memory_entries
+        WHERE id = #{memoryId}
+          AND user_id = #{userId}
+          AND library_kind = 'PERSONAL'
+        LIMIT 1
+        """)
+    MemoryEntry findPersonalByIdAndOwner(
+            @Param("memoryId") Long memoryId,
+            @Param("userId") Long userId);
+
+    @Select("""
+        SELECT * FROM memory_entries
+        WHERE status = 'ACTIVE'
           AND (
-            scope = 'FAMILY_VISIBLE'
-            OR user_id = #{viewerUserId}
-            OR (
-              scope = 'CARE_VISIBLE'
-              AND EXISTS (
-                SELECT 1 FROM family_members fm
-                WHERE fm.family_id = memory_entries.family_id
-                  AND fm.user_id = #{viewerUserId}
-                  AND fm.role = 'OWNER'
+            (
+              library_kind = 'FAMILY'
+              AND family_id = #{familyId}
+              AND type IN ('FAMILY_STORY', 'ELDER_ADVICE', 'HEALTH_REMINDER', 'GROWTH_RISK', 'VALUE', 'PLAN')
+              AND (
+                scope = 'FAMILY_VISIBLE'
+                OR user_id = #{viewerUserId}
+                OR (
+                  scope = 'CARE_VISIBLE'
+                  AND EXISTS (
+                    SELECT 1 FROM family_members fm
+                    WHERE fm.family_id = memory_entries.family_id
+                      AND fm.user_id = #{viewerUserId}
+                      AND fm.role = 'OWNER'
+                  )
+                )
+                OR (
+                  scope = 'CARE_VISIBLE'
+                  AND EXISTS (
+                    SELECT 1 FROM care_authorizations ca
+                    WHERE ca.family_id = memory_entries.family_id
+                      AND ca.subject_user_id = memory_entries.user_id
+                      AND ca.caregiver_user_id = #{viewerUserId}
+                      AND ca.status = 'ACTIVE'
+                      AND ca.scope IN ('ALL', 'DIARY', 'GROWTH_GUARD')
+                      AND (ca.expires_at IS NULL OR ca.expires_at > NOW())
+                  )
+                )
               )
             )
             OR (
-              scope = 'CARE_VISIBLE'
-              AND EXISTS (
-                SELECT 1 FROM care_authorizations ca
-                WHERE ca.family_id = memory_entries.family_id
-                  AND ca.subject_user_id = memory_entries.user_id
-                  AND ca.caregiver_user_id = #{viewerUserId}
-                  AND ca.status = 'ACTIVE'
-                  AND ca.scope IN ('ALL', 'DIARY', 'GROWTH_GUARD')
-                  AND (ca.expires_at IS NULL OR ca.expires_at > NOW())
+              library_kind = 'PERSONAL'
+              AND type IN ('NOTE', 'KNOWLEDGE', 'INSIGHT', 'EXPERIENCE', 'PREFERENCE', 'PLAN')
+              AND (
+                user_id = #{viewerUserId}
+                OR (
+                  scope IN ('ALL_FAMILIES_VISIBLE', 'SELECTED_FAMILIES_VISIBLE')
+                  AND EXISTS (
+                    SELECT 1 FROM family_members owner_membership
+                    WHERE owner_membership.family_id = #{familyId}
+                      AND owner_membership.user_id = memory_entries.user_id
+                  )
+                  AND EXISTS (
+                    SELECT 1 FROM personal_memory_family_grants pmfg
+                    WHERE pmfg.memory_id = memory_entries.id
+                      AND pmfg.family_id = #{familyId}
+                  )
+                )
+                OR (
+                  scope = 'CARE_VISIBLE'
+                  AND EXISTS (
+                    SELECT 1 FROM family_members owner_membership
+                    WHERE owner_membership.family_id = #{familyId}
+                      AND owner_membership.user_id = memory_entries.user_id
+                  )
+                  AND EXISTS (
+                    SELECT 1 FROM care_authorizations ca
+                    WHERE ca.family_id = #{familyId}
+                      AND ca.subject_user_id = memory_entries.user_id
+                      AND ca.caregiver_user_id = #{viewerUserId}
+                      AND ca.status = 'ACTIVE'
+                      AND ca.scope IN ('ALL', 'MEMORY')
+                      AND (ca.expires_at IS NULL OR ca.expires_at > NOW())
+                  )
+                )
               )
             )
           )
@@ -62,8 +127,9 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
         SELECT COUNT(*)
         FROM memory_entries
         WHERE family_id = #{familyId}
+          AND library_kind = 'FAMILY'
           AND status = 'ACTIVE'
-          AND type IN ('FAMILY_STORY', 'ELDER_ADVICE', 'HEALTH_REMINDER', 'GROWTH_RISK', 'VALUE')
+          AND type IN ('FAMILY_STORY', 'ELDER_ADVICE', 'HEALTH_REMINDER', 'GROWTH_RISK', 'VALUE', 'PLAN')
           AND (
             CAST(#{targetUserId} AS BIGINT) IS NULL
             OR user_id = CAST(#{targetUserId} AS BIGINT)
@@ -109,8 +175,9 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
     @Select("""
         SELECT * FROM memory_entries
         WHERE family_id = #{familyId}
+          AND library_kind = 'FAMILY'
           AND status = 'ACTIVE'
-          AND type IN ('FAMILY_STORY', 'ELDER_ADVICE', 'HEALTH_REMINDER', 'GROWTH_RISK', 'VALUE')
+          AND type IN ('FAMILY_STORY', 'ELDER_ADVICE', 'HEALTH_REMINDER', 'GROWTH_RISK', 'VALUE', 'PLAN')
           AND (
             CAST(#{targetUserId} AS BIGINT) IS NULL
             OR user_id = CAST(#{targetUserId} AS BIGINT)
@@ -161,8 +228,9 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
         SELECT * FROM memory_entries
         WHERE id = #{memoryId}
           AND family_id = #{familyId}
+          AND library_kind = 'FAMILY'
           AND status = 'ACTIVE'
-          AND type IN ('FAMILY_STORY', 'ELDER_ADVICE', 'HEALTH_REMINDER', 'GROWTH_RISK', 'VALUE')
+          AND type IN ('FAMILY_STORY', 'ELDER_ADVICE', 'HEALTH_REMINDER', 'GROWTH_RISK', 'VALUE', 'PLAN')
           AND (
             scope = 'FAMILY_VISIBLE'
             OR user_id = #{viewerUserId}
@@ -198,6 +266,7 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
     @Select("""
         SELECT * FROM memory_entries
         WHERE family_id = #{familyId}
+          AND library_kind = 'FAMILY'
           AND status = 'ACTIVE'
           AND metadata->>'source' = 'DIARY_PROMOTION'
           AND metadata->>'sourceDiaryId' = #{sourceDiaryId}
@@ -226,8 +295,9 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
     @Select("""
         SELECT * FROM memory_entries
         WHERE family_id = #{familyId}
+          AND library_kind = 'FAMILY'
           AND status = 'ACTIVE'
-          AND type IN ('FAMILY_STORY', 'ELDER_ADVICE', 'HEALTH_REMINDER', 'GROWTH_RISK', 'VALUE')
+          AND type IN ('FAMILY_STORY', 'ELDER_ADVICE', 'HEALTH_REMINDER', 'GROWTH_RISK', 'VALUE', 'PLAN')
         ORDER BY updated_at DESC
         LIMIT #{limit}
         """)

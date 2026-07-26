@@ -13,6 +13,7 @@ import com.familyagent.module.agent.harness.dto.AgentToolCallResult;
 import com.familyagent.module.agent.harness.dto.CreateDiaryEntryInput;
 import com.familyagent.module.agent.harness.dto.CreateFamilyMemoryInput;
 import com.familyagent.module.agent.harness.dto.CreateGrowthGuardRecordInput;
+import com.familyagent.module.agent.harness.dto.CreatePersonalMemoryInput;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -94,6 +95,32 @@ class AgentSaveMemoryToolCommandServiceTest {
         assertEquals("SELF_REFLECTION", input.entryType());
         assertEquals("FAMILY_COMPANION_TOOL", input.metadata().getSource());
         assertEquals("FAMILY_MEMORY", input.metadata().getPlannedTool());
+    }
+
+    @Test
+    void requestSave_personalExperienceMapsToPersonalMemoryTool() {
+        doReturn(AgentToolCallResult.confirmationRequired(
+                AgentToolErrorCode.CONFIRMATION_REQUIRED.code(),
+                "Agent tool requires confirmation",
+                58L)).when(toolExecutor).execute(any());
+        AgentSaveMemoryToolCommandService service = new AgentSaveMemoryToolCommandService(toolExecutor);
+        AgentSaveMemoryToolRequest request = request("EXPERIENCE");
+        request.setMemoryLibrary("PERSONAL");
+        request.setPersonalMemoryType("KNOWLEDGE");
+        request.setVisibility("SELECTED_FAMILIES_VISIBLE");
+        request.setSelectedFamilyIds(List.of(10L, 12L));
+        request.setMetadata(metadata());
+
+        service.requestSave(request, 101L);
+
+        ArgumentCaptor<AgentToolCallRequest<?>> captor = toolRequestCaptor();
+        verify(toolExecutor).execute(captor.capture());
+        AgentToolCallRequest<?> toolRequest = captor.getValue();
+        assertEquals(AgentToolName.CREATE_PERSONAL_MEMORY.value(), toolRequest.toolName());
+        CreatePersonalMemoryInput input = assertInstanceOf(CreatePersonalMemoryInput.class, toolRequest.input());
+        assertEquals("KNOWLEDGE", input.type());
+        assertEquals("SELECTED_FAMILIES_VISIBLE", input.visibility());
+        assertEquals(List.of(10L, 12L), input.selectedFamilyIds());
     }
 
     @Test

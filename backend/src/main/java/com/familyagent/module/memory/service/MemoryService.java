@@ -3,6 +3,7 @@ package com.familyagent.module.memory.service;
 import com.familyagent.common.constant.EntityStatus;
 import com.familyagent.common.constant.HeritageSource;
 import com.familyagent.common.constant.MemoryScope;
+import com.familyagent.common.constant.MemoryLibraryKind;
 import com.familyagent.common.constant.MemoryType;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
@@ -48,10 +49,6 @@ public class MemoryService {
         throw new BusinessException(ErrorCode.BAD_REQUEST, "学习记忆功能已下线，请使用家族记忆、每日记录或成长观察。");
     }
 
-    public List<MemoryEntry> listMyMemories(int limit) {
-        return List.of();
-    }
-
     @Transactional
     public MemoryEntry createFamilyMemory(CreateFamilyMemoryRequest request) {
         Long userId = CurrentUserGuard.currentUserId();
@@ -86,6 +83,7 @@ public class MemoryService {
             MemoryEntry entry = new MemoryEntry();
             entry.setUserId(userId);
             entry.setFamilyId(request.getFamilyId());
+            entry.setLibraryKind(MemoryLibraryKind.FAMILY.name());
             entry.setType(normalizedType);
             entry.setScope(normalizedScope);
             entry.setContent(request.getContent().trim());

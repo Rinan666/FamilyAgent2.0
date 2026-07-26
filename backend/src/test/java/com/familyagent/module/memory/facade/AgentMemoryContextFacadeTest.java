@@ -71,7 +71,7 @@ class AgentMemoryContextFacadeTest {
                 8,
                 8);
         assertTrue(context.contains("retrieval_summary: mode=TEXT_FALLBACK embedding_ready=3"));
-        assertTrue(context.contains("[ELDER_ADVICE] author=\"张三\" relationship_to_viewer=\"二叔\""));
+        assertTrue(context.contains("[ELDER_ADVICE] library=family author=\"张三\" relationship_to_viewer=\"二叔\""));
     }
 
     @Test

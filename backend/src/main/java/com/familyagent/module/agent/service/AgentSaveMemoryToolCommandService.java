@@ -1,6 +1,7 @@
 package com.familyagent.module.agent.service;
 
 import com.familyagent.common.exception.BusinessException;
+import com.familyagent.common.constant.MemoryLibraryKind;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.agent.dto.AgentSaveMemoryToolRequest;
 import com.familyagent.module.agent.harness.AgentRunContext;
@@ -11,6 +12,7 @@ import com.familyagent.module.agent.harness.dto.AgentToolCallResult;
 import com.familyagent.module.agent.harness.dto.CreateDiaryEntryInput;
 import com.familyagent.module.agent.harness.dto.CreateFamilyMemoryInput;
 import com.familyagent.module.agent.harness.dto.CreateGrowthGuardRecordInput;
+import com.familyagent.module.agent.harness.dto.CreatePersonalMemoryInput;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -49,16 +51,28 @@ public class AgentSaveMemoryToolCommandService {
                             tags(request.getTags()),
                             request.getVisibility(),
                             request.getMetadata())));
-            case EXPERIENCE -> toolExecutor.execute(new AgentToolCallRequest<>(
-                    AgentToolName.CREATE_FAMILY_MEMORY.value(),
-                    context,
-                    new CreateFamilyMemoryInput(
-                            request.getContent(),
-                            request.getMemoryType(),
-                            request.getVisibility(),
-                            summary(request.getTitle(), request.getContent()),
-                            defaultImportance(request.getMemoryType()),
-                            request.getMetadata())));
+            case EXPERIENCE -> personalMemoryRequested(request)
+                    ? toolExecutor.execute(new AgentToolCallRequest<>(
+                            AgentToolName.CREATE_PERSONAL_MEMORY.value(),
+                            context,
+                            new CreatePersonalMemoryInput(
+                                    request.getContent(),
+                                    request.getPersonalMemoryType(),
+                                    request.getVisibility(),
+                                    summary(request.getTitle(), request.getContent()),
+                                    defaultImportance(request.getPersonalMemoryType()),
+                                    request.getSelectedFamilyIds(),
+                                    request.getMetadata())))
+                    : toolExecutor.execute(new AgentToolCallRequest<>(
+                            AgentToolName.CREATE_FAMILY_MEMORY.value(),
+                            context,
+                            new CreateFamilyMemoryInput(
+                                    request.getContent(),
+                                    request.getMemoryType(),
+                                    request.getVisibility(),
+                                    summary(request.getTitle(), request.getContent()),
+                                    defaultImportance(request.getMemoryType()),
+                                    request.getMetadata())));
             case OBSERVATION -> toolExecutor.execute(new AgentToolCallRequest<>(
                     AgentToolName.CREATE_GROWTH_GUARD_RECORD.value(),
                     context,
@@ -78,6 +92,11 @@ public class AgentSaveMemoryToolCommandService {
         if (category == SaveWriteCategory.OBSERVATION && request.getRelatedUserId() == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Growth guard target user is required");
         }
+    }
+
+    private static boolean personalMemoryRequested(AgentSaveMemoryToolRequest request) {
+        return MemoryLibraryKind.PERSONAL.name().equalsIgnoreCase(
+                defaultText(request.getMemoryLibrary(), MemoryLibraryKind.FAMILY.name()));
     }
 
     private static String requestId(String value) {

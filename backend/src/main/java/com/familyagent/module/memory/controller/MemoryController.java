@@ -7,12 +7,17 @@ import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
 import com.familyagent.module.memory.dto.CreateFamilyMemoryRequest;
 import com.familyagent.module.memory.dto.CreateMemoryEntryRequest;
 import com.familyagent.module.memory.dto.MemoryRecallRequest;
+import com.familyagent.module.memory.dto.CreatePersonalMemoryRequest;
+import com.familyagent.module.memory.dto.PersonalMemoryView;
+import com.familyagent.module.memory.dto.UpdatePersonalMemoryVisibilityRequest;
 import com.familyagent.module.memory.dto.MemoryVoteRequest;
 import com.familyagent.module.memory.dto.RebuildEmbeddingResponse;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.service.AuthorizedMemoryRecallService;
 import com.familyagent.module.memory.service.MemoryEmbeddingService;
 import com.familyagent.module.memory.service.MemoryService;
+import com.familyagent.module.memory.service.PersonalMemoryCommandService;
+import com.familyagent.module.memory.service.PersonalMemoryQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -30,6 +35,30 @@ public class MemoryController {
     private final MemoryService memoryService;
     private final MemoryEmbeddingService memoryEmbeddingService;
     private final AuthorizedMemoryRecallService authorizedMemoryRecallService;
+    private final PersonalMemoryCommandService personalMemoryCommandService;
+    private final PersonalMemoryQueryService personalMemoryQueryService;
+
+    @Operation(summary = "Create a personal memory")
+    @PostMapping("/personal")
+    public Result<PersonalMemoryView> createPersonalMemory(
+            @Valid @RequestBody CreatePersonalMemoryRequest request) {
+        return Result.success(personalMemoryCommandService.create(request));
+    }
+
+    @Operation(summary = "List current user's personal memories")
+    @GetMapping("/personal")
+    public Result<List<PersonalMemoryView>> listPersonalMemories(
+            @RequestParam(defaultValue = "20") int limit) {
+        return Result.success(personalMemoryQueryService.listMine(limit));
+    }
+
+    @Operation(summary = "Update a personal memory visibility")
+    @PutMapping("/personal/{memoryId}/visibility")
+    public Result<PersonalMemoryView> updatePersonalMemoryVisibility(
+            @PathVariable Long memoryId,
+            @Valid @RequestBody UpdatePersonalMemoryVisibilityRequest request) {
+        return Result.success(personalMemoryCommandService.updateVisibility(memoryId, request));
+    }
 
     @Operation(summary = "Create a memory")
     @PostMapping
@@ -39,8 +68,8 @@ public class MemoryController {
 
     @Operation(summary = "List current user's memories")
     @GetMapping("/me")
-    public Result<List<MemoryEntry>> listMyMemories(@RequestParam(defaultValue = "20") int limit) {
-        return Result.success(memoryService.listMyMemories(limit));
+    public Result<List<PersonalMemoryView>> listMyMemories(@RequestParam(defaultValue = "20") int limit) {
+        return Result.success(personalMemoryQueryService.listMine(limit));
     }
 
     @Operation(summary = "Create a family heritage memory")

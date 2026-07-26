@@ -1,6 +1,7 @@
 package com.familyagent.module.growth.service;
 
 import com.familyagent.common.exception.BusinessException;
+import com.familyagent.common.constant.CareAuthorizationScope;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.family.entity.FamilyMember;
@@ -41,7 +42,7 @@ public class GrowthGuardPermissionGate implements PermissionGate {
     public void ensureCanCareForTarget(Long familyId, Long targetUserId, Long viewerUserId) {
         if (!careAuthorizationService.canViewCareScope(
                 familyId, targetUserId, viewerUserId,
-                CareAuthorizationService.SCOPE_GROWTH_GUARD)) {
+                CareAuthorizationScope.GROWTH_GUARD.name())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "没有该成员的照护授权");
         }
     }
@@ -57,7 +58,7 @@ public class GrowthGuardPermissionGate implements PermissionGate {
                 record.getFamilyId(),
                 record.getTargetUserId(),
                 viewerUserId,
-                CareAuthorizationService.SCOPE_GROWTH_GUARD)) {
+                CareAuthorizationScope.GROWTH_GUARD.name())) {
             return;
         }
         throw new BusinessException(ErrorCode.FORBIDDEN, "无权查看该成长观察");

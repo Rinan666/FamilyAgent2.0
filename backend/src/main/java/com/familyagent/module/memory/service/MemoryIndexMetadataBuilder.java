@@ -61,13 +61,32 @@ public final class MemoryIndexMetadataBuilder {
             String summary,
             String memoryType,
             int importance) {
+        return enrichMemory(metadata, content, summary, memoryType, importance, "FAMILY_MEMORY");
+    }
+
+    public static Map<String, Object> enrichPersonalMemory(
+            Map<String, Object> metadata,
+            String content,
+            String summary,
+            String memoryType,
+            int importance) {
+        return enrichMemory(metadata, content, summary, memoryType, importance, "PERSONAL_MEMORY");
+    }
+
+    private static Map<String, Object> enrichMemory(
+            Map<String, Object> metadata,
+            String content,
+            String summary,
+            String memoryType,
+            int importance,
+            String sourceKind) {
         Map<String, Object> next = mutable(metadata);
         String text = join(content, summary, asText(next.get("scenario")));
-        Map<String, Object> index = baseIndex("FAMILY_MEMORY", text);
+        Map<String, Object> index = baseIndex(sourceKind, text);
         index.put("memoryType", safeUpper(memoryType, MemoryType.DEFAULT.name()));
         index.put("importance", clamp(importance, 1, 5));
         attachRetention(index);
-        index.put("temporalLayer", inferTemporalLayer(null, "FAMILY_MEMORY", index));
+        index.put("temporalLayer", inferTemporalLayer(null, sourceKind, index));
         next.put("index", index);
         return next;
     }

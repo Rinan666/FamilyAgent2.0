@@ -42,7 +42,7 @@ public class JdbcMemoryRecallVectorRepository implements MemoryRecallVectorRepos
                 FROM (
                     SELECT DISTINCT ON (source_id) source_id, embedding, updated_at
                     FROM memory_embeddings
-                    WHERE family_id = ?
+                    WHERE (family_id = ? OR (family_id IS NULL AND source_type = 'MEMORY'))
                       AND source_type = ?
                       AND source_id IN (%s)
                       AND status = 'READY'

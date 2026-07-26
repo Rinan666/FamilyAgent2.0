@@ -26,6 +26,12 @@ public class AgentSaveToolPlan {
     @JsonProperty("memory_type")
     private String memoryType;
 
+    @JsonProperty("personal_memory_type")
+    private String personalMemoryType;
+
+    @JsonProperty("selected_family_ids")
+    private List<Long> selectedFamilyIds;
+
     private String scope;
     private String category;
     private Integer severity;

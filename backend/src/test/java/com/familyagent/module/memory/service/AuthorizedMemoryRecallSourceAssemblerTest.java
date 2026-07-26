@@ -68,6 +68,24 @@ class AuthorizedMemoryRecallSourceAssemblerTest {
         assertFalse(result.toString().contains("private metadata detail"));
     }
 
+    @Test
+    void assemble_marksPersonalMemoryOwnershipSeparatelyFromFamilyMemory() {
+        MemoryEntry memory = new MemoryEntry();
+        memory.setId(9L);
+        memory.setUserId(101L);
+        memory.setLibraryKind("PERSONAL");
+        memory.setType("KNOWLEDGE");
+        memory.setContent("A personal note");
+
+        List<RecallSourceSummary> result = assembler.assemble(
+                List.of(),
+                List.of(memory),
+                List.of(),
+                relationships());
+
+        assertEquals("PERSONAL_MEMORY", result.get(0).getSourceType());
+    }
+
     private static FamilyRelationshipGraphView relationships() {
         return new FamilyRelationshipGraphView(Map.of(
                 101L, new FamilyRelationshipNode(101L, "current viewer", "本人", null, true, false),

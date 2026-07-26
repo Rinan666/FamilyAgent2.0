@@ -7,6 +7,7 @@ import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.memory.dto.RecallParticipantSummary;
 import com.familyagent.module.memory.dto.RecallSourceSummary;
 import com.familyagent.module.memory.entity.MemoryEntry;
+import com.familyagent.common.constant.MemoryLibraryKind;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -83,7 +84,9 @@ public class AuthorizedMemoryRecallSourceAssembler {
             Map<?, ?> index = metadataIndex(entry.getMetadata());
             summaries.add(RecallSourceSummary.builder()
                     .id("memory-" + entry.getId())
-                    .sourceType("FAMILY_EXPERIENCE")
+                    .sourceType(MemoryLibraryKind.PERSONAL.name().equals(entry.getLibraryKind())
+                            ? "PERSONAL_MEMORY"
+                            : "FAMILY_EXPERIENCE")
                     .title(firstNonBlank(entry.getSummary(), entry.getType(), "经验沉淀"))
                     .snippet(snippet(firstNonBlank(entry.getSummary(), entry.getContent(), "")))
                     .visibility(entry.getScope())

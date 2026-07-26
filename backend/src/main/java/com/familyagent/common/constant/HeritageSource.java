@@ -9,7 +9,8 @@ public enum HeritageSource {
     HERITAGE_INTERVIEW,
     HERITAGE_ATOM,
     DIARY_PROMOTION,
-    MERGED_HERITAGE;
+    MERGED_HERITAGE,
+    PERSONAL_ENTRY;
 
     public static Set<String> names() {
         return Arrays.stream(values()).map(Enum::name).collect(Collectors.toUnmodifiableSet());

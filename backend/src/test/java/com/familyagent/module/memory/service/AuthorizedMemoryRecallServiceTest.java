@@ -73,7 +73,7 @@ class AuthorizedMemoryRecallServiceTest {
 
         verify(familyMembershipFacade).checkMembership(familyId);
         verify(candidateLoader, never()).loadFamily(any(), any(), anyInt(), anyInt());
-        verify(embeddingRepository, never()).countReadyByFamilyId(anyLong());
+        verify(embeddingRepository, never()).countReadyForRecall(anyLong(), any());
         verify(rankingService, never()).rank(any(), any(), any(), any(), any(), anyInt(), anyInt(), anyLong());
 
         assertEquals(List.of(), result.getDiaries());
@@ -97,7 +97,7 @@ class AuthorizedMemoryRecallServiceTest {
 
         when(candidateLoader.loadFamily(familyId, viewerUserId, 3, 3))
                 .thenReturn(candidates(List.of(), List.of(visibleMemory), List.of()));
-        when(embeddingRepository.countReadyByFamilyId(familyId)).thenReturn(0L);
+        when(embeddingRepository.countReadyForRecall(eq(familyId), any())).thenReturn(0L);
         when(rankingService.rank(eq(familyId), eq("\u90a3\u6211\u8be5\u600e\u4e48\u8ddf\u4ed6\u804a"), any(), any(), any(), eq(3), eq(3), eq(0L)))
                 .thenReturn(new AuthorizedMemoryRecallRankingService.RankedRecall(
                         List.of(),
@@ -137,7 +137,7 @@ class AuthorizedMemoryRecallServiceTest {
 
         when(candidateLoader.loadFamily(familyId, viewerUserId, 3, 3))
                 .thenReturn(candidates(List.of(), List.of(visibleMemory), List.of()));
-        when(embeddingRepository.countReadyByFamilyId(familyId)).thenReturn(0L);
+        when(embeddingRepository.countReadyForRecall(eq(familyId), any())).thenReturn(0L);
         when(rankingService.rank(eq(familyId), eq("\u7259\u9f7f \u5237\u7259"), any(), any(), any(), eq(3), eq(3), eq(0L)))
                 .thenReturn(new AuthorizedMemoryRecallRankingService.RankedRecall(
                         List.of(),
@@ -161,6 +161,32 @@ class AuthorizedMemoryRecallServiceTest {
         assertEquals(List.of(visibleMemory), result.getMemories());
         assertEquals(List.of(), result.getGrowthRecords());
         assertTrue(result.getSources().stream().allMatch(source -> source.getId().equals("memory-2")));
+    }
+
+    @Test
+    void recallForFamily_countsAuthorizedPersonalEmbeddingsWithoutTrustingFamilyId() {
+        Long familyId = 10L;
+        Long viewerUserId = 101L;
+        MemoryEntry personalMemory = memory(
+                7L,
+                null,
+                viewerUserId,
+                "personal note",
+                "A private idea recalled for its owner",
+                "PRIVATE");
+        personalMemory.setLibraryKind("PERSONAL");
+        when(candidateLoader.loadFamily(familyId, viewerUserId, 3, 3))
+                .thenReturn(candidates(List.of(), List.of(personalMemory), List.of()));
+        when(embeddingRepository.countReadyForRecall(familyId, List.of(7L))).thenReturn(1L);
+        when(rankingService.rank(eq(familyId), eq("personal idea"), any(), any(), any(), eq(3), eq(3), eq(1L)))
+                .thenReturn(new AuthorizedMemoryRecallRankingService.RankedRecall(
+                        List.of(), List.of(personalMemory), List.of(), false));
+        when(sourceAssembler.assemble(List.of(), List.of(personalMemory), List.of(), relationships))
+                .thenReturn(List.of());
+
+        recallService.recallForFamily(familyId, viewerUserId, "personal idea", "FAMILY_AGENT", 3, 3);
+
+        verify(embeddingRepository).countReadyForRecall(familyId, List.of(7L));
     }
 
     @Test
@@ -193,7 +219,7 @@ class AuthorizedMemoryRecallServiceTest {
                         List.of(visibleDiary),
                         List.of(visibleMemory),
                         List.of(growthObservation)));
-        when(embeddingRepository.countReadyByFamilyId(familyId)).thenReturn(0L);
+        when(embeddingRepository.countReadyForRecall(eq(familyId), any())).thenReturn(0L);
         when(rankingService.rank(eq(familyId), eq("\u7259\u9f7f \u7761\u7720"), any(), any(), any(), eq(3), eq(3), eq(0L)))
                 .thenReturn(new AuthorizedMemoryRecallRankingService.RankedRecall(
                         List.of(visibleDiary),
@@ -252,7 +278,7 @@ class AuthorizedMemoryRecallServiceTest {
                         List.of(targetDiary, relatedDiary),
                         List.of(),
                         List.of(growthObservation)));
-        when(embeddingRepository.countReadyByFamilyId(familyId)).thenReturn(0L);
+        when(embeddingRepository.countReadyForRecall(eq(familyId), any())).thenReturn(0L);
         when(rankingService.rank(eq(familyId), eq("\u5fd7\u613f \u4e13\u4e1a"), any(), any(), any(), eq(5), eq(5), eq(0L)))
                 .thenReturn(new AuthorizedMemoryRecallRankingService.RankedRecall(
                         List.of(targetDiary, relatedDiary),
@@ -292,7 +318,7 @@ class AuthorizedMemoryRecallServiceTest {
 
         when(candidateLoader.loadFamily(familyId, viewerUserId, 3, 3))
                 .thenReturn(candidates(List.of(), List.of(), List.of()));
-        when(embeddingRepository.countReadyByFamilyId(familyId)).thenReturn(1L);
+        when(embeddingRepository.countReadyForRecall(eq(familyId), any())).thenReturn(1L);
         when(rankingService.rank(eq(familyId), eq("\u7259\u9f7f \u5237\u7259"), any(), any(), any(), eq(3), eq(3), eq(1L)))
                 .thenReturn(new AuthorizedMemoryRecallRankingService.RankedRecall(
                         List.of(),
@@ -328,7 +354,7 @@ class AuthorizedMemoryRecallServiceTest {
 
         when(candidateLoader.loadFamily(familyId, viewerUserId, 3, 3))
                 .thenReturn(candidates(List.of(), List.of(visibleMemory), List.of()));
-        when(embeddingRepository.countReadyByFamilyId(familyId)).thenReturn(0L);
+        when(embeddingRepository.countReadyForRecall(eq(familyId), any())).thenReturn(0L);
         when(rankingService.rank(eq(familyId), eq("\u7761\u7720 \u624b\u673a"), any(), any(), any(), eq(3), eq(3), eq(0L)))
                 .thenReturn(new AuthorizedMemoryRecallRankingService.RankedRecall(
                         List.of(),
