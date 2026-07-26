@@ -106,6 +106,24 @@ def test_high_value_learning_observation_auto_saves_without_explicit_keyword():
     assert plan["visibility"] == "CARE_VISIBLE"
 
 
+def test_reusable_learning_strategy_overrides_growth_guard_proposal():
+    plan = _sanitize_save_tool_plan({
+        "should_save": True,
+        "tool": "GROWTH_GUARD",
+        "content": (
+            "孩子最近做应用题总是先抓数字，不读完整题意，所以容易列错式。"
+            "我让他先复述题意，再画一张简单线段图；今天他能更稳定地说出等量关系，"
+            "后面遇到应用题准备继续先拆题意再计算。"
+        ),
+        "visibility": "CARE_VISIBLE",
+        "scope": "CARE_VISIBLE",
+    })
+
+    assert plan["should_save"] is True
+    assert plan["tool"] == "FAMILY_MEMORY"
+    assert plan["scope"] == "CARE_VISIBLE"
+
+
 def test_long_save_content_is_summarized_to_complete_high_value_fragment():
     long_content = (
         "今天只是一些闲聊，天气不错，晚饭也还行。"

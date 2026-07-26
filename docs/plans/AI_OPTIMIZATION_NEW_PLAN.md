@@ -300,6 +300,8 @@ Backend `AIServiceClient` 约 349 行，仍同时承担 chat stream、Embedding�
 
 ### P2-2：Eval 信号质量与真实模型抽样
 
+> 状态（2026-07-26）：已完成。新增独立、手动触发、默认关闭的真实 provider 质量抽样，仅使用合成家庭场景；报告包含质量分、通过率、结构化失败率、延迟、token/成本和 baseline/candidate 差异，不保存 prompt 或模型原文。DashScope `qwen-flash` 两案例真实 smoke 为 2/2 通过、平均质量分 1.0、结构化失败率 0；同时修复了可复用学习策略被误分为成长观察的问题。
+
 #### 当前问题
 
 deterministic eval 已适合作为安全与契约门禁，但不能替代真实模型质量判断。预期失败 fixture 产生的 errorType 日志也会增加 CI 噪声。

@@ -25,6 +25,8 @@ def _infer_save_tool(content: str, proposed_tool: str) -> str:
         return "NONE"
     if _looks_like_prompt_injection(text):
         return "NONE"
+    if _looks_like_reusable_learning_strategy(text):
+        return "FAMILY_MEMORY"
     if _looks_like_growth_observation(text):
         return "GROWTH_GUARD"
     if _looks_like_family_memory(text):
@@ -190,6 +192,16 @@ def _looks_like_learning_or_care_strategy(text: str) -> bool:
     return bool(
         re.search(r"(孩子|儿子|女儿|学生|学习|作业|应用题|题意|列式|错题|考试|情绪|沟通)", text)
         and re.search(r"(先|再|下次|继续|需要|可以|适合|不适合|提醒|复盘|拆|画图|记录)", text)
+    )
+
+
+def _looks_like_reusable_learning_strategy(text: str) -> bool:
+    return bool(
+        re.search(r"(学习|作业|应用题|题意|列式|错题|考试|计算|线段图|等量关系)", text)
+        and re.search(
+            r"(复述|画图|线段图|拆.{0,6}题意|先.{0,24}再|错题.{0,12}复盘|分步|验算)",
+            text,
+        )
     )
 
 
