@@ -4,11 +4,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { Archive, Loader2, UserRound } from 'lucide-react';
 import { memoryApi } from '@/lib/api';
 import { useViewerRole } from '@/hooks/useViewerRole';
-import type { PersonalMemoryView, PersonalMemoryVisibility } from '@/types';
+import type { PersonalMemoryView, PersonalMemoryVisibility, SharedPersonalMemoryView } from '@/types';
 
 export default function PersonalMemoryWorkbench({ refreshSignal = 0 }: { refreshSignal?: number }) {
   const { families, activeFamilyId } = useViewerRole();
   const [items, setItems] = useState<PersonalMemoryView[]>([]);
+  const [sharedItems, setSharedItems] = useState<SharedPersonalMemoryView[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [error, setError] = useState('');
@@ -16,14 +17,23 @@ export default function PersonalMemoryWorkbench({ refreshSignal = 0 }: { refresh
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
-    try {
-      setItems(await memoryApi.listPersonalMemories(100));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '个人记忆加载失败');
-    } finally {
-      setLoading(false);
+    const [mine, shared] = await Promise.allSettled([
+        memoryApi.listPersonalMemories(100),
+        activeFamilyId ? memoryApi.listSharedPersonalMemories(activeFamilyId, 100) : Promise.resolve([]),
+    ]);
+    if (mine.status === 'rejected') {
+      setError(mine.reason instanceof Error ? mine.reason.message : '个人记忆加载失败');
+    } else {
+      setItems(mine.value);
     }
-  }, []);
+    if (shared.status === 'rejected') {
+      setSharedItems([]);
+      setError((current) => current || (shared.reason instanceof Error ? shared.reason.message : '家人分享加载失败'));
+    } else {
+      setSharedItems(shared.value);
+    }
+    setLoading(false);
+  }, [activeFamilyId]);
 
   useEffect(() => { void load(); }, [load, refreshSignal]);
 
@@ -61,6 +71,7 @@ export default function PersonalMemoryWorkbench({ refreshSignal = 0 }: { refresh
   return (
     <div className="mx-auto w-full max-w-6xl">
       {error && <div className="mb-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+      <h2 className="mb-3 text-lg font-semibold text-stone-900">我的个人记忆</h2>
       {items.length === 0 ? (
         <div className="rounded-xl border border-dashed border-stone-300 bg-white p-12 text-center">
           <UserRound className="mx-auto h-10 w-10 text-stone-300" />
@@ -101,6 +112,29 @@ export default function PersonalMemoryWorkbench({ refreshSignal = 0 }: { refresh
           ))}
         </div>
       )}
+
+      <section className="mt-8 border-t border-stone-200 pt-6">
+        <h2 className="text-lg font-semibold text-stone-900">家人分享给我的</h2>
+        <p className="mt-1 text-sm text-stone-500">只显示当前家族中明确共享或授权照护查看的个人记忆。</p>
+        {sharedItems.length === 0 ? (
+          <p className="mt-4 rounded-xl border border-dashed border-stone-200 bg-white px-4 py-8 text-center text-sm text-stone-400">当前没有家人分享的个人记忆。</p>
+        ) : (
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            {sharedItems.map((memory) => (
+              <article key={memory.id} className="rounded-xl border border-emerald-100 bg-emerald-50/30 p-5">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-emerald-800">
+                  <span className="rounded-full bg-emerald-100 px-2 py-1">{memory.relationshipToViewer || memory.ownerName}</span>
+                  {memory.relationshipToViewer !== memory.ownerName && <span>{memory.ownerName}</span>}
+                  <span>·</span>
+                  <span>{typeLabel(memory.type)}</span>
+                </div>
+                <h3 className="mt-3 font-semibold text-stone-900">{memory.summary || memory.content.slice(0, 60)}</h3>
+                <p className="mt-2 line-clamp-5 whitespace-pre-wrap text-sm leading-6 text-stone-600">{memory.content}</p>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

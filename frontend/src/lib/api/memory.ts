@@ -11,6 +11,7 @@ import type {
   MemoryEntry,
   PersonalMemoryView,
   PersonalMemoryVisibility,
+  SharedPersonalMemoryView,
   MemoryVoteType,
   PageResult,
   PersonaMaterialDraft,
@@ -21,6 +22,8 @@ import type {
 export const memoryApi = {
   listPersonalMemories: (limit = 50) =>
     request<PersonalMemoryView[]>(`/memories/personal?limit=${limit}`),
+  listSharedPersonalMemories: (familyId: number, limit = 50) =>
+    request<SharedPersonalMemoryView[]>(`/memories/personal/shared/${familyId}?limit=${limit}`),
   createPersonalMemory: (data: CreatePersonalMemoryRequest) =>
     request<PersonalMemoryView>('/memories/personal', { method: 'POST', body: JSON.stringify(data) }),
   updatePersonalMemoryVisibility: (

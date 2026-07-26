@@ -45,6 +45,46 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
 
     @Select("""
         SELECT * FROM memory_entries
+        WHERE library_kind = 'PERSONAL'
+          AND status = 'ACTIVE'
+          AND user_id <> #{viewerUserId}
+          AND EXISTS (
+            SELECT 1 FROM family_members owner_membership
+            WHERE owner_membership.family_id = #{familyId}
+              AND owner_membership.user_id = memory_entries.user_id
+          )
+          AND (
+            (
+              scope IN ('ALL_FAMILIES_VISIBLE', 'SELECTED_FAMILIES_VISIBLE')
+              AND EXISTS (
+                SELECT 1 FROM personal_memory_family_grants pmfg
+                WHERE pmfg.memory_id = memory_entries.id
+                  AND pmfg.family_id = #{familyId}
+              )
+            )
+            OR (
+              scope = 'CARE_VISIBLE'
+              AND EXISTS (
+                SELECT 1 FROM care_authorizations ca
+                WHERE ca.family_id = #{familyId}
+                  AND ca.subject_user_id = memory_entries.user_id
+                  AND ca.caregiver_user_id = #{viewerUserId}
+                  AND ca.status = 'ACTIVE'
+                  AND ca.scope IN ('ALL', 'MEMORY')
+                  AND (ca.expires_at IS NULL OR ca.expires_at > NOW())
+              )
+            )
+          )
+        ORDER BY importance DESC, updated_at DESC
+        LIMIT #{limit}
+        """)
+    List<MemoryEntry> findVisibleSharedPersonalMemories(
+            @Param("familyId") Long familyId,
+            @Param("viewerUserId") Long viewerUserId,
+            @Param("limit") int limit);
+
+    @Select("""
+        SELECT * FROM memory_entries
         WHERE status = 'ACTIVE'
           AND (
             (

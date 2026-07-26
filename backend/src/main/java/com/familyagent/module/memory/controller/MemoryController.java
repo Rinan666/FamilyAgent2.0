@@ -10,6 +10,7 @@ import com.familyagent.module.memory.dto.MemoryRecallRequest;
 import com.familyagent.module.memory.dto.CreatePersonalMemoryRequest;
 import com.familyagent.module.memory.dto.PersonalMemoryView;
 import com.familyagent.module.memory.dto.UpdatePersonalMemoryVisibilityRequest;
+import com.familyagent.module.memory.dto.SharedPersonalMemoryView;
 import com.familyagent.module.memory.dto.MemoryVoteRequest;
 import com.familyagent.module.memory.dto.RebuildEmbeddingResponse;
 import com.familyagent.module.memory.entity.MemoryEntry;
@@ -50,6 +51,14 @@ public class MemoryController {
     public Result<List<PersonalMemoryView>> listPersonalMemories(
             @RequestParam(defaultValue = "20") int limit) {
         return Result.success(personalMemoryQueryService.listMine(limit));
+    }
+
+    @Operation(summary = "List personal memories shared with a family")
+    @GetMapping("/personal/shared/{familyId}")
+    public Result<List<SharedPersonalMemoryView>> listSharedPersonalMemories(
+            @PathVariable Long familyId,
+            @RequestParam(defaultValue = "50") int limit) {
+        return Result.success(personalMemoryQueryService.listSharedWithFamily(familyId, limit));
     }
 
     @Operation(summary = "Update a personal memory visibility")

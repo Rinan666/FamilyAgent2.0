@@ -542,6 +542,20 @@ export interface PersonalMemoryView {
   updatedAt?: string;
 }
 
+export interface SharedPersonalMemoryView {
+  id: number;
+  ownerUserId: number;
+  ownerName: string;
+  relationshipToViewer: string;
+  type: PersonalMemoryType | string;
+  visibility: PersonalMemoryVisibility | string;
+  content: string;
+  summary?: string;
+  importance: number;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface CreatePersonalMemoryRequest {
   content: string;
   type?: PersonalMemoryType;
