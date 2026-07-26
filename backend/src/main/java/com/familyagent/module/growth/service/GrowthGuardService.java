@@ -47,6 +47,7 @@ public class GrowthGuardService {
     private final GrowthGuardStalenessVoteRepository stalenessVoteRepository;
     private final PermissionGate permissionGate;
     private final MemoryIndexingFacade memoryEmbeddingService;
+    private final GrowthMemorySyncSupport memorySyncSupport;
 
     @Transactional
     public GrowthGuardRecord createRecord(CreateGrowthGuardRecordRequest request) {
@@ -85,6 +86,7 @@ public class GrowthGuardService {
                 record.getSeverity(),
                 record.getObservedAt()));
         recordRepository.insert(record);
+        memorySyncSupport.sync(record);
         memoryEmbeddingService.indexGrowthAfterCommit(record);
         return record;
     }
@@ -163,6 +165,7 @@ public class GrowthGuardService {
         permissionGate.ensureCanArchiveRecord(record);
         record.setStatus(EntityStatus.ARCHIVED.name());
         recordRepository.updateById(record);
+        memorySyncSupport.sync(record);
     }
 
     private static int normalizeLimit(int limit) {

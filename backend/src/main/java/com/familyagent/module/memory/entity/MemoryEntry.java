@@ -2,6 +2,7 @@ package com.familyagent.module.memory.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import com.familyagent.common.handler.PgJsonbTypeHandler;
+import com.familyagent.common.handler.StringArrayTypeHandler;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -17,6 +18,8 @@ public class MemoryEntry {
     private Long userId;
     private Long familyId;
     private String libraryKind;
+    private String title;
+    private Long relatedUserId;
     private String subject;
     private String type;
     private String scope;
@@ -26,6 +29,12 @@ public class MemoryEntry {
     private BigDecimal confidence;
     private Long sourceSessionId;
     private String status;
+    private LocalDateTime occurredAt;
+    private String originType;
+    private Long originId;
+
+    @TableField(typeHandler = StringArrayTypeHandler.class)
+    private String[] tags;
 
     @TableField(typeHandler = PgJsonbTypeHandler.class)
     private Object metadata;

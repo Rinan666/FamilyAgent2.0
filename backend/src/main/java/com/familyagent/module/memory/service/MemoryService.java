@@ -2,6 +2,7 @@ package com.familyagent.module.memory.service;
 
 import com.familyagent.common.constant.EntityStatus;
 import com.familyagent.common.constant.HeritageSource;
+import com.familyagent.common.constant.MemoryContentType;
 import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.common.constant.MemoryLibraryKind;
 import com.familyagent.common.constant.MemoryType;
@@ -33,7 +34,6 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class MemoryService {
 
-    private static final Set<String> FAMILY_MEMORY_TYPES = MemoryType.names();
     private static final Set<String> FAMILY_MEMORY_SCOPES = MemoryScope.familyNames();
 
     private final MemoryEntryRepository memoryRepository;
@@ -84,6 +84,7 @@ public class MemoryService {
             entry.setUserId(userId);
             entry.setFamilyId(request.getFamilyId());
             entry.setLibraryKind(MemoryLibraryKind.FAMILY.name());
+            entry.setTitle(truncate(blankToNull(request.getSummary()), 120));
             entry.setType(normalizedType);
             entry.setScope(normalizedScope);
             entry.setContent(request.getContent().trim());
@@ -91,6 +92,8 @@ public class MemoryService {
             entry.setImportance(clamp(request.getImportance() == null ? 3 : request.getImportance(), 1, 5));
             entry.setConfidence(BigDecimal.valueOf(0.85));
             entry.setStatus(EntityStatus.ACTIVE.name());
+            entry.setOccurredAt(java.time.LocalDateTime.now());
+            entry.setTags(new String[0]);
             entry.setMetadata(MemoryIndexMetadataBuilder.enrichFamilyMemory(
                     metadata,
                     entry.getContent(),
@@ -148,11 +151,12 @@ public class MemoryService {
     }
 
     private static String normalizeFamilyMemoryType(String type) {
-        String normalized = type == null ? MemoryType.DEFAULT.name() : type.trim().toUpperCase(Locale.ROOT);
-        if (!FAMILY_MEMORY_TYPES.contains(normalized)) {
+        String requested = type == null ? MemoryType.DEFAULT.name() : type.trim().toUpperCase(Locale.ROOT);
+        MemoryContentType normalized = MemoryContentType.fromFamilyMemoryType(requested);
+        if (normalized == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "家族经验类型不支持");
         }
-        return normalized;
+        return normalized.name();
     }
 
     private static String normalizeFamilyMemoryScope(String scope) {
@@ -179,6 +183,10 @@ public class MemoryService {
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private static String truncate(String value, int maxLength) {
+        return value == null || value.length() <= maxLength ? value : value.substring(0, maxLength);
     }
 
     private static int clamp(int value, int min, int max) {

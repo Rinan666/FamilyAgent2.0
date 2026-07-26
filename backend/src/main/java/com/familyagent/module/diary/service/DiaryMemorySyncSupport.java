@@ -1,0 +1,69 @@
+package com.familyagent.module.diary.service;
+
+import com.familyagent.common.constant.EntityStatus;
+import com.familyagent.common.constant.MemoryContentType;
+import com.familyagent.common.constant.MemoryOriginType;
+import com.familyagent.common.constant.MemoryScope;
+import com.familyagent.module.diary.dto.DiaryEntryMetadata;
+import com.familyagent.module.diary.entity.DiaryEntry;
+import com.familyagent.module.memory.facade.UnifiedMemorySyncFacade;
+import com.familyagent.module.memory.facade.UnifiedMemorySyncRequest;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+@Component
+@RequiredArgsConstructor
+public class DiaryMemorySyncSupport {
+
+    private final UnifiedMemorySyncFacade syncFacade;
+
+    public void sync(DiaryEntry entry) {
+        Map<String, Object> metadata = metadata(entry.getMetadata());
+        DiaryEntryMetadata typedMetadata = DiaryEntryMetadata.fromMap(metadata);
+        syncFacade.sync(new UnifiedMemorySyncRequest(
+                entry.getUserId(),
+                entry.getFamilyId(),
+                typedMetadata.getRelatedUserId(),
+                MemoryContentType.fromDiaryEntryType(structuredText(entry.getStructured(), "entryType")),
+                visibility(entry.getVisibility()),
+                structuredText(entry.getStructured(), "title"),
+                entry.getRawText(),
+                entry.getTags() == null ? List.of() : Arrays.asList(entry.getTags()),
+                entry.getCreatedAt(),
+                MemoryOriginType.DIARY,
+                entry.getId(),
+                archived(metadata) ? EntityStatus.ARCHIVED : EntityStatus.ACTIVE));
+    }
+
+    private static MemoryScope visibility(String value) {
+        return "FAMILY".equalsIgnoreCase(value)
+                ? MemoryScope.FAMILY_VISIBLE
+                : MemoryScope.valueOf(value);
+    }
+
+    private static String structuredText(Object structured, String key) {
+        if (structured instanceof Map<?, ?> map) {
+            Object value = map.get(key);
+            if (value != null && !String.valueOf(value).isBlank()) {
+                return String.valueOf(value).trim();
+            }
+        }
+        return null;
+    }
+
+    private static boolean archived(Map<String, Object> metadata) {
+        return EntityStatus.ARCHIVED.name().equalsIgnoreCase(String.valueOf(metadata.get("status")));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> metadata(Object value) {
+        return value instanceof Map<?, ?> map
+                ? new HashMap<>((Map<String, Object>) map)
+                : new HashMap<>();
+    }
+}

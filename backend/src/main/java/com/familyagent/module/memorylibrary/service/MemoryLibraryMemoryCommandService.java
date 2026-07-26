@@ -1,9 +1,9 @@
 package com.familyagent.module.memorylibrary.service;
 
 import com.familyagent.common.constant.EntityStatus;
+import com.familyagent.common.constant.MemoryContentType;
 import com.familyagent.common.constant.MemoryLibraryMetadataSource;
 import com.familyagent.common.constant.MemoryScope;
-import com.familyagent.common.constant.MemoryType;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
@@ -54,8 +54,7 @@ public class MemoryLibraryMemoryCommandService {
         }
         MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can edit this memory");
         String body = MemoryLibraryCommandSupport.requiredBody(request.getBody());
-        String type = MemoryLibraryCommandSupport.normalize(
-                request.getType(), entry.getType(), MemoryType.names(), "Memory type is not supported");
+        String type = normalizeType(request.getType(), entry.getType());
         String visibility = MemoryLibraryCommandSupport.normalize(
                 request.getVisibility(), entry.getScope(), MemoryScope.familyNames(),
                 "Memory visibility is not supported");
@@ -67,9 +66,11 @@ public class MemoryLibraryMemoryCommandService {
             metadata.put("tags", tags);
         }
         entry.setContent(body);
+        entry.setTitle(MemoryLibrarySupport.blankToNull(request.getTitle()));
         entry.setSummary(MemoryLibraryCommandSupport.summaryFrom(request.getTitle(), body));
         entry.setType(type);
         entry.setScope(visibility);
+        entry.setTags(MemoryLibraryCommandSupport.normalizedTags(request.getTags()));
         entry.setMetadata(metadataFacade.enrichMemory(
                 metadata,
                 entry.getContent(),
@@ -78,6 +79,16 @@ public class MemoryLibraryMemoryCommandService {
                 entry.getImportance() == null ? 3 : entry.getImportance()));
         memoryFacade.update(entry);
         indexingFacade.indexMemoryAfterCommit(entry);
+    }
+
+    private static String normalizeType(String requestedType, String fallbackType) {
+        String requested = MemoryLibrarySupport.blankToNull(requestedType);
+        MemoryContentType resolved = MemoryContentType.fromFamilyMemoryType(
+                requested == null ? fallbackType : requested);
+        if (resolved == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Memory type is not supported");
+        }
+        return resolved.name();
     }
 
     public void restore(Long familyId, Long memoryId) {

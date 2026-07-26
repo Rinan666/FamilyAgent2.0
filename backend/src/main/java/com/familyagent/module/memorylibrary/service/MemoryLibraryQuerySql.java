@@ -209,8 +209,8 @@ class MemoryLibraryQuerySql {
             FROM memory_entries me
             LEFT JOIN users u ON u.id = me.user_id
             WHERE me.family_id = ?
+              AND me.origin_type IS NULL
               AND me.status = '{ROW_STATUS}'
-              AND me.type IN ('FAMILY_STORY', 'ELDER_ADVICE', 'HEALTH_REMINDER', 'GROWTH_RISK', 'VALUE', 'PLAN')
               AND (
                 me.scope = 'FAMILY_VISIBLE'
                 OR me.user_id = ?
@@ -231,7 +231,7 @@ class MemoryLibraryQuerySql {
                       AND ca.subject_user_id = me.user_id
                       AND ca.caregiver_user_id = ?
                       AND ca.status = 'ACTIVE'
-                      AND ca.scope IN ('ALL', 'DIARY', 'GROWTH_GUARD')
+                      AND ca.scope IN ('ALL', 'MEMORY')
                       AND (ca.expires_at IS NULL OR ca.expires_at > NOW())
                   )
                 )

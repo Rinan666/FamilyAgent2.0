@@ -90,7 +90,7 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
             (
               library_kind = 'FAMILY'
               AND family_id = #{familyId}
-              AND type IN ('FAMILY_STORY', 'ELDER_ADVICE', 'HEALTH_REMINDER', 'GROWTH_RISK', 'VALUE', 'PLAN')
+              AND origin_type IS NULL
               AND (
                 scope = 'FAMILY_VISIBLE'
                 OR user_id = #{viewerUserId}
@@ -111,7 +111,7 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
                       AND ca.subject_user_id = memory_entries.user_id
                       AND ca.caregiver_user_id = #{viewerUserId}
                       AND ca.status = 'ACTIVE'
-                      AND ca.scope IN ('ALL', 'DIARY', 'GROWTH_GUARD')
+                      AND ca.scope IN ('ALL', 'MEMORY')
                       AND (ca.expires_at IS NULL OR ca.expires_at > NOW())
                   )
                 )
@@ -119,7 +119,6 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
             )
             OR (
               library_kind = 'PERSONAL'
-              AND type IN ('NOTE', 'KNOWLEDGE', 'INSIGHT', 'EXPERIENCE', 'PREFERENCE', 'PLAN')
               AND (
                 user_id = #{viewerUserId}
                 OR (
@@ -169,7 +168,7 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
         WHERE family_id = #{familyId}
           AND library_kind = 'FAMILY'
           AND status = 'ACTIVE'
-          AND type IN ('FAMILY_STORY', 'ELDER_ADVICE', 'HEALTH_REMINDER', 'GROWTH_RISK', 'VALUE', 'PLAN')
+          AND origin_type IS NULL
           AND (
             CAST(#{targetUserId} AS BIGINT) IS NULL
             OR user_id = CAST(#{targetUserId} AS BIGINT)
@@ -200,7 +199,7 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
                   AND ca.subject_user_id = memory_entries.user_id
                   AND ca.caregiver_user_id = #{viewerUserId}
                   AND ca.status = 'ACTIVE'
-                  AND ca.scope IN ('ALL', 'DIARY', 'GROWTH_GUARD')
+                  AND ca.scope IN ('ALL', 'MEMORY')
                   AND (ca.expires_at IS NULL OR ca.expires_at > NOW())
               )
             )
@@ -217,7 +216,7 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
         WHERE family_id = #{familyId}
           AND library_kind = 'FAMILY'
           AND status = 'ACTIVE'
-          AND type IN ('FAMILY_STORY', 'ELDER_ADVICE', 'HEALTH_REMINDER', 'GROWTH_RISK', 'VALUE', 'PLAN')
+          AND origin_type IS NULL
           AND (
             CAST(#{targetUserId} AS BIGINT) IS NULL
             OR user_id = CAST(#{targetUserId} AS BIGINT)
@@ -248,7 +247,7 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
                   AND ca.subject_user_id = memory_entries.user_id
                   AND ca.caregiver_user_id = #{viewerUserId}
                   AND ca.status = 'ACTIVE'
-                  AND ca.scope IN ('ALL', 'DIARY', 'GROWTH_GUARD')
+                  AND ca.scope IN ('ALL', 'MEMORY')
                   AND (ca.expires_at IS NULL OR ca.expires_at > NOW())
               )
             )
@@ -270,7 +269,7 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
           AND family_id = #{familyId}
           AND library_kind = 'FAMILY'
           AND status = 'ACTIVE'
-          AND type IN ('FAMILY_STORY', 'ELDER_ADVICE', 'HEALTH_REMINDER', 'GROWTH_RISK', 'VALUE', 'PLAN')
+          AND origin_type IS NULL
           AND (
             scope = 'FAMILY_VISIBLE'
             OR user_id = #{viewerUserId}
@@ -291,7 +290,7 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
                   AND ca.subject_user_id = memory_entries.user_id
                   AND ca.caregiver_user_id = #{viewerUserId}
                   AND ca.status = 'ACTIVE'
-                  AND ca.scope IN ('ALL', 'DIARY', 'GROWTH_GUARD')
+                  AND ca.scope IN ('ALL', 'MEMORY')
                   AND (ca.expires_at IS NULL OR ca.expires_at > NOW())
               )
             )
@@ -337,7 +336,7 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
         WHERE family_id = #{familyId}
           AND library_kind = 'FAMILY'
           AND status = 'ACTIVE'
-          AND type IN ('FAMILY_STORY', 'ELDER_ADVICE', 'HEALTH_REMINDER', 'GROWTH_RISK', 'VALUE', 'PLAN')
+          AND origin_type IS NULL
         ORDER BY updated_at DESC
         LIMIT #{limit}
         """)

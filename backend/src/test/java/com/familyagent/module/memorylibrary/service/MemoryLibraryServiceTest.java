@@ -293,8 +293,9 @@ class MemoryLibraryServiceTest {
             maintenanceService.updateItem(request);
 
             assertEquals("Updated content", entry.getContent());
+            assertEquals("Updated title", entry.getTitle());
             assertEquals("Updated title", entry.getSummary());
-            assertEquals("VALUE", entry.getType());
+            assertEquals("INSIGHT", entry.getType());
             assertEquals("CARE_VISIBLE", entry.getScope());
             assertEquals(List.of("family", "shared"), ((java.util.Map<?, ?>) entry.getMetadata()).get("tags"));
             verify(memoryEntryRepository).update(entry);

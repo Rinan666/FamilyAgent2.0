@@ -91,6 +91,7 @@ public class PersonalMemoryCommandService {
         entry.setUserId(ownerUserId);
         entry.setFamilyId(null);
         entry.setLibraryKind(MemoryLibraryKind.PERSONAL.name());
+        entry.setTitle(truncate(blankToNull(request.getSummary()), 120));
         entry.setType(type);
         entry.setScope(visibility);
         entry.setContent(request.getContent().trim());
@@ -98,6 +99,8 @@ public class PersonalMemoryCommandService {
         entry.setImportance(importance);
         entry.setConfidence(BigDecimal.valueOf(0.85));
         entry.setStatus(EntityStatus.ACTIVE.name());
+        entry.setOccurredAt(java.time.LocalDateTime.now());
+        entry.setTags(new String[0]);
         entry.setMetadata(MemoryIndexMetadataBuilder.enrichPersonalMemory(
                 metadata,
                 entry.getContent(),
@@ -141,6 +144,10 @@ public class PersonalMemoryCommandService {
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private static String truncate(String value, int maxLength) {
+        return value == null || value.length() <= maxLength ? value : value.substring(0, maxLength);
     }
 
     private static int clamp(int value, int min, int max) {

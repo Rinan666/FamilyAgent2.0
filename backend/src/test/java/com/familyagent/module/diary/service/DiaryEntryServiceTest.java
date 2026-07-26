@@ -32,13 +32,14 @@ class DiaryEntryServiceTest {
     @Mock private DiaryEntryRepository diaryRepository;
     @Mock private FamilyService familyService;
     @Mock private MemoryIndexingFacade memoryEmbeddingService;
+    @Mock private DiaryMemorySyncSupport memorySyncSupport;
 
     @Test
     void create_shouldMergeOnlyManualSelfDiaryWhenThereIsExactlyOneCandidate() {
         DiaryEntry existing = existingDiary(99L, "今天早上去买菜");
         when(diaryRepository.findSameDayMergeCandidates(1L, 10L, "PRIVATE", "2026-06-08"))
                 .thenReturn(List.of(existing));
-        DiaryEntryService service = new DiaryEntryService(diaryRepository, familyService, memoryEmbeddingService);
+        DiaryEntryService service = service();
         CreateDiaryEntryRequest request = manualRequest(Map.of("eventAt", "2026-06-08T09:30:00Z"));
         request.setContent("下午又补记了一段");
 
@@ -68,7 +69,7 @@ class DiaryEntryServiceTest {
         when(diaryRepository.findSameDayMergeCandidates(1L, 10L, "PRIVATE", "2026-06-08"))
                 .thenReturn(List.of(existingA, existingB));
 
-        DiaryEntryService service = new DiaryEntryService(diaryRepository, familyService, memoryEmbeddingService);
+        DiaryEntryService service = service();
         CreateDiaryEntryRequest request = manualRequest(Map.of("eventAt", "2026-06-08T09:30:00Z"));
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
@@ -83,7 +84,7 @@ class DiaryEntryServiceTest {
 
     @Test
     void create_shouldNotMergeWhenDiaryTargetsRelatedUser() {
-        DiaryEntryService service = new DiaryEntryService(diaryRepository, familyService, memoryEmbeddingService);
+        DiaryEntryService service = service();
         CreateDiaryEntryRequest request = manualRequest(Map.of(
                 "eventAt", "2026-06-08T09:30:00Z",
                 "relatedUserId", 22,
@@ -101,7 +102,7 @@ class DiaryEntryServiceTest {
 
     @Test
     void create_shouldNotMergeForNonManualSource() {
-        DiaryEntryService service = new DiaryEntryService(diaryRepository, familyService, memoryEmbeddingService);
+        DiaryEntryService service = service();
         CreateDiaryEntryRequest request = manualRequest(Map.of(
                 "eventAt", "2026-06-08T09:30:00Z",
                 "source", "HERITAGE_TASK_COMPLETION"));
@@ -119,7 +120,7 @@ class DiaryEntryServiceTest {
 
     @Test
     void create_shouldPersistManualSourceOnNewEntry() {
-        DiaryEntryService service = new DiaryEntryService(diaryRepository, familyService, memoryEmbeddingService);
+        DiaryEntryService service = service();
         CreateDiaryEntryRequest request = manualRequest(Map.of());
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
@@ -136,11 +137,12 @@ class DiaryEntryServiceTest {
         assertEquals("DIARY_MANUAL", metadata.get("source"));
         assertEquals("MANUAL_SELF_SINGLE_CANDIDATE", metadata.get("mergePolicy"));
         assertFalse(Boolean.TRUE.equals(metadata.get("autoMerged")));
+        verify(memorySyncSupport).sync(saved);
     }
 
     @Test
     void create_shouldUseFirstLineAsTitleWhenTitleIsBlank() {
-        DiaryEntryService service = new DiaryEntryService(diaryRepository, familyService, memoryEmbeddingService);
+        DiaryEntryService service = service();
         CreateDiaryEntryRequest request = manualRequest(Map.of("disableAutoMerge", true));
         request.setTitle(null);
         request.setContent("第一行标题\n第二行正文");
@@ -160,7 +162,7 @@ class DiaryEntryServiceTest {
 
     @Test
     void searchFamilyEntries_shouldClampPageAndForwardFilters() {
-        DiaryEntryService service = new DiaryEntryService(diaryRepository, familyService, memoryEmbeddingService);
+        DiaryEntryService service = service();
         DiaryEntry entry = existingDiary(201L, "晨练后聊了学校里的事");
         when(diaryRepository.countVisibleByFamilySearch(1L, 10L, 22L, "晨练")).thenReturn(7L);
         when(diaryRepository.searchVisibleByFamily(1L, 10L, 22L, "晨练", 6, 6L)).thenReturn(List.of(entry));
@@ -176,6 +178,14 @@ class DiaryEntryServiceTest {
             assertEquals(1, result.getItems().size());
             assertEquals(201L, result.getItems().get(0).getId());
         }
+    }
+
+    private DiaryEntryService service() {
+        return new DiaryEntryService(
+                diaryRepository,
+                familyService,
+                memoryEmbeddingService,
+                memorySyncSupport);
     }
 
     private static CreateDiaryEntryRequest manualRequest(Map<String, Object> metadata) {

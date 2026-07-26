@@ -44,6 +44,7 @@ public class DiaryEntryService {
     private final DiaryEntryRepository diaryRepository;
     private final FamilyService familyService;
     private final MemoryIndexingFacade memoryEmbeddingService;
+    private final DiaryMemorySyncSupport memorySyncSupport;
 
     @Transactional
     public DiaryEntry create(CreateDiaryEntryRequest request) {
@@ -91,6 +92,7 @@ public class DiaryEntryService {
                     existing.getMood(),
                     existing.getTags()));
             diaryRepository.updateById(existing);
+            memorySyncSupport.sync(existing);
             memoryEmbeddingService.indexDiaryAfterCommit(existing);
             return existing;
         }
@@ -113,6 +115,7 @@ public class DiaryEntryService {
                 entry.getMood(),
                 entry.getTags()));
         diaryRepository.insert(entry);
+        memorySyncSupport.sync(entry);
         memoryEmbeddingService.indexDiaryAfterCommit(entry);
         return entry;
     }
@@ -168,6 +171,7 @@ public class DiaryEntryService {
                 entry.getMood(),
                 entry.getTags()));
         diaryRepository.updateById(entry);
+        memorySyncSupport.sync(entry);
         memoryEmbeddingService.indexDiaryAfterCommit(entry);
         return entry;
     }
@@ -183,6 +187,7 @@ public class DiaryEntryService {
         metadata.put("status", EntityStatus.ARCHIVED.name());
         entry.setMetadata(metadata);
         diaryRepository.updateById(entry);
+        memorySyncSupport.sync(entry);
     }
 
     private static Map<String, Object> buildStructured(String entryType, String title, String content) {

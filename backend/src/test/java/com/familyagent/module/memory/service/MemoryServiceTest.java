@@ -54,7 +54,7 @@ class MemoryServiceTest {
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
             MemoryEntry result = service.createFamilyMemory(request);
-            assertEquals("ELDER_ADVICE", result.getType());
+            assertEquals("KNOWLEDGE", result.getType());
         }
 
         ArgumentCaptor<MemoryEntry> captor = ArgumentCaptor.forClass(MemoryEntry.class);

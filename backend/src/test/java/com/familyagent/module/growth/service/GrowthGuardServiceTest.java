@@ -33,14 +33,11 @@ class GrowthGuardServiceTest {
     @Mock private GrowthGuardStalenessVoteRepository stalenessVoteRepository;
     @Mock private PermissionGate permissionGate;
     @Mock private MemoryIndexingFacade memoryEmbeddingService;
+    @Mock private GrowthMemorySyncSupport memorySyncSupport;
 
     @Test
     void createRecord_shouldPersistTypedMetadataAndDefaultFollowUpStatus() {
-        GrowthGuardService service = new GrowthGuardService(
-                recordRepository,
-                stalenessVoteRepository,
-                permissionGate,
-                memoryEmbeddingService);
+        GrowthGuardService service = service();
         CreateGrowthGuardRecordRequest request = new CreateGrowthGuardRecordRequest();
         request.setFamilyId(1L);
         request.setTargetUserId(22L);
@@ -61,15 +58,12 @@ class GrowthGuardServiceTest {
         assertEquals("MIRROR_AGENT_TOOL", metadata.get("source"));
         assertEquals("GROWTH_GUARD", metadata.get("plannedTool"));
         assertEquals("PENDING", metadata.get("followUpStatus"));
+        verify(memorySyncSupport).sync(captor.getValue());
     }
 
     @Test
     void searchFamilyRecords_shouldClampPageAndAttachStalenessStats() {
-        GrowthGuardService service = new GrowthGuardService(
-                recordRepository,
-                stalenessVoteRepository,
-                permissionGate,
-                memoryEmbeddingService);
+        GrowthGuardService service = service();
 
         GrowthGuardRecord record = new GrowthGuardRecord();
         record.setId(401L);
@@ -103,11 +97,7 @@ class GrowthGuardServiceTest {
 
     @Test
     void markRecordStale_shouldTreatDuplicateInsertAsExistingVote() {
-        GrowthGuardService service = new GrowthGuardService(
-                recordRepository,
-                stalenessVoteRepository,
-                permissionGate,
-                memoryEmbeddingService);
+        GrowthGuardService service = service();
 
         GrowthGuardRecord record = new GrowthGuardRecord();
         record.setId(401L);
@@ -134,5 +124,13 @@ class GrowthGuardServiceTest {
         verify(permissionGate).checkMembership(1L);
         verify(permissionGate).ensureCanViewRecord(record, 10L);
         verify(stalenessVoteRepository).insert(any());
+    }
+    private GrowthGuardService service() {
+        return new GrowthGuardService(
+                recordRepository,
+                stalenessVoteRepository,
+                permissionGate,
+                memoryEmbeddingService,
+                memorySyncSupport);
     }
 }
