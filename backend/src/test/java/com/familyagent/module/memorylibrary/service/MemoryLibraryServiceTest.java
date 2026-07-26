@@ -7,7 +7,7 @@ import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.response.PageResult;
 import com.familyagent.module.diary.facade.MemoryLibraryDiaryFacade;
 import com.familyagent.module.family.facade.MemoryLibraryFamilyFacade;
-import com.familyagent.module.growth.facade.MemoryLibraryGrowthStalenessFacade;
+import com.familyagent.module.growth.facade.GrowthStalenessQueryFacade;
 import com.familyagent.module.growth.facade.MemoryLibraryGrowthFacade;
 import com.familyagent.module.growth.dto.GrowthStalenessStats;
 import com.familyagent.module.memory.entity.MemoryEntry;
@@ -47,7 +47,7 @@ class MemoryLibraryServiceTest {
     @Mock private MemoryLibraryMemoryFacade memoryEntryRepository;
     @Mock private MemoryLibraryGrowthFacade growthFacade;
     @Mock private MemoryLibraryVoteFacade memoryVoteFacade;
-    @Mock private MemoryLibraryGrowthStalenessFacade growthStalenessFacade;
+    @Mock private GrowthStalenessQueryFacade growthStalenessFacade;
     @Mock private MemoryIndexingFacade memoryEmbeddingService;
     @Mock private MemoryLibraryEmbeddingFacade embeddingFacade;
     private final MemoryLibraryIndexMetadataFacade metadataFacade = new MemoryLibraryIndexMetadataFacade();

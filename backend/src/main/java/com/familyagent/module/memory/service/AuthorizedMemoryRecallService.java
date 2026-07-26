@@ -3,9 +3,8 @@ package com.familyagent.module.memory.service;
 import com.familyagent.module.family.facade.FamilyMembershipFacade;
 import com.familyagent.module.family.facade.FamilyRelationshipGraphFacade;
 import com.familyagent.module.family.facade.FamilyRelationshipGraphView;
-import com.familyagent.common.constant.MemoryLibraryKind;
+import com.familyagent.common.constant.MemoryRecallSourceType;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
-import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEmbeddingRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -23,6 +22,7 @@ public class AuthorizedMemoryRecallService {
     private final AuthorizedMemoryRecallRankingService rankingService;
     private final AuthorizedMemoryRecallSourceAssembler sourceAssembler;
     private final AuthorizedMemoryRecallQueryPolicy queryPolicy;
+    private final AuthorizedMemoryRecallCompatibilityProjector compatibilityProjector;
 
     public AuthorizedMemoryRecallResult recallForFamily(
             Long familyId,
@@ -123,8 +123,8 @@ public class AuthorizedMemoryRecallService {
         long readyEmbeddings = embeddingRepository.countReadyForRecall(
                 familyId,
                 candidates.memories().stream()
-                        .filter(memory -> MemoryLibraryKind.PERSONAL.name().equals(memory.getLibraryKind()))
-                        .map(MemoryEntry::getId)
+                        .filter(candidate -> candidate.sourceType() == MemoryRecallSourceType.PERSONAL_MEMORY)
+                        .map(candidate -> candidate.entry().getId())
                         .toList());
         AuthorizedMemoryRecallRankingService.RankedRecall ranked = rankingService.rank(
                 familyId,
@@ -143,13 +143,16 @@ public class AuthorizedMemoryRecallService {
                         ranked.diaries(),
                         ranked.memories(),
                         ranked.growthRecords()));
+        var diaries = compatibilityProjector.diaries(ranked.diaries());
+        var memories = compatibilityProjector.memories(ranked.memories());
+        var growthRecords = compatibilityProjector.growthRecords(ranked.growthRecords());
         return AuthorizedMemoryRecallResult.builder()
-                .diaries(ranked.diaries())
-                .memories(ranked.memories())
-                .growthRecords(ranked.growthRecords())
-                .diaryCount(ranked.diaries().size())
-                .memoryCount(ranked.memories().size())
-                .growthRecordCount(ranked.growthRecords().size())
+                .diaries(diaries)
+                .memories(memories)
+                .growthRecords(growthRecords)
+                .diaryCount(diaries.size())
+                .memoryCount(memories.size())
+                .growthRecordCount(growthRecords.size())
                 .sources(sourceAssembler.assemble(
                         ranked.diaries(),
                         ranked.memories(),

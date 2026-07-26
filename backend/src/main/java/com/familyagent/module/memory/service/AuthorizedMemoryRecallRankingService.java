@@ -1,9 +1,8 @@
 package com.familyagent.module.memory.service;
 
-import com.familyagent.module.diary.entity.DiaryEntry;
-import com.familyagent.module.growth.entity.GrowthGuardRecord;
+import com.familyagent.common.constant.MemoryRecallSourceType;
+import com.familyagent.module.memory.dto.AuthorizedMemoryRecallCandidate;
 import com.familyagent.module.memory.dto.EmbeddingCallObservation;
-import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryRecallVectorRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,9 +25,9 @@ public class AuthorizedMemoryRecallRankingService {
     public RankedRecall rank(
             Long familyId,
             String query,
-            List<DiaryEntry> diaryCandidates,
-            List<MemoryEntry> memoryCandidates,
-            List<GrowthGuardRecord> growthCandidates,
+            List<AuthorizedMemoryRecallCandidate> diaryCandidates,
+            List<AuthorizedMemoryRecallCandidate> memoryCandidates,
+            List<AuthorizedMemoryRecallCandidate> growthCandidates,
             int diaryLimit,
             int memoryLimit,
             long readyEmbeddings) {
@@ -62,9 +61,9 @@ public class AuthorizedMemoryRecallRankingService {
     private VectorCandidateIds loadVectorCandidates(
             Long familyId,
             String query,
-            List<DiaryEntry> diaryCandidates,
-            List<MemoryEntry> memoryCandidates,
-            List<GrowthGuardRecord> growthCandidates,
+            List<AuthorizedMemoryRecallCandidate> diaryCandidates,
+            List<AuthorizedMemoryRecallCandidate> memoryCandidates,
+            List<AuthorizedMemoryRecallCandidate> growthCandidates,
             int diaryLimit,
             int memoryLimit,
             long readyEmbeddings) {
@@ -72,39 +71,23 @@ public class AuthorizedMemoryRecallRankingService {
             return VectorCandidateIds.empty(null);
         }
 
-        AuthorizedMemoryRecallEmbeddingService.RecallQueryEmbedding embedding = embeddingService.embed(
-                familyId,
-                query);
+        AuthorizedMemoryRecallEmbeddingService.RecallQueryEmbedding embedding = embeddingService.embed(familyId, query);
         EmbeddingCallObservation observation = embedding.observation();
         if (!observation.success()) {
             return VectorCandidateIds.empty(observation);
         }
 
-        List<Double> values = embedding.values();
         try {
             return new VectorCandidateIds(
-                    rankSourceIds(
-                            familyId,
-                            "DIARY",
-                            diaryCandidates.stream().map(DiaryEntry::getId).toList(),
-                            values,
-                            diaryLimit),
-                    rankSourceIds(
-                            familyId,
-                            "MEMORY",
-                            memoryCandidates.stream().map(MemoryEntry::getId).toList(),
-                            values,
-                            memoryLimit),
-                    rankSourceIds(
-                            familyId,
-                            "GROWTH_OBSERVATION",
-                            growthCandidates.stream().map(GrowthGuardRecord::getId).toList(),
-                            values,
-                            memoryLimit),
+                    rankSourceIds(familyId, MemoryRecallSourceType.LIFE_RECORD,
+                            diaryCandidates, embedding.values(), diaryLimit),
+                    rankSourceIds(familyId, MemoryRecallSourceType.FAMILY_EXPERIENCE,
+                            memoryCandidates, embedding.values(), memoryLimit),
+                    rankSourceIds(familyId, MemoryRecallSourceType.GROWTH_OBSERVATION,
+                            growthCandidates, embedding.values(), memoryLimit),
                     observation);
         } catch (RuntimeException error) {
-            log.warn(
-                    "Vector memory recall failed, using text fallback: errorType={}",
+            log.warn("Vector memory recall failed, using text fallback: errorType={}",
                     error.getClass().getSimpleName());
             return VectorCandidateIds.empty(observation);
         }
@@ -112,16 +95,20 @@ public class AuthorizedMemoryRecallRankingService {
 
     private List<Long> rankSourceIds(
             Long familyId,
-            String sourceType,
-            List<Long> sourceIds,
+            MemoryRecallSourceType sourceType,
+            List<AuthorizedMemoryRecallCandidate> candidates,
             List<Double> values,
             int limit) {
+        List<Long> sourceIds = candidates.stream()
+                .map(AuthorizedMemoryRecallCandidate::vectorSourceId)
+                .filter(java.util.Objects::nonNull)
+                .toList();
         if (sourceIds.isEmpty()) {
             return List.of();
         }
         return vectorRepository.rankSourceIds(
                 familyId,
-                sourceType,
+                sourceType.embeddingSourceType(),
                 sourceIds,
                 values,
                 MAX_VECTOR_DISTANCE,
@@ -129,16 +116,16 @@ public class AuthorizedMemoryRecallRankingService {
     }
 
     public record RankedRecall(
-            List<DiaryEntry> diaries,
-            List<MemoryEntry> memories,
-            List<GrowthGuardRecord> growthRecords,
+            List<AuthorizedMemoryRecallCandidate> diaries,
+            List<AuthorizedMemoryRecallCandidate> memories,
+            List<AuthorizedMemoryRecallCandidate> growthRecords,
             boolean usedVector,
             EmbeddingCallObservation embeddingObservation) {
 
         public RankedRecall(
-                List<DiaryEntry> diaries,
-                List<MemoryEntry> memories,
-                List<GrowthGuardRecord> growthRecords,
+                List<AuthorizedMemoryRecallCandidate> diaries,
+                List<AuthorizedMemoryRecallCandidate> memories,
+                List<AuthorizedMemoryRecallCandidate> growthRecords,
                 boolean usedVector) {
             this(diaries, memories, growthRecords, usedVector, null);
         }

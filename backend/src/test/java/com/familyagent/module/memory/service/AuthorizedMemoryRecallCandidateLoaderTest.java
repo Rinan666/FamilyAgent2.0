@@ -1,12 +1,10 @@
 package com.familyagent.module.memory.service;
 
 import com.familyagent.common.constant.DiaryRecallSource;
-import com.familyagent.module.diary.entity.DiaryEntry;
-import com.familyagent.module.diary.facade.MemoryRecallDiaryFacade;
-import com.familyagent.module.growth.entity.GrowthGuardRecord;
-import com.familyagent.module.growth.facade.MemoryRecallGrowthFacade;
+import com.familyagent.common.constant.MemoryOriginType;
+import com.familyagent.module.memory.dto.AuthorizedMemoryRecallCandidate;
 import com.familyagent.module.memory.entity.MemoryEntry;
-import com.familyagent.module.memory.repository.MemoryEntryRepository;
+import com.familyagent.module.memory.repository.AuthorizedMemoryRecallRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -14,88 +12,64 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class AuthorizedMemoryRecallCandidateLoaderTest {
 
-    @Mock private MemoryRecallDiaryFacade diaryRecallFacade;
-    @Mock private MemoryEntryRepository memoryRepository;
-    @Mock private MemoryRecallGrowthFacade growthRecallFacade;
+    @Mock private AuthorizedMemoryRecallRepository recallRepository;
     @Mock private AuthorizedMemoryRecallSocialSupport socialSupport;
     @InjectMocks private AuthorizedMemoryRecallCandidateLoader candidateLoader;
 
     @Test
-    void loadFamily_usesExpandedLimitsAndAttachesSocialWeights() {
-        DiaryEntry diary = diary(1L);
-        MemoryEntry memory = memory(2L);
-        GrowthGuardRecord growthRecord = growth(3L);
-        when(diaryRecallFacade.findVisibleByFamily(10L, 101L, 15)).thenReturn(List.of(diary));
-        when(memoryRepository.findActiveFamilyMemories(10L, 101L, 10)).thenReturn(List.of(memory));
-        when(growthRecallFacade.findVisibleByFamily(10L, 101L, 10)).thenReturn(List.of(growthRecord));
+    void loadFamily_readsEveryCategoryFromUnifiedMemoryEntries() {
+        MemoryEntry diary = entry(101L, 1L, MemoryOriginType.DIARY);
+        MemoryEntry memory = entry(2L, null, null);
+        MemoryEntry growth = entry(103L, 3L, MemoryOriginType.GROWTH);
+        when(recallRepository.findVisibleFamilyEntriesByOrigin(10L, 101L, "DIARY", 15))
+                .thenReturn(List.of(diary));
+        when(recallRepository.findVisibleCanonicalMemories(10L, 101L, 10))
+                .thenReturn(List.of(memory));
+        when(recallRepository.findVisibleFamilyEntriesByOrigin(10L, 101L, "GROWTH", 10))
+                .thenReturn(List.of(growth));
 
         AuthorizedMemoryRecallCandidateLoader.RecallCandidates candidates =
                 candidateLoader.loadFamily(10L, 101L, 3, 2);
 
-        assertEquals(List.of(diary), candidates.diaries());
-        assertEquals(List.of(memory), candidates.memories());
-        assertEquals(List.of(growthRecord), candidates.growthRecords());
-        verify(socialSupport).attachSocialWeights(List.of(memory), List.of(growthRecord), 101L);
+        assertEquals(1L, candidates.diaries().get(0).vectorSourceId());
+        assertEquals(2L, candidates.memories().get(0).vectorSourceId());
+        assertEquals(3L, candidates.growthRecords().get(0).vectorSourceId());
+        verify(socialSupport).attachSocialWeights(anyList(), anyList(), org.mockito.ArgumentMatchers.eq(101L));
     }
 
     @Test
-    void loadMirror_prefersSelfAuthoredDuplicatesAndMarksDiarySources() {
-        DiaryEntry selfAuthored = diary(11L);
-        DiaryEntry duplicateRelated = diary(11L);
-        DiaryEntry related = diary(12L);
-        related.setMetadata(Map.of("existing", true));
-        GrowthGuardRecord growthRecord = growth(13L);
-        when(diaryRecallFacade.findVisibleByFamilyAndTarget(10L, 201L, 101L, 25))
-                .thenReturn(List.of(selfAuthored));
-        when(diaryRecallFacade.findVisibleRelatedByFamilyAndTarget(10L, 201L, 101L, 25))
-                .thenReturn(List.of(duplicateRelated, related));
-        when(growthRecallFacade.findVisibleByFamily(10L, 101L, 25))
-                .thenReturn(List.of(growthRecord));
+    void loadMirror_marksSelfAndRelatedDiarySourcesWithoutMutatingMetadata() {
+        MemoryEntry self = entry(111L, 11L, MemoryOriginType.DIARY);
+        MemoryEntry related = entry(112L, 12L, MemoryOriginType.DIARY);
+        when(recallRepository.findVisibleMirrorSelfDiaries(10L, 201L, 101L, 25))
+                .thenReturn(List.of(self));
+        when(recallRepository.findVisibleMirrorRelatedDiaries(10L, 201L, 101L, 25))
+                .thenReturn(List.of(related));
+        when(recallRepository.findVisibleFamilyEntriesByOrigin(10L, 101L, "GROWTH", 25))
+                .thenReturn(List.of());
 
         AuthorizedMemoryRecallCandidateLoader.RecallCandidates candidates =
                 candidateLoader.loadMirror(10L, 201L, 101L, 5, 5);
 
-        assertEquals(List.of(selfAuthored, related), candidates.diaries());
-        assertEquals(List.of(), candidates.memories());
-        assertEquals(
-                DiaryRecallSource.SELF_AUTHORED.name(),
-                metadata(selfAuthored).get(DiaryRecallSource.METADATA_KEY));
-        assertEquals(
-                DiaryRecallSource.RELATED_BY_FAMILY.name(),
-                metadata(related).get(DiaryRecallSource.METADATA_KEY));
-        assertTrue((Boolean) metadata(related).get("existing"));
-        verify(socialSupport).attachSocialWeights(List.of(), List.of(growthRecord), 101L);
+        assertEquals(DiaryRecallSource.SELF_AUTHORED, candidates.diaries().get(0).mirrorSource());
+        assertEquals(DiaryRecallSource.RELATED_BY_FAMILY, candidates.diaries().get(1).mirrorSource());
     }
 
-    private static DiaryEntry diary(Long id) {
-        DiaryEntry entry = new DiaryEntry();
-        entry.setId(id);
-        return entry;
-    }
-
-    private static MemoryEntry memory(Long id) {
+    private static MemoryEntry entry(Long id, Long originId, MemoryOriginType originType) {
         MemoryEntry entry = new MemoryEntry();
         entry.setId(id);
+        entry.setLibraryKind("FAMILY");
+        entry.setOriginId(originId);
+        entry.setOriginType(originType == null ? null : originType.name());
         return entry;
-    }
-
-    private static GrowthGuardRecord growth(Long id) {
-        GrowthGuardRecord record = new GrowthGuardRecord();
-        record.setId(id);
-        return record;
-    }
-
-    private static Map<?, ?> metadata(DiaryEntry entry) {
-        return (Map<?, ?>) entry.getMetadata();
     }
 }

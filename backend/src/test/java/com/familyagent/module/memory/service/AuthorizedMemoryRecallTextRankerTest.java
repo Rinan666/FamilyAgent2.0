@@ -1,6 +1,8 @@
 package com.familyagent.module.memory.service;
 
-import com.familyagent.module.diary.entity.DiaryEntry;
+import com.familyagent.common.constant.MemoryOriginType;
+import com.familyagent.module.memory.dto.AuthorizedMemoryRecallCandidate;
+import com.familyagent.module.memory.entity.MemoryEntry;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
@@ -16,49 +18,39 @@ class AuthorizedMemoryRecallTextRankerTest {
             new AuthorizedMemoryRecallTextRanker(new AuthorizedMemoryRecallScorer());
 
     @Test
-    void rank_shouldRejectVectorOnlyCandidateWithoutTextOrIndexSupport() {
-        DiaryEntry unrelated = diary(1L, "Family picnic notes");
+    void rankRejectsUnsupportedVectorCandidate() {
+        AuthorizedMemoryRecallCandidate unrelated = diary(101L, 1L, "Family picnic notes");
 
         AuthorizedMemoryRecallTextRanker.RankedCandidates ranked = ranker.rank(
-                List.of(unrelated),
-                List.of(),
-                List.of(),
-                List.of(1L),
-                List.of(),
-                List.of(),
-                "bedtime routine",
-                3,
-                3);
+                List.of(unrelated), List.of(), List.of(), List.of(1L), List.of(), List.of(),
+                "bedtime routine", 3, 3);
 
         assertFalse(ranked.usedVector());
         assertEquals(List.of(), ranked.diaries());
     }
 
     @Test
-    void rank_shouldKeepSupportedVectorCandidateAndTextFallback() {
-        DiaryEntry supported = diary(2L, "Grandma shared a bedtime routine");
-        DiaryEntry fallback = diary(3L, "A shorter bedtime note");
+    void rankKeepsSupportedVectorCandidateAndTextFallback() {
+        AuthorizedMemoryRecallCandidate supported = diary(102L, 2L, "Grandma shared a bedtime routine");
+        AuthorizedMemoryRecallCandidate fallback = diary(103L, 3L, "A shorter bedtime note");
 
         AuthorizedMemoryRecallTextRanker.RankedCandidates ranked = ranker.rank(
-                List.of(fallback, supported),
-                List.of(),
-                List.of(),
-                List.of(2L),
-                List.of(),
-                List.of(),
-                "bedtime routine",
-                3,
-                3);
+                List.of(fallback, supported), List.of(), List.of(), List.of(2L), List.of(), List.of(),
+                "bedtime routine", 3, 3);
 
         assertTrue(ranked.usedVector());
-        assertEquals(List.of(2L, 3L), ranked.diaries().stream().map(DiaryEntry::getId).toList());
+        assertEquals(List.of(2L, 3L),
+                ranked.diaries().stream().map(AuthorizedMemoryRecallCandidate::vectorSourceId).toList());
     }
 
-    private static DiaryEntry diary(Long id, String rawText) {
-        DiaryEntry entry = new DiaryEntry();
+    private static AuthorizedMemoryRecallCandidate diary(Long id, Long originId, String content) {
+        MemoryEntry entry = new MemoryEntry();
         entry.setId(id);
-        entry.setRawText(rawText);
-        entry.setCreatedAt(LocalDateTime.of(2026, 7, id.intValue(), 10, 0));
-        return entry;
+        entry.setLibraryKind("FAMILY");
+        entry.setOriginType(MemoryOriginType.DIARY.name());
+        entry.setOriginId(originId);
+        entry.setContent(content);
+        entry.setOccurredAt(LocalDateTime.of(2026, 7, originId.intValue(), 10, 0));
+        return AuthorizedMemoryRecallCandidate.from(entry);
     }
 }

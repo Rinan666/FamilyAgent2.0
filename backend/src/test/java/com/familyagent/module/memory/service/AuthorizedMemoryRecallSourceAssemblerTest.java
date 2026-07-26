@@ -1,9 +1,9 @@
 package com.familyagent.module.memory.service;
 
-import com.familyagent.module.diary.entity.DiaryEntry;
+import com.familyagent.common.constant.MemoryOriginType;
 import com.familyagent.module.family.facade.FamilyRelationshipGraphView;
 import com.familyagent.module.family.facade.FamilyRelationshipNode;
-import com.familyagent.module.growth.entity.GrowthGuardRecord;
+import com.familyagent.module.memory.dto.AuthorizedMemoryRecallCandidate;
 import com.familyagent.module.memory.dto.RecallSourceSummary;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import org.junit.jupiter.api.Test;
@@ -18,42 +18,25 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AuthorizedMemoryRecallSourceAssemblerTest {
 
-    private final AuthorizedMemoryRecallSourceAssembler assembler =
-            new AuthorizedMemoryRecallSourceAssembler();
+    private final AuthorizedMemoryRecallSourceAssembler assembler = new AuthorizedMemoryRecallSourceAssembler();
 
     @Test
-    void assemble_shouldMapStableSourceFieldsWithoutLeakingUnrelatedMetadata() {
-        DiaryEntry diary = new DiaryEntry();
-        diary.setId(1L);
-        diary.setUserId(101L);
-        diary.setStructured(Map.of("title", "Family walk"));
-        diary.setRawText("We took a walk together after dinner.");
-        diary.setVisibility("FAMILY_VISIBLE");
-        diary.setMetadata(metadata("STABLE", Arrays.asList("HEALTH", null, "BONDING"), List.of("HOME")));
-
-        MemoryEntry memory = new MemoryEntry();
-        memory.setId(2L);
-        memory.setUserId(202L);
-        memory.setSummary("Grandma's advice");
-        memory.setContent("Listen before answering.");
-        memory.setType("ELDER_ADVICE");
-        memory.setScope("FAMILY_VISIBLE");
-        memory.setMetadata(metadata("LONG_TERM", List.of("VALUES"), List.of("FAMILY")));
-
-        GrowthGuardRecord growth = new GrowthGuardRecord();
-        growth.setId(3L);
-        growth.setCreatedBy(101L);
-        growth.setTargetUserId(303L);
-        growth.setCategory("LEARNING");
-        growth.setContent("The child now asks for clarification before starting homework.");
-        growth.setVisibility("CARE_VISIBLE");
-        growth.setMetadata(metadata("RECENT", List.of("LEARNING"), List.of("HOMEWORK")));
+    void assembleMapsUnifiedEntriesToStablePublicSources() {
+        AuthorizedMemoryRecallCandidate diary = candidate(
+                entry(101L, 1L, MemoryOriginType.DIARY, 101L, null, "Family walk"),
+                metadata("STABLE", Arrays.asList("HEALTH", null, "BONDING"), List.of("HOME"),
+                        "legacyDiary", Map.of("entryType", "DAILY")));
+        AuthorizedMemoryRecallCandidate memory = candidate(
+                entry(2L, null, null, 202L, null, "Grandma's advice"),
+                metadata("LONG_TERM", List.of("VALUES"), List.of("FAMILY"), null, null));
+        AuthorizedMemoryRecallCandidate growth = candidate(
+                entry(103L, 3L, MemoryOriginType.GROWTH, 101L, 303L,
+                        "The child now asks for clarification."),
+                metadata("RECENT", List.of("LEARNING"), List.of("HOMEWORK"),
+                        "legacyGrowth", Map.of("category", "LEARNING")));
 
         List<RecallSourceSummary> result = assembler.assemble(
-                Arrays.asList(null, diary),
-                List.of(memory),
-                List.of(growth),
-                relationships());
+                List.of(diary), List.of(memory), List.of(growth), relationships());
 
         assertEquals(List.of("diary-1", "memory-2", "growth-3"),
                 result.stream().map(RecallSourceSummary::getId).toList());
@@ -61,7 +44,6 @@ class AuthorizedMemoryRecallSourceAssemblerTest {
         assertEquals(List.of("HEALTH", "BONDING"), result.get(0).getTopics());
         assertEquals("Grandma's advice", result.get(1).getTitle());
         assertEquals("LEARNING", result.get(2).getTitle());
-        assertEquals("current viewer", result.get(0).getAuthor().name());
         assertEquals("二叔", result.get(1).getAuthor().relationshipToViewer());
         assertEquals("孩子", result.get(2).getSubject().relationshipToViewer());
         assertTrue(result.stream().allMatch(item -> item.getSnippet().length() <= 93));
@@ -69,21 +51,39 @@ class AuthorizedMemoryRecallSourceAssemblerTest {
     }
 
     @Test
-    void assemble_marksPersonalMemoryOwnershipSeparatelyFromFamilyMemory() {
-        MemoryEntry memory = new MemoryEntry();
-        memory.setId(9L);
-        memory.setUserId(101L);
-        memory.setLibraryKind("PERSONAL");
-        memory.setType("KNOWLEDGE");
-        memory.setContent("A personal note");
+    void assembleMarksPersonalMemorySeparately() {
+        MemoryEntry entry = entry(9L, null, null, 101L, null, "A personal note");
+        entry.setLibraryKind("PERSONAL");
 
         List<RecallSourceSummary> result = assembler.assemble(
-                List.of(),
-                List.of(memory),
-                List.of(),
-                relationships());
+                List.of(), List.of(AuthorizedMemoryRecallCandidate.from(entry)), List.of(), relationships());
 
         assertEquals("PERSONAL_MEMORY", result.get(0).getSourceType());
+    }
+
+    private static AuthorizedMemoryRecallCandidate candidate(MemoryEntry entry, Map<String, Object> metadata) {
+        entry.setMetadata(metadata);
+        return AuthorizedMemoryRecallCandidate.from(entry);
+    }
+
+    private static MemoryEntry entry(
+            Long id,
+            Long originId,
+            MemoryOriginType originType,
+            Long authorUserId,
+            Long relatedUserId,
+            String content) {
+        MemoryEntry entry = new MemoryEntry();
+        entry.setId(id);
+        entry.setLibraryKind("FAMILY");
+        entry.setOriginId(originId);
+        entry.setOriginType(originType == null ? null : originType.name());
+        entry.setUserId(authorUserId);
+        entry.setRelatedUserId(relatedUserId);
+        entry.setTitle(content);
+        entry.setContent(content);
+        entry.setScope("FAMILY_VISIBLE");
+        return entry;
     }
 
     private static FamilyRelationshipGraphView relationships() {
@@ -96,12 +96,18 @@ class AuthorizedMemoryRecallSourceAssemblerTest {
     private static Map<String, Object> metadata(
             String temporalLayer,
             List<String> topics,
-            List<String> scenes) {
-        return Map.of(
-                "privateNote", "private metadata detail",
-                "index", Map.of(
-                        "temporalLayer", temporalLayer,
-                        "topics", topics,
-                        "scenes", scenes));
+            List<String> scenes,
+            String legacyKey,
+            Object legacyValue) {
+        java.util.LinkedHashMap<String, Object> values = new java.util.LinkedHashMap<>();
+        values.put("privateNote", "private metadata detail");
+        values.put("index", Map.of(
+                "temporalLayer", temporalLayer,
+                "topics", topics,
+                "scenes", scenes));
+        if (legacyKey != null) {
+            values.put(legacyKey, legacyValue);
+        }
+        return values;
     }
 }

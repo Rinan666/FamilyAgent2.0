@@ -1,13 +1,12 @@
 package com.familyagent.module.memory.service;
 
-import com.familyagent.module.diary.entity.DiaryEntry;
+import com.familyagent.common.constant.MemoryRecallSourceType;
 import com.familyagent.module.family.facade.FamilyRelationshipGraphView;
 import com.familyagent.module.family.facade.FamilyRelationshipNode;
-import com.familyagent.module.growth.entity.GrowthGuardRecord;
+import com.familyagent.module.memory.dto.AuthorizedMemoryRecallCandidate;
 import com.familyagent.module.memory.dto.RecallParticipantSummary;
 import com.familyagent.module.memory.dto.RecallSourceSummary;
 import com.familyagent.module.memory.entity.MemoryEntry;
-import com.familyagent.common.constant.MemoryLibraryKind;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -16,110 +15,78 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Component
 public class AuthorizedMemoryRecallSourceAssembler {
 
     public List<RecallSourceSummary> assemble(
-            List<DiaryEntry> diaries,
-            List<MemoryEntry> memories,
-            List<GrowthGuardRecord> growthRecords,
+            List<AuthorizedMemoryRecallCandidate> diaries,
+            List<AuthorizedMemoryRecallCandidate> memories,
+            List<AuthorizedMemoryRecallCandidate> growthRecords,
             FamilyRelationshipGraphView relationships) {
         List<RecallSourceSummary> summaries = new ArrayList<>();
-        appendDiaries(summaries, diaries, relationships);
-        appendMemories(summaries, memories, relationships);
-        appendGrowthRecords(summaries, growthRecords, relationships);
+        append(summaries, diaries, relationships);
+        append(summaries, memories, relationships);
+        append(summaries, growthRecords, relationships);
         return summaries;
     }
 
     public Set<Long> participantUserIds(
-            List<DiaryEntry> diaries,
-            List<MemoryEntry> memories,
-            List<GrowthGuardRecord> growthRecords) {
-        return java.util.stream.Stream.of(
-                        diaries.stream().map(DiaryEntry::getUserId),
-                        memories.stream().map(MemoryEntry::getUserId),
-                        growthRecords.stream().flatMap(record -> java.util.stream.Stream.of(
-                                record.getCreatedBy(),
-                                record.getTargetUserId())))
-                .flatMap(stream -> stream)
+            List<AuthorizedMemoryRecallCandidate> diaries,
+            List<AuthorizedMemoryRecallCandidate> memories,
+            List<AuthorizedMemoryRecallCandidate> growthRecords) {
+        return Stream.of(diaries, memories, growthRecords)
+                .flatMap(List::stream)
+                .filter(Objects::nonNull)
+                .flatMap(candidate -> Stream.of(candidate.authorUserId(), candidate.subjectUserId()))
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
     }
 
-    private static void appendDiaries(
+    private static void append(
             List<RecallSourceSummary> summaries,
-            List<DiaryEntry> entries,
+            List<AuthorizedMemoryRecallCandidate> candidates,
             FamilyRelationshipGraphView relationships) {
-        for (DiaryEntry entry : entries) {
-            if (entry == null || entry.getId() == null) {
+        for (AuthorizedMemoryRecallCandidate candidate : candidates) {
+            if (candidate == null || candidate.entry().getId() == null) {
                 continue;
             }
+            MemoryEntry entry = candidate.entry();
             Map<?, ?> index = metadataIndex(entry.getMetadata());
-            summaries.add(RecallSourceSummary.builder()
-                    .id("diary-" + entry.getId())
-                    .sourceType("LIFE_RECORD")
-                    .title(firstNonBlank(
-                            structuredText(entry.getStructured(), "title"),
-                            structuredText(entry.getStructured(), "entryType"),
-                            "每日记录"))
-                    .snippet(snippet(entry.getRawText()))
-                    .visibility(entry.getVisibility())
-                    .temporalLayer(asString(index.get("temporalLayer")))
-                    .topics(stringList(index.get("topics")))
-                    .scenes(stringList(index.get("scenes")))
-                    .author(participant(relationships, entry.getUserId()))
-                    .build());
-        }
-    }
-
-    private static void appendMemories(
-            List<RecallSourceSummary> summaries,
-            List<MemoryEntry> entries,
-            FamilyRelationshipGraphView relationships) {
-        for (MemoryEntry entry : entries) {
-            if (entry == null || entry.getId() == null) {
-                continue;
-            }
-            Map<?, ?> index = metadataIndex(entry.getMetadata());
-            summaries.add(RecallSourceSummary.builder()
-                    .id("memory-" + entry.getId())
-                    .sourceType(MemoryLibraryKind.PERSONAL.name().equals(entry.getLibraryKind())
-                            ? "PERSONAL_MEMORY"
-                            : "FAMILY_EXPERIENCE")
-                    .title(firstNonBlank(entry.getSummary(), entry.getType(), "经验沉淀"))
+            RecallSourceSummary.RecallSourceSummaryBuilder builder = RecallSourceSummary.builder()
+                    .id(candidate.publicId())
+                    .sourceType(candidate.sourceType().name())
+                    .title(title(candidate))
                     .snippet(snippet(firstNonBlank(entry.getSummary(), entry.getContent(), "")))
                     .visibility(entry.getScope())
                     .temporalLayer(asString(index.get("temporalLayer")))
                     .topics(stringList(index.get("topics")))
-                    .scenes(stringList(index.get("scenes")))
-                    .author(participant(relationships, entry.getUserId()))
-                    .build());
+                    .scenes(stringList(index.get("scenes")));
+            if (candidate.sourceType() == MemoryRecallSourceType.GROWTH_OBSERVATION) {
+                builder.observer(participant(relationships, candidate.authorUserId()))
+                        .subject(participant(relationships, candidate.subjectUserId()));
+            } else {
+                builder.author(participant(relationships, candidate.authorUserId()));
+            }
+            summaries.add(builder.build());
         }
     }
 
-    private static void appendGrowthRecords(
-            List<RecallSourceSummary> summaries,
-            List<GrowthGuardRecord> records,
-            FamilyRelationshipGraphView relationships) {
-        for (GrowthGuardRecord record : records) {
-            if (record == null || record.getId() == null) {
-                continue;
-            }
-            Map<?, ?> index = metadataIndex(record.getMetadata());
-            summaries.add(RecallSourceSummary.builder()
-                    .id("growth-" + record.getId())
-                    .sourceType("GROWTH_OBSERVATION")
-                    .title(firstNonBlank(record.getCategory(), "成长观察"))
-                    .snippet(snippet(record.getContent()))
-                    .visibility(record.getVisibility())
-                    .temporalLayer(asString(index.get("temporalLayer")))
-                    .topics(stringList(index.get("topics")))
-                    .scenes(stringList(index.get("scenes")))
-                    .observer(participant(relationships, record.getCreatedBy()))
-                    .subject(participant(relationships, record.getTargetUserId()))
-                    .build());
-        }
+    private static String title(AuthorizedMemoryRecallCandidate candidate) {
+        MemoryEntry entry = candidate.entry();
+        return switch (candidate.sourceType()) {
+            case LIFE_RECORD -> firstNonBlank(
+                    entry.getTitle(),
+                    nestedText(entry.getMetadata(), "legacyDiary", "entryType"),
+                    "Daily record");
+            case GROWTH_OBSERVATION -> firstNonBlank(
+                    nestedText(entry.getMetadata(), "legacyGrowth", "category"),
+                    entry.getTitle(),
+                    "Growth observation");
+            case FAMILY_EXPERIENCE, PERSONAL_MEMORY -> firstNonBlank(
+                    entry.getTitle(), entry.getSummary(), entry.getType(), "Memory");
+        };
     }
 
     private static RecallParticipantSummary participant(
@@ -142,9 +109,11 @@ public class AuthorizedMemoryRecallSourceAssembler {
         return Map.of();
     }
 
-    private static String structuredText(Object structured, String key) {
-        if (structured instanceof Map<?, ?> map) {
-            return asString(map.get(key));
+    private static String nestedText(Object metadata, String objectKey, String valueKey) {
+        if (metadata instanceof Map<?, ?> map
+                && map.get(objectKey) instanceof Map<?, ?> nested
+                && nested.get(valueKey) != null) {
+            return String.valueOf(nested.get(valueKey));
         }
         return "";
     }
@@ -162,9 +131,7 @@ public class AuthorizedMemoryRecallSourceAssembler {
     }
 
     private static String snippet(String value) {
-        String text = firstNonBlank(value, "")
-                .replaceAll("\\s+", " ")
-                .trim();
+        String text = firstNonBlank(value, "").replaceAll("\\s+", " ").trim();
         return text.length() <= 90 ? text : text.substring(0, 90) + "...";
     }
 

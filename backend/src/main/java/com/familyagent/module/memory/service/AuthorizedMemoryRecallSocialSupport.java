@@ -1,8 +1,9 @@
 package com.familyagent.module.memory.service;
 
+import com.familyagent.common.constant.MemoryRecallSourceType;
 import com.familyagent.module.growth.dto.GrowthStalenessStats;
-import com.familyagent.module.growth.entity.GrowthGuardRecord;
-import com.familyagent.module.growth.repository.GrowthGuardStalenessVoteRepository;
+import com.familyagent.module.growth.facade.GrowthStalenessQueryFacade;
+import com.familyagent.module.memory.dto.AuthorizedMemoryRecallCandidate;
 import com.familyagent.module.memory.dto.MemoryVoteStats;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEntryVoteRepository;
@@ -18,14 +19,17 @@ import java.util.Map;
 public class AuthorizedMemoryRecallSocialSupport {
 
     private final MemoryEntryVoteRepository memoryVoteRepository;
-    private final GrowthGuardStalenessVoteRepository stalenessVoteRepository;
+    private final GrowthStalenessQueryFacade stalenessFacade;
 
     public void attachSocialWeights(
-            List<MemoryEntry> memoryCandidates,
-            List<GrowthGuardRecord> growthCandidates,
+            List<AuthorizedMemoryRecallCandidate> memoryCandidates,
+            List<AuthorizedMemoryRecallCandidate> growthCandidates,
             Long viewerUserId) {
-        memoryCandidates.forEach(entry -> attachVoteStats(entry, viewerUserId));
-        growthCandidates.forEach(record -> attachStalenessStats(record, viewerUserId));
+        memoryCandidates.stream()
+                .filter(candidate -> candidate.sourceType() == MemoryRecallSourceType.FAMILY_EXPERIENCE)
+                .map(AuthorizedMemoryRecallCandidate::entry)
+                .forEach(entry -> attachVoteStats(entry, viewerUserId));
+        growthCandidates.forEach(candidate -> attachStalenessStats(candidate, viewerUserId));
     }
 
     private void attachVoteStats(MemoryEntry entry, Long viewerUserId) {
@@ -47,21 +51,22 @@ public class AuthorizedMemoryRecallSocialSupport {
         entry.setMetadata(metadata);
     }
 
-    private void attachStalenessStats(GrowthGuardRecord record, Long viewerUserId) {
-        if (record == null || record.getId() == null) {
+    private void attachStalenessStats(AuthorizedMemoryRecallCandidate candidate, Long viewerUserId) {
+        if (candidate == null || candidate.vectorSourceId() == null) {
             return;
         }
-        GrowthStalenessStats stats = stalenessVoteRepository.statsByRecordId(record.getId(), viewerUserId);
+        Long recordId = candidate.vectorSourceId();
+        GrowthStalenessStats stats = stalenessFacade.getStats(recordId, viewerUserId);
         if (stats == null) {
-            stats = new GrowthStalenessStats(record.getId(), 0, 1.0, false);
+            stats = new GrowthStalenessStats(recordId, 0, 1.0, false);
         }
-        Map<String, Object> metadata = mutableMetadata(record.getMetadata());
+        Map<String, Object> metadata = mutableMetadata(candidate.entry().getMetadata());
         metadata.put("stalenessStats", Map.of(
-                "recordId", record.getId(),
+                "recordId", recordId,
                 "staleVotes", stats.getStaleVotes(),
                 "stalenessWeight", stats.getStalenessWeight(),
                 "myVoted", stats.isMyVoted()));
-        record.setMetadata(metadata);
+        candidate.entry().setMetadata(metadata);
     }
 
     @SuppressWarnings("unchecked")

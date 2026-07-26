@@ -6,7 +6,7 @@ import com.familyagent.common.response.PageResult;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.family.facade.MemoryLibraryFamilyFacade;
 import com.familyagent.module.growth.dto.GrowthStalenessStats;
-import com.familyagent.module.growth.facade.MemoryLibraryGrowthStalenessFacade;
+import com.familyagent.module.growth.facade.GrowthStalenessQueryFacade;
 import com.familyagent.module.memory.dto.MemoryVoteStats;
 import com.familyagent.module.memory.facade.MemoryLibraryVoteFacade;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryItem;
@@ -36,7 +36,7 @@ public class MemoryLibraryQueryService {
     private final MemoryLibraryQueryGateway queryGateway;
     private final MemoryLibraryFamilyFacade familyService;
     private final MemoryLibraryVoteFacade memoryVoteFacade;
-    private final MemoryLibraryGrowthStalenessFacade growthStalenessFacade;
+    private final GrowthStalenessQueryFacade growthStalenessFacade;
 
     public PageResult<MemoryLibraryItem> search(MemoryLibrarySearchRequest request) {
         return query(request, false);
