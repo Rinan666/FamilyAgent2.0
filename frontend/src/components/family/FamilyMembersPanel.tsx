@@ -12,6 +12,7 @@ import {
   Users,
 } from 'lucide-react';
 import FamilyMemberCard from './FamilyMemberCard';
+import FamilyRelationshipGraph from './FamilyRelationshipGraph';
 import { familyApi } from '@/lib/api';
 import { type ViewerRole } from '@/lib/roles';
 import { cn } from '@/lib/utils';
@@ -574,36 +575,39 @@ export default function FamilyMembersPanel({
                         这个家庭暂时还没有可展示的成员信息。
                       </p>
                     ) : (
-                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                        {memberList.map((member) => (
-                          <FamilyMemberCard
-                            key={member.id}
-                            familyId={family.id}
-                            member={member}
-                            currentUserId={currentUserId}
-                            canManageSpace={canManageSpace}
-                            canManageRoles={canManageRoles}
-                            editingRelationshipKey={editingRelationshipKey}
-                            relationshipDraft={relationshipDraft}
-                            updatingRelationshipKey={updatingRelationshipKey}
-                            updatingRoleKey={updatingRoleKey}
-                            updatingCareKey={updatingCareKey}
-                            careAuthorized={hasCareAuthorization(family.id, member.userId)}
-                            onStartEditRelationship={startEditRelationship}
-                            onRelationshipDraftChange={setRelationshipDraft}
-                            onCancelEditRelationship={cancelEditRelationship}
-                            onUpdateRelationship={(targetFamilyId, targetMember) => {
-                              void handleUpdateRelationship(targetFamilyId, targetMember);
-                            }}
-                            onUpdateRole={(targetFamilyId, targetMember, role) => {
-                              void handleUpdateRole(targetFamilyId, targetMember, role);
-                            }}
-                            onToggleCareAuthorization={(targetFamilyId, caregiver) => {
-                              void handleToggleCareAuthorization(targetFamilyId, caregiver);
-                            }}
-                          />
-                        ))}
-                      </div>
+                      <>
+                        <FamilyRelationshipGraph members={memberList} currentUserId={currentUserId} />
+                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                          {memberList.map((member) => (
+                            <FamilyMemberCard
+                              key={member.id}
+                              familyId={family.id}
+                              member={member}
+                              currentUserId={currentUserId}
+                              canManageSpace={canManageSpace}
+                              canManageRoles={canManageRoles}
+                              editingRelationshipKey={editingRelationshipKey}
+                              relationshipDraft={relationshipDraft}
+                              updatingRelationshipKey={updatingRelationshipKey}
+                              updatingRoleKey={updatingRoleKey}
+                              updatingCareKey={updatingCareKey}
+                              careAuthorized={hasCareAuthorization(family.id, member.userId)}
+                              onStartEditRelationship={startEditRelationship}
+                              onRelationshipDraftChange={setRelationshipDraft}
+                              onCancelEditRelationship={cancelEditRelationship}
+                              onUpdateRelationship={(targetFamilyId, targetMember) => {
+                                void handleUpdateRelationship(targetFamilyId, targetMember);
+                              }}
+                              onUpdateRole={(targetFamilyId, targetMember, role) => {
+                                void handleUpdateRole(targetFamilyId, targetMember, role);
+                              }}
+                              onToggleCareAuthorization={(targetFamilyId, caregiver) => {
+                                void handleToggleCareAuthorization(targetFamilyId, caregiver);
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </>
                     )}
                   </div>
                 )}

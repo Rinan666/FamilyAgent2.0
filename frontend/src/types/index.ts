@@ -478,6 +478,18 @@ export interface RagRecallSource {
   temporalLayer?: string;
   topics?: string[];
   scenes?: string[];
+  author?: RecallParticipant;
+  observer?: RecallParticipant;
+  subject?: RecallParticipant;
+}
+
+export interface RecallParticipant {
+  userId?: number;
+  name: string;
+  relationshipToViewer: string;
+  relationshipToTarget?: string;
+  currentViewer: boolean;
+  currentTarget: boolean;
 }
 
 export interface RebuildMemoryIndexResult {

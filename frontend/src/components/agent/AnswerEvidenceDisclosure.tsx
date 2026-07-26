@@ -125,6 +125,7 @@ function ragSections(sources: RagRecallSource[]): EvidenceSection[] {
       snippet: source.snippet,
       badges: [
         sourceTypeLabel(source.sourceType),
+        participantBadge(source),
         source.temporalLayer ? temporalLabel(source.temporalLayer) : '',
         ...(source.scenes || []).slice(0, 1),
         ...(source.topics || []).slice(0, 1).map(topicLabel),
@@ -133,6 +134,13 @@ function ragSections(sources: RagRecallSource[]): EvidenceSection[] {
     groups.set(title, items);
   });
   return Array.from(groups.entries()).map(([title, items]) => ({ title, items }));
+}
+
+function participantBadge(source: RagRecallSource) {
+  const participant = source.author || source.observer;
+  if (!participant) return '';
+  if (participant.currentViewer) return '我记录的';
+  return participant.relationshipToViewer || participant.name;
 }
 
 function webSearchSection(sources: WebSearchSource[] = []): EvidenceSection | null {
