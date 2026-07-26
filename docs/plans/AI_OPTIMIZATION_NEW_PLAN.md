@@ -1,16 +1,16 @@
-# FamilyAgent AI 当前优化计划
+# FamilyAgent AI 优化计划（本轮已完成）
 
-> 更新日期：2026-07-17
-> 作用：只维护当前仍需解决的问题，不再记录已经完成的阶段历史。
+> 更新日期：2026-07-27
+> 状态：本轮完成定义已全部满足，后续只在出现明确证据时重新立项。
 > 历史实现与验证记录以 Git 提交、测试和迁移历史为准。
 
 ---
 
 ## 1. 当前判断
 
-FamilyAgent 已经完成 AI Architecture Harness 的核心骨架，当前重点不再是继续搭建 AgentTool、确认门、Skill Runtime、Trace、Replay 或基础 Eval。
+FamilyAgent 已完成 AI Architecture Harness 核心骨架和本轮质量、追溯、版本、依赖、监测及客户端治理目标。当前重点不再是继续搭建 AgentTool、确认门、Skill Runtime、Trace、Replay 或基础 Eval。
 
-接下来的优化目标是：
+本轮已完成的优化目标包括：
 
 1. 证明召回结果质量，而不只是证明链路能运行。
 2. 让最终业务记录可以反向追溯到 Agent run、tool call 和版本。
@@ -67,7 +67,7 @@ FamilyAgent 已经完成 AI Architecture Harness 的核心骨架，当前重点�
 
 ---
 
-## 4. 当前优先事项
+## 4. 本轮完成事项
 
 ### P0-1：Memory Recall 质量评测
 
@@ -250,7 +250,7 @@ AI Service 当前没有数据库、Redis 或 RabbitMQ 的实际应用代码，�
 
 ### P1-4：低频真实 Provider 监测
 
-> 状态（2026-07-17）：独立 synthetic monitor 已实现，默认关闭，固定无家庭数据输入和 8 token 上限，可区分主模型成功、fallback 成功和全 provider 失败；未接入 readiness。仍需在有 provider 凭据和成本审批的环境配置低频调度并完成一次真实 smoke。
+> 状态（2026-07-27）：已完成。Synthetic monitor 已并入现有每周 Provider Sampled Eval 工作流，共用凭据、依赖和开关，不接入 readiness；主模型和 fallback 各最多调用一次，每次最多 8 tokens，预算越界会在调用前失败。DashScope 真实 smoke 返回 `PRIMARY_SUCCESS`，报告未保存 prompt 或模型正文。
 
 #### 当前问题
 
@@ -322,13 +322,13 @@ deterministic eval 已适合作为安全与契约门禁，但不能替代真实�
 
 ---
 
-## 5. 执行顺序
+## 5. 后续维护触发条件
 
-按以下顺序推进，前一项未形成可验证结果时不扩展下一项范围：
+本轮没有必须继续执行的遗留项。后续只在以下条件出现时重新立项：
 
-1. 在有成本审批的环境执行一次 synthetic provider monitor，并配置低频调度。
-2. 增加真实模型抽样和 Eval 信号优化。
-3. 仅在出现明确消费者和兼容收益时继续强类型契约迁移。
+1. 真实 provider 监测或质量抽样出现连续失败、延迟或成本回归。
+2. 新增稳定跨端消费者，需要继续迁移强类型契约。
+3. deterministic eval、隐私门禁、版本门禁或 recall 质量基线发生回归。
 
 ---
 
@@ -354,22 +354,25 @@ deterministic eval 已适合作为安全与契约门禁，但不能替代真实�
 
 后续优化不得低于以下基线：
 
-- Backend：265 tests passed。
-- AI Service：175 tests passed，1 条跨仓源码一致性检查在仅挂载 AI Service 的容器中跳过。
+- Backend：371 tests passed。
+- AI Service：224 tests passed。
 - Frontend：46 tests passed，production build 成功。
 - Eval：36/36 passed。
 - P0 safety/privacy gate：100%。
 - Contract gate：100%。
-- PostgreSQL：V1-V17 已在 PostgreSQL 16 + pgvector 临时数据库顺序验证。
+- PostgreSQL：V1-V22 已在 PostgreSQL 16 + pgvector 临时数据库顺序验证。
 - AI 容器：healthy，`pip check` 通过，内部 draft smoke 通过。
 - AI 优化验证镜像：1.89GB，生产环境不包含 pytest / ruff。
 - provider fixture 异常正文不进入 eval 进程输出。
+- Synthetic provider smoke：DashScope 主模型一次成功，fallback 未触发，报告不包含 prompt 或模型正文。
 
-每次完成一个优化项，应更新本节基线；已完成事项应从“当前优先事项”删除，不在本文件积累历史流水账。
+未来重新立项时应以本节为回归基线，只记录仍有证据支持的待办，不积累历史流水账。
 
 ---
 
 ## 8. 完成定义
+
+> 状态（2026-07-27）：以下九项均已满足，本轮优化完成。
 
 本轮优化完成需同时满足：
 
