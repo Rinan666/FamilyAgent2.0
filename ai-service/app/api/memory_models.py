@@ -26,11 +26,12 @@ SaveVisibility: TypeAlias = Literal[
     "SELECTED_FAMILIES_VISIBLE",
 ]
 MemoryType: TypeAlias = Literal[
-    "FAMILY_STORY",
-    "ELDER_ADVICE",
-    "HEALTH_REMINDER",
-    "GROWTH_RISK",
-    "VALUE",
+    "NOTE",
+    "KNOWLEDGE",
+    "INSIGHT",
+    "EXPERIENCE",
+    "OBSERVATION",
+    "PREFERENCE",
     "PLAN",
 ]
 MemoryScope: TypeAlias = Literal[
@@ -52,6 +53,7 @@ PersonalMemoryType: TypeAlias = Literal[
     "KNOWLEDGE",
     "INSIGHT",
     "EXPERIENCE",
+    "OBSERVATION",
     "PREFERENCE",
     "PLAN",
 ]

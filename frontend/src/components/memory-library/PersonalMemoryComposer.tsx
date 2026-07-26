@@ -16,6 +16,7 @@ const TYPE_OPTIONS: { value: PersonalMemoryType; label: string }[] = [
   { value: 'KNOWLEDGE', label: '新知' },
   { value: 'INSIGHT', label: '感悟' },
   { value: 'EXPERIENCE', label: '经历' },
+  { value: 'OBSERVATION', label: '观察' },
   { value: 'PREFERENCE', label: '偏好' },
   { value: 'PLAN', label: '计划' },
 ];

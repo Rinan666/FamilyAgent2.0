@@ -6,6 +6,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 public class CreateFamilyMemoryRequest {
 
@@ -25,6 +27,8 @@ public class CreateFamilyMemoryRequest {
     @Size(max = 1000)
     private String summary;
     private Integer importance;
+    private Long relatedUserId;
+    private List<@Size(max = 40) String> tags;
 
     @Valid
     private WriteMemoryMetadata metadata;

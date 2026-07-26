@@ -47,11 +47,23 @@ class AgentSaveMemoryPlanAssemblerTest {
     }
 
     @Test
+    void completedRunUsesCanonicalFamilyRecordTypeForLegacyDraftLabels() {
+        AgentSaveToolPlan plan = new AgentSaveToolPlan();
+        plan.setShouldSave(true);
+        plan.setTool(AgentSaveTool.GROWTH_GUARD);
+
+        UpdateSkillRunRequest update = assembler.completedRunUpdate(plan, "request-3", 93L);
+
+        assertEquals("FAMILY_MEMORY", update.getMetadata().getSavedRecordType());
+        assertEquals("GROWTH_GUARD", update.getMetadata().getPlannedTool());
+    }
+
+    @Test
     void completedRunFinishesWhenNothingShouldBeSaved() {
         AgentSaveToolPlan plan = new AgentSaveToolPlan();
         plan.setShouldSave(false);
         plan.setTool(AgentSaveTool.NONE);
-        plan.setReason("内容缺乏持久价值");
+        plan.setReason("没有找到原始内容");
 
         assertEquals("SUCCEEDED", assembler.completedRunUpdate(plan, "request-3", 93L).getStatus());
     }

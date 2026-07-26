@@ -53,7 +53,7 @@ class PersonalMemoryCommandServiceTest {
         CreatePersonalMemoryRequest request = new CreatePersonalMemoryRequest();
         request.setContent("A new idea worth remembering");
         request.setSummary("New idea");
-        request.setType("KNOWLEDGE");
+        request.setType("OBSERVATION");
         request.setVisibility("SELECTED_FAMILIES_VISIBLE");
         request.setSelectedFamilyIds(List.of(10L, 20L));
 
@@ -66,6 +66,7 @@ class PersonalMemoryCommandServiceTest {
         ArgumentCaptor<MemoryEntry> captor = ArgumentCaptor.forClass(MemoryEntry.class);
         verify(memoryRepository).insert(captor.capture());
         assertEquals("PERSONAL", captor.getValue().getLibraryKind());
+        assertEquals("OBSERVATION", captor.getValue().getType());
         assertEquals(null, captor.getValue().getFamilyId());
         assertEquals("SELECTED_FAMILIES_VISIBLE", captor.getValue().getScope());
         verify(grantRepository).insertGrant(77L, 10L, 101L);

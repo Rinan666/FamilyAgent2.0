@@ -298,7 +298,7 @@ def _plan(tool: str, content: str, scope: str) -> SaveToolPlanData:
         "summary": content,
         "visibility": scope if scope != "PARENT_VISIBLE" else "CARE_VISIBLE",
         "entry_type": "DAILY",
-        "memory_type": "ELDER_ADVICE",
+        "memory_type": "OBSERVATION" if tool == "GROWTH_GUARD" else "KNOWLEDGE",
         "scope": scope,
         "category": "VISION" if tool == "GROWTH_GUARD" else "OTHER",
         "severity": 2,

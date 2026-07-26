@@ -7,6 +7,7 @@ public enum PersonalMemoryType {
     KNOWLEDGE,
     INSIGHT,
     EXPERIENCE,
+    OBSERVATION,
     PREFERENCE,
     PLAN;
 
@@ -18,6 +19,7 @@ public enum PersonalMemoryType {
                 KNOWLEDGE.name(),
                 INSIGHT.name(),
                 EXPERIENCE.name(),
+                OBSERVATION.name(),
                 PREFERENCE.name(),
                 PLAN.name());
     }

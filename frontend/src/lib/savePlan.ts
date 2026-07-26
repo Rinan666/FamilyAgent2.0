@@ -40,13 +40,23 @@ const DIARY_VISIBILITIES = new Set<DiaryVisibility>([
   'LEGACY_VISIBLE',
 ]);
 const MEMORY_TYPES = new Set<MemoryEntryType>([
-  'FAMILY_STORY',
-  'ELDER_ADVICE',
-  'HEALTH_REMINDER',
-  'GROWTH_RISK',
-  'VALUE',
+  'NOTE',
+  'KNOWLEDGE',
+  'INSIGHT',
+  'EXPERIENCE',
+  'OBSERVATION',
+  'PREFERENCE',
   'PLAN',
 ]);
+const LEGACY_MEMORY_TYPES: Record<string, MemoryEntryType> = {
+  FAMILY_STORY: 'EXPERIENCE',
+  ELDER_ADVICE: 'KNOWLEDGE',
+  HEALTH_REMINDER: 'PLAN',
+  GROWTH_RISK: 'OBSERVATION',
+  VALUE: 'INSIGHT',
+  LEARNING: 'KNOWLEDGE',
+  MISTAKE: 'INSIGHT',
+};
 const MEMORY_SCOPES = new Set<MemoryScope>([
   'PRIVATE',
   'CARE_VISIBLE',
@@ -63,6 +73,7 @@ const PERSONAL_MEMORY_TYPES = new Set<PersonalMemoryType>([
   'KNOWLEDGE',
   'INSIGHT',
   'EXPERIENCE',
+  'OBSERVATION',
   'PREFERENCE',
   'PLAN',
 ]);
@@ -84,7 +95,7 @@ const INLINE_SAVE_ACTION_FIRST_PREFIX_PATTERN = /^(?:请|麻烦)?(?:你)?(?:帮�
 const INLINE_SAVE_SUFFIX_PATTERN = /[，,。；;\n]\s*(?:请|麻烦)?(?:你)?(?:帮我|替我|给我)?(?:把它|将它)?(?:保存(?:到(?:家庭)?记忆库)?|加入(?:家庭)?记忆库|放到(?:家庭)?记忆库|收进(?:家庭)?记忆库|记下来|记录下来|存起来)(?:里)?(?:一下)?(?:吧)?[。.!！?？]*$/;
 const MAX_EXPLICIT_SAVE_COMMAND_LENGTH = 5000;
 
-export type SavedRecordType = 'DIARY_ENTRY' | 'PERSONAL_MEMORY' | 'FAMILY_MEMORY' | 'GROWTH_GUARD' | 'NONE';
+export type SavedRecordType = 'PERSONAL_MEMORY' | 'FAMILY_MEMORY' | 'NONE';
 
 export type SavePlanPersistenceDecision = {
   plan: AgentSaveToolPlan;
@@ -179,7 +190,7 @@ export function buildFallbackSaveToolPlan(
     summary: content.slice(0, 80),
     visibility: 'PRIVATE',
     entry_type: 'DAILY',
-    memory_type: 'ELDER_ADVICE',
+    memory_type: 'NOTE',
     personal_memory_type: 'NOTE',
     selected_family_ids: [],
     scope: 'PRIVATE',
@@ -209,6 +220,14 @@ export function normalizeSaveToolPlan(plan: AgentSaveToolPlan): AgentSaveToolPla
   const shouldSave = Boolean(plan.should_save) && tool !== 'NONE' && content.length > 0;
   const visibility = visibilityFromPlan({ ...plan, tool });
   const scope = scopeFromPlan({ ...plan, tool, visibility });
+  const entryType = entryTypeFromPlan(plan);
+  const personalMemoryType = personalMemoryTypeFromPlan(plan);
+  const memoryType = resolvedMemoryTypeFromPlan({
+    ...plan,
+    tool,
+    entry_type: entryType,
+    personal_memory_type: personalMemoryType,
+  });
 
   return {
     ...plan,
@@ -218,9 +237,9 @@ export function normalizeSaveToolPlan(plan: AgentSaveToolPlan): AgentSaveToolPla
     title: String(plan.title || '').trim().slice(0, 24) || defaultSaveTitle(tool),
     summary: String(plan.summary || content).trim().slice(0, 80),
     visibility,
-    entry_type: entryTypeFromPlan(plan),
-    memory_type: memoryTypeFromPlan(plan),
-    personal_memory_type: personalMemoryTypeFromPlan(plan),
+    entry_type: entryType,
+    memory_type: memoryType,
+    personal_memory_type: personalMemoryType,
     selected_family_ids: normalizeFamilyIds(plan.selected_family_ids),
     scope,
     category: growthCategoryFromPlan(plan),
@@ -247,7 +266,7 @@ export function savePlanPersistenceDecision(plan: AgentSaveToolPlan): SavePlanPe
 export function skippedSavePlanDetail(plan: AgentSaveToolPlan) {
   const reason = String(plan.reason || '').trim();
   if (reason.includes('保存规划暂时不可用')) return '暂未保存，可稍后重试。';
-  return reason ? `这段对话暂时没有可沉淀的内容：${reason}` : '这段对话暂时没有可沉淀的内容。';
+  return reason ? `未生成保存草稿：${reason}` : '未生成保存草稿。';
 }
 
 export function scopeFromPlan(
@@ -278,8 +297,25 @@ export function entryTypeFromPlan(plan: Pick<AgentSaveToolPlan, 'entry_type'>): 
   return choice(plan.entry_type, DIARY_ENTRY_TYPES, 'DAILY');
 }
 
+function memoryTypeForDiaryEntry(entryType: DiaryEntryType): MemoryEntryType {
+  if (entryType === 'LESSON') return 'KNOWLEDGE';
+  if (entryType === 'EMOTION' || entryType === 'SELF_REFLECTION') return 'INSIGHT';
+  return 'NOTE';
+}
+
 export function memoryTypeFromPlan(plan: Pick<AgentSaveToolPlan, 'memory_type'>): MemoryEntryType {
-  return choice(plan.memory_type, MEMORY_TYPES, 'ELDER_ADVICE');
+  const normalized = String(plan.memory_type || '').trim().toUpperCase();
+  return choice(LEGACY_MEMORY_TYPES[normalized] || normalized, MEMORY_TYPES, 'NOTE');
+}
+
+function resolvedMemoryTypeFromPlan(
+  plan: Pick<AgentSaveToolPlan, 'tool' | 'entry_type' | 'memory_type' | 'personal_memory_type'>,
+): MemoryEntryType {
+  const tool = choice(plan.tool, SAVE_TOOLS, 'NONE');
+  if (tool === 'GROWTH_GUARD') return 'OBSERVATION';
+  if (tool === 'PERSONAL_MEMORY') return personalMemoryTypeFromPlan(plan);
+  if (tool === 'DIARY') return memoryTypeForDiaryEntry(entryTypeFromPlan(plan));
+  return memoryTypeFromPlan(plan);
 }
 
 export function personalMemoryTypeFromPlan(
@@ -293,18 +329,16 @@ export function growthCategoryFromPlan(plan: Pick<AgentSaveToolPlan, 'category'>
 }
 
 export function toolLabel(tool: AgentSaveTool) {
-  if (tool === 'DIARY') return '日记';
+  if (tool === 'DIARY') return '家庭记录';
   if (tool === 'PERSONAL_MEMORY') return '个人记忆';
   if (tool === 'FAMILY_MEMORY') return '家庭记忆';
-  if (tool === 'GROWTH_GUARD') return '成长观察';
+  if (tool === 'GROWTH_GUARD') return '家庭观察';
   return '未保存';
 }
 
 export function savedRecordType(tool: AgentSaveTool): SavedRecordType {
-  if (tool === 'DIARY') return 'DIARY_ENTRY';
   if (tool === 'PERSONAL_MEMORY') return 'PERSONAL_MEMORY';
-  if (tool === 'FAMILY_MEMORY') return 'FAMILY_MEMORY';
-  if (tool === 'GROWTH_GUARD') return 'GROWTH_GUARD';
+  if (tool !== 'NONE') return 'FAMILY_MEMORY';
   return 'NONE';
 }
 
@@ -387,13 +421,6 @@ export function buildAgentSaveMemoryMetadata(
       target: context.targetPersonaName || '',
     };
   }
-  if (plan.tool === 'GROWTH_GUARD' && context.agentMode === 'mirror') {
-    return {
-      ...metadata,
-      sourceType: 'GROWTH_OBSERVATION',
-      followUpStatus: 'PENDING',
-    };
-  }
   return metadata;
 }
 
@@ -436,14 +463,12 @@ export function buildWriteMemorySaveRequest(
     visibility: plan.tool === 'GROWTH_GUARD' ? scopeFromPlan(plan) : visibilityFromPlan(plan),
     relatedUserId: targetUserId,
     diaryEntryType: entryTypeFromPlan(plan),
-    memoryType: memoryTypeFromPlan(plan),
+    memoryType: resolvedMemoryTypeFromPlan(plan),
     personalMemoryType: personalMemoryTypeFromPlan(plan),
     memoryLibrary: plan.tool === 'PERSONAL_MEMORY' ? 'PERSONAL' : 'FAMILY',
     selectedFamilyIds: plan.tool === 'PERSONAL_MEMORY'
       ? normalizeFamilyIds(plan.selected_family_ids)
       : [],
-    growthCategory: growthCategoryFromPlan(plan),
-    growthSeverity: plan.severity,
     metadata,
   };
 }
@@ -460,20 +485,20 @@ function subjectFromAgentMode(mode: AgentMode) {
 
 function defaultSaveTitle(tool: AgentSaveTool) {
   return {
-    DIARY: '聊天保存日记',
+    DIARY: '聊天保存家庭记录',
     PERSONAL_MEMORY: '聊天保存个人记忆',
     FAMILY_MEMORY: '聊天保存家庭记忆',
-    GROWTH_GUARD: '聊天保存成长观察',
+    GROWTH_GUARD: '聊天保存家庭观察',
     NONE: '无需保存',
   }[tool];
 }
 
 function defaultSaveConfirmation(tool: AgentSaveTool) {
   return {
-    DIARY: '日记草稿已准备，请修改或确认后保存。',
+    DIARY: '家庭记录草稿已准备，请修改或确认后保存。',
     PERSONAL_MEMORY: '个人记忆草稿已准备，请修改或确认后保存。',
     FAMILY_MEMORY: '家庭记忆草稿已准备，请修改或确认后保存。',
-    GROWTH_GUARD: '成长观察草稿已准备，请修改或确认后保存。',
+    GROWTH_GUARD: '家庭观察草稿已准备，请修改或确认后保存。',
     NONE: '没有找到可保存的内容。',
   }[tool];
 }

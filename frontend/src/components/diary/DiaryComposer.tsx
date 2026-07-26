@@ -55,14 +55,17 @@ const visibilityOptions: { value: DiaryVisibility; label: string; note: string }
   { value: 'CARE_VISIBLE', label: '照护可见', note: '照护相关成员可查看和跟进。' },
 ];
 
-const categoryOptions: {
-  value: WriteCategory;
+const memoryTypeOptions: {
+  value: MemoryEntryType;
   label: string;
-  description: string;
 }[] = [
-  { value: 'RECORD', label: '记录', description: '写下当下发生的事、感受和留言。' },
-  { value: 'EXPERIENCE', label: '经验', description: '留下以后还会用到的经验和提醒。' },
-  { value: 'OBSERVATION', label: '观察', description: '记录照护线索、变化和后续复核点。' },
+  { value: 'NOTE', label: '笔记' },
+  { value: 'KNOWLEDGE', label: '新知' },
+  { value: 'INSIGHT', label: '感悟' },
+  { value: 'EXPERIENCE', label: '经历' },
+  { value: 'OBSERVATION', label: '观察' },
+  { value: 'PREFERENCE', label: '偏好' },
+  { value: 'PLAN', label: '计划' },
 ];
 
 const starterTemplates: StarterTemplate[] = [
@@ -111,11 +114,12 @@ const starterTemplates: StarterTemplate[] = [
 ];
 
 const validMemoryTypes = new Set<MemoryEntryType>([
-  'ELDER_ADVICE',
-  'FAMILY_STORY',
-  'HEALTH_REMINDER',
-  'GROWTH_RISK',
-  'VALUE',
+  'NOTE',
+  'KNOWLEDGE',
+  'INSIGHT',
+  'EXPERIENCE',
+  'OBSERVATION',
+  'PREFERENCE',
   'PLAN',
 ]);
 
@@ -162,8 +166,26 @@ function defaultVisibilityForCategory(category: WriteCategory): DiaryVisibility 
 }
 
 function defaultMemoryTypeForQuery(type?: string): MemoryEntryType {
-  if (type && validMemoryTypes.has(type)) return type;
-  return 'ELDER_ADVICE';
+  const normalized = type?.trim().toUpperCase();
+  if (normalized && validMemoryTypes.has(normalized)) return normalized;
+  if (normalized === 'LEARNING' || normalized === 'ELDER_ADVICE') return 'KNOWLEDGE';
+  if (normalized === 'MISTAKE' || normalized === 'VALUE') return 'INSIGHT';
+  if (normalized === 'FAMILY_STORY') return 'EXPERIENCE';
+  if (normalized === 'GROWTH_RISK') return 'OBSERVATION';
+  if (normalized === 'HEALTH_REMINDER') return 'PLAN';
+  return 'NOTE';
+}
+
+function categoryForMemoryType(type: MemoryEntryType): WriteCategory {
+  if (type === 'OBSERVATION') return 'OBSERVATION';
+  if (type === 'NOTE' || type === 'INSIGHT') return 'RECORD';
+  return 'EXPERIENCE';
+}
+
+function memoryTypeForDiaryEntry(type?: string): MemoryEntryType {
+  if (type === 'LESSON') return 'KNOWLEDGE';
+  if (type === 'EMOTION' || type === 'SELF_REFLECTION') return 'INSIGHT';
+  return 'NOTE';
 }
 
 function defaultGrowthCategoryForQuery(category?: string): GrowthGuardCategory {
@@ -203,15 +225,8 @@ function categoryFromLibraryItem(item?: MemoryLibraryItem | null): WriteCategory
   return 'RECORD';
 }
 
-function editTypeFromState(
-  category: WriteCategory,
-  diaryEntryType: DiaryEntryType,
-  memoryType: MemoryEntryType,
-  growthCategory: GrowthGuardCategory,
-) {
-  if (category === 'EXPERIENCE') return memoryType;
-  if (category === 'OBSERVATION') return growthCategory;
-  return diaryEntryType;
+function editTypeFromState(memoryType: MemoryEntryType) {
+  return memoryType;
 }
 
 function titleFromFirstLine(value: string) {
@@ -268,7 +283,7 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
   const [visibility, setVisibility] = useState<DiaryVisibility>('FAMILY_VISIBLE');
   const [relatedUserId, setRelatedUserId] = useState<number | undefined>(undefined);
   const [diaryEntryType, setDiaryEntryType] = useState<DiaryEntryType>('DAILY');
-  const [memoryType, setMemoryType] = useState<MemoryEntryType>('ELDER_ADVICE');
+  const [memoryType, setMemoryType] = useState<MemoryEntryType>('NOTE');
   const [growthCategory, setGrowthCategory] = useState<GrowthGuardCategory>('OTHER');
   const [growthSeverity, setGrowthSeverity] = useState(3);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -354,7 +369,7 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
     setTagText('');
     setVisibility(defaultVisibilityForCategory(categoryToUse));
     setDiaryEntryType('DAILY');
-    setMemoryType('ELDER_ADVICE');
+    setMemoryType(categoryToUse === 'OBSERVATION' ? 'OBSERVATION' : categoryToUse === 'EXPERIENCE' ? 'EXPERIENCE' : 'NOTE');
     setGrowthCategory('OTHER');
     setGrowthSeverity(3);
     if (categoryToUse !== 'OBSERVATION') {
@@ -445,18 +460,23 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
 
   useEffect(() => {
     if (isEditingExisting) return;
+    const requestedType = defaultMemoryTypeForQuery(requestedMemoryType);
     const initialCategory = requestedWriteCategory === 'OBSERVATION' || requestedGrowthCategory
       ? 'OBSERVATION'
-      : requestedWriteCategory === 'EXPERIENCE' || requestedMemoryType
+      : requestedWriteCategory === 'EXPERIENCE'
         ? 'EXPERIENCE'
-        : 'RECORD';
+        : requestedMemoryType
+          ? categoryForMemoryType(requestedType)
+          : 'RECORD';
     const key = `${requestedWriteCategory}:${requestedMemoryType}:${requestedGrowthCategory}:${requestedTargetUserId || ''}`;
     if (writeCategoryAppliedKeyRef.current === key) return;
     writeCategoryAppliedKeyRef.current = key;
 
     setCategory(initialCategory);
     setVisibility(defaultVisibilityForCategory(initialCategory));
-    setMemoryType(defaultMemoryTypeForQuery(requestedMemoryType));
+    setMemoryType(requestedMemoryType
+      ? requestedType
+      : initialCategory === 'OBSERVATION' ? 'OBSERVATION' : initialCategory === 'EXPERIENCE' ? 'EXPERIENCE' : 'NOTE');
     setGrowthCategory(defaultGrowthCategoryForQuery(requestedGrowthCategory));
     if (requestedTargetUserId) setRelatedUserId(requestedTargetUserId);
   }, [isEditingExisting, requestedGrowthCategory, requestedMemoryType, requestedTargetUserId, requestedWriteCategory]);
@@ -474,8 +494,8 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
     setTagText((editItem.tags || []).join(' '));
     setVisibility((normalizeVisibility(editItem.visibility) || defaultVisibilityForCategory(nextCategory)) as DiaryVisibility);
     setRelatedUserId(editItem.memberUserId || undefined);
-    setDiaryEntryType(nextCategory === 'RECORD' ? (editItem.type as DiaryEntryType) || 'DAILY' : 'DAILY');
-    setMemoryType(nextCategory === 'EXPERIENCE' ? defaultMemoryTypeForQuery(editItem.type) : 'ELDER_ADVICE');
+    setDiaryEntryType('DAILY');
+    setMemoryType(defaultMemoryTypeForQuery(editItem.type));
     setGrowthCategory(nextCategory === 'OBSERVATION' ? defaultGrowthCategoryForQuery(editItem.type) : 'OTHER');
     setGrowthSeverity(3);
     setDraftStatus('正在编辑已有内容');
@@ -500,7 +520,7 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
       setTagText('');
       setVisibility(defaultVisibilityForCategory('RECORD'));
       setDiaryEntryType('DAILY');
-      setMemoryType('ELDER_ADVICE');
+      setMemoryType('NOTE');
       setGrowthCategory('OTHER');
       setGrowthSeverity(3);
       setRelatedUserId(requestedTargetUserId || undefined);
@@ -517,7 +537,7 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
       setVisibility(normalizeVisibility(saved.visibility) || defaultVisibilityForCategory(saved.category || 'RECORD'));
       setRelatedUserId(saved.relatedUserId || requestedTargetUserId || undefined);
       setDiaryEntryType(saved.diaryEntryType || 'DAILY');
-      setMemoryType(saved.memoryType && validMemoryTypes.has(saved.memoryType) ? saved.memoryType : 'ELDER_ADVICE');
+      setMemoryType(defaultMemoryTypeForQuery(saved.memoryType));
       setGrowthCategory(
         saved.growthCategory && validGrowthCategories.has(saved.growthCategory)
           ? saved.growthCategory
@@ -565,6 +585,7 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
 
   const applyTemplate = useCallback((template: StarterTemplate) => {
     setCategory(template.category);
+    setMemoryType(template.category === 'OBSERVATION' ? 'OBSERVATION' : template.category === 'EXPERIENCE' ? 'EXPERIENCE' : 'NOTE');
     setContent(template.content);
     setTagText(template.tags || '');
     setVisibility(defaultVisibilityForCategory(template.category));
@@ -580,7 +601,9 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
     clearForm(category);
   }, [category, clearForm, relatedUserId, requestedTargetUserId, selectedFamilyId, user?.id]);
 
-  const handleCategoryChange = useCallback((nextCategory: WriteCategory) => {
+  const handleMemoryTypeChange = useCallback((nextType: MemoryEntryType) => {
+    const nextCategory = categoryForMemoryType(nextType);
+    setMemoryType(nextType);
     setCategory(nextCategory);
     setVisibility((current) => {
       if (nextCategory === 'OBSERVATION') return current === 'PRIVATE' ? 'CARE_VISIBLE' : current;
@@ -618,15 +641,13 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
             ? draft.diaryEntryType as DiaryEntryType
             : diaryEntryType,
         );
+        setMemoryType(memoryTypeForDiaryEntry(draft.diaryEntryType));
         setVisibility(normalizeVisibility(draft.diaryVisibility) || visibility);
       } else if (category === 'EXPERIENCE') {
-        setMemoryType(
-          draft.memoryType && validMemoryTypes.has(draft.memoryType)
-            ? draft.memoryType
-            : memoryType,
-        );
+        setMemoryType(defaultMemoryTypeForQuery(draft.memoryType || memoryType));
         setVisibility(normalizeVisibility(draft.memoryScope) || visibility);
       } else {
+        setMemoryType('OBSERVATION');
         setGrowthCategory(
           draft.growthCategory && validGrowthCategories.has(draft.growthCategory as GrowthGuardCategory)
             ? draft.growthCategory as GrowthGuardCategory
@@ -669,11 +690,6 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
       setError('先写一点内容再保存。');
       return;
     }
-    if (category === 'OBSERVATION' && !relatedUserId) {
-      setError('观察类内容需要先关联一位成员。');
-      return;
-    }
-
     persistDraftNow('正在保存，已先保留本地草稿');
     setSaving(true);
     setError('');
@@ -690,7 +706,7 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
           itemId: editItem.id,
           title: resolvedTitle || undefined,
           body: bodyText,
-          type: editTypeFromState(category, diaryEntryType, memoryType, growthCategory),
+          type: editTypeFromState(memoryType),
           visibility,
           tags,
         });
@@ -944,28 +960,18 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
             </select>
           </label>
 
-          <div className="text-xs font-medium text-stone-500">
+          <label className="text-xs font-medium text-stone-500">
             类型
-            <div className="mt-1 grid grid-cols-3 gap-1.5 rounded-md border border-stone-200 bg-white p-1">
-              {categoryOptions.map((item) => (
-                <button
-                  key={item.value}
-                  type="button"
-                  onClick={() => {
-                    if (!isEditingExisting) handleCategoryChange(item.value);
-                  }}
-                  disabled={isEditingExisting && category !== item.value}
-                  className={`h-7 rounded px-2 text-xs font-medium transition ${
-                    category === item.value
-                      ? 'bg-stone-950 text-white'
-                      : 'text-stone-500 hover:bg-stone-100 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-40'
-                  }`}
-                >
-                  {item.label}
-                </button>
+            <select
+              value={memoryType}
+              onChange={(event) => handleMemoryTypeChange(event.target.value as MemoryEntryType)}
+              className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+            >
+              {memoryTypeOptions.map((item) => (
+                <option key={item.value} value={item.value}>{item.label}</option>
               ))}
-            </div>
-          </div>
+            </select>
+          </label>
 
           <label className="text-xs font-medium text-stone-500">
             可见范围
@@ -990,9 +996,9 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
             />
           </label>
 
-          {category === 'OBSERVATION' && (
+          {memoryType === 'OBSERVATION' && (
             <label className="text-xs font-medium text-stone-500">
-              关联成员
+              关联成员（可选）
               <select
                 value={relatedUserId || ''}
                 onChange={(event) => {
@@ -1001,7 +1007,7 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
                 }}
                 className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
               >
-                <option value="">请选择一位成员</option>
+                <option value="">不关联具体成员</option>
                 {members.map((member) => (
                   <option key={member.userId} value={member.userId}>{memberDisplayName(member)}</option>
                 ))}

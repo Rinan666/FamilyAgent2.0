@@ -1,7 +1,8 @@
 package com.familyagent.module.agent.service;
 
-import com.familyagent.common.exception.BusinessException;
+import com.familyagent.common.constant.MemoryContentType;
 import com.familyagent.common.constant.MemoryLibraryKind;
+import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.agent.dto.AgentSaveMemoryToolRequest;
 import com.familyagent.module.agent.harness.AgentRunContext;
@@ -9,14 +10,11 @@ import com.familyagent.module.agent.harness.AgentToolExecutor;
 import com.familyagent.module.agent.harness.constant.AgentToolName;
 import com.familyagent.module.agent.harness.dto.AgentToolCallRequest;
 import com.familyagent.module.agent.harness.dto.AgentToolCallResult;
-import com.familyagent.module.agent.harness.dto.CreateDiaryEntryInput;
 import com.familyagent.module.agent.harness.dto.CreateFamilyMemoryInput;
-import com.familyagent.module.agent.harness.dto.CreateGrowthGuardRecordInput;
 import com.familyagent.module.agent.harness.dto.CreatePersonalMemoryInput;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -29,7 +27,6 @@ public class AgentSaveMemoryToolCommandService {
 
     public AgentToolCallResult<?> requestSave(AgentSaveMemoryToolRequest request, Long viewerUserId) {
         SaveWriteCategory category = SaveWriteCategory.from(request.getWriteCategory());
-        requireGrowthTarget(category, request);
         AgentRunContext context = new AgentRunContext(
                 requestId(request.getRequestId()),
                 request.getFamilyId(),
@@ -38,60 +35,59 @@ public class AgentSaveMemoryToolCommandService {
                 defaultText(request.getAgentMode(), "family"),
                 defaultText(request.getSubject(), "FamilyAgent"),
                 defaultText(request.getContextLabel(), "save_memory"));
-
-        return switch (category) {
-            case RECORD -> toolExecutor.execute(new AgentToolCallRequest<>(
-                    AgentToolName.CREATE_DIARY_ENTRY.value(),
-                    context,
-                    new CreateDiaryEntryInput(
-                            request.getContent(),
-                            request.getDiaryEntryType(),
-                            request.getTitle(),
-                            null,
-                            tags(request.getTags()),
-                            request.getVisibility(),
-                            request.getMetadata())));
-            case EXPERIENCE -> personalMemoryRequested(request)
-                    ? toolExecutor.execute(new AgentToolCallRequest<>(
-                            AgentToolName.CREATE_PERSONAL_MEMORY.value(),
-                            context,
-                            new CreatePersonalMemoryInput(
-                                    request.getContent(),
-                                    request.getPersonalMemoryType(),
-                                    request.getVisibility(),
-                                    summary(request.getTitle(), request.getContent()),
-                                    defaultImportance(request.getPersonalMemoryType()),
-                                    request.getSelectedFamilyIds(),
-                                    request.getMetadata())))
-                    : toolExecutor.execute(new AgentToolCallRequest<>(
-                            AgentToolName.CREATE_FAMILY_MEMORY.value(),
-                            context,
-                            new CreateFamilyMemoryInput(
-                                    request.getContent(),
-                                    request.getMemoryType(),
-                                    request.getVisibility(),
-                                    summary(request.getTitle(), request.getContent()),
-                                    defaultImportance(request.getMemoryType()),
-                                    request.getMetadata())));
-            case OBSERVATION -> toolExecutor.execute(new AgentToolCallRequest<>(
-                    AgentToolName.CREATE_GROWTH_GUARD_RECORD.value(),
-                    context,
-                    new CreateGrowthGuardRecordInput(
-                            request.getRelatedUserId(),
-                            request.getGrowthCategory(),
-                            request.getContent(),
-                            request.getGrowthSeverity(),
-                            LocalDate.now(),
-                            LocalDate.now().plusDays(7),
-                            request.getVisibility(),
-                            request.getMetadata())));
-        };
+        if (personalMemoryRequested(request)) {
+            return savePersonal(request, context);
+        }
+        return saveFamily(request, category, context);
     }
 
-    private static void requireGrowthTarget(SaveWriteCategory category, AgentSaveMemoryToolRequest request) {
-        if (category == SaveWriteCategory.OBSERVATION && request.getRelatedUserId() == null) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "Growth guard target user is required");
+    private AgentToolCallResult<?> saveFamily(
+            AgentSaveMemoryToolRequest request,
+            SaveWriteCategory category,
+            AgentRunContext context) {
+        MemoryContentType type = resolveType(request, category);
+        return toolExecutor.execute(new AgentToolCallRequest<>(
+                AgentToolName.CREATE_FAMILY_MEMORY.value(),
+                context,
+                new CreateFamilyMemoryInput(
+                        request.getContent(),
+                        type.name(),
+                        request.getVisibility(),
+                        summary(request.getTitle(), request.getContent()),
+                        type == MemoryContentType.OBSERVATION ? 4 : 3,
+                        request.getRelatedUserId(),
+                        tags(request.getTags()),
+                        request.getMetadata())));
+    }
+
+    private AgentToolCallResult<?> savePersonal(
+            AgentSaveMemoryToolRequest request,
+            AgentRunContext context) {
+        return toolExecutor.execute(new AgentToolCallRequest<>(
+                AgentToolName.CREATE_PERSONAL_MEMORY.value(),
+                context,
+                new CreatePersonalMemoryInput(
+                        request.getContent(),
+                        request.getPersonalMemoryType(),
+                        request.getVisibility(),
+                        summary(request.getTitle(), request.getContent()),
+                        3,
+                        request.getSelectedFamilyIds(),
+                        request.getMetadata())));
+    }
+
+    private static MemoryContentType resolveType(
+            AgentSaveMemoryToolRequest request,
+            SaveWriteCategory category) {
+        if (category == SaveWriteCategory.OBSERVATION) {
+            return MemoryContentType.OBSERVATION;
         }
+        if (category == SaveWriteCategory.RECORD) {
+            return MemoryContentType.fromDiaryEntryType(request.getDiaryEntryType());
+        }
+        String requested = defaultText(request.getMemoryType(), "");
+        MemoryContentType explicit = MemoryContentType.fromFamilyMemoryType(requested);
+        return explicit == null ? MemoryContentType.EXPERIENCE : explicit;
     }
 
     private static boolean personalMemoryRequested(AgentSaveMemoryToolRequest request) {
@@ -119,22 +115,17 @@ public class AgentSaveMemoryToolCommandService {
                 .filter(tag -> tag != null && !tag.isBlank())
                 .map(String::trim)
                 .distinct()
-                .limit(8)
+                .limit(10)
                 .toList();
     }
 
     private static String summary(String title, String content) {
         String preferred = title == null ? "" : title.trim();
         if (!preferred.isEmpty()) {
-            return preferred;
+            return preferred.length() <= 120 ? preferred : preferred.substring(0, 120);
         }
         String text = content == null ? "" : content.trim();
         return text.length() <= 120 ? text : text.substring(0, 120);
-    }
-
-    private static Integer defaultImportance(String memoryType) {
-        String normalized = memoryType == null ? "" : memoryType.trim().toUpperCase(Locale.ROOT);
-        return ("HEALTH_REMINDER".equals(normalized) || "GROWTH_RISK".equals(normalized)) ? 4 : 3;
     }
 
     private enum SaveWriteCategory {
@@ -145,9 +136,9 @@ public class AgentSaveMemoryToolCommandService {
         static SaveWriteCategory from(String value) {
             String normalized = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
             try {
-                return SaveWriteCategory.valueOf(normalized);
-            } catch (IllegalArgumentException e) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST, "写下分类不支持");
+                return valueOf(normalized);
+            } catch (IllegalArgumentException error) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "Memory write category is not supported");
             }
         }
     }

@@ -14,10 +14,8 @@ public enum AgentSaveTool {
     public String savedRecordType() {
         return switch (this) {
             case NONE -> "NONE";
-            case DIARY -> "DIARY_ENTRY";
             case PERSONAL_MEMORY -> "PERSONAL_MEMORY";
-            case FAMILY_MEMORY -> "FAMILY_MEMORY";
-            case GROWTH_GUARD -> "GROWTH_GUARD";
+            case DIARY, FAMILY_MEMORY, GROWTH_GUARD -> "FAMILY_MEMORY";
         };
     }
 }

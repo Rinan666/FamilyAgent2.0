@@ -1,6 +1,7 @@
 package com.familyagent.module.memorylibrary.service;
 
 import com.familyagent.common.constant.EntityStatus;
+import com.familyagent.common.constant.MemoryContentType;
 import com.familyagent.common.constant.MemoryLibraryMetadataSource;
 import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.common.exception.BusinessException;
@@ -54,8 +55,7 @@ public class MemoryLibraryDiaryCommandService {
         }
         MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can edit this diary");
         String body = MemoryLibraryCommandSupport.requiredBody(request.getBody());
-        String type = MemoryLibraryCommandSupport.normalize(
-                request.getType(), "DAILY", ENTRY_TYPES, "Diary entry type is not supported");
+        String type = normalizeEntryType(request.getType());
         String visibility = MemoryLibraryCommandSupport.normalize(
                 request.getVisibility(), entry.getVisibility(), MemoryScope.diaryNames(),
                 "Diary visibility is not supported");
@@ -73,6 +73,26 @@ public class MemoryLibraryDiaryCommandService {
                 tags));
         diaryFacade.update(entry);
         indexingFacade.indexDiaryAfterCommit(entry);
+    }
+
+    private static String normalizeEntryType(String requestedType) {
+        String requested = MemoryLibrarySupport.blankToNull(requestedType);
+        if (requested == null) {
+            return "DAILY";
+        }
+        String normalized = requested.toUpperCase(java.util.Locale.ROOT);
+        if (ENTRY_TYPES.contains(normalized)) {
+            return normalized;
+        }
+        MemoryContentType contentType = MemoryContentType.fromFamilyMemoryType(normalized);
+        if (contentType == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Diary entry type is not supported");
+        }
+        return switch (contentType) {
+            case KNOWLEDGE -> "LESSON";
+            case INSIGHT -> "SELF_REFLECTION";
+            default -> "DAILY";
+        };
     }
 
     public void restore(Long familyId, Long diaryId) {

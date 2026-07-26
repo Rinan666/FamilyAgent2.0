@@ -16,7 +16,7 @@ def test_save_to_memory_library_command_is_detected_as_command_only():
     assert _looks_like_save_command_only("保存到记忆库吧") is True
 
 
-def test_growth_observation_keeps_model_selected_growth_tool():
+def test_growth_observation_uses_unified_type_without_inferred_legacy_fields():
     plan = _sanitize_save_tool_plan({
         "should_save": True,
         "tool": "GROWTH_GUARD",
@@ -29,7 +29,8 @@ def test_growth_observation_keeps_model_selected_growth_tool():
 
     assert plan["should_save"] is True
     assert plan["tool"] == "GROWTH_GUARD"
-    assert plan["category"] == "DENTAL"
+    assert plan["memory_type"] == "OBSERVATION"
+    assert plan["category"] == "OTHER"
     assert plan["visibility"] == "CARE_VISIBLE"
     assert plan["scope"] == "CARE_VISIBLE"
 
@@ -45,7 +46,7 @@ def test_family_memory_keeps_model_selected_memory_tool():
     })
 
     assert plan["tool"] == "FAMILY_MEMORY"
-    assert plan["memory_type"] == "GROWTH_RISK"
+    assert plan["memory_type"] == "INSIGHT"
     assert plan["visibility"] == "FAMILY_VISIBLE"
     assert plan["scope"] == "FAMILY_VISIBLE"
 
@@ -476,7 +477,7 @@ def test_durable_emotion_auto_saves_even_when_model_is_conservative():
     assert plan["entry_type"] == "EMOTION"
 
 
-def test_child_vision_observation_keeps_model_selected_growth_tool():
+def test_child_vision_observation_does_not_infer_legacy_category():
     plan = _sanitize_save_tool_plan({
         "should_save": False,
         "tool": "GROWTH_GUARD",
@@ -487,7 +488,8 @@ def test_child_vision_observation_keeps_model_selected_growth_tool():
 
     assert plan["should_save"] is True
     assert plan["tool"] == "GROWTH_GUARD"
-    assert plan["category"] == "VISION"
+    assert plan["memory_type"] == "OBSERVATION"
+    assert plan["category"] == "OTHER"
     assert plan["visibility"] == "CARE_VISIBLE"
 
 
@@ -502,7 +504,7 @@ def test_elder_college_major_advice_keeps_model_selected_memory_tool():
 
     assert plan["should_save"] is True
     assert plan["tool"] == "FAMILY_MEMORY"
-    assert plan["memory_type"] == "GROWTH_RISK"
+    assert plan["memory_type"] == "INSIGHT"
     assert plan["visibility"] == "FAMILY_VISIBLE"
 
 

@@ -72,7 +72,7 @@ class AgentSaveMemoryPlanServiceTest {
         ArgumentCaptor<UpdateSkillRunRequest> updateCaptor = ArgumentCaptor.forClass(UpdateSkillRunRequest.class);
         verify(skillRunFacade).update(eq(77L), updateCaptor.capture());
         assertEquals("PLANNED", updateCaptor.getValue().getStatus());
-        assertEquals("DIARY_ENTRY", updateCaptor.getValue().getMetadata().getSavedRecordType());
+        assertEquals("FAMILY_MEMORY", updateCaptor.getValue().getMetadata().getSavedRecordType());
         assertEquals(91L, updateCaptor.getValue().getMetadata().getAgentRunId());
         verify(traceRecorder).succeed(any(AgentRunStepRecord.class));
         verify(runLifecycleService).succeed(any(AgentRunContext.class));

@@ -6,6 +6,7 @@ from .memory_helpers import (
     _bounded_int,
     _choice,
     _compact_string_list,
+    _normalize_memory_type,
 )
 
 
@@ -13,9 +14,7 @@ def _sanitize_memory(item: dict) -> dict | None:
     content = str(item.get("content", "")).strip()
     if len(content) < 8:
         return None
-    memory_type = str(item.get("type", "LEARNING")).strip().upper()
-    if memory_type not in {"LEARNING", "MISTAKE", "PREFERENCE", "PLAN"}:
-        memory_type = "LEARNING"
+    memory_type = _normalize_memory_type(item.get("type"), "NOTE")
     try:
         importance = int(item.get("importance", 3))
     except (TypeError, ValueError):
@@ -67,10 +66,9 @@ def _sanitize_organized_draft(data: dict, scene: str, fallback_content: str) -> 
             {"PRIVATE", "FAMILY_VISIBLE", "CARE_VISIBLE", "LEGACY_VISIBLE"},
             "CARE_VISIBLE" if scene == "GROWTH_GUARD" else "PRIVATE",
         ),
-        "memory_type": _choice(
+        "memory_type": _normalize_memory_type(
             data.get("memory_type"),
-            {"FAMILY_STORY", "ELDER_ADVICE", "HEALTH_REMINDER", "GROWTH_RISK", "VALUE", "PLAN"},
-            "ELDER_ADVICE" if scene == "HERITAGE" else "FAMILY_STORY",
+            "EXPERIENCE" if scene == "HERITAGE" else "OBSERVATION" if scene == "GROWTH_GUARD" else "NOTE",
         ),
         "memory_scope": _choice(
             data.get("memory_scope"),
@@ -92,7 +90,7 @@ def _sanitize_organized_draft(data: dict, scene: str, fallback_content: str) -> 
             },
             "OTHER",
         ),
-        "growth_severity": _bounded_int(data.get("growth_severity"), 1, 5, 3),
+        "growth_severity": _bounded_int(data.get("growth_severity"), 1, 5, 1),
         "scenario": str(data.get("scenario", "")).strip()[:30],
         "reason": str(data.get("reason", "")).strip()[:120],
     }

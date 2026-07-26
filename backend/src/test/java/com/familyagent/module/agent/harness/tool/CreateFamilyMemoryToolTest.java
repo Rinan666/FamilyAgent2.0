@@ -45,10 +45,12 @@ class CreateFamilyMemoryToolTest {
     void execute_usesContextFamilyAndMemoryFacade() {
         CreateFamilyMemoryInput input = new CreateFamilyMemoryInput(
                 "Grandpa taught us to repair things before replacing them.",
-                "FAMILY_STORY",
+                "EXPERIENCE",
                 "FAMILY_VISIBLE",
                 "Repair before replacing.",
                 4,
+                22L,
+                java.util.List.of("story"),
                 metadata());
         MemoryEntry entry = new MemoryEntry();
         entry.setId(99L);
@@ -62,10 +64,12 @@ class CreateFamilyMemoryToolTest {
         CreateFamilyMemoryRequest request = captor.getValue();
         assertEquals(10L, request.getFamilyId());
         assertEquals("Grandpa taught us to repair things before replacing them.", request.getContent());
-        assertEquals("FAMILY_STORY", request.getType());
+        assertEquals("EXPERIENCE", request.getType());
         assertEquals("FAMILY_VISIBLE", request.getScope());
         assertEquals("Repair before replacing.", request.getSummary());
         assertEquals(4, request.getImportance());
+        assertEquals(22L, request.getRelatedUserId());
+        assertEquals(java.util.List.of("story"), request.getTags());
         assertEquals("MIRROR_AGENT_TOOL", request.getMetadata().getSource());
         assertEquals("FAMILY_MEMORY", request.getMetadata().toMap().get("plannedTool"));
         assertEquals("FAMILY_EXPERIENCE", request.getMetadata().toMap().get("sourceType"));
@@ -80,6 +84,8 @@ class CreateFamilyMemoryToolTest {
                 "FAMILY_VISIBLE",
                 null,
                 null,
+                null,
+                java.util.List.of(),
                 metadata());
 
         assertThrows(BusinessException.class, () -> tool.execute(context, input));

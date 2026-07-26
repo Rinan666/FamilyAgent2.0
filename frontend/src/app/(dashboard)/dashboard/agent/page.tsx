@@ -342,7 +342,6 @@ export default function AgentPage() {
     targetPersonaName: mode === 'persona' ? saveTargetName : '',
     sessionId: () => sessionIdRef.current,
     onSaved: handleDraftSaved,
-    onOpenContext: () => setIsContextOpen(true),
   });
 
   const upsertSession = useCallback((session: ChatSessionSummary) => {

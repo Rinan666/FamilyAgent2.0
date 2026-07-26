@@ -19,10 +19,10 @@ interface SaveDraftCardProps {
 }
 
 const TOOL_OPTIONS: { value: AgentSaveTool; label: string }[] = [
-  { value: 'DIARY', label: '日记' },
+  { value: 'DIARY', label: '家庭记录' },
   { value: 'PERSONAL_MEMORY', label: '个人记忆' },
   { value: 'FAMILY_MEMORY', label: '家庭记忆' },
-  { value: 'GROWTH_GUARD', label: '成长观察' },
+  { value: 'GROWTH_GUARD', label: '家庭观察' },
 ];
 
 const DEFAULT_VISIBILITY_OPTIONS: { value: SaveMemoryVisibility; label: string }[] = [

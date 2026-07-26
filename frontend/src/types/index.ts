@@ -503,15 +503,13 @@ export interface RebuildMemoryIndexResult {
 }
 
 export type MemoryEntryType =
-  | 'LEARNING'
-  | 'MISTAKE'
+  | 'NOTE'
+  | 'KNOWLEDGE'
+  | 'INSIGHT'
+  | 'EXPERIENCE'
+  | 'OBSERVATION'
   | 'PREFERENCE'
   | 'PLAN'
-  | 'FAMILY_STORY'
-  | 'ELDER_ADVICE'
-  | 'HEALTH_REMINDER'
-  | 'GROWTH_RISK'
-  | 'VALUE'
   | string;
 
 export type MemoryScope = 'PRIVATE' | 'CARE_VISIBLE' | 'FAMILY_VISIBLE';
@@ -522,7 +520,7 @@ export type PersonalMemoryVisibility =
   | 'ALL_FAMILIES_VISIBLE'
   | 'SELECTED_FAMILIES_VISIBLE'
   | 'CARE_VISIBLE';
-export type PersonalMemoryType = 'NOTE' | 'KNOWLEDGE' | 'INSIGHT' | 'EXPERIENCE' | 'PREFERENCE' | 'PLAN';
+export type PersonalMemoryType = 'NOTE' | 'KNOWLEDGE' | 'INSIGHT' | 'EXPERIENCE' | 'OBSERVATION' | 'PREFERENCE' | 'PLAN';
 export type SaveMemoryVisibility = DiaryVisibility | MemoryScope | PersonalMemoryVisibility;
 
 export interface PersonalMemoryView {
@@ -602,6 +600,8 @@ export interface CreateFamilyMemoryRequest {
   scope?: MemoryScope;
   summary?: string;
   importance?: number;
+  relatedUserId?: number;
+  tags?: string[];
   metadata?: WriteMemoryMetadata;
 }
 

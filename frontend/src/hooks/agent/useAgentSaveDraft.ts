@@ -23,7 +23,6 @@ interface UseAgentSaveDraftOptions {
   targetPersonaName?: string;
   sessionId: () => number | null;
   onSaved: (plan: AgentSaveToolPlan, savedAt: string) => void;
-  onOpenContext: () => void;
 }
 
 export function useAgentSaveDraft(options: UseAgentSaveDraftOptions) {
@@ -99,17 +98,6 @@ export function useAgentSaveDraft(options: UseAgentSaveDraftOptions) {
       return;
     }
     const plan = decision.plan;
-    if (plan.tool === 'GROWTH_GUARD' && !options.targetUserId) {
-      options.onOpenContext();
-      setFeedback(message.id, {
-        status: 'error',
-        detail: '成长观察需要先选择对应家庭成员，或将保存类型改为日记/家庭记忆。',
-        skillRunId: skillRunId ?? undefined,
-        draft: plan,
-      });
-      return;
-    }
-
     setFeedback(message.id, {
       status: 'confirming',
       detail: '正在确认并保存草稿...',

@@ -85,6 +85,7 @@ public class MemoryService {
             entry.setFamilyId(request.getFamilyId());
             entry.setLibraryKind(MemoryLibraryKind.FAMILY.name());
             entry.setTitle(truncate(blankToNull(request.getSummary()), 120));
+            entry.setRelatedUserId(request.getRelatedUserId());
             entry.setType(normalizedType);
             entry.setScope(normalizedScope);
             entry.setContent(request.getContent().trim());
@@ -93,7 +94,7 @@ public class MemoryService {
             entry.setConfidence(BigDecimal.valueOf(0.85));
             entry.setStatus(EntityStatus.ACTIVE.name());
             entry.setOccurredAt(java.time.LocalDateTime.now());
-            entry.setTags(new String[0]);
+            entry.setTags(normalizeTags(request.getTags()));
             entry.setMetadata(MemoryIndexMetadataBuilder.enrichFamilyMemory(
                     metadata,
                     entry.getContent(),
@@ -187,6 +188,18 @@ public class MemoryService {
 
     private static String truncate(String value, int maxLength) {
         return value == null || value.length() <= maxLength ? value : value.substring(0, maxLength);
+    }
+
+    private static String[] normalizeTags(List<String> tags) {
+        if (tags == null || tags.isEmpty()) {
+            return new String[0];
+        }
+        return tags.stream()
+                .filter(tag -> tag != null && !tag.isBlank())
+                .map(String::trim)
+                .distinct()
+                .limit(10)
+                .toArray(String[]::new);
     }
 
     private static int clamp(int value, int min, int max) {

@@ -24,7 +24,7 @@ function plan(overrides: Partial<AgentSaveToolPlan> = {}): AgentSaveToolPlan {
     summary: '孩子意识到读题太快，准备先复述题意。',
     visibility: 'PRIVATE',
     entry_type: 'SELF_REFLECTION',
-    memory_type: 'ELDER_ADVICE',
+    memory_type: 'INSIGHT',
     scope: 'PRIVATE',
     category: 'OTHER',
     severity: 2,
@@ -65,10 +65,19 @@ describe('savePlan helpers', () => {
     expect(normalized.visibility).toBe('FAMILY_VISIBLE');
     expect(normalized.scope).toBe('FAMILY_VISIBLE');
     expect(normalized.entry_type).toBe('DAILY');
-    expect(normalized.memory_type).toBe('ELDER_ADVICE');
+    expect(normalized.memory_type).toBe('NOTE');
     expect(normalized.category).toBe('OTHER');
     expect(normalized.severity).toBe(5);
     expect(normalized.importance).toBe(1);
+  });
+
+  it('maps legacy memory types into the unified taxonomy', () => {
+    const normalized = normalizeSaveToolPlan(plan({
+      tool: 'FAMILY_MEMORY',
+      memory_type: 'ELDER_ADVICE',
+    }));
+
+    expect(normalized.memory_type).toBe('KNOWLEDGE');
   });
 
   it('blocks empty content even when should_save is true', () => {
@@ -83,12 +92,12 @@ describe('savePlan helpers', () => {
       should_save: false,
       tool: 'NONE',
       content: '',
-      reason: '内容缺少具体事实。',
+      reason: '没有找到原始内容。',
     }));
 
     expect(decision.shouldPersist).toBe(false);
     expect(decision.plan.tool).toBe('NONE');
-    expect(decision.skippedDetail).toContain('内容缺少具体事实');
+    expect(decision.skippedDetail).toContain('没有找到原始内容');
   });
 
   it('keeps valid save plans persistable', () => {
@@ -121,12 +130,13 @@ describe('savePlan helpers', () => {
       visibility: 'PRIVATE',
       metadata: { source: 'TEST' },
     });
+    expect(savedRecordType(normalized.tool)).toBe('FAMILY_MEMORY');
   });
 
   it('builds unified write request for experience plan', () => {
     const normalized = normalizeSaveToolPlan(plan({
       tool: 'FAMILY_MEMORY',
-      memory_type: 'GROWTH_RISK',
+      memory_type: 'EXPERIENCE',
       scope: 'CARE_VISIBLE',
     }));
     const request = buildWriteMemorySaveRequest(10, normalized, { source: 'TEST' });
@@ -134,7 +144,7 @@ describe('savePlan helpers', () => {
     expect(request).toMatchObject({
       familyId: 10,
       writeCategory: 'EXPERIENCE',
-      memoryType: 'GROWTH_RISK',
+      memoryType: 'EXPERIENCE',
       visibility: 'CARE_VISIBLE',
       metadata: { source: 'TEST' },
     });
@@ -143,21 +153,25 @@ describe('savePlan helpers', () => {
   });
 
   it('builds unified write request for observation plan', () => {
-    const normalized = normalizeSaveToolPlan(plan({
+    const observationPlan = plan({
       tool: 'GROWTH_GUARD',
       category: 'VISION',
       visibility: 'FAMILY_VISIBLE',
-    }));
-    const request = buildWriteMemorySaveRequest(10, normalized, { source: 'TEST' }, 20);
+      memory_type: 'INSIGHT',
+    });
+    const request = buildWriteMemorySaveRequest(10, observationPlan, { source: 'TEST' });
 
     expect(request).toMatchObject({
       familyId: 10,
       writeCategory: 'OBSERVATION',
-      relatedUserId: 20,
-      growthCategory: 'VISION',
+      memoryType: 'OBSERVATION',
       visibility: 'CARE_VISIBLE',
       metadata: { source: 'TEST' },
     });
+    expect(request.relatedUserId).toBeUndefined();
+    expect(request.growthCategory).toBeUndefined();
+    expect(request.growthSeverity).toBeUndefined();
+    expect(savedRecordType(observationPlan.tool)).toBe('FAMILY_MEMORY');
   });
 
   it('builds family save-memory tool request with source metadata', () => {
@@ -216,7 +230,7 @@ describe('savePlan helpers', () => {
     });
   });
 
-  it('builds mirror growth metadata with follow-up status', () => {
+  it('builds mirror observation without legacy follow-up metadata', () => {
     const normalized = normalizeSaveToolPlan(plan({ tool: 'GROWTH_GUARD', category: 'VISION' }));
     const request = buildAgentSaveMemoryToolRequest(10, normalized, {
       agentMode: 'mirror',
@@ -228,14 +242,14 @@ describe('savePlan helpers', () => {
     expect(request).toMatchObject({
       writeCategory: 'OBSERVATION',
       relatedUserId: 202,
-      growthCategory: 'VISION',
+      memoryType: 'OBSERVATION',
       subject: 'MirrorAgent',
       metadata: {
-        sourceType: 'GROWTH_OBSERVATION',
-        followUpStatus: 'PENDING',
         relatedUserId: 202,
       },
     });
+    expect(request.growthCategory).toBeUndefined();
+    expect(request.metadata?.followUpStatus).toBeUndefined();
   });
 
   it('builds persona family-memory metadata with persona target', () => {
@@ -381,7 +395,7 @@ describe('savePlan helpers', () => {
       confirmation_message: '已经完整归档到家庭记忆库。',
     }));
 
-    expect(normalized.confirmation_message).toBe('日记草稿已准备，请修改或确认后保存。');
+    expect(normalized.confirmation_message).toBe('家庭记录草稿已准备，请修改或确认后保存。');
     expect(normalized.confirmation_message).not.toContain('已保存');
   });
 });

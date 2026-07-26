@@ -1,6 +1,7 @@
 package com.familyagent.module.memorylibrary.service;
 
 import com.familyagent.common.constant.EntityStatus;
+import com.familyagent.common.constant.MemoryContentType;
 import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
@@ -44,9 +45,7 @@ public class MemoryLibraryGrowthCommandService {
         MemoryLibrarySupport.ensureCreator(
                 record.getCreatedBy(),
                 "Only the creator can edit this growth record");
-        String category = MemoryLibraryCommandSupport.normalize(
-                request.getType(), record.getCategory(), CATEGORIES,
-                "Growth category is not supported");
+        String category = normalizeCategory(request.getType(), record.getCategory());
         String visibility = MemoryLibraryCommandSupport.normalize(
                 request.getVisibility(), record.getVisibility(), MemoryScope.familyNames(),
                 "Growth visibility is not supported");
@@ -68,6 +67,24 @@ public class MemoryLibraryGrowthCommandService {
                 record.getObservedAt()));
         growthFacade.update(record);
         indexingFacade.indexGrowthAfterCommit(record);
+    }
+
+    private static String normalizeCategory(String requestedType, String currentCategory) {
+        String requested = MemoryLibrarySupport.blankToNull(requestedType);
+        if (requested == null) {
+            return currentCategory;
+        }
+        String normalized = requested.toUpperCase(java.util.Locale.ROOT);
+        if (CATEGORIES.contains(normalized)) {
+            return normalized;
+        }
+        return MemoryContentType.OBSERVATION == MemoryContentType.fromFamilyMemoryType(normalized)
+                ? currentCategory
+                : MemoryLibraryCommandSupport.normalize(
+                        normalized,
+                        currentCategory,
+                        CATEGORIES,
+                        "Growth category is not supported");
     }
 
     public void restore(Long familyId, Long recordId) {

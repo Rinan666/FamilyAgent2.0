@@ -1,7 +1,6 @@
 package com.familyagent.module.agent.service;
 
 import com.familyagent.common.exception.BusinessException;
-import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.agent.dto.AgentSaveMemoryToolRequest;
 import com.familyagent.module.agent.harness.AgentToolExecutor;
 import com.familyagent.module.agent.harness.constant.AgentToolCallStatus;
@@ -10,9 +9,7 @@ import com.familyagent.module.agent.harness.constant.AgentToolName;
 import com.familyagent.module.agent.harness.dto.AgentSaveMemoryMetadata;
 import com.familyagent.module.agent.harness.dto.AgentToolCallRequest;
 import com.familyagent.module.agent.harness.dto.AgentToolCallResult;
-import com.familyagent.module.agent.harness.dto.CreateDiaryEntryInput;
 import com.familyagent.module.agent.harness.dto.CreateFamilyMemoryInput;
-import com.familyagent.module.agent.harness.dto.CreateGrowthGuardRecordInput;
 import com.familyagent.module.agent.harness.dto.CreatePersonalMemoryInput;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -63,7 +60,7 @@ class AgentSaveMemoryToolCommandServiceTest {
         assertEquals(201L, toolRequest.context().sessionId());
         CreateFamilyMemoryInput input = assertInstanceOf(CreateFamilyMemoryInput.class, toolRequest.input());
         assertEquals("The child explains the problem before calculating.", input.content());
-        assertEquals("ELDER_ADVICE", input.type());
+        assertEquals("KNOWLEDGE", input.type());
         assertEquals("FAMILY_VISIBLE", input.scope());
         assertEquals("Word problem strategy", input.summary());
         assertEquals(3, input.importance());
@@ -72,7 +69,7 @@ class AgentSaveMemoryToolCommandServiceTest {
     }
 
     @Test
-    void requestSave_recordMapsToDiaryToolWithTitleTagsAndMetadata() {
+    void requestSave_recordMapsToUnifiedFamilyMemory() {
         doReturn(AgentToolCallResult.confirmationRequired(
                 AgentToolErrorCode.CONFIRMATION_REQUIRED.code(),
                 "Agent tool requires confirmation",
@@ -88,11 +85,11 @@ class AgentSaveMemoryToolCommandServiceTest {
         ArgumentCaptor<AgentToolCallRequest<?>> captor = toolRequestCaptor();
         verify(toolExecutor).execute(captor.capture());
         AgentToolCallRequest<?> toolRequest = captor.getValue();
-        assertEquals(AgentToolName.CREATE_DIARY_ENTRY.value(), toolRequest.toolName());
-        CreateDiaryEntryInput input = assertInstanceOf(CreateDiaryEntryInput.class, toolRequest.input());
-        assertEquals("Study reflection", input.title());
+        assertEquals(AgentToolName.CREATE_FAMILY_MEMORY.value(), toolRequest.toolName());
+        CreateFamilyMemoryInput input = assertInstanceOf(CreateFamilyMemoryInput.class, toolRequest.input());
+        assertEquals("Study reflection", input.summary());
         assertEquals(List.of("learning", "reflection"), input.tags());
-        assertEquals("SELF_REFLECTION", input.entryType());
+        assertEquals("INSIGHT", input.type());
         assertEquals("FAMILY_COMPANION_TOOL", input.metadata().getSource());
         assertEquals("FAMILY_MEMORY", input.metadata().getPlannedTool());
     }
@@ -124,7 +121,7 @@ class AgentSaveMemoryToolCommandServiceTest {
     }
 
     @Test
-    void requestSave_observationMapsToGrowthToolWithTargetFollowUpAndMetadata() {
+    void requestSave_observationMapsToSimpleUnifiedMemory() {
         doReturn(AgentToolCallResult.confirmationRequired(
                 AgentToolErrorCode.CONFIRMATION_REQUIRED.code(),
                 "Agent tool requires confirmation",
@@ -143,13 +140,11 @@ class AgentSaveMemoryToolCommandServiceTest {
         ArgumentCaptor<AgentToolCallRequest<?>> captor = toolRequestCaptor();
         verify(toolExecutor).execute(captor.capture());
         AgentToolCallRequest<?> toolRequest = captor.getValue();
-        assertEquals(AgentToolName.CREATE_GROWTH_GUARD_RECORD.value(), toolRequest.toolName());
-        CreateGrowthGuardRecordInput input = assertInstanceOf(CreateGrowthGuardRecordInput.class, toolRequest.input());
-        assertEquals(202L, input.targetUserId());
-        assertEquals("VISION", input.category());
-        assertEquals(4, input.severity());
-        assertEquals(202L, input.metadata().getRelatedUserId());
-        assertEquals("PENDING", input.metadata().getFollowUpStatus());
+        assertEquals(AgentToolName.CREATE_FAMILY_MEMORY.value(), toolRequest.toolName());
+        CreateFamilyMemoryInput input = assertInstanceOf(CreateFamilyMemoryInput.class, toolRequest.input());
+        assertEquals(202L, input.relatedUserId());
+        assertEquals("OBSERVATION", input.type());
+        assertEquals(4, input.importance());
         assertEquals("FAMILY_COMPANION_TOOL", input.metadata().getSource());
     }
 
@@ -163,15 +158,17 @@ class AgentSaveMemoryToolCommandServiceTest {
     }
 
     @Test
-    void requestSave_rejectsGrowthObservationWithoutTargetBeforeConfirmation() {
+    void requestSave_allowsObservationWithoutSpecificMember() {
+        doReturn(AgentToolCallResult.confirmationRequired(
+                AgentToolErrorCode.CONFIRMATION_REQUIRED.code(),
+                "Agent tool requires confirmation",
+                59L)).when(toolExecutor).execute(any());
         AgentSaveMemoryToolCommandService service = new AgentSaveMemoryToolCommandService(toolExecutor);
         AgentSaveMemoryToolRequest request = request("OBSERVATION");
 
-        BusinessException exception = assertThrows(BusinessException.class,
-                () -> service.requestSave(request, 101L));
+        service.requestSave(request, 101L);
 
-        assertEquals(ErrorCode.BAD_REQUEST.getCode(), exception.getCode());
-        verify(toolExecutor, never()).execute(any());
+        verify(toolExecutor).execute(any());
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})

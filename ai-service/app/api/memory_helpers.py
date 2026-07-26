@@ -2,11 +2,22 @@
 
 import re
 
+from .memory_contracts import MEMORY_TYPES, PERSONAL_MEMORY_TYPES
 from .memory_save_signals import (
     _has_private_emotion_signal,
     _has_substantive_insight_signal,
     _looks_like_save_command_only,
 )
+
+LEGACY_MEMORY_TYPE_MAP = {
+    "FAMILY_STORY": "EXPERIENCE",
+    "ELDER_ADVICE": "KNOWLEDGE",
+    "HEALTH_REMINDER": "PLAN",
+    "GROWTH_RISK": "OBSERVATION",
+    "VALUE": "INSIGHT",
+    "LEARNING": "KNOWLEDGE",
+    "MISTAKE": "INSIGHT",
+}
 
 def _sanitize_save_tool_plan(data: dict) -> dict:
     content = _normalize_save_content(data.get("content", ""))
@@ -67,19 +78,11 @@ def _sanitize_save_tool_plan(data: dict) -> dict:
         },
         "OTHER",
     )
-    if tool == "GROWTH_GUARD":
-        category = _infer_growth_category(content, category)
-    memory_type = _choice(
-        data.get("memory_type"),
-        {"FAMILY_STORY", "ELDER_ADVICE", "HEALTH_REMINDER", "GROWTH_RISK", "VALUE", "PLAN"},
-        "ELDER_ADVICE",
-    )
-    if tool == "FAMILY_MEMORY":
-        memory_type = _infer_family_memory_type(content, memory_type)
-    personal_memory_type = _choice(
+    memory_type = _normalize_memory_type(data.get("memory_type"), "NOTE")
+    personal_memory_type = _normalize_memory_type(
         data.get("personal_memory_type"),
-        {"NOTE", "KNOWLEDGE", "INSIGHT", "EXPERIENCE", "PREFERENCE", "PLAN"},
         "NOTE",
+        allowed=set(PERSONAL_MEMORY_TYPES),
     )
     entry_type = _choice(
         data.get("entry_type"),
@@ -88,6 +91,13 @@ def _sanitize_save_tool_plan(data: dict) -> dict:
     )
     if tool == "DIARY":
         entry_type = _infer_diary_entry_type(content, entry_type)
+        memory_type = _memory_type_for_diary_entry(entry_type)
+    elif tool == "PERSONAL_MEMORY":
+        memory_type = personal_memory_type
+    elif tool == "FAMILY_MEMORY":
+        memory_type = _infer_family_memory_type(content, memory_type)
+    elif tool == "GROWTH_GUARD":
+        memory_type = "OBSERVATION"
 
     return {
         "should_save": should_save,
@@ -101,7 +111,7 @@ def _sanitize_save_tool_plan(data: dict) -> dict:
         "personal_memory_type": personal_memory_type,
         "scope": scope,
         "category": category,
-        "severity": _bounded_int(data.get("severity"), 1, 5, _default_growth_severity(content)),
+        "severity": _bounded_int(data.get("severity"), 1, 5, 1),
         "importance": _bounded_int(data.get("importance"), 1, 5, 3),
         "tags": _compact_string_list(data.get("tags"), 6, 18),
         "reason": _save_plan_reason(data.get("reason"), tool),
@@ -123,7 +133,7 @@ def _blocked_save_tool_plan(reason: str) -> dict:
         "summary": "",
         "visibility": "PRIVATE",
         "entry_type": "DAILY",
-        "memory_type": "ELDER_ADVICE",
+        "memory_type": "NOTE",
         "personal_memory_type": "NOTE",
         "scope": "PRIVATE",
         "category": "OTHER",
@@ -143,7 +153,7 @@ def _unavailable_save_tool_plan() -> dict:
         "summary": "",
         "visibility": "PRIVATE",
         "entry_type": "DAILY",
-        "memory_type": "ELDER_ADVICE",
+        "memory_type": "NOTE",
         "personal_memory_type": "NOTE",
         "scope": "PRIVATE",
         "category": "OTHER",
@@ -200,49 +210,44 @@ def _normalize_save_scope(tool: str, scope: str, visibility: str) -> str:
         return visibility
     return scope
 
-def _infer_growth_category(content: str, fallback: str) -> str:
-    category_patterns = [
-        ("DENTAL", r"(牙|刷牙|龋齿|换牙|牙科|甜食|饮料)"),
-        ("VISION", r"(视力|近视|眼睛|揉眼|看书|屏幕|用眼|户外)"),
-        ("POSTURE", r"(体态|坐姿|驼背|含胸|耸肩|肩膀|前倾)"),
-        ("SLEEP", r"(睡眠|入睡|熬夜|作息|早起|睡前)"),
-        ("EXERCISE", r"(运动|户外|跑步|耐力|活动量)"),
-        ("SCREEN_TIME", r"(屏幕|手机|平板|电子设备|游戏)"),
-        ("EMOTION", r"(情绪|烦躁|压力|哭|沉默|表达意愿)"),
-        ("COMMUNICATION", r"(沟通|反驳|争吵|说教|亲子|提醒时)"),
-    ]
-    for category, pattern in category_patterns:
-        if re.search(pattern, content):
-            return category
-    return fallback
-
 def _infer_family_memory_type(content: str, fallback: str) -> str:
     if re.search(r"(牙|视力|体态|睡眠|运动|健康|生病|就医)", content):
-        return "HEALTH_REMINDER"
+        return "PLAN"
     if re.search(r"(踩坑|风险|不要|别只|跟风|不适合|教训|后悔|如果重来)", content):
-        return "GROWTH_RISK"
+        return "INSIGHT"
     if re.search(r"(规矩|原则|价值观|家风)", content):
-        return "VALUE"
+        return "INSIGHT"
     if re.search(r"(故事|以前|年轻时|当年)", content):
-        return "FAMILY_STORY"
+        return "EXPERIENCE"
     return fallback
 
-def _default_growth_severity(content: str) -> int:
-    if re.search(r"(连续|明显|严重|尽快|疼|看不清|长期)", content):
-        return 4
-    if re.search(r"(担心|留意|观察|最近)", content):
-        return 3
-    return 2
+def _normalize_memory_type(
+    value: object,
+    fallback: str,
+    *,
+    allowed: set[str] | None = None,
+) -> str:
+    normalized = str(value or "").strip().upper()
+    normalized = LEGACY_MEMORY_TYPE_MAP.get(normalized, normalized)
+    valid_types = allowed or set(MEMORY_TYPES)
+    return normalized if normalized in valid_types else fallback
+
+def _memory_type_for_diary_entry(entry_type: str) -> str:
+    if entry_type == "LESSON":
+        return "KNOWLEDGE"
+    if entry_type in {"EMOTION", "SELF_REFLECTION"}:
+        return "INSIGHT"
+    return "NOTE"
 
 def _save_plan_reason(value: object, tool: str) -> str:
     reason = str(value or "").strip()[:120]
     if reason:
         return reason
     return {
-        "DIARY": "用户明确要求保存，已整理为可编辑的日记草稿。",
+        "DIARY": "用户明确要求保存，已整理为可编辑的家庭记录草稿。",
         "PERSONAL_MEMORY": "用户明确要求保存，已整理为可编辑的个人记忆草稿。",
         "FAMILY_MEMORY": "用户明确要求保存，已整理为可编辑的家庭记忆草稿。",
-        "GROWTH_GUARD": "用户明确要求保存，已整理为可编辑的成长观察草稿。",
+        "GROWTH_GUARD": "用户明确要求保存，已整理为可编辑的家庭观察草稿。",
     }.get(tool, "没有找到可保存的内容。")
 
 def _choice(value: object, allowed: set[str], fallback: str) -> str:
@@ -258,18 +263,18 @@ def _bounded_int(value: object, minimum: int, maximum: int, fallback: int) -> in
 
 def _default_save_title(tool: str) -> str:
     return {
-        "DIARY": "对话保存的每日记录",
+        "DIARY": "对话保存的家庭记录",
         "PERSONAL_MEMORY": "对话保存的个人记忆",
         "FAMILY_MEMORY": "对话沉淀的经验",
-        "GROWTH_GUARD": "对话记录的成长观察",
+        "GROWTH_GUARD": "对话记录的家庭观察",
     }.get(tool, "无需保存")
 
 def _default_save_confirmation(tool: str) -> str:
     return {
-        "DIARY": "日记草稿已准备，请修改或确认后保存。",
+        "DIARY": "家庭记录草稿已准备，请修改或确认后保存。",
         "PERSONAL_MEMORY": "个人记忆草稿已准备，请修改或确认后保存。",
         "FAMILY_MEMORY": "家庭记忆草稿已准备，请修改或确认后保存。",
-        "GROWTH_GUARD": "成长观察草稿已准备，请修改或确认后保存。",
+        "GROWTH_GUARD": "家庭观察草稿已准备，请修改或确认后保存。",
     }.get(tool, "没有找到可保存的内容。")
 
 def _compact_string_list(value: object, limit: int, max_len: int) -> list[str]:
