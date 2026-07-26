@@ -72,6 +72,13 @@ class Settings(BaseSettings):
     provider_sampled_eval_timeout_seconds: float = 20.0
     provider_sampled_eval_case_limit: int = 2
 
+    # Manual real-provider quality sampling (synthetic family scenarios only)
+    provider_quality_eval_enabled: bool = False
+    provider_quality_eval_candidate_model: str = "dashscope/qwen-flash"
+    provider_quality_eval_baseline_model: str = ""
+    provider_quality_eval_timeout_seconds: float = 30.0
+    provider_quality_eval_case_limit: int = 2
+
     # Math sandbox
     math_sandbox_timeout: int = 5
     math_sandbox_max_memory_mb: int = 256

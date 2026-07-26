@@ -281,7 +281,7 @@ async def test_litellm_probe_collects_usage_without_reporting_content(monkeypatc
         fake_completion,
     )
     monkeypatch.setattr(
-        "app.monitoring.provider_sampled_eval.litellm.completion_cost",
+        "app.monitoring.provider_eval_support.litellm.completion_cost",
         lambda **_kwargs: 0.00000321,
     )
     monkeypatch.setattr(

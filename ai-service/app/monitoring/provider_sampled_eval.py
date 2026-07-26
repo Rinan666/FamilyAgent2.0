@@ -4,15 +4,20 @@ from __future__ import annotations
 
 import asyncio
 import json
-import math
 import time
 import uuid
 
-import litellm
 from openai import AuthenticationError, PermissionDeniedError, RateLimitError
 
 from app.config import settings
 from app.llm.completion_config import provider_completion
+from app.monitoring.provider_eval_support import (
+    completion_cost,
+    provider_name,
+    sum_optional_cost,
+    sum_optional_int,
+    token_usage,
+)
 from app.monitoring.provider_sampled_eval_models import (
     MAX_CASES,
     MAX_CASE_TOKENS,
@@ -50,15 +55,15 @@ class DefaultProviderProbeClient:
             raise ProviderProbeAuthenticationError from error
         except RateLimitError as error:
             raise ProviderProbeRateLimitError from error
-        input_tokens, output_tokens = _token_usage(response)
+        input_tokens, output_tokens = token_usage(response)
         return ProviderProbeResponse(
             content=response.choices[0].message.content or "",
-            provider=_provider_name(model),
+            provider=provider_name(model),
             model=model,
             latency_ms=max(0, round((time.monotonic() - started_at) * 1000)),
             input_tokens=input_tokens,
             output_tokens=output_tokens,
-            cost_usd=_completion_cost(response, model),
+            cost_usd=completion_cost(response, model),
         )
 
 
@@ -97,9 +102,9 @@ class ProviderSampledEval:
             configured_case_count=len(cases),
             executed_case_count=len(results),
             max_output_token_budget=sum(case.max_tokens for case in cases),
-            total_input_tokens=_sum_optional(results, "input_tokens"),
-            total_output_tokens=_sum_optional(results, "output_tokens"),
-            estimated_cost_usd=_sum_cost(results),
+            total_input_tokens=sum_optional_int([item.input_tokens for item in results]),
+            total_output_tokens=sum_optional_int([item.output_tokens for item in results]),
+            estimated_cost_usd=sum_optional_cost([item.cost_usd for item in results]),
             error_code=None if passed else results[-1].error_code,
             results=tuple(results),
         )
@@ -211,7 +216,7 @@ def _failed_result(
     return ProviderSampleResult(
         case_id=case.case_id,
         passed=False,
-        provider=_provider_name(model),
+        provider=provider_name(model),
         model=model,
         latency_ms=latency_ms,
         max_tokens=case.max_tokens,
@@ -224,52 +229,8 @@ def _failed_result(
     )
 
 
-def _provider_name(model: str) -> str:
-    return model.split("/", 1)[0].strip() if "/" in model else "unknown"
-
-
 def _elapsed_ms(started_at: float) -> int:
     return max(0, round((time.monotonic() - started_at) * 1000))
-
-
-def _token_usage(response: object) -> tuple[int | None, int | None]:
-    usage = getattr(response, "usage", None)
-    return _usage_value(usage, "prompt_tokens"), _usage_value(usage, "completion_tokens")
-
-
-def _usage_value(usage: object, field: str) -> int | None:
-    value = getattr(usage, field, None)
-    if value is None and isinstance(usage, dict):
-        value = usage.get(field)
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError):
-        return None
-    return parsed if parsed >= 0 else None
-
-
-def _completion_cost(response: object, model: str) -> float | None:
-    if model.lower().startswith("dashscope/"):
-        return None
-    try:
-        cost = float(litellm.completion_cost(completion_response=response))
-    except Exception:
-        return None
-    return round(cost, 8) if math.isfinite(cost) and cost >= 0 else None
-
-
-def _sum_optional(results: list[ProviderSampleResult], field: str) -> int | None:
-    values = [getattr(result, field) for result in results]
-    if any(value is None for value in values):
-        return None
-    return sum(values)
-
-
-def _sum_cost(results: list[ProviderSampleResult]) -> float | None:
-    values = [result.cost_usd for result in results]
-    if any(value is None for value in values):
-        return None
-    return round(sum(values), 8)
 
 
 def report_exit_code(report: ProviderSampledEvalReport) -> int:

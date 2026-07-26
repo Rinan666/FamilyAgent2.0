@@ -1,0 +1,73 @@
+name: Provider Quality Eval
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: provider-quality-eval
+  cancel-in-progress: false
+
+jobs:
+  quality-eval:
+    name: Manual synthetic family quality samples
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      APP_ENV: production
+      PROVIDER_QUALITY_EVAL_CANDIDATE_MODEL: ${{ vars.PROVIDER_QUALITY_EVAL_CANDIDATE_MODEL || 'dashscope/qwen-flash' }}
+      PROVIDER_QUALITY_EVAL_BASELINE_MODEL: ${{ vars.PROVIDER_QUALITY_EVAL_BASELINE_MODEL || '' }}
+      PROVIDER_QUALITY_EVAL_CASE_LIMIT: "2"
+      PROVIDER_QUALITY_EVAL_TIMEOUT_SECONDS: "30"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check provider credentials
+        id: credentials
+        env:
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+        run: |
+          if [ -z "$DASHSCOPE_API_KEY" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "DashScope credentials are not configured; quality eval skipped."
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Python 3.12
+        if: steps.credentials.outputs.available == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ai-service/requirements-runtime.lock
+
+      - name: Install quality evaluation dependencies
+        if: steps.credentials.outputs.available == 'true'
+        working-directory: ai-service
+        run: >-
+          python -m pip install
+          --constraint requirements-runtime.lock
+          litellm==1.88.1
+          pydantic-settings==2.3.0
+          python-dotenv==1.2.2
+
+      - name: Run privacy-safe provider quality evaluation
+        if: steps.credentials.outputs.available == 'true'
+        working-directory: ai-service
+        env:
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          PROVIDER_QUALITY_EVAL_ENABLED: "true"
+        run: python -m app.monitoring.provider_quality_eval | tee provider-quality-report.json
+
+      - name: Upload privacy-safe quality report
+        if: always() && steps.credentials.outputs.available == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: provider-quality-report
+          path: ai-service/provider-quality-report.json
+          if-no-files-found: error
+          retention-days: 14
