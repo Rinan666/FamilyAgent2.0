@@ -30,31 +30,22 @@ import {
   readinessLevel,
   temporalLayerClass,
   temporalLayerLabel,
-  type SaveFeedback,
   isRelatedDiary,
 } from '@/components/agent/agentDisplay';
 import VoiceInputButton from '@/components/voice/VoiceInputButton';
 import { useChat, type SessionSavedMemory, type UseChatRequestConfig } from '@/hooks/useChat';
+import { useAgentSaveDraft } from '@/hooks/agent/useAgentSaveDraft';
 import { useViewerRole } from '@/hooks/useViewerRole';
 import { normalizeAssistantMetadata } from '@/hooks/chat/useChatHelpers';
 import { useAuthStore } from '@/stores/authStore';
 import { useChatStore } from '@/stores/chatStore';
 import { cn, generateId } from '@/lib/utils';
-import { agentApi, familyApi, memoryApi, mirrorApi, sessionApi, skillRunApi } from '@/lib/api';
+import { familyApi, mirrorApi, sessionApi } from '@/lib/api';
 import { isPlainEnter } from '@/lib/formKeyboard';
 import { loadSessionMessagesChronologically } from '@/lib/sessionHistory';
-import {
-  buildAgentSaveMemoryToolRequest,
-  routeAgentSubmission,
-  savePlanDetail,
-  savePlanPersistenceDecision,
-  savedRecordType,
-  todayString,
-  toolLabel,
-} from '@/lib/savePlan';
+import { routeAgentSubmission, todayString, toolLabel } from '@/lib/savePlan';
 import type {
   AgentMode,
-  AgentConfirmationDecision,
   AgentResponseMode,
   AgentSaveToolPlan,
   AgentSessionMetadata,
@@ -84,10 +75,6 @@ function buildSessionMetadata(
     targetPersonaName: mode === 'persona' ? targetLabel : null,
     hasTargetSwitches,
   };
-}
-
-function savedMemoryHref(familyId?: number | null) {
-  return `/dashboard/memory-library${familyId ? `?familyId=${familyId}` : ''}`;
 }
 
 function savedMemoryFromPlan(plan: AgentSaveToolPlan, savedAt: string): SessionSavedMemory | null {
@@ -252,7 +239,6 @@ export default function AgentPage() {
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [sessionError, setSessionError] = useState('');
   const [contextError, setContextError] = useState('');
-  const [saveFeedback, setSaveFeedback] = useState<Record<string, SaveFeedback>>({});
   const [isSessionsOpen, setIsSessionsOpen] = useState(false);
   const [isContextOpen, setIsContextOpen] = useState(false);
   const [responseMode, setResponseMode] = useState<AgentResponseMode>('think');
@@ -327,6 +313,36 @@ export default function AgentPage() {
     [selfTargetLabel, targetMember, targetPersona, targetSelection],
   );
   const modeReadiness = useMemo(() => readinessLevel(mirrorContext), [mirrorContext]);
+  const saveTargetName = mode === 'mirror'
+    ? memberName(targetMember)
+    : mode === 'persona'
+      ? targetPersona?.name || targetLabel
+      : activeMembership?.relationshipLabel || '';
+  const handleDraftSaved = useCallback((plan: AgentSaveToolPlan, savedAt: string) => {
+    const savedMemory = savedMemoryFromPlan(plan, savedAt);
+    if (savedMemory) {
+      sessionSavedMemoriesRef.current = [...sessionSavedMemoriesRef.current, savedMemory].slice(-10);
+    }
+  }, []);
+  const {
+    saveFeedback,
+    resetSaveDrafts,
+    prepareSaveDraft,
+    confirmSaveDraft,
+    cancelSaveDraft,
+  } = useAgentSaveDraft({
+    activeFamilyId,
+    familyName: activeFamily?.name,
+    viewerRole,
+    mode,
+    targetName: saveTargetName,
+    targetUserId: mirrorTargetUserId,
+    targetPersonaId: targetPersona?.id ?? targetPersonaId,
+    targetPersonaName: mode === 'persona' ? saveTargetName : '',
+    sessionId: () => sessionIdRef.current,
+    onSaved: handleDraftSaved,
+    onOpenContext: () => setIsContextOpen(true),
+  });
 
   const upsertSession = useCallback((session: ChatSessionSummary) => {
     setSessions((current) => {
@@ -694,7 +710,7 @@ export default function AgentPage() {
     setActiveSessionDetail(null);
     setMessages([]);
     setSessionError('');
-    setSaveFeedback({});
+    resetSaveDrafts();
     sessionSavedMemoriesRef.current = [];
     setIsSessionsOpen(false);
     setIsContextOpen(false);
@@ -717,6 +733,7 @@ export default function AgentPage() {
     activeFamilyId,
     chatFamilyId,
     discardStreaming,
+    resetSaveDrafts,
     setChatFamilyId,
     setMessages,
     setSessionId,
@@ -752,9 +769,9 @@ export default function AgentPage() {
     setActiveSessionDetail(null);
     setInput('');
     setSessionError('');
-    setSaveFeedback({});
+    resetSaveDrafts();
     sessionSavedMemoriesRef.current = [];
-  }, [discardStreaming, reset, setSessionId]);
+  }, [discardStreaming, reset, resetSaveDrafts, setSessionId]);
 
   const loadAllSessionMessages = useCallback((targetSessionId: number) => (
     loadSessionMessagesChronologically(sessionApi.getSessionMessages, targetSessionId, 40)
@@ -778,7 +795,7 @@ export default function AgentPage() {
       setSessionId(detail.id);
       setMessages(restoredMessages);
       setActiveSessionDetail(detail);
-      setSaveFeedback({});
+      resetSaveDrafts();
       sessionSavedMemoriesRef.current = [];
       upsertSession(detail);
     } catch (error) {
@@ -790,7 +807,7 @@ export default function AgentPage() {
         setIsLoadingMessages(false);
       }
     }
-  }, [discardStreaming, loadAllSessionMessages, setMessages, setSessionId, upsertSession]);
+  }, [discardStreaming, loadAllSessionMessages, resetSaveDrafts, setMessages, setSessionId, upsertSession]);
 
   useEffect(() => {
     if (!activeFamilyId || autoRestoreFamilyIdRef.current === activeFamilyId) return;
@@ -890,7 +907,7 @@ export default function AgentPage() {
     const hasConversation = useChatStore.getState().messages.length > 0 || Boolean(activeSessionDetailRef.current?.messageCount);
 
     setTargetSelection(normalizedSelection);
-    setSaveFeedback({});
+    resetSaveDrafts();
 
     if (!hasConversation) {
       return;
@@ -912,291 +929,7 @@ export default function AgentPage() {
         // non-critical
       }
     }
-  }, [appendSessionMessages, isStreaming, members, personas, selfUserId, setMessages, stopStreaming, targetSelection]);
-
-  const handleSaveMessage = useCallback(async (message: ChatMessage, conversationContext: ChatMessage[]) => {
-    if (!activeFamilyId) {
-      setSaveFeedback((current) => ({
-        ...current,
-        [message.id]: { status: 'error', detail: '请先选择一个家庭再保存。' },
-      }));
-      return;
-    }
-
-    const originalContent = message.content.trim();
-    if (!originalContent) return;
-
-    setSaveFeedback((current) => ({
-      ...current,
-      [message.id]: { status: 'saving', detail: '保存中...' },
-    }));
-
-    const currentMode = mode;
-    const currentTargetName = currentMode === 'mirror'
-      ? memberName(targetMember)
-      : currentMode === 'persona'
-        ? targetPersona?.name || targetLabel
-        : (activeMembership?.relationshipLabel || '');
-    const currentSkillSource = currentMode === 'mirror'
-      ? 'MIRROR_AGENT_CHAT'
-      : currentMode === 'persona'
-        ? 'PERSONA_MEMBER_CHAT'
-        : 'FAMILY_AGENT_CHAT';
-    let skillRunId: number | null = null;
-
-    try {
-      const planResult = await memoryApi.planSaveTool({
-        familyId: activeFamilyId,
-        message: originalContent,
-        familyContext: activeFamily?.name || '',
-        conversationContext,
-        targetMemberName: currentTargetName,
-        viewerRole,
-        source: currentSkillSource,
-        requestId: `save-plan-${message.id}`,
-      });
-      skillRunId = planResult.skillRunId;
-
-      const decision = savePlanPersistenceDecision(planResult.plan);
-      const plan = decision.plan;
-      if (!decision.shouldPersist) {
-        setSaveFeedback((current) => ({
-          ...current,
-          [message.id]: {
-            status: 'skipped',
-            detail: decision.skippedDetail,
-          },
-        }));
-        return;
-      }
-
-      const growthTargetUserId = currentMode === 'mirror' ? mirrorTargetUserId : null;
-      if (plan.tool === 'GROWTH_GUARD' && !growthTargetUserId) {
-        if (skillRunId) {
-          try {
-            await skillRunApi.update(skillRunId, {
-              status: 'PLANNED',
-              saved: false,
-              outputSummary: 'Growth observation requires a target family member',
-              metadata: { savedRecordType: 'GROWTH_GUARD', plannedTool: plan.tool },
-            });
-          } catch {
-            // The user-facing guidance remains useful if audit persistence fails.
-          }
-        }
-        setIsContextOpen(true);
-        setSaveFeedback((current) => ({
-          ...current,
-          [message.id]: {
-            status: 'error',
-            detail: 'Please select a family member as the growth observation target, then try saving again.',
-          },
-        }));
-        return;
-      }
-
-      const toolResult = await agentApi.requestSaveMemoryTool(buildAgentSaveMemoryToolRequest(
-        activeFamilyId,
-        plan,
-        {
-          requestId: `save-memory-${message.id}`,
-          sessionId: sessionIdRef.current,
-          agentMode: currentMode,
-          contextLabel: 'save_memory',
-          familyName: activeFamily?.name || '',
-          viewerRole,
-          savedFromMessageRole: message.role,
-          targetUserId: mirrorTargetUserId,
-          targetMemberName: currentMode === 'mirror' ? currentTargetName : '',
-          targetPersonaId: targetPersona?.id ?? targetPersonaId,
-          targetPersonaName: currentMode === 'persona' ? currentTargetName : '',
-        },
-      ));
-
-      if (toolResult.status === 'CONFIRMATION_REQUIRED' && toolResult.confirmationId) {
-        if (skillRunId) {
-          await skillRunApi.update(skillRunId, {
-            status: 'PLANNED',
-            saved: false,
-            outputSummary: `等待确认：${savePlanDetail(plan)}`,
-            metadata: {
-              savedRecordType: savedRecordType(plan.tool),
-              plannedTool: plan.tool,
-              plannedReason: plan.reason,
-              confirmationId: toolResult.confirmationId,
-            },
-          });
-        }
-
-        setSaveFeedback((current) => ({
-          ...current,
-          [message.id]: {
-            status: 'confirmation',
-            detail: `请确认保存为${toolLabel(plan.tool)}：${plan.title}`,
-            confirmationId: toolResult.confirmationId ?? undefined,
-            skillRunId: skillRunId ?? undefined,
-          },
-        }));
-        return;
-      }
-
-      if (!toolResult.success) {
-        throw new Error(toolResult.message || '保存工具执行失败，请稍后重试。');
-      }
-
-      if (skillRunId) {
-        await skillRunApi.update(skillRunId, {
-          status: 'SUCCEEDED',
-          saved: true,
-          outputSummary: savePlanDetail(plan),
-          metadata: {
-            savedRecordType: savedRecordType(plan.tool),
-            plannedTool: plan.tool,
-            plannedReason: plan.reason,
-          },
-        });
-      }
-
-      const savedAt = new Date().toISOString();
-      const savedMemory = savedMemoryFromPlan(plan, savedAt);
-      if (savedMemory) {
-        sessionSavedMemoriesRef.current = [...sessionSavedMemoriesRef.current, savedMemory].slice(-10);
-      }
-
-      setSaveFeedback((current) => ({
-        ...current,
-        [message.id]: {
-          status: 'saved',
-          detail: savePlanDetail(plan),
-          href: savedMemoryHref(activeFamilyId),
-        },
-      }));
-    } catch (error) {
-      if (skillRunId) {
-        try {
-          await skillRunApi.update(skillRunId, {
-            status: 'FAILED',
-            saved: false,
-            outputSummary: error instanceof Error ? error.message : '保存失败',
-          });
-        } catch {
-          // ignore secondary failure
-        }
-      }
-
-      setSaveFeedback((current) => ({
-        ...current,
-        [message.id]: {
-          status: 'error',
-          detail: error instanceof Error ? error.message : '保存失败，请稍后重试。',
-        },
-      }));
-    }
-  }, [
-    activeFamily?.name,
-    activeFamilyId,
-    activeMembership?.relationshipLabel,
-    mirrorTargetUserId,
-    mode,
-    targetLabel,
-    targetMember,
-    targetPersona,
-    targetPersonaId,
-    viewerRole,
-  ]);
-
-  const handleSaveConfirmationDecision = useCallback(async (
-    message: ChatMessage,
-    confirmationId: number,
-    decision: AgentConfirmationDecision,
-  ) => {
-    const skillRunId = saveFeedback[message.id]?.skillRunId;
-    setSaveFeedback((current) => ({
-      ...current,
-      [message.id]: {
-        status: 'confirming',
-        detail: decision === 'APPROVE' ? '正在确认保存...' : '正在取消保存...',
-        confirmationId,
-        skillRunId,
-      },
-    }));
-
-    try {
-      const result = await agentApi.decideToolConfirmation(confirmationId, decision);
-      if (decision === 'REJECT') {
-        if (skillRunId) {
-          await skillRunApi.update(skillRunId, {
-            status: 'CANCELED',
-            saved: false,
-            outputSummary: '用户取消保存。',
-            metadata: { confirmationId },
-          });
-        }
-        setSaveFeedback((current) => ({
-          ...current,
-          [message.id]: { status: 'skipped', detail: '已取消保存。' },
-        }));
-        return;
-      }
-
-      const toolResult = result.toolResult;
-      if (toolResult?.success) {
-        if (skillRunId) {
-          await skillRunApi.update(skillRunId, {
-            status: 'SUCCEEDED',
-            saved: true,
-            outputSummary: '已确认并完成保存。',
-            metadata: {
-              confirmationId,
-              executionStatus: result.confirmation.executionStatus || '',
-              executionErrorCode: result.confirmation.executionErrorCode || '',
-            },
-          });
-        }
-        setSaveFeedback((current) => ({
-          ...current,
-          [message.id]: {
-            status: 'saved',
-            detail: '已确认并完成保存。',
-            href: activeFamilyId ? savedMemoryHref(activeFamilyId) : undefined,
-          },
-        }));
-        return;
-      }
-
-      setSaveFeedback((current) => ({
-        ...current,
-        [message.id]: {
-          status: 'error',
-          detail: toolResult?.message || '保存确认已处理，但工具执行未成功。',
-          confirmationId,
-          skillRunId,
-        },
-      }));
-    } catch (error) {
-      if (skillRunId) {
-        try {
-          await skillRunApi.update(skillRunId, {
-            status: 'FAILED',
-            saved: false,
-            outputSummary: error instanceof Error ? error.message : '确认保存失败',
-            metadata: { confirmationId },
-          });
-        } catch {
-          // ignore secondary failure
-        }
-      }
-      setSaveFeedback((current) => ({
-        ...current,
-        [message.id]: {
-          status: 'error',
-          detail: error instanceof Error ? error.message : '确认保存失败，请稍后重试。',
-          confirmationId,
-          skillRunId,
-        },
-      }));
-    }
-  }, [activeFamilyId, saveFeedback]);
+  }, [appendSessionMessages, isStreaming, members, personas, resetSaveDrafts, selfUserId, setMessages, stopStreaming, targetSelection]);
 
   const handleSubmit = useCallback(async () => {
     if (isStreaming || isProcessingSaveCommand) return;
@@ -1209,7 +942,7 @@ export default function AgentPage() {
       const userMessage = useChatStore.getState().addMessage('user', submission.content);
       const persistenceTask = appendSessionMessages([userMessage]).catch(() => undefined);
       try {
-        await handleSaveMessage(userMessage, submission.conversationContext);
+        await prepareSaveDraft(userMessage, submission.conversationContext);
       } finally {
         setIsProcessingSaveCommand(false);
         void persistenceTask;
@@ -1222,7 +955,7 @@ export default function AgentPage() {
     } catch {
       // The chat pipeline already surfaces provider failures inline.
     }
-  }, [appendSessionMessages, handleSaveMessage, input, isProcessingSaveCommand, isStreaming, sendMessage]);
+  }, [appendSessionMessages, input, isProcessingSaveCommand, isStreaming, prepareSaveDraft, sendMessage]);
 
   const handleInputKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (!isPlainEnter(event)) return;
@@ -1329,9 +1062,8 @@ export default function AgentPage() {
             mode={mode}
             targetLabel={targetLabel}
             saveFeedback={saveFeedback}
-            onDecideSaveConfirmation={(message, confirmationId, decision) => {
-              void handleSaveConfirmationDecision(message, confirmationId, decision);
-            }}
+            onConfirmSaveDraft={(message, plan) => void confirmSaveDraft(message, plan)}
+            onCancelSaveDraft={(message) => void cancelSaveDraft(message)}
             onOpenContext={() => setIsContextOpen(true)}
           />
 

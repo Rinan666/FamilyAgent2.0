@@ -18,7 +18,8 @@ function renderMessageList(saveFeedback = {}) {
       mode="family"
       targetLabel="家庭成员"
       saveFeedback={saveFeedback}
-      onDecideSaveConfirmation={vi.fn()}
+      onConfirmSaveDraft={vi.fn()}
+      onCancelSaveDraft={vi.fn()}
     />,
   );
 }
@@ -30,17 +31,35 @@ describe('AgentMessageList save controls', () => {
     expect(markup).not.toContain('智能保存');
   });
 
-  it('keeps explicit-save feedback and confirmation actions visible', () => {
+  it('shows an editable draft before any save action', () => {
     const markup = renderMessageList({
       [message.id]: {
-        status: 'confirmation' as const,
-        detail: '请确认保存为家庭记忆：应用题先复述题意',
-        confirmationId: 12,
+        status: 'draft' as const,
+        detail: '家庭记忆草稿已准备，请修改或确认后保存。',
+        draft: {
+          should_save: true,
+          tool: 'FAMILY_MEMORY' as const,
+          content: '孩子最近做应用题时，先复述题意后列式更稳定。',
+          title: '应用题先复述题意',
+          summary: '先复述题意后列式更稳定。',
+          visibility: 'CARE_VISIBLE',
+          entry_type: 'DAILY',
+          memory_type: 'ELDER_ADVICE',
+          scope: 'CARE_VISIBLE',
+          category: 'OTHER',
+          severity: 2,
+          importance: 3,
+          tags: ['应用题'],
+          reason: '按用户要求整理为草稿。',
+          confirmation_message: '草稿已准备。',
+        },
       },
     });
 
-    expect(markup).toContain('请确认保存为家庭记忆');
-    expect(markup).toContain('aria-label="确认保存"');
-    expect(markup).toContain('aria-label="取消保存"');
+    expect(markup).toContain('保存草稿');
+    expect(markup).toContain('尚未保存，可直接修改后确认');
+    expect(markup).toContain('应用题先复述题意');
+    expect(markup).toContain('确认保存');
+    expect(markup).toContain('取消');
   });
 });

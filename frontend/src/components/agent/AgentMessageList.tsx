@@ -1,11 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { Check, CheckCircle, Loader2, Sparkles, X } from 'lucide-react';
+import { CheckCircle, Loader2, Sparkles } from 'lucide-react';
 import MathRenderer from '@/components/agent/MathRenderer';
 import AnswerEvidenceDisclosure from '@/components/agent/AnswerEvidenceDisclosure';
+import SaveDraftCard from '@/components/agent/SaveDraftCard';
 import { type SaveFeedback } from '@/components/agent/agentDisplay';
-import type { AgentConfirmationDecision, AgentMode, ChatMessage } from '@/types';
+import type { AgentMode, AgentSaveToolPlan, ChatMessage } from '@/types';
 
 interface AgentMessageListProps {
   messages: ChatMessage[];
@@ -14,11 +15,8 @@ interface AgentMessageListProps {
   mode: AgentMode;
   targetLabel: string;
   saveFeedback: Record<string, SaveFeedback>;
-  onDecideSaveConfirmation: (
-    message: ChatMessage,
-    confirmationId: number,
-    decision: AgentConfirmationDecision,
-  ) => void;
+  onConfirmSaveDraft: (message: ChatMessage, plan: AgentSaveToolPlan) => void;
+  onCancelSaveDraft: (message: ChatMessage) => void;
   onOpenContext?: () => void;
 }
 
@@ -41,7 +39,8 @@ export default function AgentMessageList({
   mode,
   targetLabel,
   saveFeedback,
-  onDecideSaveConfirmation,
+  onConfirmSaveDraft,
+  onCancelSaveDraft,
   onOpenContext,
 }: AgentMessageListProps) {
   if (!isLoadingMessages && messages.length === 0) {
@@ -93,8 +92,6 @@ export default function AgentMessageList({
 
         {messages.map((message) => {
           const feedback = saveFeedback[message.id];
-          const pendingConfirmationId =
-            feedback?.status === 'confirmation' ? feedback.confirmationId : undefined;
           if (message.role === 'system') {
             return (
               <div key={message.id} className="text-center">
@@ -173,31 +170,13 @@ export default function AgentMessageList({
                         打开
                       </Link>
                     )}
-                    {pendingConfirmationId && (
-                      <span className="ml-3 inline-flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onDecideSaveConfirmation(message, pendingConfirmationId, 'APPROVE')
-                          }
-                          className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 transition hover:bg-emerald-100"
-                          aria-label="确认保存"
-                          title="确认保存"
-                        >
-                          <Check className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onDecideSaveConfirmation(message, pendingConfirmationId, 'REJECT')
-                          }
-                          className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-stone-100 text-stone-500 transition hover:bg-stone-200"
-                          aria-label="取消保存"
-                          title="取消保存"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </span>
+                    {feedback.draft && (feedback.status === 'draft' || feedback.status === 'confirming' || feedback.status === 'error') && (
+                      <SaveDraftCard
+                        plan={feedback.draft}
+                        isConfirming={feedback.status === 'confirming'}
+                        onConfirm={(plan) => onConfirmSaveDraft(message, plan)}
+                        onCancel={() => onCancelSaveDraft(message)}
+                      />
                     )}
                   </div>
                 )}

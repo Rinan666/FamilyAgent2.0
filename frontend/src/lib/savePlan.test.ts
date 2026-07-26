@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentSaveToolPlan } from '../types';
 import {
+  buildFallbackSaveToolPlan,
   buildAgentSaveMemoryMetadata,
   buildAgentSaveMemoryToolRequest,
   buildRelevantSaveContext,
@@ -187,7 +188,7 @@ describe('savePlan helpers', () => {
         plannedTool: 'DIARY',
         plannedTitle: normalized.title,
         plannedReason: normalized.reason,
-        confirmationPolicy: 'USER_CONFIRMATION_OR_EXPLICIT_SAVE_COMMAND',
+      confirmationPolicy: 'USER_APPROVED_EDITABLE_DRAFT',
         savedAt: '2026-07-04T10:00:00.000Z',
       },
     });
@@ -315,6 +316,17 @@ describe('savePlan helpers', () => {
     expect(routed.content).toBe(content);
   });
 
+  it('recognizes natural inline save wording without requiring memory-library terms', () => {
+    const content = '帮我保存这句话：每次犹豫时，先把真正担心的事情写下来。';
+
+    const routed = routeAgentSubmission(content, []);
+
+    expect(routed.kind).toBe('explicit_save');
+    expect(buildFallbackSaveToolPlan(content, [])?.content).toBe(
+      '每次犹豫时，先把真正担心的事情写下来。',
+    );
+  });
+
   it('keeps ordinary messages on the chat route', () => {
     const routed = routeAgentSubmission('怎么保存到本地？', []);
 
@@ -322,12 +334,34 @@ describe('savePlan helpers', () => {
     expect(routed.conversationContext).toEqual([]);
   });
 
+  it('keeps an editable raw draft when AI planning is unavailable', () => {
+    const fallback = buildFallbackSaveToolPlan(
+      '保存到记忆库：这句话只对我自己有意义。',
+      [],
+    );
+
+    expect(fallback?.should_save).toBe(true);
+    expect(fallback?.tool).toBe('DIARY');
+    expect(fallback?.content).toBe('这句话只对我自己有意义。');
+    expect(fallback?.visibility).toBe('PRIVATE');
+    expect(fallback?.reason).toContain('AI 整理暂时不可用');
+  });
+
+  it('uses the latest conversation message for a bare save command fallback', () => {
+    const fallback = buildFallbackSaveToolPlan('保存一下', [
+      { id: 'u1', role: 'user', content: '前一条问题', timestamp: '2026-07-01' },
+      { id: 'a1', role: 'assistant', content: '这是一段用户想保存的新知。', timestamp: '2026-07-01' },
+    ]);
+
+    expect(fallback?.content).toBe('这是一段用户想保存的新知。');
+  });
+
   it('never preserves a model claim that planning already saved data', () => {
     const normalized = normalizeSaveToolPlan(plan({
       confirmation_message: '已经完整归档到家庭记忆库。',
     }));
 
-    expect(normalized.confirmation_message).toBe('建议保存为日记，等待后端执行结果。');
+    expect(normalized.confirmation_message).toBe('日记草稿已准备，请修改或确认后保存。');
     expect(normalized.confirmation_message).not.toContain('已保存');
   });
 });

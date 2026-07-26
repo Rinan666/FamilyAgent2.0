@@ -56,8 +56,9 @@ const GROWTH_CATEGORIES = new Set<GrowthGuardCategory>([
 ]);
 
 const EXPLICIT_SAVE_COMMAND_PATTERN = /^(?:请|麻烦)?(?:你)?(?:帮我|替我|给我)?(?:把)?(?:刚才|上面|上文|前面|这段|这条|这个|这些|那段|那条|那件事)?(?:的)?(?:内容|对话|记录|记忆|经历|事情|话)?(?:保存|保存成记忆|存起来|记一下|记下来|记录下来|留个记录|留作记录|沉淀下来|加入记忆库|放到记忆库|收进记忆库)(?:一下|起来|为记忆|到记忆库)?(?:吧)?[。.!！?？]*$/;
-const INLINE_SAVE_PREFIX_PATTERN = /^(?:请|麻烦)?(?:你)?(?:帮我|替我|给我)?(?:把)?(?:以下|下面|这条|这段|这份)?(?:内容|记录|记忆|经历|事情|材料)?(?:保存到|加入|放到|收进)(?:家庭)?记忆库(?:里)?(?:一下)?(?:吧)?[：:\s]+/;
-const INLINE_SAVE_SUFFIX_PATTERN = /[，,。；;\n]\s*(?:请|麻烦)?(?:你)?(?:帮我|替我|给我)?(?:把它|将它)?(?:保存到|加入|放到|收进)(?:家庭)?记忆库(?:里)?(?:一下)?(?:吧)?[。.!！?？]*$/;
+const INLINE_SAVE_PREFIX_PATTERN = /^(?:请|麻烦)?(?:你)?(?:帮我|替我|给我)?(?:把)?(?:以下|下面|这条|这段|这份|这句话)?(?:内容|记录|记忆|经历|事情|材料)?(?:保存(?:到(?:家庭)?记忆库)?|加入(?:家庭)?记忆库|放到(?:家庭)?记忆库|收进(?:家庭)?记忆库|记下来|记录下来|存起来)(?:里)?(?:一下)?(?:吧)?[：:\s]+/;
+const INLINE_SAVE_ACTION_FIRST_PREFIX_PATTERN = /^(?:请|麻烦)?(?:你)?(?:帮我|替我|给我)?(?:保存|记下|记录)(?:以下|下面|这条|这段|这份|这句话|这些内容)?(?:一下)?(?:吧)?[：:\s]+/;
+const INLINE_SAVE_SUFFIX_PATTERN = /[，,。；;\n]\s*(?:请|麻烦)?(?:你)?(?:帮我|替我|给我)?(?:把它|将它)?(?:保存(?:到(?:家庭)?记忆库)?|加入(?:家庭)?记忆库|放到(?:家庭)?记忆库|收进(?:家庭)?记忆库|记下来|记录下来|存起来)(?:里)?(?:一下)?(?:吧)?[。.!！?？]*$/;
 const MAX_EXPLICIT_SAVE_COMMAND_LENGTH = 5000;
 
 export type SavedRecordType = 'DIARY_ENTRY' | 'FAMILY_MEMORY' | 'GROWTH_GUARD' | 'NONE';
@@ -109,7 +110,10 @@ export function isExplicitSaveMemoryCommand(value: string) {
     return true;
   }
 
-  const prefixPayload = trimmed.replace(INLINE_SAVE_PREFIX_PATTERN, '').trim();
+  const prefixPayload = trimmed
+    .replace(INLINE_SAVE_PREFIX_PATTERN, '')
+    .replace(INLINE_SAVE_ACTION_FIRST_PREFIX_PATTERN, '')
+    .trim();
   if (prefixPayload !== trimmed && prefixPayload.replace(/\s+/g, '').length >= 8) {
     return true;
   }
@@ -131,6 +135,36 @@ export function routeAgentSubmission(
       ? messages.filter((message) => message.role !== 'system').slice(-10)
       : [],
   };
+}
+
+export function buildFallbackSaveToolPlan(
+  message: string,
+  conversationContext: readonly ChatMessage[],
+): AgentSaveToolPlan | null {
+  const directContent = stripInlineSaveCommand(message);
+  const content = directContent || [...conversationContext]
+    .reverse()
+    .find((item) => item.role !== 'system' && item.content.trim())
+    ?.content.trim() || '';
+  if (!content) return null;
+
+  return normalizeSaveToolPlan({
+    should_save: true,
+    tool: 'DIARY',
+    content: content.slice(0, 1200),
+    title: '待确认的保存草稿',
+    summary: content.slice(0, 80),
+    visibility: 'PRIVATE',
+    entry_type: 'DAILY',
+    memory_type: 'ELDER_ADVICE',
+    scope: 'PRIVATE',
+    category: 'OTHER',
+    severity: 1,
+    importance: 1,
+    tags: [],
+    reason: 'AI 整理暂时不可用，已保留用户选择的原文草稿。',
+    confirmation_message: '原文草稿已准备，请修改或确认后保存。',
+  });
 }
 
 export function buildRelevantSaveContext(message: ChatMessage, messages: readonly ChatMessage[]) {
@@ -253,7 +287,7 @@ export function saveMemorySkillMetadata(plan: AgentSaveToolPlan, savedAt?: strin
     plannedReason: plan.reason,
     visibility: plan.visibility || '',
     scope: plan.scope || '',
-    confirmationPolicy: 'USER_CONFIRMATION_OR_EXPLICIT_SAVE_COMMAND',
+    confirmationPolicy: 'USER_APPROVED_EDITABLE_DRAFT',
     savedAt: savedAt || '',
   };
 }
@@ -385,11 +419,23 @@ function defaultSaveTitle(tool: AgentSaveTool) {
 
 function defaultSaveConfirmation(tool: AgentSaveTool) {
   return {
-    DIARY: '建议保存为日记，等待后端执行结果。',
-    FAMILY_MEMORY: '建议保存为家庭记忆，等待后端执行结果。',
-    GROWTH_GUARD: '建议保存为成长观察，等待后端执行结果。',
-    NONE: '这条消息无需保存。',
+    DIARY: '日记草稿已准备，请修改或确认后保存。',
+    FAMILY_MEMORY: '家庭记忆草稿已准备，请修改或确认后保存。',
+    GROWTH_GUARD: '成长观察草稿已准备，请修改或确认后保存。',
+    NONE: '没有找到可保存的内容。',
   }[tool];
+}
+
+function stripInlineSaveCommand(value: string) {
+  const trimmed = value.trim();
+  const prefixPayload = trimmed
+    .replace(INLINE_SAVE_PREFIX_PATTERN, '')
+    .replace(INLINE_SAVE_ACTION_FIRST_PREFIX_PATTERN, '')
+    .trim();
+  if (prefixPayload !== trimmed) return prefixPayload;
+  const suffixPayload = trimmed.replace(INLINE_SAVE_SUFFIX_PATTERN, '').trim();
+  if (suffixPayload !== trimmed) return suffixPayload;
+  return EXPLICIT_SAVE_COMMAND_PATTERN.test(trimmed.replace(/\s+/g, '')) ? '' : trimmed;
 }
 
 function visibilityLabel(value?: string) {

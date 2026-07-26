@@ -1,4 +1,5 @@
 import type {
+  AgentSaveToolPlan,
   AgentSessionMetadata,
   ChatSessionSummary,
   DiaryEntry,
@@ -9,11 +10,11 @@ import type {
 } from '@/types';
 
 export type SaveFeedback = {
-  status: 'saving' | 'confirmation' | 'confirming' | 'saved' | 'skipped' | 'error';
+  status: 'saving' | 'draft' | 'confirming' | 'saved' | 'skipped' | 'error';
   detail: string;
   href?: string;
-  confirmationId?: number;
   skillRunId?: number;
+  draft?: AgentSaveToolPlan;
 };
 
 export type ModeReadinessTone = 'gray' | 'green' | 'blue' | 'yellow';
