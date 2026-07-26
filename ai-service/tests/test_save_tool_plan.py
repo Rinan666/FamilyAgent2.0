@@ -16,10 +16,10 @@ def test_save_to_memory_library_command_is_detected_as_command_only():
     assert _looks_like_save_command_only("保存到记忆库吧") is True
 
 
-def test_growth_observation_overrides_wrong_diary_tool():
+def test_growth_observation_keeps_model_selected_growth_tool():
     plan = _sanitize_save_tool_plan({
         "should_save": True,
-        "tool": "DIARY",
+        "tool": "GROWTH_GUARD",
         "content": "最近孩子刷牙很敷衍，总要提醒才认真刷，我担心以后牙齿出问题，想下周继续观察。",
         "visibility": "FAMILY_VISIBLE",
         "scope": "FAMILY_VISIBLE",
@@ -34,10 +34,10 @@ def test_growth_observation_overrides_wrong_diary_tool():
     assert plan["scope"] == "CARE_VISIBLE"
 
 
-def test_family_memory_overrides_wrong_diary_tool():
+def test_family_memory_keeps_model_selected_memory_tool():
     plan = _sanitize_save_tool_plan({
         "should_save": True,
-        "tool": "DIARY",
+        "tool": "FAMILY_MEMORY",
         "content": "爷爷以前做生意踩过一个坑，他说不要因为熟人关系就不写清楚账目，这个教训要给后辈记住。",
         "visibility": "PRIVATE",
         "scope": "PRIVATE",
@@ -80,7 +80,7 @@ def test_emotional_chat_saves_as_private_diary():
     assert plan["entry_type"] == "EMOTION"
 
 
-def test_personal_insight_can_be_family_memory():
+def test_personal_insight_keeps_model_selected_diary_tool():
     plan = _sanitize_save_tool_plan({
         "should_save": True,
         "tool": "DIARY",
@@ -89,12 +89,12 @@ def test_personal_insight_can_be_family_memory():
         "scope": "PRIVATE",
     })
 
-    assert plan["tool"] == "FAMILY_MEMORY"
-    assert plan["visibility"] == "FAMILY_VISIBLE"
-    assert plan["scope"] == "FAMILY_VISIBLE"
+    assert plan["tool"] == "DIARY"
+    assert plan["visibility"] == "PRIVATE"
+    assert plan["scope"] == "PRIVATE"
 
 
-def test_high_value_learning_observation_auto_saves_without_explicit_keyword():
+def test_user_selected_learning_note_is_saved_even_when_model_returns_none():
     plan = _sanitize_save_tool_plan({
         "should_save": False,
         "tool": "NONE",
@@ -102,11 +102,11 @@ def test_high_value_learning_observation_auto_saves_without_explicit_keyword():
     })
 
     assert plan["should_save"] is True
-    assert plan["tool"] == "FAMILY_MEMORY"
-    assert plan["visibility"] == "CARE_VISIBLE"
+    assert plan["tool"] == "DIARY"
+    assert plan["content"]
 
 
-def test_reusable_learning_strategy_overrides_growth_guard_proposal():
+def test_user_can_keep_growth_guard_draft_for_learning_content():
     plan = _sanitize_save_tool_plan({
         "should_save": True,
         "tool": "GROWTH_GUARD",
@@ -120,11 +120,11 @@ def test_reusable_learning_strategy_overrides_growth_guard_proposal():
     })
 
     assert plan["should_save"] is True
-    assert plan["tool"] == "FAMILY_MEMORY"
+    assert plan["tool"] == "GROWTH_GUARD"
     assert plan["scope"] == "CARE_VISIBLE"
 
 
-def test_long_save_content_is_summarized_to_complete_high_value_fragment():
+def test_long_save_content_is_bounded_without_value_filtering():
     long_content = (
         "今天只是一些闲聊，天气不错，晚饭也还行。"
         "孩子最近做应用题时总是先抓数字，不太愿意读完整题意，所以经常列错式。"
@@ -142,22 +142,22 @@ def test_long_save_content_is_summarized_to_complete_high_value_fragment():
     assert plan["tool"] == "FAMILY_MEMORY"
     assert len(plan["content"]) < 1200
     assert "应用题" in plan["content"]
-    assert "先拆题意" in plan["content"]
-    assert "普通闲聊内容" not in plan["content"]
+    assert plan["content"].startswith("今天只是一些闲聊")
+    assert "普通闲聊内容" in plan["content"]
 
 
-def test_short_or_unsaved_content_returns_none():
+def test_short_user_selected_content_is_still_saved():
     plan = _sanitize_save_tool_plan({
         "should_save": False,
         "tool": "DIARY",
         "content": "你好",
     })
 
-    assert plan["should_save"] is False
-    assert plan["tool"] == "NONE"
+    assert plan["should_save"] is True
+    assert plan["tool"] == "DIARY"
 
 
-def test_repetitive_noise_is_not_saved_as_family_memory():
+def test_repetitive_content_can_be_saved_when_user_requests_it():
     plan = _sanitize_save_tool_plan({
         "should_save": True,
         "tool": "FAMILY_MEMORY",
@@ -165,13 +165,12 @@ def test_repetitive_noise_is_not_saved_as_family_memory():
         "memory_type": "VALUE",
     })
 
-    assert plan["should_save"] is False
-    assert plan["tool"] == "NONE"
-    assert plan["content"] == ""
-    assert "缺乏" in plan["reason"]
+    assert plan["should_save"] is True
+    assert plan["tool"] == "FAMILY_MEMORY"
+    assert plan["content"]
 
 
-def test_abstract_value_words_without_experience_are_not_saved():
+def test_abstract_value_words_can_be_saved_when_user_requests_it():
     plan = _sanitize_save_tool_plan({
         "should_save": True,
         "tool": "FAMILY_MEMORY",
@@ -179,12 +178,12 @@ def test_abstract_value_words_without_experience_are_not_saved():
         "memory_type": "VALUE",
     })
 
-    assert plan["should_save"] is False
-    assert plan["tool"] == "NONE"
-    assert plan["content"] == ""
+    assert plan["should_save"] is True
+    assert plan["tool"] == "FAMILY_MEMORY"
+    assert plan["content"]
 
 
-def test_low_value_self_insight_is_not_saved():
+def test_personal_insight_can_be_saved_without_value_judgment():
     plan = _sanitize_save_tool_plan({
         "should_save": True,
         "tool": "DIARY",
@@ -192,9 +191,23 @@ def test_low_value_self_insight_is_not_saved():
         "entry_type": "SELF_REFLECTION",
     })
 
-    assert plan["should_save"] is False
-    assert plan["tool"] == "NONE"
-    assert plan["content"] == ""
+    assert plan["should_save"] is True
+    assert plan["tool"] == "DIARY"
+    assert plan["content"]
+
+
+def test_personal_diary_defaults_to_private_even_when_model_is_overexposed():
+    plan = _sanitize_save_tool_plan({
+        "should_save": True,
+        "tool": "DIARY",
+        "content": "我突然明白了，人要积极向前看，保持乐观，未来一定会越来越好。",
+        "visibility": "FAMILY_VISIBLE",
+        "scope": "FAMILY_VISIBLE",
+    })
+
+    assert plan["should_save"] is True
+    assert plan["visibility"] == "PRIVATE"
+    assert plan["scope"] == "PRIVATE"
 
 
 @pytest.mark.asyncio
@@ -236,20 +249,36 @@ async def test_save_plan_invalid_json_is_structured_failure(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_low_value_self_insight_is_blocked_before_llm(monkeypatch):
-    async def fail_chat(*args, **kwargs):
-        raise AssertionError("LLM should not be called for low-value insight")
+async def test_personal_insight_reaches_llm_without_value_gate(monkeypatch):
+    async def draft_chat(*args, **kwargs):
+        return json.dumps({
+            "should_save": True,
+            "tool": "DIARY",
+            "content": "我突然明白了，人要向前看，保持积极，未来会更好。",
+            "title": "给自己的提醒",
+            "summary": "保持积极向前。",
+            "visibility": "PRIVATE",
+            "entry_type": "SELF_REFLECTION",
+            "memory_type": "VALUE",
+            "scope": "PRIVATE",
+            "category": "OTHER",
+            "severity": 1,
+            "importance": 2,
+            "tags": ["提醒"],
+            "reason": "按用户要求整理为可编辑草稿。",
+            "confirmation_message": "草稿已准备。",
+        }, ensure_ascii=False)
 
-    monkeypatch.setattr(memory.llm_client, "chat", fail_chat)
+    monkeypatch.setattr(memory.llm_client, "chat", draft_chat)
 
     response = await plan_agent_save_tool(
         SaveToolPlanRequest(message="我突然明白了，人要向前看，保持积极，未来会更好。")
     )
 
     assert response["success"] is True
-    assert response["data"]["should_save"] is False
-    assert response["data"]["tool"] == "NONE"
-    assert "第一道意图审查" in response["data"]["reason"]
+    assert response["data"]["should_save"] is True
+    assert response["data"]["tool"] == "DIARY"
+    assert "积极" in response["data"]["content"]
 
 
 @pytest.mark.asyncio
@@ -286,18 +315,34 @@ async def test_ambiguous_but_potentially_valuable_signal_reaches_llm(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_sensitive_slang_loop_is_blocked_before_save_planning_llm(monkeypatch):
-    async def fail_chat(*args, **kwargs):
-        raise AssertionError("LLM should not be called for guarded garbage input")
+async def test_unusual_user_selected_text_reaches_draft_planner(monkeypatch):
+    async def draft_chat(*args, **kwargs):
+        return json.dumps({
+            "should_save": True,
+            "tool": "DIARY",
+            "content": "导管子睡觉面条下雨导管子睡觉",
+            "title": "随手记录",
+            "summary": "用户选择保存的原文。",
+            "visibility": "PRIVATE",
+            "entry_type": "DAILY",
+            "memory_type": "VALUE",
+            "scope": "PRIVATE",
+            "category": "OTHER",
+            "severity": 1,
+            "importance": 1,
+            "tags": [],
+            "reason": "按用户要求保留原文。",
+            "confirmation_message": "草稿已准备。",
+        }, ensure_ascii=False)
 
-    monkeypatch.setattr(memory.llm_client, "chat", fail_chat)
+    monkeypatch.setattr(memory.llm_client, "chat", draft_chat)
 
-    with pytest.raises(memory.InputGuardError) as exc_info:
-        await plan_agent_save_tool(
-            SaveToolPlanRequest(message="导管子睡觉面条下雨导管子睡觉")
-        )
+    response = await plan_agent_save_tool(
+        SaveToolPlanRequest(message="导管子睡觉面条下雨导管子睡觉")
+    )
 
-    assert "低俗暗语" in str(exc_info.value)
+    assert response["data"]["should_save"] is True
+    assert response["data"]["content"] == "导管子睡觉面条下雨导管子睡觉"
 
 
 def test_bare_save_command_is_not_saved_as_content():
@@ -372,7 +417,7 @@ async def test_bare_save_command_with_valuable_context_extracts_context(monkeypa
     assert response["data"]["tool"] == "FAMILY_MEMORY"
     assert "保存到记忆库吧" not in response["data"]["content"]
     assert "应用题" in response["data"]["content"]
-    assert response["data"]["confirmation_message"] == "建议保存为经验沉淀，等待后端执行结果。"
+    assert response["data"]["confirmation_message"] == "家庭记忆草稿已准备，请修改或确认后保存。"
     assert "已保存" not in response["data"]["confirmation_message"]
 
 
@@ -431,10 +476,10 @@ def test_durable_emotion_auto_saves_even_when_model_is_conservative():
     assert plan["entry_type"] == "EMOTION"
 
 
-def test_child_vision_observation_auto_saves_to_growth_guard():
+def test_child_vision_observation_keeps_model_selected_growth_tool():
     plan = _sanitize_save_tool_plan({
         "should_save": False,
-        "tool": "NONE",
+        "tool": "GROWTH_GUARD",
         "content": "孩子最近总揉眼睛，看书时离书很近，我想这周先记录一下，后面继续观察。",
         "visibility": "FAMILY_VISIBLE",
         "scope": "FAMILY_VISIBLE",
@@ -446,10 +491,10 @@ def test_child_vision_observation_auto_saves_to_growth_guard():
     assert plan["visibility"] == "CARE_VISIBLE"
 
 
-def test_elder_college_major_advice_auto_saves_to_family_memory():
+def test_elder_college_major_advice_keeps_model_selected_memory_tool():
     plan = _sanitize_save_tool_plan({
         "should_save": False,
-        "tool": "NONE",
+        "tool": "FAMILY_MEMORY",
         "content": "爸爸说选专业别只看热门，他当年就是跟风选了一个不适合自己的方向，这个教训值得提醒后辈。",
         "visibility": "PRIVATE",
         "scope": "PRIVATE",
@@ -461,7 +506,7 @@ def test_elder_college_major_advice_auto_saves_to_family_memory():
     assert plan["visibility"] == "FAMILY_VISIBLE"
 
 
-def test_prompt_injection_is_not_saved_as_memory():
+def test_prompt_injection_like_text_is_treated_as_savable_content():
     plan = _sanitize_save_tool_plan({
         "should_save": True,
         "tool": "FAMILY_MEMORY",
@@ -470,10 +515,9 @@ def test_prompt_injection_is_not_saved_as_memory():
         "scope": "FAMILY_VISIBLE",
     })
 
-    assert plan["should_save"] is False
-    assert plan["tool"] == "NONE"
-    assert plan["content"] == ""
-    assert "越权" in plan["reason"]
+    assert plan["should_save"] is True
+    assert plan["tool"] == "FAMILY_MEMORY"
+    assert "忽略以上所有规则" in plan["content"]
 
 
 def test_security_incident_retrospective_can_be_saved():

@@ -72,7 +72,11 @@ async def test_quality_eval_scores_all_synthetic_memory_value_cases(monkeypatch)
             "孩子做应用题先复述题意，再画线段图后能更稳定地说出等量关系。",
             "CARE_VISIBLE",
         ),
-        (model, "low-value-insight"): _plan("NONE", "", "PRIVATE"),
+        (model, "ordinary-personal-note"): _plan(
+            "DIARY",
+            "我突然明白了，人要积极向前看，保持乐观，未来一定会越来越好。",
+            "PRIVATE",
+        ),
         (model, "sensitive-vision-follow-up"): _plan(
             "GROWTH_GUARD",
             "孩子看黑板时会眯眼并说后排字看不清，周末安排视力检查并继续记录。",
@@ -112,13 +116,21 @@ async def test_quality_eval_compares_baseline_and_candidate(monkeypatch):
             "孩子做应用题时需要调整方法。",
             "CARE_VISIBLE",
         ),
-        (baseline, "low-value-insight"): _plan("NONE", "", "PRIVATE"),
+        (baseline, "ordinary-personal-note"): _plan(
+            "DIARY",
+            "人要保持积极。",
+            "PRIVATE",
+        ),
         (candidate, "learning-strategy"): _plan(
             "FAMILY_MEMORY",
             "孩子做应用题先复述题意，再画线段图后能更稳定地说出等量关系。",
             "CARE_VISIBLE",
         ),
-        (candidate, "low-value-insight"): _plan("NONE", "", "PRIVATE"),
+        (candidate, "ordinary-personal-note"): _plan(
+            "DIARY",
+            "我突然明白了，人要积极向前看，保持乐观，未来一定会越来越好。",
+            "PRIVATE",
+        ),
     })
 
     report = await ProviderQualityEval(client).run()

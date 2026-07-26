@@ -71,12 +71,12 @@ SYNTHETIC_QUALITY_CASES = (
         forbidden_terms=("注意力缺陷", "智力问题", "确诊"),
     ),
     ProviderQualityCase(
-        case_id="low-value-insight",
+        case_id="ordinary-personal-note",
         message="我突然明白了，人要积极向前看，保持乐观，未来一定会越来越好。",
-        expected_tool="NONE",
-        expected_scope=None,
-        anchor_groups=(),
-        forbidden_terms=("家族智慧", "核心记忆"),
+        expected_tool="DIARY",
+        expected_scope="PRIVATE",
+        anchor_groups=(("积极向前看",), ("保持乐观", "乐观")),
+        forbidden_terms=("毫无价值", "不值得保存"),
     ),
     ProviderQualityCase(
         case_id="sensitive-vision-follow-up",

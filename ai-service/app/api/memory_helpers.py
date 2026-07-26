@@ -3,33 +3,18 @@
 import re
 
 from .memory_save_signals import (
-    _has_durable_save_value,
     _has_private_emotion_signal,
     _has_substantive_insight_signal,
-    _infer_save_tool,
-    _lacks_substantive_save_value,
-    _looks_like_prompt_injection,
     _looks_like_save_command_only,
-    _sentence_has_save_value,
 )
 
 def _sanitize_save_tool_plan(data: dict) -> dict:
     content = _normalize_save_content(data.get("content", ""))
     raw_tool = _choice(data.get("tool"), {"NONE", "DIARY", "FAMILY_MEMORY", "GROWTH_GUARD"}, "NONE")
     if _looks_like_save_command_only(content):
-        return _blocked_save_tool_plan("只有保存指令，没有可沉淀的具体内容。")
-    if _looks_like_prompt_injection(content):
-        return _blocked_save_tool_plan("疑似提示词注入或越权指令，不适合保存为家族记忆。")
-    if _lacks_substantive_save_value(content):
-        return _blocked_save_tool_plan("内容缺乏具体人物、事件、观察、情绪强度或可跟进经验，不应沉淀为家族记忆。")
-    tool = _infer_save_tool(content, raw_tool)
-    should_save = (
-        (bool(data.get("should_save")) or _has_durable_save_value(content))
-        and tool != "NONE"
-        and len(content) >= 4
-    )
-    if not should_save:
-        tool = "NONE"
+        return _blocked_save_tool_plan("只有保存指令，没有找到可保存的原始内容。")
+    tool = raw_tool if raw_tool != "NONE" else "DIARY"
+    should_save = bool(content)
 
     visibility = _normalize_save_visibility(
         tool,
@@ -101,42 +86,11 @@ def _sanitize_save_tool_plan(data: dict) -> dict:
 
 def _normalize_save_content(value: object, *, max_chars: int = 1200) -> str:
     content = re.sub(r"\s+", " ", str(value or "").strip())
-    if len(content) <= 500:
+    if len(content) <= max_chars:
         return content
-
-    sentences = _split_sentences(content)
-    if not sentences:
-        return content[:max_chars].strip()
-
-    selected: list[str] = []
-    budget = max(240, min(max_chars, 420))
-    for sentence in sentences:
-        if not _sentence_has_save_value(sentence):
-            continue
-        if sum(len(item) for item in selected) + len(sentence) > budget:
-            continue
-        selected.append(sentence)
-        if len(selected) >= 5:
-            break
-
-    if not selected:
-        selected = sentences[:3]
-
-    summary = "；".join(item.strip("，。；; ") for item in selected if item.strip())
-    if len(summary) > max_chars:
-        summary = summary[: max_chars - 1].rstrip("，。；; ") + "…"
-    return summary.strip()
-
-def _split_sentences(text: str) -> list[str]:
-    parts = re.split(r"(?<=[。！？!?；;])|\n+", text)
-    return [part.strip() for part in parts if part and part.strip()]
+    return content[: max_chars - 1].rstrip("，。；; ") + "…"
 
 def _blocked_save_tool_plan(reason: str) -> dict:
-    confirmation_message = (
-        "这条内容缺少可保存的具体事实，我不会沉淀为家族记忆。"
-        if "缺乏" in reason or "没有可沉淀" in reason
-        else "这条内容像是在要求越权或泄露内部规则，我不会保存为家族记忆。"
-    )
     return {
         "should_save": False,
         "tool": "NONE",
@@ -152,7 +106,7 @@ def _blocked_save_tool_plan(reason: str) -> dict:
         "importance": 1,
         "tags": [],
         "reason": reason,
-        "confirmation_message": confirmation_message,
+        "confirmation_message": "没有找到可保存的内容，请补充内容后重试。",
     }
 
 def _unavailable_save_tool_plan() -> dict:
@@ -188,13 +142,10 @@ def _normalize_save_visibility(tool: str, visibility: str, content: str) -> str:
         if re.search(r"(冲突|吵架|失望|隐私|生病|诊断|学校|班级|孩子|儿子|女儿|未成年|情绪)", content):
             return "CARE_VISIBLE"
         return "FAMILY_VISIBLE"
-    if tool == "DIARY" and (
-        _has_private_emotion_signal(content)
-        or re.search(r"(别让|不要让|不想让|只给我|私密|隐私|不能公开|别公开|别告诉)", content)
-    ):
-        return "PRIVATE"
     if tool == "DIARY" and re.search(r"(给家人|希望家人|全家|家里人都|大家)", content):
         return "FAMILY_VISIBLE"
+    if tool == "DIARY":
+        return "PRIVATE"
     return visibility
 
 def _normalize_save_scope(tool: str, scope: str, visibility: str) -> str:
@@ -247,10 +198,10 @@ def _save_plan_reason(value: object, tool: str) -> str:
     if reason:
         return reason
     return {
-        "DIARY": "这段话包含具体经历或个人感受，适合作为每日记录保存。",
-        "FAMILY_MEMORY": "这段话包含可复用的经验、家族故事或长辈提醒，适合沉淀为经验沉淀。",
-        "GROWTH_GUARD": "这段话包含需要后续留意的成长观察信号，适合保存为成长观察。",
-    }.get(tool, "内容不足或缺少长期保存价值。")
+        "DIARY": "用户明确要求保存，已整理为可编辑的日记草稿。",
+        "FAMILY_MEMORY": "用户明确要求保存，已整理为可编辑的家庭记忆草稿。",
+        "GROWTH_GUARD": "用户明确要求保存，已整理为可编辑的成长观察草稿。",
+    }.get(tool, "没有找到可保存的内容。")
 
 def _choice(value: object, allowed: set[str], fallback: str) -> str:
     text = str(value or "").strip().upper()
@@ -272,10 +223,10 @@ def _default_save_title(tool: str) -> str:
 
 def _default_save_confirmation(tool: str) -> str:
     return {
-        "DIARY": "建议保存为每日记录，等待后端执行结果。",
-        "FAMILY_MEMORY": "建议保存为经验沉淀，等待后端执行结果。",
-        "GROWTH_GUARD": "建议保存为成长观察，等待后端执行结果。",
-    }.get(tool, "这条消息不需要保存。")
+        "DIARY": "日记草稿已准备，请修改或确认后保存。",
+        "FAMILY_MEMORY": "家庭记忆草稿已准备，请修改或确认后保存。",
+        "GROWTH_GUARD": "成长观察草稿已准备，请修改或确认后保存。",
+    }.get(tool, "没有找到可保存的内容。")
 
 def _compact_string_list(value: object, limit: int, max_len: int) -> list[str]:
     if not isinstance(value, list):

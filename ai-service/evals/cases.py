@@ -173,14 +173,18 @@ def _save_plan_cases() -> list[GoldenCase]:
     )
     return [
         SavePlanEvalCase(
-            "low-value-insight-skips-llm",
+            "ordinary-personal-note-reaches-draft-model",
             "memory_quality",
             ProtectedAsset.MEMORY_QUALITY,
             "我突然明白了，人要向前看，保持积极，未来会更好。",
             (),
-            None,
+            _save_plan_json(
+                should_save=True,
+                tool="DIARY",
+                content="我突然明白了，人要向前看，保持积极，未来会更好。",
+            ),
             False,
-            SavePlanExpectation(EvalDecision.SKIP_SAVE, 0, True, False, "NONE"),
+            SavePlanExpectation(EvalDecision.SAVE, 1, True, True, "DIARY"),
         ),
         SavePlanEvalCase(
             "bare-save-command-skips-without-context",
@@ -203,14 +207,14 @@ def _save_plan_cases() -> list[GoldenCase]:
             SavePlanExpectation(EvalDecision.SAVE, 1, True, True, "DIARY"),
         ),
         SavePlanEvalCase(
-            "high-value-learning-survives-conservative-model",
+            "user-selected-content-survives-conservative-model",
             "memory_quality",
             ProtectedAsset.MEMORY_QUALITY,
             learning,
             (),
             _save_plan_json(should_save=False, tool="NONE", content=learning),
             False,
-            SavePlanExpectation(EvalDecision.SAVE, 1, True, True, "FAMILY_MEMORY"),
+            SavePlanExpectation(EvalDecision.SAVE, 1, True, True, "DIARY"),
         ),
         SavePlanEvalCase(
             "save-plan-provider-failure-structured",

@@ -28,7 +28,6 @@ from app.runtime.prompt_renderer import SaveMemoryPromptRenderer
 from app.use_cases.organize_draft import OrganizeDraftUseCase
 from app.use_cases.persona_material_draft import PersonaMaterialDraftUseCase
 from app.use_cases.save_memory_plan import SaveMemoryPlanUseCase
-from app.utils.input_guard import InputGuardError  # noqa: F401
 from app.utils.safety_limits import enforce_ai_concurrency, enforce_ai_rate_limit
 
 router = APIRouter(dependencies=[
