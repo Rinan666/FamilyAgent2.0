@@ -75,7 +75,10 @@ public record AgentMemoryContextResult(
                         source.getVisibility(),
                         source.getTemporalLayer(),
                         source.getTopics(),
-                        source.getScenes()))
+                        source.getScenes(),
+                        source.getAuthor(),
+                        source.getObserver(),
+                        source.getSubject()))
                 .toList();
     }
 

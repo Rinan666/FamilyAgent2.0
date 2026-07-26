@@ -17,4 +17,7 @@ public class RecallSourceSummary {
     private String temporalLayer;
     private List<String> topics;
     private List<String> scenes;
+    private RecallParticipantSummary author;
+    private RecallParticipantSummary observer;
+    private RecallParticipantSummary subject;
 }

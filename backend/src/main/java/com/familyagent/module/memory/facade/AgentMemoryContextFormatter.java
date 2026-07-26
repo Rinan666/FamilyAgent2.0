@@ -4,12 +4,16 @@ import com.familyagent.common.constant.EntityStatus;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
+import com.familyagent.module.memory.dto.RecallParticipantSummary;
+import com.familyagent.module.memory.dto.RecallSourceSummary;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Component
 public class AgentMemoryContextFormatter {
@@ -24,9 +28,10 @@ public class AgentMemoryContextFormatter {
             return "";
         }
 
-        List<String> memoryHits = memoryHits(recall.getMemories());
-        List<String> diaryHits = diaryHits(recall.getDiaries());
-        List<String> growthHits = growthHits(recall.getGrowthRecords());
+        Map<String, RecallSourceSummary> sources = sourceIndex(recall.getSources());
+        List<String> memoryHits = memoryHits(recall.getMemories(), sources);
+        List<String> diaryHits = diaryHits(recall.getDiaries(), sources);
+        List<String> growthHits = growthHits(recall.getGrowthRecords(), sources);
 
         List<String> sections = new ArrayList<>();
         sections.add(String.format(
@@ -42,7 +47,9 @@ public class AgentMemoryContextFormatter {
         return String.join("\n\n", sections);
     }
 
-    private List<String> memoryHits(List<MemoryEntry> memories) {
+    private List<String> memoryHits(
+            List<MemoryEntry> memories,
+            Map<String, RecallSourceSummary> sources) {
         List<String> hits = new ArrayList<>();
         for (MemoryEntry memory : safeList(memories)) {
             if (hits.size() >= MEMORY_LIMIT) {
@@ -55,13 +62,17 @@ public class AgentMemoryContextFormatter {
             if (content.isBlank()) {
                 continue;
             }
-            hits.add(numbered(hits.size(), "[" + textOrDefault(memory.getType(), "MEMORY") + "] author="
-                    + authorLabel(memory.getUserId()) + " " + preview(content)));
+            RecallSourceSummary source = sources.get("memory-" + memory.getId());
+            hits.add(numbered(hits.size(), "[" + textOrDefault(memory.getType(), "MEMORY") + "] "
+                    + participantAttributes("author", source == null ? null : source.getAuthor(), memory.getUserId())
+                    + " " + preview(content)));
         }
         return hits;
     }
 
-    private List<String> diaryHits(List<DiaryEntry> diaries) {
+    private List<String> diaryHits(
+            List<DiaryEntry> diaries,
+            Map<String, RecallSourceSummary> sources) {
         List<String> hits = new ArrayList<>();
         for (DiaryEntry diary : safeList(diaries)) {
             if (hits.size() >= DIARY_LIMIT) {
@@ -71,13 +82,17 @@ public class AgentMemoryContextFormatter {
                 continue;
             }
             String entryType = entryType(diary.getStructured());
-            hits.add(numbered(hits.size(), "[" + entryType + "] author="
-                    + authorLabel(diary.getUserId()) + " " + preview(diary.getRawText())));
+            RecallSourceSummary source = sources.get("diary-" + diary.getId());
+            hits.add(numbered(hits.size(), "[" + entryType + "] "
+                    + participantAttributes("author", source == null ? null : source.getAuthor(), diary.getUserId())
+                    + " " + preview(diary.getRawText())));
         }
         return hits;
     }
 
-    private List<String> growthHits(List<GrowthGuardRecord> records) {
+    private List<String> growthHits(
+            List<GrowthGuardRecord> records,
+            Map<String, RecallSourceSummary> sources) {
         List<String> hits = new ArrayList<>();
         for (GrowthGuardRecord record : safeList(records)) {
             if (hits.size() >= GROWTH_LIMIT) {
@@ -90,11 +105,18 @@ public class AgentMemoryContextFormatter {
             if (content.isBlank()) {
                 continue;
             }
-            hits.add(numbered(hits.size(), String.format("[%s] severity=%d observer=%s subject=%s %s",
+            RecallSourceSummary source = sources.get("growth-" + record.getId());
+            hits.add(numbered(hits.size(), String.format("[%s] severity=%d %s %s %s",
                     textOrDefault(record.getCategory(), "OTHER"),
                     record.getSeverity() == null ? 0 : record.getSeverity(),
-                    authorLabel(record.getCreatedBy()),
-                    authorLabel(record.getTargetUserId()),
+                    participantAttributes(
+                            "observer",
+                            source == null ? null : source.getObserver(),
+                            record.getCreatedBy()),
+                    participantAttributes(
+                            "subject",
+                            source == null ? null : source.getSubject(),
+                            record.getTargetUserId()),
                     preview(content))));
         }
         return hits;
@@ -129,8 +151,48 @@ public class AgentMemoryContextFormatter {
         return value == null || value.isBlank() ? fallback : value.trim();
     }
 
-    private String authorLabel(Long userId) {
+    private Map<String, RecallSourceSummary> sourceIndex(List<RecallSourceSummary> sources) {
+        return safeList(sources).stream()
+                .filter(source -> source != null && source.getId() != null)
+                .collect(Collectors.toMap(
+                        RecallSourceSummary::getId,
+                        Function.identity(),
+                        (left, right) -> left));
+    }
+
+    private String participantAttributes(
+            String role,
+            RecallParticipantSummary participant,
+            Long fallbackUserId) {
+        if (participant == null) {
+            return role + "=" + fallbackParticipant(fallbackUserId);
+        }
+        StringBuilder attributes = new StringBuilder();
+        if (participant.currentViewer()) {
+            attributes.append(role).append("=current_conversation_user")
+                    .append(' ').append(role).append("_name=").append(quoted(participant.name()));
+        } else {
+            attributes.append(role).append('=').append(quoted(participant.name()));
+        }
+        attributes.append(" relationship_to_viewer=")
+                .append(quoted(participant.relationshipToViewer()));
+        if (participant.relationshipToTarget() != null && !participant.relationshipToTarget().isBlank()) {
+            attributes.append(" relationship_to_target=")
+                    .append(quoted(participant.relationshipToTarget()));
+        }
+        return attributes.toString();
+    }
+
+    private String fallbackParticipant(Long userId) {
         return userId == null ? "unknown_family_member" : "family_user_" + userId;
+    }
+
+    private String quoted(String value) {
+        String normalized = textOrDefault(value, "家族成员")
+                .replace('\\', '/')
+                .replace('"', '\'')
+                .replaceAll("\\s+", " ");
+        return '"' + normalized + '"';
     }
 
     private <T> List<T> safeList(List<T> items) {

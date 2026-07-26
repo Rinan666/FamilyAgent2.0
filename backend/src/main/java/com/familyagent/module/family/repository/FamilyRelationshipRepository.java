@@ -14,6 +14,15 @@ public interface FamilyRelationshipRepository extends BaseMapper<FamilyRelations
         SELECT id, family_id, from_user_id, to_user_id, label, reverse_label, note,
                created_by, updated_by, created_at, updated_at
         FROM family_relationships
+        WHERE family_id = #{familyId}
+        ORDER BY updated_at DESC, id DESC
+        """)
+    List<FamilyRelationship> findByFamilyId(Long familyId);
+
+    @Select("""
+        SELECT id, family_id, from_user_id, to_user_id, label, reverse_label, note,
+               created_by, updated_by, created_at, updated_at
+        FROM family_relationships
         WHERE family_id = #{familyId} AND from_user_id = #{fromUserId}
         ORDER BY updated_at DESC, id DESC
         """)

@@ -1,7 +1,10 @@
 package com.familyagent.module.memory.service;
 
 import com.familyagent.module.diary.entity.DiaryEntry;
+import com.familyagent.module.family.facade.FamilyRelationshipGraphView;
+import com.familyagent.module.family.facade.FamilyRelationshipNode;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
+import com.familyagent.module.memory.dto.RecallParticipantSummary;
 import com.familyagent.module.memory.dto.RecallSourceSummary;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import org.springframework.stereotype.Component;
@@ -10,6 +13,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Component
 public class AuthorizedMemoryRecallSourceAssembler {
@@ -17,15 +22,34 @@ public class AuthorizedMemoryRecallSourceAssembler {
     public List<RecallSourceSummary> assemble(
             List<DiaryEntry> diaries,
             List<MemoryEntry> memories,
-            List<GrowthGuardRecord> growthRecords) {
+            List<GrowthGuardRecord> growthRecords,
+            FamilyRelationshipGraphView relationships) {
         List<RecallSourceSummary> summaries = new ArrayList<>();
-        appendDiaries(summaries, diaries);
-        appendMemories(summaries, memories);
-        appendGrowthRecords(summaries, growthRecords);
+        appendDiaries(summaries, diaries, relationships);
+        appendMemories(summaries, memories, relationships);
+        appendGrowthRecords(summaries, growthRecords, relationships);
         return summaries;
     }
 
-    private static void appendDiaries(List<RecallSourceSummary> summaries, List<DiaryEntry> entries) {
+    public Set<Long> participantUserIds(
+            List<DiaryEntry> diaries,
+            List<MemoryEntry> memories,
+            List<GrowthGuardRecord> growthRecords) {
+        return java.util.stream.Stream.of(
+                        diaries.stream().map(DiaryEntry::getUserId),
+                        memories.stream().map(MemoryEntry::getUserId),
+                        growthRecords.stream().flatMap(record -> java.util.stream.Stream.of(
+                                record.getCreatedBy(),
+                                record.getTargetUserId())))
+                .flatMap(stream -> stream)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    private static void appendDiaries(
+            List<RecallSourceSummary> summaries,
+            List<DiaryEntry> entries,
+            FamilyRelationshipGraphView relationships) {
         for (DiaryEntry entry : entries) {
             if (entry == null || entry.getId() == null) {
                 continue;
@@ -43,11 +67,15 @@ public class AuthorizedMemoryRecallSourceAssembler {
                     .temporalLayer(asString(index.get("temporalLayer")))
                     .topics(stringList(index.get("topics")))
                     .scenes(stringList(index.get("scenes")))
+                    .author(participant(relationships, entry.getUserId()))
                     .build());
         }
     }
 
-    private static void appendMemories(List<RecallSourceSummary> summaries, List<MemoryEntry> entries) {
+    private static void appendMemories(
+            List<RecallSourceSummary> summaries,
+            List<MemoryEntry> entries,
+            FamilyRelationshipGraphView relationships) {
         for (MemoryEntry entry : entries) {
             if (entry == null || entry.getId() == null) {
                 continue;
@@ -62,13 +90,15 @@ public class AuthorizedMemoryRecallSourceAssembler {
                     .temporalLayer(asString(index.get("temporalLayer")))
                     .topics(stringList(index.get("topics")))
                     .scenes(stringList(index.get("scenes")))
+                    .author(participant(relationships, entry.getUserId()))
                     .build());
         }
     }
 
     private static void appendGrowthRecords(
             List<RecallSourceSummary> summaries,
-            List<GrowthGuardRecord> records) {
+            List<GrowthGuardRecord> records,
+            FamilyRelationshipGraphView relationships) {
         for (GrowthGuardRecord record : records) {
             if (record == null || record.getId() == null) {
                 continue;
@@ -83,8 +113,23 @@ public class AuthorizedMemoryRecallSourceAssembler {
                     .temporalLayer(asString(index.get("temporalLayer")))
                     .topics(stringList(index.get("topics")))
                     .scenes(stringList(index.get("scenes")))
+                    .observer(participant(relationships, record.getCreatedBy()))
+                    .subject(participant(relationships, record.getTargetUserId()))
                     .build());
         }
+    }
+
+    private static RecallParticipantSummary participant(
+            FamilyRelationshipGraphView relationships,
+            Long userId) {
+        FamilyRelationshipNode node = relationships.member(userId);
+        return new RecallParticipantSummary(
+                node.userId(),
+                node.displayName(),
+                node.relationshipToViewer(),
+                node.relationshipToTarget(),
+                node.currentViewer(),
+                node.currentTarget());
     }
 
     private static Map<?, ?> metadataIndex(Object metadata) {

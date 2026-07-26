@@ -1,5 +1,7 @@
 package com.familyagent.module.memory.facade;
 
+import com.familyagent.module.memory.dto.RecallParticipantSummary;
+
 import java.util.List;
 
 public record AgentMemoryRecallSource(
@@ -10,7 +12,10 @@ public record AgentMemoryRecallSource(
         String visibility,
         String temporalLayer,
         List<String> topics,
-        List<String> scenes) {
+        List<String> scenes,
+        RecallParticipantSummary author,
+        RecallParticipantSummary observer,
+        RecallParticipantSummary subject) {
 
     public AgentMemoryRecallSource {
         topics = topics == null ? List.of() : List.copyOf(topics);

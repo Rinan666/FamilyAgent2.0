@@ -4,6 +4,8 @@ import com.familyagent.common.constant.EntityStatus;
 import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.family.facade.FamilyMembershipFacade;
+import com.familyagent.module.family.facade.FamilyRelationshipGraphFacade;
+import com.familyagent.module.family.facade.FamilyRelationshipGraphView;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
 import com.familyagent.module.memory.dto.EmbeddingCallObservation;
@@ -11,6 +13,7 @@ import com.familyagent.module.memory.dto.RecallSourceSummary;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEmbeddingRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -20,6 +23,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -27,6 +32,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -37,10 +44,20 @@ class AuthorizedMemoryRecallServiceTest {
     @Mock private AuthorizedMemoryRecallCandidateLoader candidateLoader;
     @Mock private MemoryEmbeddingRepository embeddingRepository;
     @Mock private FamilyMembershipFacade familyMembershipFacade;
+    @Mock private FamilyRelationshipGraphFacade relationshipGraphFacade;
     @Mock private AuthorizedMemoryRecallRankingService rankingService;
     @Mock private AuthorizedMemoryRecallSourceAssembler sourceAssembler;
     @Spy private AuthorizedMemoryRecallQueryPolicy queryPolicy = new AuthorizedMemoryRecallQueryPolicy();
     @InjectMocks private AuthorizedMemoryRecallService recallService;
+
+    private final FamilyRelationshipGraphView relationships = new FamilyRelationshipGraphView(Map.of());
+
+    @BeforeEach
+    void setUpRelationshipResolution() {
+        lenient().when(sourceAssembler.participantUserIds(any(), any(), any())).thenReturn(Set.of());
+        lenient().when(relationshipGraphFacade.resolve(anyLong(), anyLong(), nullable(Long.class), any()))
+                .thenReturn(relationships);
+    }
 
     @Test
     void recallForFamily_skipsFamilyMemoryForUnrelatedQuery() {
@@ -87,7 +104,7 @@ class AuthorizedMemoryRecallServiceTest {
                         List.of(visibleMemory),
                         List.of(),
                         false));
-        when(sourceAssembler.assemble(List.of(), List.of(visibleMemory), List.of()))
+        when(sourceAssembler.assemble(List.of(), List.of(visibleMemory), List.of(), relationships))
                 .thenReturn(List.of());
 
         AuthorizedMemoryRecallResult result = recallService.recallForFamily(
@@ -127,7 +144,7 @@ class AuthorizedMemoryRecallServiceTest {
                         List.of(visibleMemory),
                         List.of(),
                         false));
-        when(sourceAssembler.assemble(List.of(), List.of(visibleMemory), List.of()))
+        when(sourceAssembler.assemble(List.of(), List.of(visibleMemory), List.of(), relationships))
                 .thenReturn(summaries);
 
         AuthorizedMemoryRecallResult result = recallService.recallForFamily(
@@ -183,7 +200,11 @@ class AuthorizedMemoryRecallServiceTest {
                         List.of(visibleMemory),
                         List.of(growthObservation),
                         false));
-        when(sourceAssembler.assemble(List.of(visibleDiary), List.of(visibleMemory), List.of(growthObservation)))
+        when(sourceAssembler.assemble(
+                List.of(visibleDiary),
+                List.of(visibleMemory),
+                List.of(growthObservation),
+                relationships))
                 .thenReturn(List.of());
 
         AuthorizedMemoryRecallResult result = recallService.recallForFamily(
@@ -238,7 +259,11 @@ class AuthorizedMemoryRecallServiceTest {
                         List.of(),
                         List.of(growthObservation),
                         false));
-        when(sourceAssembler.assemble(List.of(targetDiary, relatedDiary), List.of(), List.of(growthObservation)))
+        when(sourceAssembler.assemble(
+                List.of(targetDiary, relatedDiary),
+                List.of(),
+                List.of(growthObservation),
+                relationships))
                 .thenReturn(List.of());
 
         AuthorizedMemoryRecallResult result = recallService.recallForMirror(
@@ -275,7 +300,7 @@ class AuthorizedMemoryRecallServiceTest {
                         List.of(),
                         true,
                         embeddingObservation));
-        when(sourceAssembler.assemble(List.of(), List.of(), List.of()))
+        when(sourceAssembler.assemble(List.of(), List.of(), List.of(), relationships))
                 .thenReturn(List.of());
 
         AuthorizedMemoryRecallResult result = recallService.recallForFamily(
@@ -310,7 +335,7 @@ class AuthorizedMemoryRecallServiceTest {
                         List.of(visibleMemory),
                         List.of(),
                         false));
-        when(sourceAssembler.assemble(List.of(), List.of(visibleMemory), List.of()))
+        when(sourceAssembler.assemble(List.of(), List.of(visibleMemory), List.of(), relationships))
                 .thenReturn(List.of());
 
         AuthorizedMemoryRecallResult result = recallService.recallForFamily(

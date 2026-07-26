@@ -1,6 +1,8 @@
 package com.familyagent.module.memory.service;
 
 import com.familyagent.module.family.facade.FamilyMembershipFacade;
+import com.familyagent.module.family.facade.FamilyRelationshipGraphFacade;
+import com.familyagent.module.family.facade.FamilyRelationshipGraphView;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
 import com.familyagent.module.memory.repository.MemoryEmbeddingRepository;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +17,7 @@ public class AuthorizedMemoryRecallService {
     private final AuthorizedMemoryRecallCandidateLoader candidateLoader;
     private final MemoryEmbeddingRepository embeddingRepository;
     private final FamilyMembershipFacade familyMembershipFacade;
+    private final FamilyRelationshipGraphFacade relationshipGraphFacade;
     private final AuthorizedMemoryRecallRankingService rankingService;
     private final AuthorizedMemoryRecallSourceAssembler sourceAssembler;
     private final AuthorizedMemoryRecallQueryPolicy queryPolicy;
@@ -69,7 +72,14 @@ public class AuthorizedMemoryRecallService {
                 viewerUserId,
                 diaryLimit,
                 memoryLimit);
-        return buildRecallResult(familyId, normalizedQuery, diaryLimit, memoryLimit, candidates);
+        return buildRecallResult(
+                familyId,
+                viewerUserId,
+                null,
+                normalizedQuery,
+                diaryLimit,
+                memoryLimit,
+                candidates);
     }
 
     public AuthorizedMemoryRecallResult recallForMirror(
@@ -90,11 +100,20 @@ public class AuthorizedMemoryRecallService {
                 viewerUserId,
                 diaryLimit,
                 memoryLimit);
-        return buildRecallResult(familyId, normalizedQuery, diaryLimit, memoryLimit, candidates);
+        return buildRecallResult(
+                familyId,
+                viewerUserId,
+                targetUserId,
+                normalizedQuery,
+                diaryLimit,
+                memoryLimit,
+                candidates);
     }
 
     private AuthorizedMemoryRecallResult buildRecallResult(
             Long familyId,
+            Long viewerUserId,
+            Long targetUserId,
             String normalizedQuery,
             int diaryLimit,
             int memoryLimit,
@@ -109,6 +128,14 @@ public class AuthorizedMemoryRecallService {
                 diaryLimit,
                 memoryLimit,
                 readyEmbeddings);
+        FamilyRelationshipGraphView relationships = relationshipGraphFacade.resolve(
+                familyId,
+                viewerUserId,
+                targetUserId,
+                sourceAssembler.participantUserIds(
+                        ranked.diaries(),
+                        ranked.memories(),
+                        ranked.growthRecords()));
         return AuthorizedMemoryRecallResult.builder()
                 .diaries(ranked.diaries())
                 .memories(ranked.memories())
@@ -119,7 +146,8 @@ public class AuthorizedMemoryRecallService {
                 .sources(sourceAssembler.assemble(
                         ranked.diaries(),
                         ranked.memories(),
-                        ranked.growthRecords()))
+                        ranked.growthRecords(),
+                        relationships))
                 .query(normalizedQuery)
                 .embeddingReadyCount(readyEmbeddings)
                 .embeddingObservation(ranked.embeddingObservation())

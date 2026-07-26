@@ -3,6 +3,7 @@ package com.familyagent.module.memory.facade;
 import com.familyagent.common.constant.EntityStatus;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
 import com.familyagent.module.memory.dto.RecallSourceSummary;
+import com.familyagent.module.memory.dto.RecallParticipantSummary;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.service.AuthorizedMemoryRecallService;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,7 @@ class AgentMemoryContextFacadeTest {
     @Test
     void buildFamilyAgentContext_usesAuthorizedRecallAndFormatsPreview() {
         MemoryEntry memory = new MemoryEntry();
+        memory.setId(9L);
         memory.setUserId(202L);
         memory.setStatus(EntityStatus.ACTIVE.name());
         memory.setType("ELDER_ADVICE");
@@ -41,6 +43,16 @@ class AgentMemoryContextFacadeTest {
                         .memories(List.of(memory))
                         .diaries(List.of())
                         .growthRecords(List.of())
+                        .sources(List.of(RecallSourceSummary.builder()
+                                .id("memory-9")
+                                .author(new RecallParticipantSummary(
+                                        202L,
+                                        "张三",
+                                        "二叔",
+                                        null,
+                                        false,
+                                        false))
+                                .build()))
                         .retrievalMode("TEXT_FALLBACK")
                         .embeddingReadyCount(3)
                         .build());
@@ -59,7 +71,7 @@ class AgentMemoryContextFacadeTest {
                 8,
                 8);
         assertTrue(context.contains("retrieval_summary: mode=TEXT_FALLBACK embedding_ready=3"));
-        assertTrue(context.contains("[ELDER_ADVICE] author=family_user_202 Brush teeth before sleep"));
+        assertTrue(context.contains("[ELDER_ADVICE] author=\"张三\" relationship_to_viewer=\"二叔\""));
     }
 
     @Test
