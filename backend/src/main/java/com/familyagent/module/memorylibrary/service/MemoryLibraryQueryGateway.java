@@ -25,10 +25,7 @@ public class MemoryLibraryQueryGateway {
     private final ObjectMapper objectMapper;
 
     public QueryResult query(QueryCriteria criteria) {
-        Object[] args = concat(
-                sectionArgs(criteria),
-                sectionArgs(criteria),
-                growthSectionArgs(criteria));
+        Object[] args = unifiedArgs(criteria);
         String sql = MemoryLibraryQuerySql.fullQuery(criteria.archived());
         Long total = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM (" + sql + ") items",
@@ -60,24 +57,13 @@ public class MemoryLibraryQueryGateway {
                 .build();
     }
 
-    private static Object[] sectionArgs(QueryCriteria criteria) {
+    private static Object[] unifiedArgs(QueryCriteria criteria) {
         String[] terms = criteria.searchTerms().toArray(String[]::new);
         return new Object[] {
                 criteria.familyId(), criteria.viewerUserId(), criteria.viewerUserId(), criteria.viewerUserId(),
                 terms, terms, criteria.type(), criteria.type(), criteria.memberUserId(), criteria.memberUserId(),
                 criteria.visibility(), criteria.visibility(), criteria.tag(), criteria.tag(),
                 criteria.dateFrom(), criteria.dateFrom(), criteria.dateTo(), criteria.dateTo()
-        };
-    }
-
-    private static Object[] growthSectionArgs(QueryCriteria criteria) {
-        String[] terms = criteria.searchTerms().toArray(String[]::new);
-        return new Object[] {
-                criteria.familyId(), criteria.viewerUserId(), criteria.viewerUserId(), criteria.viewerUserId(),
-                criteria.viewerUserId(), terms, terms, criteria.type(), criteria.type(),
-                criteria.memberUserId(), criteria.memberUserId(), criteria.visibility(), criteria.visibility(),
-                criteria.tag(), criteria.tag(), criteria.dateFrom(), criteria.dateFrom(),
-                criteria.dateTo(), criteria.dateTo()
         };
     }
 

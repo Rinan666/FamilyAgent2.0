@@ -13,6 +13,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -26,7 +27,7 @@ class MemoryLibraryQueryGatewayTest {
     @Mock private JdbcTemplate jdbcTemplate;
 
     @Test
-    void query_shouldBindPermissionSectionsAndPagination() {
+    void query_shouldBindUnifiedMemoryPermissionsAndPagination() {
         when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), any(Object[].class)))
                 .thenReturn(2L);
         when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
@@ -59,33 +60,25 @@ class MemoryLibraryQueryGatewayTest {
         verify(jdbcTemplate).queryForObject(countSql.capture(), eq(Long.class), countArgs.capture());
         verify(jdbcTemplate).query(listSql.capture(), any(RowMapper.class), listArgs.capture());
 
-        assertTrue(listSql.getValue().contains("jsonb_typeof(me.metadata->'tags')"));
-        assertTrue(listSql.getValue().contains("jsonb_typeof(gr.metadata->'tags')"));
-        assertPermissionSectionArgs(countArgs.getValue(), false);
-        assertPermissionSectionArgs(listArgs.getValue(), true);
+        assertTrue(listSql.getValue().contains("FROM memory_entries me"));
+        assertTrue(listSql.getValue().contains("me.origin_type = 'DIARY'"));
+        assertFalse(listSql.getValue().contains("UNION ALL"));
+        assertUnifiedArgs(countArgs.getValue(), false);
+        assertUnifiedArgs(listArgs.getValue(), true);
         assertEquals(countQuestionMarks(countSql.getValue()), countArgs.getValue().length);
         assertEquals(countQuestionMarks(listSql.getValue()), listArgs.getValue().length);
     }
 
-    private static void assertPermissionSectionArgs(Object[] args, boolean includesPagination) {
-        int expectedLength = includesPagination ? 57 : 55;
+    private static void assertUnifiedArgs(Object[] args, boolean includesPagination) {
+        int expectedLength = includesPagination ? 20 : 18;
         assertEquals(expectedLength, args.length);
-        assertSection(args, 0, 18);
-        assertSection(args, 18, 18);
-        assertSection(args, 36, 19);
+        assertEquals(10L, args[0]);
+        assertEquals(101L, args[1]);
+        assertEquals(101L, args[2]);
+        assertEquals(101L, args[3]);
         if (includesPagination) {
-            assertEquals(3, args[55]);
-            assertEquals(6, args[56]);
-        }
-    }
-
-    private static void assertSection(Object[] args, int offset, int length) {
-        assertEquals(10L, args[offset]);
-        assertEquals(101L, args[offset + 1]);
-        assertEquals(101L, args[offset + 2]);
-        assertEquals(101L, args[offset + 3]);
-        if (length == 19) {
-            assertEquals(101L, args[offset + 4]);
+            assertEquals(3, args[18]);
+            assertEquals(6, args[19]);
         }
     }
 

@@ -38,6 +38,10 @@ public class GrowthMemorySyncSupport {
                 EntityStatus.valueOf(record.getStatus())));
     }
 
+    public void delete(Long recordId) {
+        syncFacade.delete(MemoryOriginType.GROWTH, recordId);
+    }
+
     private static String text(Object value) {
         return value == null || String.valueOf(value).isBlank() ? null : String.valueOf(value).trim();
     }

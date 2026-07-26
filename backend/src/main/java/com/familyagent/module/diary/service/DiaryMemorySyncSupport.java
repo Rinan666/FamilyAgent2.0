@@ -40,6 +40,10 @@ public class DiaryMemorySyncSupport {
                 archived(metadata) ? EntityStatus.ARCHIVED : EntityStatus.ACTIVE));
     }
 
+    public void delete(Long diaryId) {
+        syncFacade.delete(MemoryOriginType.DIARY, diaryId);
+    }
+
     private static MemoryScope visibility(String value) {
         return "FAMILY".equalsIgnoreCase(value)
                 ? MemoryScope.FAMILY_VISIBLE
