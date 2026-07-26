@@ -246,6 +246,7 @@ export default function AgentPage() {
   const [isProcessingSaveCommand, setIsProcessingSaveCommand] = useState(false);
 
   const {
+    families,
     viewerRole,
     activeFamilyId,
     activeFamily,
@@ -1062,6 +1063,8 @@ export default function AgentPage() {
             mode={mode}
             targetLabel={targetLabel}
             saveFeedback={saveFeedback}
+            families={families}
+            activeFamilyId={activeFamilyId}
             onConfirmSaveDraft={(message, plan) => void confirmSaveDraft(message, plan)}
             onCancelSaveDraft={(message) => void cancelSaveDraft(message)}
             onOpenContext={() => setIsContextOpen(true)}

@@ -6,13 +6,20 @@ import { Plus, X } from 'lucide-react';
 import DiaryComposer from '@/components/diary/DiaryComposer';
 import { MobilePageDrawer } from '@/components/layout/Sidebar';
 import MemoryLibraryWorkbench from '@/components/memory-library/MemoryLibraryWorkbench';
+import PersonalMemoryWorkbench from '@/components/memory-library/PersonalMemoryWorkbench';
+import PersonalMemoryComposer from '@/components/memory-library/PersonalMemoryComposer';
+import { useViewerRole } from '@/hooks/useViewerRole';
 import type { MemoryLibraryItem } from '@/types';
 
 export default function MemoryLibraryPage() {
+  const { families, activeFamilyId } = useViewerRole();
   const searchParams = useSearchParams();
   const [composerOpen, setComposerOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MemoryLibraryItem | null>(null);
   const [refreshSignal, setRefreshSignal] = useState(0);
+  const [libraryKind, setLibraryKind] = useState<'PERSONAL' | 'FAMILY'>(
+    () => searchParams.get('library') === 'family' ? 'FAMILY' : 'PERSONAL',
+  );
 
   const handleSaved = useCallback(() => {
     setComposerOpen(false);
@@ -38,13 +45,22 @@ export default function MemoryLibraryPage() {
         <MobilePageDrawer showLibrarySearch />
       </div>
 
-      <MemoryLibraryWorkbench
-        refreshSignal={refreshSignal}
-        onEditEntry={(item) => {
-          setEditingItem(item);
-          setComposerOpen(true);
-        }}
-      />
+      <div className="mx-auto flex max-w-6xl rounded-xl bg-stone-100 p-1">
+        <button type="button" onClick={() => setLibraryKind('PERSONAL')} className={libraryKind === 'PERSONAL' ? 'flex-1 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-stone-900 shadow-sm' : 'flex-1 px-4 py-2.5 text-sm text-stone-500'}>个人记忆库</button>
+        <button type="button" onClick={() => setLibraryKind('FAMILY')} className={libraryKind === 'FAMILY' ? 'flex-1 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-stone-900 shadow-sm' : 'flex-1 px-4 py-2.5 text-sm text-stone-500'}>家族记忆库</button>
+      </div>
+
+      {libraryKind === 'PERSONAL' ? (
+        <PersonalMemoryWorkbench refreshSignal={refreshSignal} />
+      ) : (
+        <MemoryLibraryWorkbench
+          refreshSignal={refreshSignal}
+          onEditEntry={(item) => {
+            setEditingItem(item);
+            setComposerOpen(true);
+          }}
+        />
+      )}
 
       <button
         type="button"
@@ -68,7 +84,7 @@ export default function MemoryLibraryPage() {
           />
           <section className="relative mx-auto flex h-full max-w-6xl flex-col overflow-hidden rounded-md border border-white/60 bg-stone-50 shadow-2xl">
             <div className="flex h-12 shrink-0 items-center justify-between border-b border-stone-200 bg-white px-4">
-              <h2 className="text-sm font-semibold text-stone-950">{editingItem ? '编辑记忆' : '新建记忆'}</h2>
+              <h2 className="text-sm font-semibold text-stone-950">{editingItem ? '编辑记忆' : libraryKind === 'PERSONAL' ? '新建个人记忆' : '新建家族记忆'}</h2>
               <button
                 type="button"
                 onClick={closeComposer}
@@ -79,7 +95,11 @@ export default function MemoryLibraryPage() {
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
-              <DiaryComposer editItem={editingItem} onSaved={handleSaved} />
+              {libraryKind === 'PERSONAL' ? (
+                <PersonalMemoryComposer families={families} activeFamilyId={activeFamilyId} onSaved={handleSaved} />
+              ) : (
+                <DiaryComposer editItem={editingItem} onSaved={handleSaved} />
+              )}
             </div>
           </section>
         </div>

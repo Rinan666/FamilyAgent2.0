@@ -176,7 +176,7 @@ export function useAgentSaveDraft(options: UseAgentSaveDraftOptions) {
       setFeedback(message.id, {
         status: 'saved',
         detail: savePlanDetail(plan),
-        href: savedMemoryHref(options.activeFamilyId),
+        href: savedMemoryHref(options.activeFamilyId, plan),
       });
     } catch (error) {
       await markSkillRunFailed(skillRunId, error);
@@ -237,6 +237,7 @@ function skillSource(mode: AgentMode) {
   return 'FAMILY_AGENT_CHAT';
 }
 
-function savedMemoryHref(familyId: number) {
-  return `/dashboard/memory-library?familyId=${familyId}`;
+function savedMemoryHref(familyId: number, plan: AgentSaveToolPlan) {
+  if (plan.tool === 'PERSONAL_MEMORY') return '/dashboard/memory-library?library=personal';
+  return `/dashboard/memory-library?familyId=${familyId}&library=family`;
 }

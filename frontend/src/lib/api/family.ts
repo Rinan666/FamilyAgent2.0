@@ -33,7 +33,7 @@ export const familyApi = {
     familyId: number,
     subjectUserId: number,
     caregiverUserId: number,
-    data: { scope?: 'ALL' | 'DIARY' | 'GROWTH_GUARD'; active?: boolean; expiresAt?: string },
+    data: { scope?: 'ALL' | 'DIARY' | 'MEMORY' | 'GROWTH_GUARD'; active?: boolean; expiresAt?: string },
   ) =>
     request<CareAuthorization>(`/families/${familyId}/members/${subjectUserId}/caregivers/${caregiverUserId}`, {
       method: 'PUT',

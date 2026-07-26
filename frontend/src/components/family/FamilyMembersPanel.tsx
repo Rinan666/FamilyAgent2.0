@@ -277,7 +277,7 @@ export default function FamilyMembersPanel({
   const hasActiveCareScope = (
     familyId: number,
     caregiverUserId: number,
-    scope: 'DIARY' | 'GROWTH_GUARD',
+    scope: 'DIARY' | 'MEMORY' | 'GROWTH_GUARD',
   ) => {
     if (!currentUserId) return false;
     return (careAuthorizations[familyId] || []).some((item) => (
@@ -290,6 +290,7 @@ export default function FamilyMembersPanel({
 
   const hasCareAuthorization = (familyId: number, caregiverUserId: number) => (
     hasActiveCareScope(familyId, caregiverUserId, 'DIARY')
+    && hasActiveCareScope(familyId, caregiverUserId, 'MEMORY')
     && hasActiveCareScope(familyId, caregiverUserId, 'GROWTH_GUARD')
   );
 
@@ -309,6 +310,10 @@ export default function FamilyMembersPanel({
         }),
         familyApi.upsertCareAuthorization(familyId, currentUserId, caregiver.userId, {
           scope: 'GROWTH_GUARD',
+          active: !active,
+        }),
+        familyApi.upsertCareAuthorization(familyId, currentUserId, caregiver.userId, {
+          scope: 'MEMORY',
           active: !active,
         }),
       ]);

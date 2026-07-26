@@ -17,6 +17,14 @@ Visibility: TypeAlias = Literal[
     "CARE_VISIBLE",
     "LEGACY_VISIBLE",
 ]
+SaveVisibility: TypeAlias = Literal[
+    "PRIVATE",
+    "FAMILY_VISIBLE",
+    "CARE_VISIBLE",
+    "LEGACY_VISIBLE",
+    "ALL_FAMILIES_VISIBLE",
+    "SELECTED_FAMILIES_VISIBLE",
+]
 MemoryType: TypeAlias = Literal[
     "FAMILY_STORY",
     "ELDER_ADVICE",
@@ -30,6 +38,22 @@ MemoryScope: TypeAlias = Literal[
     "CARE_VISIBLE",
     "FAMILY_VISIBLE",
     "PARENT_VISIBLE",
+]
+SaveMemoryScope: TypeAlias = Literal[
+    "PRIVATE",
+    "CARE_VISIBLE",
+    "FAMILY_VISIBLE",
+    "PARENT_VISIBLE",
+    "ALL_FAMILIES_VISIBLE",
+    "SELECTED_FAMILIES_VISIBLE",
+]
+PersonalMemoryType: TypeAlias = Literal[
+    "NOTE",
+    "KNOWLEDGE",
+    "INSIGHT",
+    "EXPERIENCE",
+    "PREFERENCE",
+    "PLAN",
 ]
 GrowthCategory: TypeAlias = Literal[
     "POSTURE",
@@ -129,14 +153,15 @@ class SaveToolPlanData(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     should_save: bool
-    tool: Literal["NONE", "DIARY", "FAMILY_MEMORY", "GROWTH_GUARD"]
+    tool: Literal["NONE", "DIARY", "PERSONAL_MEMORY", "FAMILY_MEMORY", "GROWTH_GUARD"]
     content: str
     title: str
     summary: str
-    visibility: Visibility
+    visibility: SaveVisibility
     entry_type: DiaryEntryType
     memory_type: MemoryType
-    scope: MemoryScope
+    personal_memory_type: PersonalMemoryType = "NOTE"
+    scope: SaveMemoryScope
     category: GrowthCategory
     severity: int = Field(ge=1, le=5)
     importance: int = Field(ge=1, le=5)

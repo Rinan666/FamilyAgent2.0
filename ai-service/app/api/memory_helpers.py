@@ -10,7 +10,11 @@ from .memory_save_signals import (
 
 def _sanitize_save_tool_plan(data: dict) -> dict:
     content = _normalize_save_content(data.get("content", ""))
-    raw_tool = _choice(data.get("tool"), {"NONE", "DIARY", "FAMILY_MEMORY", "GROWTH_GUARD"}, "NONE")
+    raw_tool = _choice(
+        data.get("tool"),
+        {"NONE", "DIARY", "PERSONAL_MEMORY", "FAMILY_MEMORY", "GROWTH_GUARD"},
+        "NONE",
+    )
     if _looks_like_save_command_only(content):
         return _blocked_save_tool_plan("只有保存指令，没有找到可保存的原始内容。")
     tool = raw_tool if raw_tool != "NONE" else "DIARY"
@@ -20,7 +24,14 @@ def _sanitize_save_tool_plan(data: dict) -> dict:
         tool,
         _choice(
             data.get("visibility"),
-            {"PRIVATE", "FAMILY_VISIBLE", "CARE_VISIBLE", "LEGACY_VISIBLE"},
+            {
+                "PRIVATE",
+                "FAMILY_VISIBLE",
+                "CARE_VISIBLE",
+                "LEGACY_VISIBLE",
+                "ALL_FAMILIES_VISIBLE",
+                "SELECTED_FAMILIES_VISIBLE",
+            },
             "PRIVATE",
         ),
         content,
@@ -29,7 +40,14 @@ def _sanitize_save_tool_plan(data: dict) -> dict:
         tool,
         _choice(
             data.get("scope"),
-            {"PRIVATE", "CARE_VISIBLE", "FAMILY_VISIBLE", "PARENT_VISIBLE"},
+            {
+                "PRIVATE",
+                "CARE_VISIBLE",
+                "FAMILY_VISIBLE",
+                "PARENT_VISIBLE",
+                "ALL_FAMILIES_VISIBLE",
+                "SELECTED_FAMILIES_VISIBLE",
+            },
             "PRIVATE" if visibility == "PRIVATE" else visibility,
         ),
         visibility,
@@ -58,6 +76,11 @@ def _sanitize_save_tool_plan(data: dict) -> dict:
     )
     if tool == "FAMILY_MEMORY":
         memory_type = _infer_family_memory_type(content, memory_type)
+    personal_memory_type = _choice(
+        data.get("personal_memory_type"),
+        {"NOTE", "KNOWLEDGE", "INSIGHT", "EXPERIENCE", "PREFERENCE", "PLAN"},
+        "NOTE",
+    )
     entry_type = _choice(
         data.get("entry_type"),
         {"DAILY", "IMPORTANT_EVENT", "LESSON", "EMOTION", "MESSAGE_TO_FAMILY", "SELF_REFLECTION"},
@@ -75,6 +98,7 @@ def _sanitize_save_tool_plan(data: dict) -> dict:
         "visibility": visibility,
         "entry_type": entry_type,
         "memory_type": memory_type,
+        "personal_memory_type": personal_memory_type,
         "scope": scope,
         "category": category,
         "severity": _bounded_int(data.get("severity"), 1, 5, _default_growth_severity(content)),
@@ -100,6 +124,7 @@ def _blocked_save_tool_plan(reason: str) -> dict:
         "visibility": "PRIVATE",
         "entry_type": "DAILY",
         "memory_type": "ELDER_ADVICE",
+        "personal_memory_type": "NOTE",
         "scope": "PRIVATE",
         "category": "OTHER",
         "severity": 1,
@@ -119,6 +144,7 @@ def _unavailable_save_tool_plan() -> dict:
         "visibility": "PRIVATE",
         "entry_type": "DAILY",
         "memory_type": "ELDER_ADVICE",
+        "personal_memory_type": "NOTE",
         "scope": "PRIVATE",
         "category": "OTHER",
         "severity": 1,
@@ -144,6 +170,14 @@ def _normalize_save_visibility(tool: str, visibility: str, content: str) -> str:
         return "FAMILY_VISIBLE"
     if tool == "DIARY" and re.search(r"(给家人|希望家人|全家|家里人都|大家)", content):
         return "FAMILY_VISIBLE"
+    if tool == "PERSONAL_MEMORY":
+        if visibility in {
+            "ALL_FAMILIES_VISIBLE",
+            "SELECTED_FAMILIES_VISIBLE",
+            "CARE_VISIBLE",
+        }:
+            return visibility
+        return "PRIVATE"
     if tool == "DIARY":
         return "PRIVATE"
     return visibility
@@ -153,6 +187,13 @@ def _normalize_save_scope(tool: str, scope: str, visibility: str) -> str:
         return "CARE_VISIBLE"
     if tool == "FAMILY_MEMORY":
         return "FAMILY_VISIBLE" if visibility == "FAMILY_VISIBLE" else "CARE_VISIBLE"
+    if tool == "PERSONAL_MEMORY":
+        return visibility if visibility in {
+            "PRIVATE",
+            "ALL_FAMILIES_VISIBLE",
+            "SELECTED_FAMILIES_VISIBLE",
+            "CARE_VISIBLE",
+        } else "PRIVATE"
     if visibility == "PRIVATE":
         return "PRIVATE"
     if visibility in {"CARE_VISIBLE", "FAMILY_VISIBLE"}:
@@ -199,6 +240,7 @@ def _save_plan_reason(value: object, tool: str) -> str:
         return reason
     return {
         "DIARY": "用户明确要求保存，已整理为可编辑的日记草稿。",
+        "PERSONAL_MEMORY": "用户明确要求保存，已整理为可编辑的个人记忆草稿。",
         "FAMILY_MEMORY": "用户明确要求保存，已整理为可编辑的家庭记忆草稿。",
         "GROWTH_GUARD": "用户明确要求保存，已整理为可编辑的成长观察草稿。",
     }.get(tool, "没有找到可保存的内容。")
@@ -217,6 +259,7 @@ def _bounded_int(value: object, minimum: int, maximum: int, fallback: int) -> in
 def _default_save_title(tool: str) -> str:
     return {
         "DIARY": "对话保存的每日记录",
+        "PERSONAL_MEMORY": "对话保存的个人记忆",
         "FAMILY_MEMORY": "对话沉淀的经验",
         "GROWTH_GUARD": "对话记录的成长观察",
     }.get(tool, "无需保存")
@@ -224,6 +267,7 @@ def _default_save_title(tool: str) -> str:
 def _default_save_confirmation(tool: str) -> str:
     return {
         "DIARY": "日记草稿已准备，请修改或确认后保存。",
+        "PERSONAL_MEMORY": "个人记忆草稿已准备，请修改或确认后保存。",
         "FAMILY_MEMORY": "家庭记忆草稿已准备，请修改或确认后保存。",
         "GROWTH_GUARD": "成长观察草稿已准备，请修改或确认后保存。",
     }.get(tool, "没有找到可保存的内容。")

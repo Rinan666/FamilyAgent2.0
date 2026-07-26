@@ -235,6 +235,7 @@ function safeHttpUrl(value: string): string | null {
 }
 
 function ragSectionTitle(type: string) {
+  if (type === 'PERSONAL_MEMORY') return '个人记忆';
   if (type === 'LIFE_RECORD') return '日记';
   if (type === 'GROWTH_OBSERVATION') return '成长观察';
   if (type === 'FAMILY_EXPERIENCE') return '家族经验';
@@ -242,6 +243,7 @@ function ragSectionTitle(type: string) {
 }
 
 function sourceTypeLabel(type: string) {
+  if (type === 'PERSONAL_MEMORY') return '个人记忆';
   if (type === 'LIFE_RECORD') return '日记';
   if (type === 'FAMILY_EXPERIENCE') return '经验';
   if (type === 'GROWTH_OBSERVATION') return '成长';

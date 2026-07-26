@@ -7,7 +7,10 @@ import type {
   AuthorizedMemoryRecallResult,
   ChatMessage,
   CreateFamilyMemoryRequest,
+  CreatePersonalMemoryRequest,
   MemoryEntry,
+  PersonalMemoryView,
+  PersonalMemoryVisibility,
   MemoryVoteType,
   PageResult,
   PersonaMaterialDraft,
@@ -16,7 +19,18 @@ import type {
 } from '@/types';
 
 export const memoryApi = {
-  listMyMemories: (limit = 20) => request<MemoryEntry[]>(`/memories/me?limit=${limit}`),
+  listPersonalMemories: (limit = 50) =>
+    request<PersonalMemoryView[]>(`/memories/personal?limit=${limit}`),
+  createPersonalMemory: (data: CreatePersonalMemoryRequest) =>
+    request<PersonalMemoryView>('/memories/personal', { method: 'POST', body: JSON.stringify(data) }),
+  updatePersonalMemoryVisibility: (
+    memoryId: number,
+    data: { visibility: PersonalMemoryVisibility; selectedFamilyIds?: number[] },
+  ) => request<PersonalMemoryView>(`/memories/personal/${memoryId}/visibility`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  listMyMemories: (limit = 20) => request<PersonalMemoryView[]>(`/memories/me?limit=${limit}`),
   listFamilyMemories: (familyId: number, limit = 30) =>
     request<MemoryEntry[]>(`/memories/family/${familyId}?limit=${limit}`),
   searchFamilyMemories: (params: {

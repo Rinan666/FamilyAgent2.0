@@ -2,25 +2,40 @@
 
 import { useEffect, useState } from 'react';
 import { Check, Loader2, X } from 'lucide-react';
-import type { AgentSaveTool, AgentSaveToolPlan, MemoryScope } from '@/types';
+import type {
+  AgentSaveTool,
+  AgentSaveToolPlan,
+  Family,
+  SaveMemoryVisibility,
+} from '@/types';
 
 interface SaveDraftCardProps {
   plan: AgentSaveToolPlan;
   isConfirming: boolean;
   onConfirm: (plan: AgentSaveToolPlan) => void;
   onCancel: () => void;
+  families: Family[];
+  activeFamilyId?: number | null;
 }
 
 const TOOL_OPTIONS: { value: AgentSaveTool; label: string }[] = [
   { value: 'DIARY', label: '日记' },
+  { value: 'PERSONAL_MEMORY', label: '个人记忆' },
   { value: 'FAMILY_MEMORY', label: '家庭记忆' },
   { value: 'GROWTH_GUARD', label: '成长观察' },
 ];
 
-const VISIBILITY_OPTIONS: { value: MemoryScope; label: string }[] = [
+const DEFAULT_VISIBILITY_OPTIONS: { value: SaveMemoryVisibility; label: string }[] = [
   { value: 'PRIVATE', label: '仅自己可见' },
   { value: 'CARE_VISIBLE', label: '照护可见' },
   { value: 'FAMILY_VISIBLE', label: '家庭可见' },
+];
+
+const PERSONAL_VISIBILITY_OPTIONS: { value: SaveMemoryVisibility; label: string }[] = [
+  { value: 'PRIVATE', label: '仅自己可见' },
+  { value: 'ALL_FAMILIES_VISIBLE', label: '当前全部家族可见' },
+  { value: 'SELECTED_FAMILIES_VISIBLE', label: '选择家族可见' },
+  { value: 'CARE_VISIBLE', label: '仅照护可见' },
 ];
 
 export default function SaveDraftCard({
@@ -28,11 +43,16 @@ export default function SaveDraftCard({
   isConfirming,
   onConfirm,
   onCancel,
+  families,
+  activeFamilyId,
 }: SaveDraftCardProps) {
   const [title, setTitle] = useState(plan.title);
   const [content, setContent] = useState(plan.content);
   const [tool, setTool] = useState<AgentSaveTool>(plan.tool === 'NONE' ? 'DIARY' : plan.tool);
-  const [visibility, setVisibility] = useState<MemoryScope>(draftVisibility(plan));
+  const [visibility, setVisibility] = useState<SaveMemoryVisibility>(draftVisibility(plan));
+  const [selectedFamilyIds, setSelectedFamilyIds] = useState<number[]>(
+    initialSelectedFamilyIds(plan, activeFamilyId),
+  );
   const [tags, setTags] = useState(plan.tags.join('，'));
 
   useEffect(() => {
@@ -40,11 +60,21 @@ export default function SaveDraftCard({
     setContent(plan.content);
     setTool(plan.tool === 'NONE' ? 'DIARY' : plan.tool);
     setVisibility(draftVisibility(plan));
+    setSelectedFamilyIds(initialSelectedFamilyIds(plan, activeFamilyId));
     setTags(plan.tags.join('，'));
-  }, [plan]);
+  }, [activeFamilyId, plan]);
 
   const effectiveVisibility = tool === 'GROWTH_GUARD' ? 'CARE_VISIBLE' : visibility;
-  const canConfirm = Boolean(title.trim() && content.trim()) && !isConfirming;
+  const needsSelectedFamilies = tool === 'PERSONAL_MEMORY'
+    && effectiveVisibility === 'SELECTED_FAMILIES_VISIBLE';
+  const canConfirm = Boolean(title.trim() && content.trim())
+    && (!needsSelectedFamilies || selectedFamilyIds.length > 0)
+    && !isConfirming;
+  const visibilityOptions = tool === 'PERSONAL_MEMORY'
+    ? PERSONAL_VISIBILITY_OPTIONS
+    : tool === 'FAMILY_MEMORY'
+      ? DEFAULT_VISIBILITY_OPTIONS.filter((option) => option.value !== 'PRIVATE')
+      : DEFAULT_VISIBILITY_OPTIONS;
 
   return (
     <div className="mt-3 w-full max-w-2xl rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 text-left text-stone-800 shadow-sm">
@@ -55,7 +85,11 @@ export default function SaveDraftCard({
         </div>
         <select
           value={tool}
-          onChange={(event) => setTool(event.target.value as AgentSaveTool)}
+          onChange={(event) => {
+            const nextTool = event.target.value as AgentSaveTool;
+            setTool(nextTool);
+            setVisibility(defaultVisibilityForTool(nextTool, visibility));
+          }}
           disabled={isConfirming}
           className="rounded-md border border-emerald-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-emerald-500"
           aria-label="保存类型"
@@ -94,11 +128,11 @@ export default function SaveDraftCard({
           可见范围
           <select
             value={effectiveVisibility}
-            onChange={(event) => setVisibility(event.target.value as MemoryScope)}
+            onChange={(event) => setVisibility(event.target.value as SaveMemoryVisibility)}
             disabled={isConfirming || tool === 'GROWTH_GUARD'}
             className="mt-1 w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 disabled:bg-stone-100"
           >
-            {VISIBILITY_OPTIONS.map((option) => (
+            {visibilityOptions.map((option) => (
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
@@ -116,6 +150,29 @@ export default function SaveDraftCard({
         </label>
       </div>
 
+      {needsSelectedFamilies && (
+        <fieldset className="mt-3 rounded-lg border border-stone-200 bg-white p-3">
+          <legend className="px-1 text-xs font-medium text-stone-600">选择可见家族</legend>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {families.map((family) => (
+              <label key={family.id} className="flex items-center gap-2 text-sm text-stone-700">
+                <input
+                  type="checkbox"
+                  checked={selectedFamilyIds.includes(family.id)}
+                  onChange={() => setSelectedFamilyIds(toggleFamilyId(selectedFamilyIds, family.id))}
+                  disabled={isConfirming}
+                  className="h-4 w-4 rounded border-stone-300 text-emerald-700"
+                />
+                <span className="truncate">{family.name}</span>
+              </label>
+            ))}
+          </div>
+          {families.length === 0 && (
+            <p className="text-xs text-stone-500">当前没有可选择的家族。</p>
+          )}
+        </fieldset>
+      )}
+
       {plan.reason && (
         <p className="mt-3 text-xs leading-5 text-stone-500">AI 整理说明：{plan.reason}</p>
       )}
@@ -132,7 +189,15 @@ export default function SaveDraftCard({
         </button>
         <button
           type="button"
-          onClick={() => onConfirm(buildEditedPlan(plan, title, content, tool, effectiveVisibility, tags))}
+          onClick={() => onConfirm(buildEditedPlan(
+            plan,
+            title,
+            content,
+            tool,
+            effectiveVisibility,
+            tags,
+            selectedFamilyIds,
+          ))}
           disabled={!canConfirm}
           className="inline-flex items-center gap-1 rounded-md bg-emerald-700 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
@@ -144,9 +209,10 @@ export default function SaveDraftCard({
   );
 }
 
-function draftVisibility(plan: AgentSaveToolPlan): MemoryScope {
+function draftVisibility(plan: AgentSaveToolPlan): SaveMemoryVisibility {
   const value = String(plan.scope || plan.visibility || '').toUpperCase();
-  if (value === 'CARE_VISIBLE' || value === 'FAMILY_VISIBLE') return value;
+  if (value === 'CARE_VISIBLE' || value === 'FAMILY_VISIBLE'
+    || value === 'ALL_FAMILIES_VISIBLE' || value === 'SELECTED_FAMILIES_VISIBLE') return value;
   return 'PRIVATE';
 }
 
@@ -155,8 +221,9 @@ function buildEditedPlan(
   title: string,
   content: string,
   tool: AgentSaveTool,
-  visibility: MemoryScope,
+  visibility: SaveMemoryVisibility,
   tags: string,
+  selectedFamilyIds: number[],
 ): AgentSaveToolPlan {
   const normalizedContent = content.trim();
   return {
@@ -168,6 +235,8 @@ function buildEditedPlan(
     summary: normalizedContent.slice(0, 80),
     visibility,
     scope: visibility,
+    personal_memory_type: plan.personal_memory_type || 'NOTE',
+    selected_family_ids: tool === 'PERSONAL_MEMORY' ? selectedFamilyIds : [],
     tags: tags
       .split(/[，,]/)
       .map((tag) => tag.trim())
@@ -175,4 +244,28 @@ function buildEditedPlan(
       .slice(0, 6),
     confirmation_message: '用户已确认保存草稿。',
   };
+}
+
+function initialSelectedFamilyIds(plan: AgentSaveToolPlan, activeFamilyId?: number | null) {
+  const selected = Array.isArray(plan.selected_family_ids) ? plan.selected_family_ids : [];
+  if (selected.length > 0) return selected;
+  return activeFamilyId ? [activeFamilyId] : [];
+}
+
+function defaultVisibilityForTool(
+  tool: AgentSaveTool,
+  current: SaveMemoryVisibility,
+): SaveMemoryVisibility {
+  if (tool === 'GROWTH_GUARD') return 'CARE_VISIBLE';
+  if (tool === 'FAMILY_MEMORY') return current === 'CARE_VISIBLE' ? current : 'FAMILY_VISIBLE';
+  if (tool === 'PERSONAL_MEMORY') {
+    return PERSONAL_VISIBILITY_OPTIONS.some((option) => option.value === current) ? current : 'PRIVATE';
+  }
+  return DEFAULT_VISIBILITY_OPTIONS.some((option) => option.value === current) ? current : 'PRIVATE';
+}
+
+function toggleFamilyId(selected: number[], familyId: number) {
+  return selected.includes(familyId)
+    ? selected.filter((id) => id !== familyId)
+    : [...selected, familyId];
 }

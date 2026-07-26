@@ -61,6 +61,7 @@ def test_build_family_agent_system_prompt_includes_full_context():
     assert "不得把其他家庭成员发布、观察或被观察的内容说成当前对话者" in prompt
     assert "author=current_conversation_user" in prompt
     assert "relationship_to_viewer" in prompt
+    assert "library=personal" in prompt
     assert "称呼方向不可颠倒" in prompt
     assert "不推断、补全或编造亲属关系" in prompt
 

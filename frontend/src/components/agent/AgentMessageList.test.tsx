@@ -18,6 +18,8 @@ function renderMessageList(saveFeedback = {}) {
       mode="family"
       targetLabel="家庭成员"
       saveFeedback={saveFeedback}
+      families={[]}
+      activeFamilyId={null}
       onConfirmSaveDraft={vi.fn()}
       onCancelSaveDraft={vi.fn()}
     />,

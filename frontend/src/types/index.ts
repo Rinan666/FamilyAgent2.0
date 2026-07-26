@@ -250,7 +250,7 @@ export interface FamilyRelationship {
   updatedAt: string;
 }
 
-export type CareAuthorizationScope = 'ALL' | 'GROWTH_GUARD' | string;
+export type CareAuthorizationScope = 'ALL' | 'DIARY' | 'MEMORY' | 'GROWTH_GUARD' | string;
 export type CareAuthorizationStatus = 'ACTIVE' | 'REVOKED' | string;
 
 export interface CareAuthorization {
@@ -431,6 +431,7 @@ export interface MemoryEntry {
   id: number;
   userId: number;
   familyId?: number;
+  libraryKind?: MemoryLibraryKind;
   subject?: string;
   type: MemoryEntryType;
   scope: MemoryScope | string;
@@ -515,6 +516,42 @@ export type MemoryEntryType =
 
 export type MemoryScope = 'PRIVATE' | 'CARE_VISIBLE' | 'FAMILY_VISIBLE';
 
+export type MemoryLibraryKind = 'PERSONAL' | 'FAMILY';
+export type PersonalMemoryVisibility =
+  | 'PRIVATE'
+  | 'ALL_FAMILIES_VISIBLE'
+  | 'SELECTED_FAMILIES_VISIBLE'
+  | 'CARE_VISIBLE';
+export type PersonalMemoryType = 'NOTE' | 'KNOWLEDGE' | 'INSIGHT' | 'EXPERIENCE' | 'PREFERENCE' | 'PLAN';
+export type SaveMemoryVisibility = DiaryVisibility | MemoryScope | PersonalMemoryVisibility;
+
+export interface PersonalMemoryView {
+  id: number;
+  userId: number;
+  libraryKind: 'PERSONAL';
+  type: PersonalMemoryType | string;
+  visibility: PersonalMemoryVisibility | string;
+  content: string;
+  summary?: string;
+  importance: number;
+  confidence: number;
+  status: 'ACTIVE' | 'ARCHIVED' | string;
+  metadata?: Record<string, unknown>;
+  selectedFamilyIds: number[];
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface CreatePersonalMemoryRequest {
+  content: string;
+  type?: PersonalMemoryType;
+  visibility?: PersonalMemoryVisibility;
+  summary?: string;
+  importance?: number;
+  selectedFamilyIds?: number[];
+  metadata?: WriteMemoryMetadata;
+}
+
 export type MemoryLibraryItemType = 'LIFE_RECORD' | 'FAMILY_EXPERIENCE' | 'GROWTH_OBSERVATION' | 'AI_SUMMARY';
 
 export interface MemoryLibraryItem {
@@ -569,10 +606,13 @@ export interface WriteMemoryRequest {
   content: string;
   title?: string;
   tags?: string[];
-  visibility?: DiaryVisibility | MemoryScope;
+  visibility?: SaveMemoryVisibility;
   relatedUserId?: number;
   diaryEntryType?: DiaryEntryType;
   memoryType?: MemoryEntryType;
+  personalMemoryType?: PersonalMemoryType;
+  memoryLibrary?: MemoryLibraryKind;
+  selectedFamilyIds?: number[];
   growthCategory?: GrowthGuardCategory;
   growthSeverity?: number;
   metadata?: WriteMemoryMetadata;
@@ -616,10 +656,13 @@ export interface AgentSaveMemoryToolRequest {
   content: string;
   title?: string;
   tags?: string[];
-  visibility?: DiaryVisibility | MemoryScope;
+  visibility?: SaveMemoryVisibility;
   relatedUserId?: number;
   diaryEntryType?: DiaryEntryType;
   memoryType?: MemoryEntryType;
+  personalMemoryType?: PersonalMemoryType;
+  memoryLibrary?: MemoryLibraryKind;
+  selectedFamilyIds?: number[];
   growthCategory?: GrowthGuardCategory;
   growthSeverity?: number;
   requestId?: string;
@@ -630,7 +673,7 @@ export interface AgentSaveMemoryToolRequest {
   metadata?: AgentSaveMemoryMetadata;
 }
 
-export type AgentSaveTool = 'NONE' | 'DIARY' | 'FAMILY_MEMORY' | 'GROWTH_GUARD';
+export type AgentSaveTool = 'NONE' | 'DIARY' | 'PERSONAL_MEMORY' | 'FAMILY_MEMORY' | 'GROWTH_GUARD';
 
 export interface AgentSaveToolPlan {
   should_save: boolean;
@@ -638,10 +681,12 @@ export interface AgentSaveToolPlan {
   content: string;
   title: string;
   summary: string;
-  visibility: DiaryVisibility | MemoryScope | string;
+  visibility: SaveMemoryVisibility | string;
   entry_type: DiaryEntryType | string;
   memory_type: MemoryEntryType;
-  scope: MemoryScope | string;
+  personal_memory_type?: PersonalMemoryType;
+  selected_family_ids?: number[];
+  scope: SaveMemoryVisibility | string;
   category: GrowthGuardCategory | string;
   severity: number;
   importance: number;

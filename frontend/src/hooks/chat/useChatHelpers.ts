@@ -4,7 +4,7 @@ import type { ChatMessage, DiaryEntry, GrowthGuardRecord, MemoryEntry, MemoryLib
 
 export type SessionSavedMemory = {
   id: string;
-  tool: 'DIARY' | 'FAMILY_MEMORY' | 'GROWTH_GUARD';
+  tool: 'DIARY' | 'PERSONAL_MEMORY' | 'FAMILY_MEMORY' | 'GROWTH_GUARD';
   label: string;
   title: string;
   content: string;

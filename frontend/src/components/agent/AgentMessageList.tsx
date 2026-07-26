@@ -6,7 +6,7 @@ import MathRenderer from '@/components/agent/MathRenderer';
 import AnswerEvidenceDisclosure from '@/components/agent/AnswerEvidenceDisclosure';
 import SaveDraftCard from '@/components/agent/SaveDraftCard';
 import { type SaveFeedback } from '@/components/agent/agentDisplay';
-import type { AgentMode, AgentSaveToolPlan, ChatMessage } from '@/types';
+import type { AgentMode, AgentSaveToolPlan, ChatMessage, Family } from '@/types';
 
 interface AgentMessageListProps {
   messages: ChatMessage[];
@@ -18,6 +18,8 @@ interface AgentMessageListProps {
   onConfirmSaveDraft: (message: ChatMessage, plan: AgentSaveToolPlan) => void;
   onCancelSaveDraft: (message: ChatMessage) => void;
   onOpenContext?: () => void;
+  families: Family[];
+  activeFamilyId?: number | null;
 }
 
 function AssistantThinkingIndicator() {
@@ -42,6 +44,8 @@ export default function AgentMessageList({
   onConfirmSaveDraft,
   onCancelSaveDraft,
   onOpenContext,
+  families,
+  activeFamilyId,
 }: AgentMessageListProps) {
   if (!isLoadingMessages && messages.length === 0) {
     return (
@@ -176,6 +180,8 @@ export default function AgentMessageList({
                         isConfirming={feedback.status === 'confirming'}
                         onConfirm={(plan) => onConfirmSaveDraft(message, plan)}
                         onCancel={() => onCancelSaveDraft(message)}
+                        families={families}
+                        activeFamilyId={activeFamilyId}
                       />
                     )}
                   </div>

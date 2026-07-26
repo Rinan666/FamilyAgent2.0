@@ -10,12 +10,21 @@ import type {
   GrowthGuardCategory,
   MemoryEntryType,
   MemoryScope,
+  PersonalMemoryType,
+  PersonalMemoryVisibility,
+  SaveMemoryVisibility,
   WriteCategory,
   WriteMemoryMetadata,
   WriteMemoryRequest,
 } from '../types';
 
-const SAVE_TOOLS = new Set<AgentSaveTool>(['NONE', 'DIARY', 'FAMILY_MEMORY', 'GROWTH_GUARD']);
+const SAVE_TOOLS = new Set<AgentSaveTool>([
+  'NONE',
+  'DIARY',
+  'PERSONAL_MEMORY',
+  'FAMILY_MEMORY',
+  'GROWTH_GUARD',
+]);
 const DIARY_ENTRY_TYPES = new Set<DiaryEntryType>([
   'DAILY',
   'IMPORTANT_EVENT',
@@ -43,6 +52,20 @@ const MEMORY_SCOPES = new Set<MemoryScope>([
   'CARE_VISIBLE',
   'FAMILY_VISIBLE',
 ]);
+const PERSONAL_MEMORY_VISIBILITIES = new Set<PersonalMemoryVisibility>([
+  'PRIVATE',
+  'ALL_FAMILIES_VISIBLE',
+  'SELECTED_FAMILIES_VISIBLE',
+  'CARE_VISIBLE',
+]);
+const PERSONAL_MEMORY_TYPES = new Set<PersonalMemoryType>([
+  'NOTE',
+  'KNOWLEDGE',
+  'INSIGHT',
+  'EXPERIENCE',
+  'PREFERENCE',
+  'PLAN',
+]);
 const GROWTH_CATEGORIES = new Set<GrowthGuardCategory>([
   'POSTURE',
   'DENTAL',
@@ -61,7 +84,7 @@ const INLINE_SAVE_ACTION_FIRST_PREFIX_PATTERN = /^(?:请|麻烦)?(?:你)?(?:帮�
 const INLINE_SAVE_SUFFIX_PATTERN = /[，,。；;\n]\s*(?:请|麻烦)?(?:你)?(?:帮我|替我|给我)?(?:把它|将它)?(?:保存(?:到(?:家庭)?记忆库)?|加入(?:家庭)?记忆库|放到(?:家庭)?记忆库|收进(?:家庭)?记忆库|记下来|记录下来|存起来)(?:里)?(?:一下)?(?:吧)?[。.!！?？]*$/;
 const MAX_EXPLICIT_SAVE_COMMAND_LENGTH = 5000;
 
-export type SavedRecordType = 'DIARY_ENTRY' | 'FAMILY_MEMORY' | 'GROWTH_GUARD' | 'NONE';
+export type SavedRecordType = 'DIARY_ENTRY' | 'PERSONAL_MEMORY' | 'FAMILY_MEMORY' | 'GROWTH_GUARD' | 'NONE';
 
 export type SavePlanPersistenceDecision = {
   plan: AgentSaveToolPlan;
@@ -157,6 +180,8 @@ export function buildFallbackSaveToolPlan(
     visibility: 'PRIVATE',
     entry_type: 'DAILY',
     memory_type: 'ELDER_ADVICE',
+    personal_memory_type: 'NOTE',
+    selected_family_ids: [],
     scope: 'PRIVATE',
     category: 'OTHER',
     severity: 1,
@@ -195,6 +220,8 @@ export function normalizeSaveToolPlan(plan: AgentSaveToolPlan): AgentSaveToolPla
     visibility,
     entry_type: entryTypeFromPlan(plan),
     memory_type: memoryTypeFromPlan(plan),
+    personal_memory_type: personalMemoryTypeFromPlan(plan),
+    selected_family_ids: normalizeFamilyIds(plan.selected_family_ids),
     scope,
     category: growthCategoryFromPlan(plan),
     severity: boundedInt(plan.severity, 3),
@@ -223,17 +250,27 @@ export function skippedSavePlanDetail(plan: AgentSaveToolPlan) {
   return reason ? `这段对话暂时没有可沉淀的内容：${reason}` : '这段对话暂时没有可沉淀的内容。';
 }
 
-export function scopeFromPlan(plan: Pick<AgentSaveToolPlan, 'scope' | 'visibility' | 'tool'>): MemoryScope {
+export function scopeFromPlan(
+  plan: Pick<AgentSaveToolPlan, 'scope' | 'visibility' | 'tool'>,
+): SaveMemoryVisibility {
   const tool = choice(plan.tool, SAVE_TOOLS, 'NONE');
   if (tool === 'GROWTH_GUARD') return 'CARE_VISIBLE';
+  if (tool === 'PERSONAL_MEMORY') {
+    return choice(plan.scope || plan.visibility, PERSONAL_MEMORY_VISIBILITIES, 'PRIVATE');
+  }
   const fallback = plan.visibility === 'FAMILY_VISIBLE' ? 'FAMILY_VISIBLE' : 'PRIVATE';
   return choice(plan.scope || plan.visibility, MEMORY_SCOPES, fallback);
 }
 
-export function visibilityFromPlan(plan: Pick<AgentSaveToolPlan, 'visibility' | 'scope' | 'tool'>): DiaryVisibility {
+export function visibilityFromPlan(
+  plan: Pick<AgentSaveToolPlan, 'visibility' | 'scope' | 'tool'>,
+): SaveMemoryVisibility {
   const tool = choice(plan.tool, SAVE_TOOLS, 'NONE');
   if (tool === 'GROWTH_GUARD') return 'CARE_VISIBLE';
   if (tool === 'FAMILY_MEMORY') return plan.scope === 'CARE_VISIBLE' ? 'CARE_VISIBLE' : 'FAMILY_VISIBLE';
+  if (tool === 'PERSONAL_MEMORY') {
+    return choice(plan.visibility || plan.scope, PERSONAL_MEMORY_VISIBILITIES, 'PRIVATE');
+  }
   return choice(plan.visibility || plan.scope, DIARY_VISIBILITIES, 'PRIVATE');
 }
 
@@ -245,12 +282,19 @@ export function memoryTypeFromPlan(plan: Pick<AgentSaveToolPlan, 'memory_type'>)
   return choice(plan.memory_type, MEMORY_TYPES, 'ELDER_ADVICE');
 }
 
+export function personalMemoryTypeFromPlan(
+  plan: Pick<AgentSaveToolPlan, 'personal_memory_type'>,
+): PersonalMemoryType {
+  return choice(plan.personal_memory_type, PERSONAL_MEMORY_TYPES, 'NOTE');
+}
+
 export function growthCategoryFromPlan(plan: Pick<AgentSaveToolPlan, 'category'>): GrowthGuardCategory {
   return choice(plan.category, GROWTH_CATEGORIES, 'OTHER');
 }
 
 export function toolLabel(tool: AgentSaveTool) {
   if (tool === 'DIARY') return '日记';
+  if (tool === 'PERSONAL_MEMORY') return '个人记忆';
   if (tool === 'FAMILY_MEMORY') return '家庭记忆';
   if (tool === 'GROWTH_GUARD') return '成长观察';
   return '未保存';
@@ -258,13 +302,14 @@ export function toolLabel(tool: AgentSaveTool) {
 
 export function savedRecordType(tool: AgentSaveTool): SavedRecordType {
   if (tool === 'DIARY') return 'DIARY_ENTRY';
+  if (tool === 'PERSONAL_MEMORY') return 'PERSONAL_MEMORY';
   if (tool === 'FAMILY_MEMORY') return 'FAMILY_MEMORY';
   if (tool === 'GROWTH_GUARD') return 'GROWTH_GUARD';
   return 'NONE';
 }
 
 export function writeCategoryFromTool(tool: AgentSaveTool): WriteCategory {
-  if (tool === 'FAMILY_MEMORY') return 'EXPERIENCE';
+  if (tool === 'PERSONAL_MEMORY' || tool === 'FAMILY_MEMORY') return 'EXPERIENCE';
   if (tool === 'GROWTH_GUARD') return 'OBSERVATION';
   return 'RECORD';
 }
@@ -392,6 +437,11 @@ export function buildWriteMemorySaveRequest(
     relatedUserId: targetUserId,
     diaryEntryType: entryTypeFromPlan(plan),
     memoryType: memoryTypeFromPlan(plan),
+    personalMemoryType: personalMemoryTypeFromPlan(plan),
+    memoryLibrary: plan.tool === 'PERSONAL_MEMORY' ? 'PERSONAL' : 'FAMILY',
+    selectedFamilyIds: plan.tool === 'PERSONAL_MEMORY'
+      ? normalizeFamilyIds(plan.selected_family_ids)
+      : [],
     growthCategory: growthCategoryFromPlan(plan),
     growthSeverity: plan.severity,
     metadata,
@@ -411,6 +461,7 @@ function subjectFromAgentMode(mode: AgentMode) {
 function defaultSaveTitle(tool: AgentSaveTool) {
   return {
     DIARY: '聊天保存日记',
+    PERSONAL_MEMORY: '聊天保存个人记忆',
     FAMILY_MEMORY: '聊天保存家庭记忆',
     GROWTH_GUARD: '聊天保存成长观察',
     NONE: '无需保存',
@@ -420,6 +471,7 @@ function defaultSaveTitle(tool: AgentSaveTool) {
 function defaultSaveConfirmation(tool: AgentSaveTool) {
   return {
     DIARY: '日记草稿已准备，请修改或确认后保存。',
+    PERSONAL_MEMORY: '个人记忆草稿已准备，请修改或确认后保存。',
     FAMILY_MEMORY: '家庭记忆草稿已准备，请修改或确认后保存。',
     GROWTH_GUARD: '成长观察草稿已准备，请修改或确认后保存。',
     NONE: '没有找到可保存的内容。',
@@ -442,7 +494,14 @@ function visibilityLabel(value?: string) {
   const normalized = String(value || '').trim().toUpperCase();
   if (normalized === 'PRIVATE') return '仅自己可见';
   if (normalized === 'FAMILY_VISIBLE') return '家庭可见';
+  if (normalized === 'ALL_FAMILIES_VISIBLE') return '当前全部家族可见';
+  if (normalized === 'SELECTED_FAMILIES_VISIBLE') return '选择家族可见';
   if (normalized === 'CARE_VISIBLE') return '照护可见';
   if (normalized === 'LEGACY_VISIBLE') return '传承可见';
   return value || '未设置';
+}
+
+function normalizeFamilyIds(value?: number[]) {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(value.filter((id) => Number.isInteger(id) && id > 0))).slice(0, 20);
 }

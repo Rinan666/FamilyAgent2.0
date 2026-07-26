@@ -264,8 +264,28 @@ describe('savePlan helpers', () => {
 
   it('maps save tool to write category', () => {
     expect(writeCategoryFromTool('DIARY')).toBe('RECORD');
+    expect(writeCategoryFromTool('PERSONAL_MEMORY')).toBe('EXPERIENCE');
     expect(writeCategoryFromTool('FAMILY_MEMORY')).toBe('EXPERIENCE');
     expect(writeCategoryFromTool('GROWTH_GUARD')).toBe('OBSERVATION');
+  });
+
+  it('builds personal memory request with explicit selected family grants', () => {
+    const normalized = normalizeSaveToolPlan(plan({
+      tool: 'PERSONAL_MEMORY',
+      visibility: 'SELECTED_FAMILIES_VISIBLE',
+      scope: 'SELECTED_FAMILIES_VISIBLE',
+      personal_memory_type: 'KNOWLEDGE',
+      selected_family_ids: [10, 20, 10],
+    }));
+
+    expect(buildWriteMemorySaveRequest(10, normalized, {})).toMatchObject({
+      writeCategory: 'EXPERIENCE',
+      memoryLibrary: 'PERSONAL',
+      personalMemoryType: 'KNOWLEDGE',
+      visibility: 'SELECTED_FAMILIES_VISIBLE',
+      selectedFamilyIds: [10, 20],
+    });
+    expect(savedRecordType('PERSONAL_MEMORY')).toBe('PERSONAL_MEMORY');
   });
 
   it('detects explicit memory save commands without matching general save questions', () => {

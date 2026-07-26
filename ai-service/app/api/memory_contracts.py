@@ -1,9 +1,18 @@
 """LLM response schemas for the family memory API."""
 
 VISIBILITY_VALUES = ["PRIVATE", "FAMILY_VISIBLE", "CARE_VISIBLE", "LEGACY_VISIBLE"]
+PERSONAL_MEMORY_VISIBILITIES = [
+    "PRIVATE",
+    "ALL_FAMILIES_VISIBLE",
+    "SELECTED_FAMILIES_VISIBLE",
+    "CARE_VISIBLE",
+]
+SAVE_VISIBILITY_VALUES = list(dict.fromkeys([*VISIBILITY_VALUES, *PERSONAL_MEMORY_VISIBILITIES]))
 DIARY_ENTRY_TYPES = ["DAILY", "IMPORTANT_EVENT", "LESSON", "EMOTION", "MESSAGE_TO_FAMILY", "SELF_REFLECTION"]
 MEMORY_TYPES = ["FAMILY_STORY", "ELDER_ADVICE", "HEALTH_REMINDER", "GROWTH_RISK", "VALUE", "PLAN"]
 MEMORY_SCOPES = ["PRIVATE", "CARE_VISIBLE", "FAMILY_VISIBLE", "PARENT_VISIBLE"]
+SAVE_MEMORY_SCOPES = list(dict.fromkeys([*MEMORY_SCOPES, *PERSONAL_MEMORY_VISIBILITIES]))
+PERSONAL_MEMORY_TYPES = ["NOTE", "KNOWLEDGE", "INSIGHT", "EXPERIENCE", "PREFERENCE", "PLAN"]
 GROWTH_CATEGORIES = [
     "POSTURE",
     "DENTAL",
@@ -42,14 +51,18 @@ SAVE_TOOL_PLAN_SCHEMA = {
             "additionalProperties": False,
             "properties": {
                 "should_save": {"type": "boolean"},
-                "tool": {"type": "string", "enum": ["NONE", "DIARY", "FAMILY_MEMORY", "GROWTH_GUARD"]},
+                "tool": {
+                    "type": "string",
+                    "enum": ["NONE", "DIARY", "PERSONAL_MEMORY", "FAMILY_MEMORY", "GROWTH_GUARD"],
+                },
                 "content": _string_schema(1200),
                 "title": _string_schema(48),
                 "summary": _string_schema(160),
-                "visibility": {"type": "string", "enum": VISIBILITY_VALUES},
+                "visibility": {"type": "string", "enum": SAVE_VISIBILITY_VALUES},
                 "entry_type": {"type": "string", "enum": DIARY_ENTRY_TYPES},
                 "memory_type": {"type": "string", "enum": MEMORY_TYPES},
-                "scope": {"type": "string", "enum": MEMORY_SCOPES},
+                "personal_memory_type": {"type": "string", "enum": PERSONAL_MEMORY_TYPES},
+                "scope": {"type": "string", "enum": SAVE_MEMORY_SCOPES},
                 "category": {"type": "string", "enum": GROWTH_CATEGORIES},
                 "severity": {"type": "integer", "minimum": 1, "maximum": 5},
                 "importance": {"type": "integer", "minimum": 1, "maximum": 5},
@@ -66,6 +79,7 @@ SAVE_TOOL_PLAN_SCHEMA = {
                 "visibility",
                 "entry_type",
                 "memory_type",
+                "personal_memory_type",
                 "scope",
                 "category",
                 "severity",
