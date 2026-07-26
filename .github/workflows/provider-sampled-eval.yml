@@ -20,9 +20,13 @@ jobs:
     timeout-minutes: 10
     env:
       APP_ENV: production
+      DEFAULT_LLM_MODEL: ${{ vars.PROVIDER_MONITOR_PRIMARY_MODEL || vars.PROVIDER_SAMPLED_EVAL_MODEL || 'dashscope/qwen-flash' }}
+      FALLBACK_LLM_MODEL: ${{ vars.PROVIDER_MONITOR_FALLBACK_MODEL || 'dashscope/qwen-turbo' }}
       PROVIDER_SAMPLED_EVAL_MODEL: ${{ vars.PROVIDER_SAMPLED_EVAL_MODEL || 'dashscope/qwen-flash' }}
       PROVIDER_SAMPLED_EVAL_CASE_LIMIT: "2"
       PROVIDER_SAMPLED_EVAL_TIMEOUT_SECONDS: "20"
+      PROVIDER_MONITOR_MAX_TOKENS: "8"
+      PROVIDER_MONITOR_TIMEOUT_SECONDS: "30"
 
     steps:
       - uses: actions/checkout@v4
@@ -57,10 +61,29 @@ jobs:
           pydantic-settings==2.3.0
           python-dotenv==1.2.2
 
-      - name: Run cost-bounded provider evaluation
+      - name: Run privacy-safe provider fallback monitor
         if: steps.credentials.outputs.available == 'true'
         working-directory: ai-service
         env:
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          PROVIDER_MONITOR_ENABLED: "true"
+        run: python -m app.monitoring.provider_synthetic_monitor | tee provider-monitor-report.json
+
+      - name: Run cost-bounded provider evaluation
+        if: always() && steps.credentials.outputs.available == 'true'
+        working-directory: ai-service
+        env:
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
           PROVIDER_SAMPLED_EVAL_ENABLED: "true"
-        run: python -m app.monitoring.provider_sampled_eval
+        run: python -m app.monitoring.provider_sampled_eval | tee provider-sampled-eval-report.json
+
+      - name: Upload privacy-safe provider reports
+        if: always() && steps.credentials.outputs.available == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: provider-monitoring-reports
+          path: |
+            ai-service/provider-monitor-report.json
+            ai-service/provider-sampled-eval-report.json
+          if-no-files-found: error
+          retention-days: 14
