@@ -7,6 +7,7 @@ import com.familyagent.module.agent.harness.constant.AgentConfirmationStatus;
 import com.familyagent.module.agent.harness.entity.AgentToolConfirmationRecord;
 import com.familyagent.module.agent.harness.repository.AgentToolConfirmationRecordRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -47,10 +48,23 @@ public class AgentToolConfirmationService {
         String inputPayload = payloadCodec.encode(descriptor, input);
         record.setInputPayload(inputPayload);
         record.setStatus(AgentConfirmationStatus.REQUIRED.name());
-        record.setIdempotencyKey(idempotencyKey(context, descriptor, sha256(inputPayload)));
+        String idempotencyKey = idempotencyKey(context, descriptor, sha256(inputPayload));
+        record.setIdempotencyKey(idempotencyKey);
         record.setExpiresAt(LocalDateTime.now(Clock.systemDefaultZone()).plus(DEFAULT_TTL));
-        repository.insert(record);
-        return record;
+        AgentToolConfirmationRecord existing = repository.selectByIdempotencyKey(idempotencyKey);
+        if (existing != null) {
+            return existing;
+        }
+        try {
+            repository.insert(record);
+            return record;
+        } catch (DuplicateKeyException conflict) {
+            AgentToolConfirmationRecord concurrent = repository.selectByIdempotencyKey(idempotencyKey);
+            if (concurrent != null) {
+                return concurrent;
+            }
+            throw conflict;
+        }
     }
 
     public AgentToolConfirmationRecord decide(

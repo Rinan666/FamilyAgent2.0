@@ -10,4 +10,7 @@ public interface AgentToolConfirmationRecordRepository extends BaseMapper<AgentT
 
     @Select("SELECT * FROM agent_tool_confirmations WHERE id = #{id} FOR UPDATE")
     AgentToolConfirmationRecord selectByIdForUpdate(Long id);
+
+    @Select("SELECT * FROM agent_tool_confirmations WHERE idempotency_key = #{idempotencyKey}")
+    AgentToolConfirmationRecord selectByIdempotencyKey(String idempotencyKey);
 }

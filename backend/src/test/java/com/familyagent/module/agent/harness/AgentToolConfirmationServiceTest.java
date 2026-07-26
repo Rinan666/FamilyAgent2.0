@@ -14,9 +14,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class AgentToolConfirmationServiceTest {
 
@@ -69,6 +73,21 @@ class AgentToolConfirmationServiceTest {
         assertNotEquals(
                 captor.getAllValues().get(0).getIdempotencyKey(),
                 captor.getAllValues().get(1).getIdempotencyKey());
+    }
+
+    @Test
+    void createRequired_reusesExistingConfirmationForSamePayload() {
+        AgentToolConfirmationRecord existing = new AgentToolConfirmationRecord();
+        existing.setId(88L);
+        when(repository.selectByIdempotencyKey(anyString())).thenReturn(existing);
+
+        AgentToolConfirmationRecord returned = service.createRequired(
+                context(),
+                descriptor(),
+                new PrivateInput("same memory"));
+
+        assertEquals(existing, returned);
+        verify(repository, never()).insert(any());
     }
 
     private AgentRunContext context() {
