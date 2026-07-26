@@ -32,7 +32,7 @@ public class AuthorizedMemoryRecallCompatibilityProjector {
         MemoryEntry memory = candidate.entry();
         Map<String, Object> legacy = nestedMap(memory.getMetadata(), "legacyDiary");
         DiaryEntry diary = new DiaryEntry();
-        diary.setId(candidate.vectorSourceId());
+        diary.setId(candidate.publicSourceId());
         diary.setUserId(memory.getUserId());
         diary.setFamilyId(memory.getFamilyId());
         diary.setRawText(memory.getContent());
@@ -55,7 +55,7 @@ public class AuthorizedMemoryRecallCompatibilityProjector {
         MemoryEntry memory = candidate.entry();
         Map<String, Object> legacy = nestedMap(memory.getMetadata(), "legacyGrowth");
         GrowthGuardRecord record = new GrowthGuardRecord();
-        record.setId(candidate.vectorSourceId());
+        record.setId(candidate.publicSourceId());
         record.setFamilyId(memory.getFamilyId());
         record.setTargetUserId(candidate.subjectUserId());
         record.setCreatedBy(memory.getUserId());

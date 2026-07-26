@@ -1,15 +1,13 @@
 package com.familyagent.module.memory.service;
 
+import com.familyagent.common.constant.EntityStatus;
+import com.familyagent.common.constant.MemoryEmbeddingSourceType;
+import com.familyagent.common.constant.MemoryLibraryKind;
 import com.familyagent.infra.ai.AIServiceClient;
 import com.familyagent.infra.ai.dto.EmbeddingRequest;
 import com.familyagent.infra.ai.dto.EmbeddingResponse;
-import com.familyagent.module.diary.entity.DiaryEntry;
-import com.familyagent.module.diary.facade.MemoryIndexDiaryFacade;
 import com.familyagent.module.family.facade.FamilyMembershipFacade;
-import com.familyagent.module.growth.entity.GrowthGuardRecord;
-import com.familyagent.module.growth.facade.MemoryIndexGrowthFacade;
 import com.familyagent.module.memory.dto.RebuildEmbeddingResponse;
-import com.familyagent.common.constant.MemoryLibraryKind;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.repository.MemoryEmbeddingWriteRepository;
 import com.familyagent.module.memory.repository.MemoryEntryRepository;
@@ -34,28 +32,24 @@ public class MemoryEmbeddingService {
 
     private final AIServiceClient aiServiceClient;
     private final MemoryEmbeddingWriteRepository embeddingWriteRepository;
-    private final MemoryIndexDiaryFacade diaryIndexFacade;
     private final MemoryEntryRepository memoryRepository;
-    private final MemoryIndexGrowthFacade growthIndexFacade;
     private final FamilyMembershipFacade familyMembershipFacade;
     private final EmbeddingAsyncProcessor asyncProcessor;
     private final MemoryIndexRebuildService indexRebuildService;
 
     public RebuildEmbeddingResponse rebuildFamilyEmbeddings(Long familyId, int limit) {
         familyMembershipFacade.checkMembership(familyId);
-        int normalizedLimit = normalizeLimit(limit);
-        List<DiaryEntry> diaries = diaryIndexFacade.findActiveByFamily(familyId, normalizedLimit);
-        List<MemoryEntry> memories = memoryRepository.findActiveByFamilyForIndexing(familyId, normalizedLimit);
-        List<GrowthGuardRecord> growthRecords = growthIndexFacade.findActiveByFamily(familyId, normalizedLimit);
-        diaries.forEach(this::indexDiaryAfterCommit);
-        memories.forEach(this::indexMemoryAfterCommit);
-        growthRecords.forEach(this::indexGrowthAfterCommit);
+        List<MemoryEntry> entries = memoryRepository.findActiveFamilyEntriesForIndexing(
+                familyId,
+                normalizeLimit(limit));
+        entries.forEach(this::indexMemoryAfterCommit);
+        UnifiedMemorySourceCounts counts = UnifiedMemorySourceCounts.from(entries);
         return RebuildEmbeddingResponse.builder()
                 .familyId(familyId)
-                .diaryCount(diaries.size())
-                .memoryCount(memories.size())
-                .growthRecordCount(growthRecords.size())
-                .scheduledCount(diaries.size() + memories.size() + growthRecords.size())
+                .diaryCount(counts.diaries())
+                .memoryCount(counts.memories())
+                .growthRecordCount(counts.growthRecords())
+                .scheduledCount(entries.size())
                 .build();
     }
 
@@ -63,40 +57,23 @@ public class MemoryEmbeddingService {
         return indexRebuildService.rebuildFamilyIndexes(familyId, limit);
     }
 
-    public void indexDiaryAfterCommit(DiaryEntry entry) {
-        if (entry == null || entry.getId() == null || isBlank(entry.getRawText())) {
-            return;
-        }
-        scheduleAfterCommit(() -> index(
-                "DIARY",
-                entry.getId(),
-                entry.getFamilyId(),
-                entry.getUserId(),
-                buildDiaryText(entry)));
-    }
-
     public void indexMemoryAfterCommit(MemoryEntry entry) {
-        if (entry == null || entry.getId() == null || isBlank(entry.getContent())) {
+        if (entry == null
+                || entry.getId() == null
+                || isBlank(entry.getContent())
+                || !EntityStatus.ACTIVE.name().equals(entry.getStatus())) {
             return;
         }
-        scheduleAfterCommit(() -> index(
-                "MEMORY",
-                entry.getId(),
-                entry.getFamilyId(),
-                entry.getUserId(),
-                buildMemoryText(entry)));
+        scheduleAfterCommit(() -> indexCurrentMemory(entry.getId()));
     }
 
-    public void indexGrowthAfterCommit(GrowthGuardRecord record) {
-        if (record == null || record.getId() == null || isBlank(record.getContent())) {
+    public void deleteMemoryIndexAfterCommit(Long memoryId) {
+        if (memoryId == null) {
             return;
         }
-        scheduleAfterCommit(() -> index(
-                "GROWTH_OBSERVATION",
-                record.getId(),
-                record.getFamilyId(),
-                record.getCreatedBy(),
-                buildGrowthText(record)));
+        scheduleAfterCommit(() -> embeddingWriteRepository.deleteBySource(
+                MemoryEmbeddingSourceType.MEMORY.name(),
+                memoryId));
     }
 
     private void scheduleAfterCommit(Runnable task) {
@@ -112,10 +89,24 @@ public class MemoryEmbeddingService {
         asyncProcessor.execute(task);
     }
 
-    private void index(String sourceType, Long sourceId, Long familyId, Long userId, String text) {
+    private void indexCurrentMemory(Long memoryId) {
+        MemoryEntry current = memoryRepository.selectById(memoryId);
+        if (current == null || !EntityStatus.ACTIVE.name().equals(current.getStatus())) {
+            embeddingWriteRepository.deleteBySource(MemoryEmbeddingSourceType.MEMORY.name(), memoryId);
+            return;
+        }
+        index(
+                current.getId(),
+                current.getFamilyId(),
+                current.getUserId(),
+                buildMemoryText(current));
+    }
+
+    private void index(Long sourceId, Long familyId, Long userId, String text) {
         if (userId == null || isBlank(text)) {
             return;
         }
+        String sourceType = MemoryEmbeddingSourceType.MEMORY.name();
         String contentHash = sha256(text);
         Long embeddingId = embeddingWriteRepository.upsertPending(
                 sourceType,
@@ -148,23 +139,14 @@ public class MemoryEmbeddingService {
                     response.getPrivacyCategories(),
                     response.getProvider(),
                     response.getDimensions() == null ? values.size() : response.getDimensions());
-        } catch (Exception e) {
+        } catch (Exception error) {
             log.warn(
                     "Memory embedding indexing failed: sourceType={}, sourceId={}, errorType={}",
                     sourceType,
                     sourceId,
-                    e.getClass().getSimpleName());
+                    error.getClass().getSimpleName());
             embeddingWriteRepository.markFailed(embeddingId, "embedding indexing failed");
         }
-    }
-
-    private static String buildDiaryText(DiaryEntry entry) {
-        return String.join("\n",
-                "类型：家族日记",
-                "心情：" + safe(entry.getMood()),
-                "标签：" + String.join(" ", entry.getTags() == null ? new String[0] : entry.getTags()),
-                "内容：" + safe(entry.getRawText()),
-                "结构：" + safe(entry.getStructured()));
     }
 
     private static String buildMemoryText(MemoryEntry entry) {
@@ -172,33 +154,21 @@ public class MemoryEmbeddingService {
                 "library: " + (MemoryLibraryKind.PERSONAL.name().equals(entry.getLibraryKind())
                         ? "personal memory"
                         : "family memory"),
+                "origin: " + safe(entry.getOriginType()),
                 "type: " + safe(entry.getType()),
+                "title: " + safe(entry.getTitle()),
                 "summary: " + safe(entry.getSummary()),
                 "content: " + safe(entry.getContent()),
                 "metadata: " + safe(entry.getMetadata()));
-    }
-
-    private static String buildGrowthText(GrowthGuardRecord record) {
-        return String.join("\n",
-                "type: growth observation",
-                "category: " + safe(record.getCategory()),
-                "severity: " + safe(record.getSeverity()),
-                "observedAt: " + safe(record.getObservedAt()),
-                "content: " + safe(record.getContent()),
-                "metadata: " + safe(record.getMetadata()));
     }
 
     private static String sha256(String text) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             return HexFormat.of().formatHex(digest.digest(text.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 unavailable", e);
+        } catch (NoSuchAlgorithmException error) {
+            throw new IllegalStateException("SHA-256 unavailable", error);
         }
-    }
-
-    private static boolean isBlank(String value) {
-        return value == null || value.isBlank();
     }
 
     private static int normalizeLimit(int limit) {
@@ -208,7 +178,12 @@ public class MemoryEmbeddingService {
         return Math.min(limit, 1000);
     }
 
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
     private static String safe(Object value) {
         return value == null ? "" : String.valueOf(value);
     }
+
 }

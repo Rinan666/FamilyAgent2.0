@@ -1,11 +1,14 @@
 package com.familyagent.module.memory.service;
 
 import com.familyagent.common.constant.MemoryOriginType;
+import com.familyagent.common.constant.EntityStatus;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.family.facade.FamilyMembershipQueryFacade;
 import com.familyagent.module.memory.facade.UnifiedMemorySyncRequest;
 import com.familyagent.module.memory.gateway.UnifiedMemorySyncGateway;
+import com.familyagent.module.memory.entity.MemoryEntry;
+import com.familyagent.module.memory.repository.MemoryEntryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,11 +19,23 @@ public class UnifiedMemorySyncService {
 
     private final UnifiedMemorySyncGateway syncGateway;
     private final FamilyMembershipQueryFacade membershipQueryFacade;
+    private final MemoryEntryRepository memoryRepository;
+    private final MemoryEmbeddingService embeddingService;
 
     @Transactional
     public Long sync(UnifiedMemorySyncRequest request) {
         validate(request);
-        return syncGateway.upsert(normalizeRelatedUser(request));
+        Long memoryId = syncGateway.upsert(normalizeRelatedUser(request));
+        MemoryEntry entry = memoryRepository.selectById(memoryId);
+        if (entry == null) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "Unified memory record was not returned");
+        }
+        if (EntityStatus.ACTIVE.name().equals(entry.getStatus())) {
+            embeddingService.indexMemoryAfterCommit(entry);
+        } else {
+            embeddingService.deleteMemoryIndexAfterCommit(memoryId);
+        }
+        return memoryId;
     }
 
     @Transactional
@@ -28,7 +43,10 @@ public class UnifiedMemorySyncService {
         if (originType == null || originId == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Memory origin is required");
         }
-        syncGateway.delete(originType, originId);
+        Long memoryId = syncGateway.delete(originType, originId);
+        if (memoryId != null) {
+            embeddingService.deleteMemoryIndexAfterCommit(memoryId);
+        }
     }
 
     private static void validate(UnifiedMemorySyncRequest request) {

@@ -6,8 +6,10 @@ import com.familyagent.common.constant.MemoryOriginType;
 import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.module.family.facade.FamilyMembershipQueryFacade;
+import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memory.facade.UnifiedMemorySyncRequest;
 import com.familyagent.module.memory.gateway.UnifiedMemorySyncGateway;
+import com.familyagent.module.memory.repository.MemoryEntryRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -26,25 +28,46 @@ class UnifiedMemorySyncServiceTest {
 
     private final UnifiedMemorySyncGateway gateway = mock(UnifiedMemorySyncGateway.class);
     private final FamilyMembershipQueryFacade membershipQueryFacade = mock(FamilyMembershipQueryFacade.class);
-    private final UnifiedMemorySyncService service = new UnifiedMemorySyncService(gateway, membershipQueryFacade);
+    private final MemoryEntryRepository memoryRepository = mock(MemoryEntryRepository.class);
+    private final MemoryEmbeddingService embeddingService = mock(MemoryEmbeddingService.class);
+    private final UnifiedMemorySyncService service = new UnifiedMemorySyncService(
+            gateway,
+            membershipQueryFacade,
+            memoryRepository,
+            embeddingService);
 
     @Test
-    void sync_delegatesCompleteCanonicalRecordToGateway() {
-        UnifiedMemorySyncRequest request = request("A family observation");
+    void syncIndexesTheCanonicalMemoryEntry() {
+        UnifiedMemorySyncRequest request = request("A family observation", EntityStatus.ACTIVE);
+        MemoryEntry entry = entry(81L, EntityStatus.ACTIVE);
         when(membershipQueryFacade.isMember(1L, 22L)).thenReturn(true);
         when(gateway.upsert(request)).thenReturn(81L);
+        when(memoryRepository.selectById(81L)).thenReturn(entry);
 
-        Long result = service.sync(request);
+        assertEquals(81L, service.sync(request));
 
-        assertEquals(81L, result);
         verify(gateway).upsert(request);
+        verify(embeddingService).indexMemoryAfterCommit(entry);
     }
 
     @Test
-    void sync_clearsRelatedUserOutsideTheFamily() {
-        UnifiedMemorySyncRequest request = request("A family observation");
+    void syncArchivedRecordDeletesCanonicalIndex() {
+        UnifiedMemorySyncRequest request = request("Archived observation", EntityStatus.ARCHIVED);
+        when(membershipQueryFacade.isMember(1L, 22L)).thenReturn(true);
+        when(gateway.upsert(request)).thenReturn(82L);
+        when(memoryRepository.selectById(82L)).thenReturn(entry(82L, EntityStatus.ARCHIVED));
+
+        service.sync(request);
+
+        verify(embeddingService).deleteMemoryIndexAfterCommit(82L);
+    }
+
+    @Test
+    void syncClearsRelatedUserOutsideTheFamily() {
+        UnifiedMemorySyncRequest request = request("A family observation", EntityStatus.ACTIVE);
         when(membershipQueryFacade.isMember(1L, 22L)).thenReturn(false);
-        when(gateway.upsert(org.mockito.ArgumentMatchers.any())).thenReturn(82L);
+        when(gateway.upsert(org.mockito.ArgumentMatchers.any())).thenReturn(83L);
+        when(memoryRepository.selectById(83L)).thenReturn(entry(83L, EntityStatus.ACTIVE));
 
         service.sync(request);
 
@@ -54,15 +77,23 @@ class UnifiedMemorySyncServiceTest {
     }
 
     @Test
-    void sync_rejectsBlankContentBeforeDatabaseWrite() {
-        UnifiedMemorySyncRequest request = request("  ");
+    void deleteRemovesCanonicalIndexByReturnedMemoryId() {
+        when(gateway.delete(MemoryOriginType.DIARY, 77L)).thenReturn(177L);
+
+        service.delete(MemoryOriginType.DIARY, 77L);
+
+        verify(embeddingService).deleteMemoryIndexAfterCommit(177L);
+    }
+
+    @Test
+    void syncRejectsBlankContentBeforeDatabaseWrite() {
+        UnifiedMemorySyncRequest request = request("  ", EntityStatus.ACTIVE);
 
         assertThrows(BusinessException.class, () -> service.sync(request));
-
         verify(gateway, never()).upsert(request);
     }
 
-    private static UnifiedMemorySyncRequest request(String content) {
+    private static UnifiedMemorySyncRequest request(String content, EntityStatus status) {
         return new UnifiedMemorySyncRequest(
                 10L,
                 1L,
@@ -75,6 +106,13 @@ class UnifiedMemorySyncServiceTest {
                 LocalDateTime.of(2026, 7, 26, 10, 0),
                 MemoryOriginType.GROWTH,
                 77L,
-                EntityStatus.ACTIVE);
+                status);
+    }
+
+    private static MemoryEntry entry(Long id, EntityStatus status) {
+        MemoryEntry entry = new MemoryEntry();
+        entry.setId(id);
+        entry.setStatus(status.name());
+        return entry;
     }
 }

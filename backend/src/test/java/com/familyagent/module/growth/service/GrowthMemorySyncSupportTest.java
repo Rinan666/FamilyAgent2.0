@@ -27,6 +27,8 @@ class GrowthMemorySyncSupportTest {
         record.setFamilyId(1L);
         record.setTargetUserId(22L);
         record.setContent("Recently rubs eyes while reading");
+        record.setCategory("VISION");
+        record.setSeverity(4);
         record.setVisibility("CARE_VISIBLE");
         record.setObservedAt(LocalDate.of(2026, 7, 26));
         record.setStatus("ACTIVE");
@@ -39,5 +41,7 @@ class GrowthMemorySyncSupportTest {
         assertEquals("OBSERVATION", captor.getValue().type().name());
         assertEquals("GROWTH", captor.getValue().originType().name());
         assertEquals(List.of("vision"), captor.getValue().tags());
+        assertEquals("VISION", captor.getValue().metadata().legacyGrowth().category());
+        assertEquals(4, captor.getValue().metadata().legacyGrowth().severity());
     }
 }

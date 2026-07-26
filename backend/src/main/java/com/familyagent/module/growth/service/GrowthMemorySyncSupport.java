@@ -6,6 +6,7 @@ import com.familyagent.common.constant.MemoryOriginType;
 import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.memory.facade.UnifiedMemorySyncFacade;
+import com.familyagent.module.memory.facade.UnifiedMemorySyncMetadata;
 import com.familyagent.module.memory.facade.UnifiedMemorySyncRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -35,6 +36,10 @@ public class GrowthMemorySyncSupport {
                 record.getObservedAt() == null ? record.getCreatedAt() : record.getObservedAt().atStartOfDay(),
                 MemoryOriginType.GROWTH,
                 record.getId(),
+                UnifiedMemorySyncMetadata.growth(
+                        record.getCategory(),
+                        record.getSeverity(),
+                        record.getFollowUpAt()),
                 EntityStatus.valueOf(record.getStatus())));
     }
 

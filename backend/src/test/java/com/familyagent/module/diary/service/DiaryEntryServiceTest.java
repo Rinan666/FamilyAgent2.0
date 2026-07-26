@@ -6,7 +6,6 @@ import com.familyagent.module.diary.dto.DiaryEntryMetadata;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.repository.DiaryEntryRepository;
 import com.familyagent.module.family.service.FamilyService;
-import com.familyagent.module.memory.facade.MemoryIndexingFacade;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -31,7 +30,6 @@ class DiaryEntryServiceTest {
 
     @Mock private DiaryEntryRepository diaryRepository;
     @Mock private FamilyService familyService;
-    @Mock private MemoryIndexingFacade memoryEmbeddingService;
     @Mock private DiaryMemorySyncSupport memorySyncSupport;
 
     @Test
@@ -59,7 +57,7 @@ class DiaryEntryServiceTest {
 
         verify(diaryRepository, never()).insert(any(DiaryEntry.class));
         verify(diaryRepository).updateById(existing);
-        verify(memoryEmbeddingService).indexDiaryAfterCommit(existing);
+        verify(memorySyncSupport).sync(existing);
     }
 
     @Test
@@ -184,7 +182,6 @@ class DiaryEntryServiceTest {
         return new DiaryEntryService(
                 diaryRepository,
                 familyService,
-                memoryEmbeddingService,
                 memorySyncSupport);
     }
 

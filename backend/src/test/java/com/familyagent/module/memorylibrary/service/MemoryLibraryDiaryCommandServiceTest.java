@@ -3,19 +3,15 @@ package com.familyagent.module.memorylibrary.service;
 import cn.dev33.satoken.stp.StpUtil;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.facade.MemoryLibraryDiaryFacade;
-import com.familyagent.module.memory.facade.MemoryIndexingFacade;
-import com.familyagent.module.memory.facade.MemoryLibraryEmbeddingFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryIndexMetadataFacade;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryUpdateRequest;
 import org.junit.jupiter.api.Test;
-import org.mockito.InOrder;
 import org.mockito.MockedStatic;
 
 import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
@@ -26,8 +22,6 @@ class MemoryLibraryDiaryCommandServiceTest {
     @Test
     void update_shouldPreserveDiaryContractAndScheduleIndexing() {
         MemoryLibraryDiaryFacade diaryFacade = mock(MemoryLibraryDiaryFacade.class);
-        MemoryIndexingFacade indexingFacade = mock(MemoryIndexingFacade.class);
-        MemoryLibraryEmbeddingFacade embeddingFacade = mock(MemoryLibraryEmbeddingFacade.class);
         DiaryEntry entry = new DiaryEntry();
         entry.setId(44L);
         entry.setFamilyId(10L);
@@ -43,8 +37,6 @@ class MemoryLibraryDiaryCommandServiceTest {
         request.setTags(List.of("family"));
         MemoryLibraryDiaryCommandService service = new MemoryLibraryDiaryCommandService(
                 diaryFacade,
-                indexingFacade,
-                embeddingFacade,
                 new MemoryLibraryIndexMetadataFacade());
 
         try (MockedStatic<StpUtil> stp = mockStatic(StpUtil.class)) {
@@ -57,14 +49,11 @@ class MemoryLibraryDiaryCommandServiceTest {
         assertEquals("PRIVATE", entry.getPrivacyLevel());
         assertEquals("A day", ((Map<?, ?>) entry.getStructured()).get("title"));
         verify(diaryFacade).update(entry);
-        verify(indexingFacade).indexDiaryAfterCommit(entry);
     }
 
     @Test
-    void deleteArchived_shouldDeleteEmbeddingBeforeDiary() {
+    void deleteArchived_shouldDeleteDiaryThroughUnifiedSyncFacade() {
         MemoryLibraryDiaryFacade diaryFacade = mock(MemoryLibraryDiaryFacade.class);
-        MemoryIndexingFacade indexingFacade = mock(MemoryIndexingFacade.class);
-        MemoryLibraryEmbeddingFacade embeddingFacade = mock(MemoryLibraryEmbeddingFacade.class);
         DiaryEntry entry = new DiaryEntry();
         entry.setId(44L);
         entry.setFamilyId(10L);
@@ -73,8 +62,6 @@ class MemoryLibraryDiaryCommandServiceTest {
         when(diaryFacade.findById(44L)).thenReturn(entry);
         MemoryLibraryDiaryCommandService service = new MemoryLibraryDiaryCommandService(
                 diaryFacade,
-                indexingFacade,
-                embeddingFacade,
                 new MemoryLibraryIndexMetadataFacade());
 
         try (MockedStatic<StpUtil> stp = mockStatic(StpUtil.class)) {
@@ -82,8 +69,6 @@ class MemoryLibraryDiaryCommandServiceTest {
             service.deleteArchived(10L, 44L);
         }
 
-        InOrder deletionOrder = inOrder(embeddingFacade, diaryFacade);
-        deletionOrder.verify(embeddingFacade).deleteDiaryIndex(44L);
-        deletionOrder.verify(diaryFacade).delete(44L);
+        verify(diaryFacade).delete(44L);
     }
 }

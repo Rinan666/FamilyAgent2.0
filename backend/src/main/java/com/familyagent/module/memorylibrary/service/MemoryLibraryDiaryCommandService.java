@@ -9,8 +9,6 @@ import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.facade.MemoryLibraryDiaryFacade;
-import com.familyagent.module.memory.facade.MemoryIndexingFacade;
-import com.familyagent.module.memory.facade.MemoryLibraryEmbeddingFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryIndexMetadataFacade;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryAuditMetadata;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryUpdateRequest;
@@ -28,8 +26,6 @@ public class MemoryLibraryDiaryCommandService {
             "DAILY", "IMPORTANT_EVENT", "LESSON", "EMOTION", "MESSAGE_TO_FAMILY", "SELF_REFLECTION");
 
     private final MemoryLibraryDiaryFacade diaryFacade;
-    private final MemoryIndexingFacade indexingFacade;
-    private final MemoryLibraryEmbeddingFacade embeddingFacade;
     private final MemoryLibraryIndexMetadataFacade metadataFacade;
 
     public void archive(Long familyId, Long diaryId) {
@@ -72,7 +68,6 @@ public class MemoryLibraryDiaryCommandService {
                 entry.getMood(),
                 tags));
         diaryFacade.update(entry);
-        indexingFacade.indexDiaryAfterCommit(entry);
     }
 
     private static String normalizeEntryType(String requestedType) {
@@ -117,7 +112,6 @@ public class MemoryLibraryDiaryCommandService {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         MemoryLibrarySupport.ensureCreator(entry.getUserId(), "Only the creator can delete this diary");
-        embeddingFacade.deleteDiaryIndex(diaryId);
         diaryFacade.delete(diaryId);
     }
 }

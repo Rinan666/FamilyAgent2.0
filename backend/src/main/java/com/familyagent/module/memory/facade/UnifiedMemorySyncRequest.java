@@ -20,6 +20,7 @@ public record UnifiedMemorySyncRequest(
         LocalDateTime occurredAt,
         MemoryOriginType originType,
         Long originId,
+        UnifiedMemorySyncMetadata metadata,
         EntityStatus status) {
 
     public UnifiedMemorySyncRequest {
@@ -31,6 +32,36 @@ public record UnifiedMemorySyncRequest(
                         .distinct()
                         .limit(10)
                         .toList();
+        metadata = metadata == null ? UnifiedMemorySyncMetadata.empty() : metadata;
+    }
+
+    public UnifiedMemorySyncRequest(
+            Long ownerUserId,
+            Long familyId,
+            Long relatedUserId,
+            MemoryContentType type,
+            MemoryScope visibility,
+            String title,
+            String content,
+            List<String> tags,
+            LocalDateTime occurredAt,
+            MemoryOriginType originType,
+            Long originId,
+            EntityStatus status) {
+        this(
+                ownerUserId,
+                familyId,
+                relatedUserId,
+                type,
+                visibility,
+                title,
+                content,
+                tags,
+                occurredAt,
+                originType,
+                originId,
+                UnifiedMemorySyncMetadata.empty(),
+                status);
     }
 
     public UnifiedMemorySyncRequest withRelatedUserId(Long normalizedRelatedUserId) {
@@ -46,6 +77,7 @@ public record UnifiedMemorySyncRequest(
                 occurredAt,
                 originType,
                 originId,
+                metadata,
                 status);
     }
 }

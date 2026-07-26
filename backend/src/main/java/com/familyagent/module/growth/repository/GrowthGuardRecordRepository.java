@@ -152,17 +152,6 @@ public interface GrowthGuardRecordRepository extends BaseMapper<GrowthGuardRecor
     @Select("""
         SELECT * FROM growth_guard_records
         WHERE family_id = #{familyId}
-          AND status = 'ACTIVE'
-        ORDER BY observed_at DESC, created_at DESC
-        LIMIT #{limit}
-        """)
-    List<GrowthGuardRecord> findActiveByFamilyForIndexing(
-            @Param("familyId") Long familyId,
-            @Param("limit") int limit);
-
-    @Select("""
-        SELECT * FROM growth_guard_records
-        WHERE family_id = #{familyId}
           AND target_user_id = #{targetUserId}
           AND status = 'ACTIVE'
         ORDER BY observed_at DESC, created_at DESC

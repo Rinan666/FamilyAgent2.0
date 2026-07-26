@@ -12,7 +12,6 @@ import com.familyagent.module.diary.dto.UpdateDiaryEntryRequest;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.diary.repository.DiaryEntryRepository;
 import com.familyagent.module.family.service.FamilyService;
-import com.familyagent.module.memory.facade.MemoryIndexingFacade;
 import com.familyagent.module.memory.service.MemoryIndexMetadataBuilder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -43,7 +42,6 @@ public class DiaryEntryService {
 
     private final DiaryEntryRepository diaryRepository;
     private final FamilyService familyService;
-    private final MemoryIndexingFacade memoryEmbeddingService;
     private final DiaryMemorySyncSupport memorySyncSupport;
 
     @Transactional
@@ -93,7 +91,6 @@ public class DiaryEntryService {
                     existing.getTags()));
             diaryRepository.updateById(existing);
             memorySyncSupport.sync(existing);
-            memoryEmbeddingService.indexDiaryAfterCommit(existing);
             return existing;
         }
 
@@ -116,7 +113,6 @@ public class DiaryEntryService {
                 entry.getTags()));
         diaryRepository.insert(entry);
         memorySyncSupport.sync(entry);
-        memoryEmbeddingService.indexDiaryAfterCommit(entry);
         return entry;
     }
 
@@ -172,7 +168,6 @@ public class DiaryEntryService {
                 entry.getTags()));
         diaryRepository.updateById(entry);
         memorySyncSupport.sync(entry);
-        memoryEmbeddingService.indexDiaryAfterCommit(entry);
         return entry;
     }
 

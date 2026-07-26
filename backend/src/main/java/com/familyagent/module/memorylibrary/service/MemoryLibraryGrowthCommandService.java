@@ -7,8 +7,6 @@ import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.facade.MemoryLibraryGrowthFacade;
-import com.familyagent.module.memory.facade.MemoryIndexingFacade;
-import com.familyagent.module.memory.facade.MemoryLibraryEmbeddingFacade;
 import com.familyagent.module.memory.facade.MemoryLibraryIndexMetadataFacade;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryUpdateRequest;
 import lombok.RequiredArgsConstructor;
@@ -27,8 +25,6 @@ public class MemoryLibraryGrowthCommandService {
             "EMOTION", "COMMUNICATION", "OTHER");
 
     private final MemoryLibraryGrowthFacade growthFacade;
-    private final MemoryIndexingFacade indexingFacade;
-    private final MemoryLibraryEmbeddingFacade embeddingFacade;
     private final MemoryLibraryIndexMetadataFacade metadataFacade;
 
     public void archive(Long familyId, Long recordId) {
@@ -66,7 +62,6 @@ public class MemoryLibraryGrowthCommandService {
                 record.getSeverity() == null ? 3 : record.getSeverity(),
                 record.getObservedAt()));
         growthFacade.update(record);
-        indexingFacade.indexGrowthAfterCommit(record);
     }
 
     private static String normalizeCategory(String requestedType, String currentCategory) {
@@ -101,7 +96,6 @@ public class MemoryLibraryGrowthCommandService {
         MemoryLibrarySupport.ensureCreator(
                 record.getCreatedBy(),
                 "Only the creator can delete this growth record");
-        embeddingFacade.deleteGrowthIndex(recordId);
         growthFacade.delete(recordId);
     }
 

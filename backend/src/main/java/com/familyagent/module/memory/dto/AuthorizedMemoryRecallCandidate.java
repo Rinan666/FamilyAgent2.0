@@ -26,7 +26,7 @@ public record AuthorizedMemoryRecallCandidate(
         return new AuthorizedMemoryRecallCandidate(entry, sourceType, source);
     }
 
-    public Long vectorSourceId() {
+    public Long publicSourceId() {
         return switch (sourceType) {
             case LIFE_RECORD, GROWTH_OBSERVATION ->
                     entry.getOriginId() == null ? entry.getId() : entry.getOriginId();
@@ -34,8 +34,12 @@ public record AuthorizedMemoryRecallCandidate(
         };
     }
 
+    public Long embeddingSourceId() {
+        return entry.getId();
+    }
+
     public String publicId() {
-        return sourceType.publicIdPrefix() + "-" + vectorSourceId();
+        return sourceType.publicIdPrefix() + "-" + publicSourceId();
     }
 
     public Long authorUserId() {

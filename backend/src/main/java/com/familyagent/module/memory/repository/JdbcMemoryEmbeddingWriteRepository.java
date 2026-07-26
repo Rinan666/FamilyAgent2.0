@@ -62,6 +62,7 @@ public class JdbcMemoryEmbeddingWriteRepository implements MemoryEmbeddingWriteR
                     metadata = ?::jsonb,
                     updated_at = NOW()
                 WHERE id = ?
+                  AND status = 'PENDING'
                 """,
                 normalize(model),
                 toVectorLiteral(values),
@@ -90,6 +91,7 @@ public class JdbcMemoryEmbeddingWriteRepository implements MemoryEmbeddingWriteR
                     metadata = ?::jsonb,
                     updated_at = NOW()
                 WHERE id = ?
+                  AND status = 'PENDING'
                 """, metadata, id);
     }
 

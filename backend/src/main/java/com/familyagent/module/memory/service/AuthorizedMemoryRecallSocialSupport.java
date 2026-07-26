@@ -52,10 +52,10 @@ public class AuthorizedMemoryRecallSocialSupport {
     }
 
     private void attachStalenessStats(AuthorizedMemoryRecallCandidate candidate, Long viewerUserId) {
-        if (candidate == null || candidate.vectorSourceId() == null) {
+        if (candidate == null || candidate.publicSourceId() == null) {
             return;
         }
-        Long recordId = candidate.vectorSourceId();
+        Long recordId = candidate.publicSourceId();
         GrowthStalenessStats stats = stalenessFacade.getStats(recordId, viewerUserId);
         if (stats == null) {
             stats = new GrowthStalenessStats(recordId, 0, 1.0, false);

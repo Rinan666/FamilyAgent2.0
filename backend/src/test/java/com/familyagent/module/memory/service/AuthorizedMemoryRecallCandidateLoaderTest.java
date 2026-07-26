@@ -40,9 +40,9 @@ class AuthorizedMemoryRecallCandidateLoaderTest {
         AuthorizedMemoryRecallCandidateLoader.RecallCandidates candidates =
                 candidateLoader.loadFamily(10L, 101L, 3, 2);
 
-        assertEquals(1L, candidates.diaries().get(0).vectorSourceId());
-        assertEquals(2L, candidates.memories().get(0).vectorSourceId());
-        assertEquals(3L, candidates.growthRecords().get(0).vectorSourceId());
+        assertEquals(1L, candidates.diaries().get(0).publicSourceId());
+        assertEquals(2L, candidates.memories().get(0).publicSourceId());
+        assertEquals(3L, candidates.growthRecords().get(0).publicSourceId());
         verify(socialSupport).attachSocialWeights(anyList(), anyList(), org.mockito.ArgumentMatchers.eq(101L));
     }
 

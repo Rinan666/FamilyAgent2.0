@@ -344,11 +344,10 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
         WHERE family_id = #{familyId}
           AND library_kind = 'FAMILY'
           AND status = 'ACTIVE'
-          AND origin_type IS NULL
-        ORDER BY updated_at DESC
+        ORDER BY occurred_at DESC, updated_at DESC
         LIMIT #{limit}
         """)
-    List<MemoryEntry> findActiveByFamilyForIndexing(
+    List<MemoryEntry> findActiveFamilyEntriesForIndexing(
             @Param("familyId") Long familyId,
             @Param("limit") int limit);
 

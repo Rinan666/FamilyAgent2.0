@@ -26,6 +26,8 @@ class DiaryMemorySyncSupportTest {
         entry.setRawText("A lesson from today");
         entry.setVisibility("LEGACY_VISIBLE");
         entry.setStructured(Map.of("entryType", "LESSON", "title", "Today"));
+        entry.setMood("CALM");
+        entry.setSource("MANUAL");
         entry.setMetadata(Map.of("relatedUserId", 22L));
         entry.setTags(new String[] {"family"});
 
@@ -37,5 +39,7 @@ class DiaryMemorySyncSupportTest {
         assertEquals("DIARY", captor.getValue().originType().name());
         assertEquals(22L, captor.getValue().relatedUserId());
         assertEquals("FAMILY_VISIBLE", captor.getValue().visibility().name());
+        assertEquals("LESSON", captor.getValue().metadata().legacyDiary().entryType());
+        assertEquals("CALM", captor.getValue().metadata().legacyDiary().mood());
     }
 }

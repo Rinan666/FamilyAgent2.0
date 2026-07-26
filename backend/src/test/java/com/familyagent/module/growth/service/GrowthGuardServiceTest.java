@@ -6,7 +6,6 @@ import com.familyagent.module.growth.dto.GrowthGuardMetadata;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
 import com.familyagent.module.growth.repository.GrowthGuardStalenessVoteRepository;
-import com.familyagent.module.memory.facade.MemoryIndexingFacade;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -32,7 +31,6 @@ class GrowthGuardServiceTest {
     @Mock private GrowthGuardRecordRepository recordRepository;
     @Mock private GrowthGuardStalenessVoteRepository stalenessVoteRepository;
     @Mock private PermissionGate permissionGate;
-    @Mock private MemoryIndexingFacade memoryEmbeddingService;
     @Mock private GrowthMemorySyncSupport memorySyncSupport;
 
     @Test
@@ -130,7 +128,6 @@ class GrowthGuardServiceTest {
                 recordRepository,
                 stalenessVoteRepository,
                 permissionGate,
-                memoryEmbeddingService,
                 memorySyncSupport);
     }
 }

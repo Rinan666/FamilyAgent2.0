@@ -15,7 +15,6 @@ import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.entity.GrowthGuardStalenessVote;
 import com.familyagent.module.growth.repository.GrowthGuardRecordRepository;
 import com.familyagent.module.growth.repository.GrowthGuardStalenessVoteRepository;
-import com.familyagent.module.memory.facade.MemoryIndexingFacade;
 import com.familyagent.module.memory.service.MemoryIndexMetadataBuilder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -46,7 +45,6 @@ public class GrowthGuardService {
     private final GrowthGuardRecordRepository recordRepository;
     private final GrowthGuardStalenessVoteRepository stalenessVoteRepository;
     private final PermissionGate permissionGate;
-    private final MemoryIndexingFacade memoryEmbeddingService;
     private final GrowthMemorySyncSupport memorySyncSupport;
 
     @Transactional
@@ -87,7 +85,6 @@ public class GrowthGuardService {
                 record.getObservedAt()));
         recordRepository.insert(record);
         memorySyncSupport.sync(record);
-        memoryEmbeddingService.indexGrowthAfterCommit(record);
         return record;
     }
 

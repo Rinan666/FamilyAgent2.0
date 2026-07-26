@@ -7,6 +7,7 @@ import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.module.diary.dto.DiaryEntryMetadata;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.memory.facade.UnifiedMemorySyncFacade;
+import com.familyagent.module.memory.facade.UnifiedMemorySyncMetadata;
 import com.familyagent.module.memory.facade.UnifiedMemorySyncRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -37,6 +38,11 @@ public class DiaryMemorySyncSupport {
                 entry.getCreatedAt(),
                 MemoryOriginType.DIARY,
                 entry.getId(),
+                UnifiedMemorySyncMetadata.diary(
+                        structuredText(entry.getStructured(), "entryType"),
+                        entry.getMood(),
+                        entry.getSource(),
+                        entry.getVoiceUrl()),
                 archived(metadata) ? EntityStatus.ARCHIVED : EntityStatus.ACTIVE));
     }
 

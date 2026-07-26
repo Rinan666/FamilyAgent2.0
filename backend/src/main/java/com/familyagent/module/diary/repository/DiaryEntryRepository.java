@@ -249,17 +249,6 @@ public interface DiaryEntryRepository extends BaseMapper<DiaryEntry> {
     @Select("""
         SELECT * FROM diary_entries
         WHERE family_id = #{familyId}
-          AND (metadata->>'status' IS NULL OR metadata->>'status' = 'ACTIVE')
-        ORDER BY created_at DESC
-        LIMIT #{limit}
-        """)
-    List<DiaryEntry> findActiveByFamilyForIndexing(
-            @Param("familyId") Long familyId,
-            @Param("limit") int limit);
-
-    @Select("""
-        SELECT * FROM diary_entries
-        WHERE family_id = #{familyId}
           AND user_id = #{userId}
           AND (metadata->>'status' IS NULL OR metadata->>'status' = 'ACTIVE')
         ORDER BY created_at DESC

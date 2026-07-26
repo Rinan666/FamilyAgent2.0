@@ -9,16 +9,12 @@ import static org.mockito.Mockito.verify;
 class MemoryLibraryEmbeddingFacadeTest {
 
     @Test
-    void shouldMapMemoryLibrarySourcesToEmbeddingRepository() {
+    void shouldDeleteUnifiedMemoryEmbedding() {
         MemoryEmbeddingWriteRepository repository = mock(MemoryEmbeddingWriteRepository.class);
         MemoryLibraryEmbeddingFacade facade = new MemoryLibraryEmbeddingFacade(repository);
 
-        facade.deleteDiaryIndex(44L);
         facade.deleteMemoryIndex(88L);
-        facade.deleteGrowthIndex(55L);
 
-        verify(repository).deleteBySource("DIARY", 44L);
         verify(repository).deleteBySource("MEMORY", 88L);
-        verify(repository).deleteBySource("GROWTH_OBSERVATION", 55L);
     }
 }

@@ -47,8 +47,8 @@ public class AuthorizedMemoryRecallTextRanker {
         Map<Long, AuthorizedMemoryRecallCandidate> bySourceId = new LinkedHashMap<>();
         candidates.stream()
                 .filter(Objects::nonNull)
-                .filter(candidate -> candidate.vectorSourceId() != null)
-                .forEach(candidate -> bySourceId.put(candidate.vectorSourceId(), candidate));
+                .filter(candidate -> candidate.embeddingSourceId() != null)
+                .forEach(candidate -> bySourceId.put(candidate.embeddingSourceId(), candidate));
 
         List<AuthorizedMemoryRecallCandidate> result = new ArrayList<>();
         Set<Long> used = new LinkedHashSet<>();
@@ -65,8 +65,8 @@ public class AuthorizedMemoryRecallTextRanker {
                 .filter(candidate -> query.isBlank() || scorer.score(candidate, query) > 0)
                 .sorted(candidateComparator(query))
                 .forEach(candidate -> {
-                    if (result.size() < limit && candidate.vectorSourceId() != null
-                            && used.add(candidate.vectorSourceId())) {
+                    if (result.size() < limit && candidate.embeddingSourceId() != null
+                            && used.add(candidate.embeddingSourceId())) {
                         result.add(candidate);
                     }
                 });

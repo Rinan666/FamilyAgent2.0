@@ -7,5 +7,5 @@ public interface UnifiedMemorySyncGateway {
 
     Long upsert(UnifiedMemorySyncRequest request);
 
-    void delete(MemoryOriginType originType, Long originId);
+    Long delete(MemoryOriginType originType, Long originId);
 }

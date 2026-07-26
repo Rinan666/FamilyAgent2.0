@@ -32,13 +32,13 @@ class JdbcMemoryEmbeddingWriteRepositoryTest {
                 eq(Long.class),
                 eq(11L),
                 eq(34L),
-                eq("DIARY"),
+                eq("MEMORY"),
                 eq(44L),
                 eq("new-hash")))
                 .thenReturn(123L);
         JdbcMemoryEmbeddingWriteRepository repository = repository();
 
-        Long id = repository.upsertPending("DIARY", 44L, 11L, 34L, "new-hash");
+        Long id = repository.upsertPending("MEMORY", 44L, 11L, 34L, "new-hash");
 
         assertEquals(123L, id);
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
@@ -46,7 +46,7 @@ class JdbcMemoryEmbeddingWriteRepositoryTest {
         verify(jdbcTemplate).update(
                 sqlCaptor.capture(),
                 metadataCaptor.capture(),
-                eq("DIARY"),
+                eq("MEMORY"),
                 eq(44L),
                 eq("new-hash"));
         assertTrue(sqlCaptor.getValue().contains("content_hash <> ?"));
@@ -81,6 +81,7 @@ class JdbcMemoryEmbeddingWriteRepositoryTest {
                 metadataCaptor.capture(),
                 eq(123L));
         assertTrue(sqlCaptor.getValue().contains("status = 'READY'"));
+        assertTrue(sqlCaptor.getValue().contains("AND status = 'PENDING'"));
         JsonNode expected = objectMapper.readTree("""
                 {
                   "privacyCategories": ["family"],
@@ -104,6 +105,7 @@ class JdbcMemoryEmbeddingWriteRepositoryTest {
                 metadataCaptor.capture(),
                 eq(123L));
         assertTrue(sqlCaptor.getValue().contains("status = 'FAILED'"));
+        assertTrue(sqlCaptor.getValue().contains("AND status = 'PENDING'"));
         assertEquals(
                 objectMapper.readTree("{\"error\":\"dimension mismatch\"}"),
                 objectMapper.readTree(String.valueOf(metadataCaptor.getValue())));

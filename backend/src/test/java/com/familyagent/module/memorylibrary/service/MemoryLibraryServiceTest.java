@@ -367,13 +367,9 @@ class MemoryLibraryServiceTest {
                 metadataFacade);
         MemoryLibraryDiaryCommandService diaryCommands = new MemoryLibraryDiaryCommandService(
                 diaryFacade,
-                memoryEmbeddingService,
-                embeddingFacade,
                 metadataFacade);
         MemoryLibraryGrowthCommandService growthCommands = new MemoryLibraryGrowthCommandService(
                 growthFacade,
-                memoryEmbeddingService,
-                embeddingFacade,
                 metadataFacade);
         return new MemoryLibraryMaintenanceService(
                 familyService,

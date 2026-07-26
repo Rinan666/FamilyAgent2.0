@@ -43,21 +43,21 @@ class AuthorizedMemoryRecallRankingServiceTest {
     }
 
     @Test
-    void rankUsesLegacyOriginIdForCurrentDiaryVectorIndex() {
+    void rankUsesUnifiedMemoryEntryIdForDiaryVectorIndex() {
         EmbeddingCallObservation observation = observation();
         List<Double> values = Collections.nCopies(1536, 0.01);
         AuthorizedMemoryRecallCandidate diary = diary(144L, 44L, "bedtime reminder");
         when(embeddingService.embed(10L, "bedtime reminder"))
                 .thenReturn(new AuthorizedMemoryRecallEmbeddingService.RecallQueryEmbedding(values, observation));
-        when(vectorRepository.rankSourceIds(10L, "DIARY", List.of(44L), values, 0.72, 3))
-                .thenReturn(List.of(44L));
+        when(vectorRepository.rankSourceIds(10L, "MEMORY", List.of(144L), values, 0.72, 3))
+                .thenReturn(List.of(144L));
 
         AuthorizedMemoryRecallRankingService.RankedRecall result = service().rank(
                 10L, "bedtime reminder", List.of(diary), List.of(), List.of(), 3, 3, 1L);
 
         assertTrue(result.usedVector());
         assertEquals(List.of(diary), result.diaries());
-        verify(vectorRepository).rankSourceIds(10L, "DIARY", List.of(44L), values, 0.72, 3);
+        verify(vectorRepository).rankSourceIds(10L, "MEMORY", List.of(144L), values, 0.72, 3);
     }
 
     @Test
@@ -67,7 +67,7 @@ class AuthorizedMemoryRecallRankingServiceTest {
         AuthorizedMemoryRecallCandidate diary = diary(144L, 44L, "bedtime reminder");
         when(embeddingService.embed(10L, "bedtime reminder"))
                 .thenReturn(new AuthorizedMemoryRecallEmbeddingService.RecallQueryEmbedding(values, observation));
-        when(vectorRepository.rankSourceIds(10L, "DIARY", List.of(44L), values, 0.72, 3))
+        when(vectorRepository.rankSourceIds(10L, "MEMORY", List.of(144L), values, 0.72, 3))
                 .thenThrow(new IllegalStateException("database detail"));
 
         AuthorizedMemoryRecallRankingService.RankedRecall result = service().rank(

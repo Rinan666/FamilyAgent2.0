@@ -1,5 +1,7 @@
 package com.familyagent.module.memory.gateway;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.familyagent.common.constant.MemoryOriginType;
 import com.familyagent.module.memory.facade.UnifiedMemorySyncRequest;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +24,7 @@ public class JdbcUnifiedMemorySyncGateway implements UnifiedMemorySyncGateway {
           user_id, family_id, library_kind, title, related_user_id, type, scope,
           content, summary, importance, confidence, status, tags, occurred_at,
           origin_type, origin_id, metadata, created_at, updated_at
-        ) VALUES (?, ?, 'FAMILY', ?, ?, ?, ?, ?, ?, 3, 0.8500, ?, ?, ?, ?, ?, '{}'::jsonb, NOW(), NOW())
+        ) VALUES (?, ?, 'FAMILY', ?, ?, ?, ?, ?, ?, 3, 0.8500, ?, ?, ?, ?, ?, ?::jsonb, NOW(), NOW())
         ON CONFLICT (origin_type, origin_id)
           WHERE origin_type IS NOT NULL AND origin_id IS NOT NULL
         DO UPDATE SET
@@ -37,11 +39,13 @@ public class JdbcUnifiedMemorySyncGateway implements UnifiedMemorySyncGateway {
           status = EXCLUDED.status,
           tags = EXCLUDED.tags,
           occurred_at = EXCLUDED.occurred_at,
+          metadata = COALESCE(memory_entries.metadata, '{}'::jsonb) || EXCLUDED.metadata,
           updated_at = NOW()
         RETURNING id
         """;
 
     private final JdbcTemplate jdbcTemplate;
+    private final ObjectMapper objectMapper;
 
     @Override
     public Long upsert(UnifiedMemorySyncRequest request) {
@@ -69,16 +73,21 @@ public class JdbcUnifiedMemorySyncGateway implements UnifiedMemorySyncGateway {
             }
             statement.setString(12, request.originType().name());
             statement.setLong(13, request.originId());
+            statement.setString(14, serializeMetadata(request));
             return statement;
         }, (PreparedStatementCallback<Long>) JdbcUnifiedMemorySyncGateway::readId);
     }
 
     @Override
-    public void delete(MemoryOriginType originType, Long originId) {
-        jdbcTemplate.update(
-                "DELETE FROM memory_entries WHERE origin_type = ? AND origin_id = ?",
-                originType.name(),
-                originId);
+    public Long delete(MemoryOriginType originType, Long originId) {
+        return jdbcTemplate.query(
+                        "DELETE FROM memory_entries WHERE origin_type = ? AND origin_id = ? RETURNING id",
+                        (resultSet, rowNumber) -> resultSet.getLong(1),
+                        originType.name(),
+                        originId)
+                .stream()
+                .findFirst()
+                .orElse(null);
     }
 
     private static Long readId(PreparedStatement statement) throws java.sql.SQLException {
@@ -87,6 +96,14 @@ public class JdbcUnifiedMemorySyncGateway implements UnifiedMemorySyncGateway {
                 throw new java.sql.SQLException("Unified memory upsert returned no id");
             }
             return resultSet.getLong(1);
+        }
+    }
+
+    private String serializeMetadata(UnifiedMemorySyncRequest request) {
+        try {
+            return objectMapper.writeValueAsString(request.metadata());
+        } catch (JsonProcessingException error) {
+            throw new IllegalStateException("Unified memory metadata serialization failed", error);
         }
     }
 

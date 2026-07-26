@@ -1,6 +1,6 @@
 package com.familyagent.module.memory.service;
 
-import com.familyagent.common.constant.MemoryRecallSourceType;
+import com.familyagent.common.constant.MemoryEmbeddingSourceType;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallCandidate;
 import com.familyagent.module.memory.dto.EmbeddingCallObservation;
 import com.familyagent.module.memory.repository.MemoryRecallVectorRepository;
@@ -79,12 +79,9 @@ public class AuthorizedMemoryRecallRankingService {
 
         try {
             return new VectorCandidateIds(
-                    rankSourceIds(familyId, MemoryRecallSourceType.LIFE_RECORD,
-                            diaryCandidates, embedding.values(), diaryLimit),
-                    rankSourceIds(familyId, MemoryRecallSourceType.FAMILY_EXPERIENCE,
-                            memoryCandidates, embedding.values(), memoryLimit),
-                    rankSourceIds(familyId, MemoryRecallSourceType.GROWTH_OBSERVATION,
-                            growthCandidates, embedding.values(), memoryLimit),
+                    rankSourceIds(familyId, diaryCandidates, embedding.values(), diaryLimit),
+                    rankSourceIds(familyId, memoryCandidates, embedding.values(), memoryLimit),
+                    rankSourceIds(familyId, growthCandidates, embedding.values(), memoryLimit),
                     observation);
         } catch (RuntimeException error) {
             log.warn("Vector memory recall failed, using text fallback: errorType={}",
@@ -95,12 +92,11 @@ public class AuthorizedMemoryRecallRankingService {
 
     private List<Long> rankSourceIds(
             Long familyId,
-            MemoryRecallSourceType sourceType,
             List<AuthorizedMemoryRecallCandidate> candidates,
             List<Double> values,
             int limit) {
         List<Long> sourceIds = candidates.stream()
-                .map(AuthorizedMemoryRecallCandidate::vectorSourceId)
+                .map(AuthorizedMemoryRecallCandidate::embeddingSourceId)
                 .filter(java.util.Objects::nonNull)
                 .toList();
         if (sourceIds.isEmpty()) {
@@ -108,7 +104,7 @@ public class AuthorizedMemoryRecallRankingService {
         }
         return vectorRepository.rankSourceIds(
                 familyId,
-                sourceType.embeddingSourceType(),
+                MemoryEmbeddingSourceType.MEMORY.name(),
                 sourceIds,
                 values,
                 MAX_VECTOR_DISTANCE,
