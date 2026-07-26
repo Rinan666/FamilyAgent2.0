@@ -108,10 +108,12 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
                   AND EXISTS (
                     SELECT 1 FROM care_authorizations ca
                     WHERE ca.family_id = memory_entries.family_id
-                      AND ca.subject_user_id = memory_entries.user_id
+                      AND ca.subject_user_id = COALESCE(
+                          memory_entries.related_user_id,
+                          memory_entries.user_id)
                       AND ca.caregiver_user_id = #{viewerUserId}
                       AND ca.status = 'ACTIVE'
-                      AND ca.scope IN ('ALL', 'MEMORY')
+                      AND ca.scope IN ('ALL', 'MEMORY', 'DIARY', 'GROWTH_GUARD')
                       AND (ca.expires_at IS NULL OR ca.expires_at > NOW())
                   )
                 )
@@ -171,7 +173,7 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
           AND origin_type IS NULL
           AND (
             CAST(#{targetUserId} AS BIGINT) IS NULL
-            OR user_id = CAST(#{targetUserId} AS BIGINT)
+            OR COALESCE(related_user_id, user_id) = CAST(#{targetUserId} AS BIGINT)
           )
           AND (
             CAST(#{keyword} AS VARCHAR) IS NULL
@@ -196,10 +198,12 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
               AND EXISTS (
                 SELECT 1 FROM care_authorizations ca
                 WHERE ca.family_id = memory_entries.family_id
-                  AND ca.subject_user_id = memory_entries.user_id
+                  AND ca.subject_user_id = COALESCE(
+                      memory_entries.related_user_id,
+                      memory_entries.user_id)
                   AND ca.caregiver_user_id = #{viewerUserId}
                   AND ca.status = 'ACTIVE'
-                  AND ca.scope IN ('ALL', 'MEMORY')
+                  AND ca.scope IN ('ALL', 'MEMORY', 'DIARY', 'GROWTH_GUARD')
                   AND (ca.expires_at IS NULL OR ca.expires_at > NOW())
               )
             )
@@ -219,7 +223,7 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
           AND origin_type IS NULL
           AND (
             CAST(#{targetUserId} AS BIGINT) IS NULL
-            OR user_id = CAST(#{targetUserId} AS BIGINT)
+            OR COALESCE(related_user_id, user_id) = CAST(#{targetUserId} AS BIGINT)
           )
           AND (
             CAST(#{keyword} AS VARCHAR) IS NULL
@@ -244,10 +248,12 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
               AND EXISTS (
                 SELECT 1 FROM care_authorizations ca
                 WHERE ca.family_id = memory_entries.family_id
-                  AND ca.subject_user_id = memory_entries.user_id
+                  AND ca.subject_user_id = COALESCE(
+                      memory_entries.related_user_id,
+                      memory_entries.user_id)
                   AND ca.caregiver_user_id = #{viewerUserId}
                   AND ca.status = 'ACTIVE'
-                  AND ca.scope IN ('ALL', 'MEMORY')
+                  AND ca.scope IN ('ALL', 'MEMORY', 'DIARY', 'GROWTH_GUARD')
                   AND (ca.expires_at IS NULL OR ca.expires_at > NOW())
               )
             )
@@ -287,10 +293,12 @@ public interface MemoryEntryRepository extends BaseMapper<MemoryEntry> {
               AND EXISTS (
                 SELECT 1 FROM care_authorizations ca
                 WHERE ca.family_id = memory_entries.family_id
-                  AND ca.subject_user_id = memory_entries.user_id
+                  AND ca.subject_user_id = COALESCE(
+                      memory_entries.related_user_id,
+                      memory_entries.user_id)
                   AND ca.caregiver_user_id = #{viewerUserId}
                   AND ca.status = 'ACTIVE'
-                  AND ca.scope IN ('ALL', 'MEMORY')
+                  AND ca.scope IN ('ALL', 'MEMORY', 'DIARY', 'GROWTH_GUARD')
                   AND (ca.expires_at IS NULL OR ca.expires_at > NOW())
               )
             )

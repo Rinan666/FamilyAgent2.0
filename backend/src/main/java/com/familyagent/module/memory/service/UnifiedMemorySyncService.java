@@ -3,6 +3,7 @@ package com.familyagent.module.memory.service;
 import com.familyagent.common.constant.MemoryOriginType;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
+import com.familyagent.module.family.facade.FamilyMembershipQueryFacade;
 import com.familyagent.module.memory.facade.UnifiedMemorySyncRequest;
 import com.familyagent.module.memory.gateway.UnifiedMemorySyncGateway;
 import lombok.RequiredArgsConstructor;
@@ -14,11 +15,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class UnifiedMemorySyncService {
 
     private final UnifiedMemorySyncGateway syncGateway;
+    private final FamilyMembershipQueryFacade membershipQueryFacade;
 
     @Transactional
     public Long sync(UnifiedMemorySyncRequest request) {
         validate(request);
-        return syncGateway.upsert(request);
+        return syncGateway.upsert(normalizeRelatedUser(request));
     }
 
     @Transactional
@@ -38,9 +40,18 @@ public class UnifiedMemorySyncService {
                 || request.originType() == null
                 || request.originId() == null
                 || request.status() == null
+                || request.occurredAt() == null
                 || request.content() == null
                 || request.content().isBlank()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Unified memory record is incomplete");
         }
+    }
+
+    private UnifiedMemorySyncRequest normalizeRelatedUser(UnifiedMemorySyncRequest request) {
+        Long relatedUserId = request.relatedUserId();
+        if (relatedUserId == null || membershipQueryFacade.isMember(request.familyId(), relatedUserId)) {
+            return request;
+        }
+        return request.withRelatedUserId(null);
     }
 }

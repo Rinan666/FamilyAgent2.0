@@ -24,6 +24,12 @@ public class FamilyMembershipQueryFacade {
                 .collect(Collectors.toUnmodifiableSet());
     }
 
+    public boolean isMember(Long familyId, Long userId) {
+        return familyId != null
+                && userId != null
+                && memberRepository.findByFamilyAndUser(familyId, userId) != null;
+    }
+
     public Set<Long> requireMemberships(Long userId, Collection<Long> requestedFamilyIds) {
         Set<Long> requested = requestedFamilyIds == null
                 ? Set.of()

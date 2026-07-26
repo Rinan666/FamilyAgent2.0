@@ -23,6 +23,29 @@ public record UnifiedMemorySyncRequest(
         EntityStatus status) {
 
     public UnifiedMemorySyncRequest {
-        tags = tags == null ? List.of() : List.copyOf(tags);
+        tags = tags == null
+                ? List.of()
+                : tags.stream()
+                        .filter(tag -> tag != null && !tag.isBlank())
+                        .map(String::trim)
+                        .distinct()
+                        .limit(10)
+                        .toList();
+    }
+
+    public UnifiedMemorySyncRequest withRelatedUserId(Long normalizedRelatedUserId) {
+        return new UnifiedMemorySyncRequest(
+                ownerUserId,
+                familyId,
+                normalizedRelatedUserId,
+                type,
+                visibility,
+                title,
+                content,
+                tags,
+                occurredAt,
+                originType,
+                originId,
+                status);
     }
 }

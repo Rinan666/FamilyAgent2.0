@@ -79,6 +79,21 @@ class MemoryServiceTest {
         verify(memoryRepository).insert(any(MemoryEntry.class));
     }
 
+    @Test
+    void createFamilyMemory_shouldValidateRelatedUserMembership() throws InterruptedException {
+        MemoryService service = serviceWithAcquiredLock();
+        CreateFamilyMemoryRequest request = requestWithMetadata(Map.of());
+        request.setRelatedUserId(22L);
+        when(memoryMergeService.findSimilar(any(), any(), eq(10L), any(), any())).thenReturn(null);
+
+        try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
+            stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
+            service.createFamilyMemory(request);
+        }
+
+        verify(familyMembershipFacade).checkMembership(1L, 22L);
+    }
+
     // --- MemoryMergeService ---
 
     @Test

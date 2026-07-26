@@ -53,6 +53,9 @@ public class MemoryService {
     public MemoryEntry createFamilyMemory(CreateFamilyMemoryRequest request) {
         Long userId = CurrentUserGuard.currentUserId();
         familyMembershipFacade.checkMembership(request.getFamilyId());
+        if (request.getRelatedUserId() != null) {
+            familyMembershipFacade.checkMembership(request.getFamilyId(), request.getRelatedUserId());
+        }
 
         WriteMemoryMetadata requestMetadata = request.getMetadata();
         Map<String, Object> metadata = buildFamilyMemoryMetadata(requestMetadata);

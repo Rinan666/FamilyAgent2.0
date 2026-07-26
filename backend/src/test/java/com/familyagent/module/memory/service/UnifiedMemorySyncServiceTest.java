@@ -5,14 +5,17 @@ import com.familyagent.common.constant.MemoryContentType;
 import com.familyagent.common.constant.MemoryOriginType;
 import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.common.exception.BusinessException;
+import com.familyagent.module.family.facade.FamilyMembershipQueryFacade;
 import com.familyagent.module.memory.facade.UnifiedMemorySyncRequest;
 import com.familyagent.module.memory.gateway.UnifiedMemorySyncGateway;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -22,17 +25,32 @@ import static org.mockito.Mockito.when;
 class UnifiedMemorySyncServiceTest {
 
     private final UnifiedMemorySyncGateway gateway = mock(UnifiedMemorySyncGateway.class);
-    private final UnifiedMemorySyncService service = new UnifiedMemorySyncService(gateway);
+    private final FamilyMembershipQueryFacade membershipQueryFacade = mock(FamilyMembershipQueryFacade.class);
+    private final UnifiedMemorySyncService service = new UnifiedMemorySyncService(gateway, membershipQueryFacade);
 
     @Test
     void sync_delegatesCompleteCanonicalRecordToGateway() {
         UnifiedMemorySyncRequest request = request("A family observation");
+        when(membershipQueryFacade.isMember(1L, 22L)).thenReturn(true);
         when(gateway.upsert(request)).thenReturn(81L);
 
         Long result = service.sync(request);
 
         assertEquals(81L, result);
         verify(gateway).upsert(request);
+    }
+
+    @Test
+    void sync_clearsRelatedUserOutsideTheFamily() {
+        UnifiedMemorySyncRequest request = request("A family observation");
+        when(membershipQueryFacade.isMember(1L, 22L)).thenReturn(false);
+        when(gateway.upsert(org.mockito.ArgumentMatchers.any())).thenReturn(82L);
+
+        service.sync(request);
+
+        ArgumentCaptor<UnifiedMemorySyncRequest> captor = ArgumentCaptor.forClass(UnifiedMemorySyncRequest.class);
+        verify(gateway).upsert(captor.capture());
+        assertNull(captor.getValue().relatedUserId());
     }
 
     @Test

@@ -45,9 +45,11 @@ public class DiaryMemorySyncSupport {
     }
 
     private static MemoryScope visibility(String value) {
-        return "FAMILY".equalsIgnoreCase(value)
-                ? MemoryScope.FAMILY_VISIBLE
-                : MemoryScope.valueOf(value);
+        if ("FAMILY".equalsIgnoreCase(value)
+                || MemoryScope.LEGACY_VISIBLE.name().equalsIgnoreCase(value)) {
+            return MemoryScope.FAMILY_VISIBLE;
+        }
+        return MemoryScope.valueOf(value);
     }
 
     private static String structuredText(Object structured, String key) {
