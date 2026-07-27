@@ -23,6 +23,9 @@
         <mybatis-plus.version>3.5.6</mybatis-plus.version>
         <sa-token.version>1.38.0</sa-token.version>
         <hutool.version>5.8.27</hutool.version>
+        <jackson-bom.version>2.21.5</jackson-bom.version>
+        <netty.version>4.1.136.Final</netty.version>
+        <postgresql.version>42.7.12</postgresql.version>
     </properties>
 
     <dependencyManagement>
