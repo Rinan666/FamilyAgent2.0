@@ -38,14 +38,14 @@ def test_core_outputs_declare_applicable_versions_and_eval_bindings():
 
 def test_backend_recall_algorithm_version_matches_cross_service_contract():
     repository_root = Path(__file__).resolve().parents[2]
-    ranking_source = repository_root / (
-        "backend/src/main/java/com/familyagent/module/memory/service/"
-        "AuthorizedMemoryRecallRankingService.java"
+    contract_source = repository_root / (
+        "backend/src/main/java/com/familyagent/module/memory/facade/"
+        "MemoryRecallContract.java"
     )
-    if not ranking_source.exists():
+    if not contract_source.exists():
         pytest.skip("Backend source is not mounted in the AI Service test container")
 
-    assert f'ALGORITHM_VERSION = "{BACKEND_RECALL_ALGORITHM_VERSION}"' in ranking_source.read_text(
+    assert f'ALGORITHM_VERSION = "{BACKEND_RECALL_ALGORITHM_VERSION}"' in contract_source.read_text(
         encoding="utf-8"
     )
 
