@@ -2,45 +2,46 @@ package com.familyagent.module.growth.service;
 
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.constant.CareAuthorizationScope;
+import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.family.entity.FamilyMember;
-import com.familyagent.module.family.service.CareAuthorizationService;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.FamilyCareAuthorizationFacade;
+import com.familyagent.module.family.facade.FamilyMembershipFacade;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /**
  * Default implementation of {@link PermissionGate} that aggregates
- * {@link FamilyService} and {@link CareAuthorizationService}
+ * family membership and care-authorization facades
  * behind a single capability interface.
  */
 @Service
 @RequiredArgsConstructor
 public class GrowthGuardPermissionGate implements PermissionGate {
 
-    private final FamilyService familyService;
-    private final CareAuthorizationService careAuthorizationService;
+    private final FamilyMembershipFacade familyMembershipFacade;
+    private final FamilyCareAuthorizationFacade careAuthorizationFacade;
 
     @Override
     public void checkMembership(Long familyId) {
-        familyService.checkMembership(familyId);
+        familyMembershipFacade.checkMembership(familyId);
     }
 
     @Override
     public void checkOwner(Long familyId) {
-        familyService.checkOwner(familyId);
+        familyMembershipFacade.checkOwner(familyId);
     }
 
     @Override
     public FamilyMember requireFamilyMember(Long familyId, Long userId) {
-        return familyService.getFamilyMember(familyId, userId);
+        return familyMembershipFacade.requireMember(familyId, userId);
     }
 
     @Override
     public void ensureCanCareForTarget(Long familyId, Long targetUserId, Long viewerUserId) {
-        if (!careAuthorizationService.canViewCareScope(
+        if (!careAuthorizationFacade.canViewScope(
                 familyId, targetUserId, viewerUserId,
                 CareAuthorizationScope.GROWTH_GUARD.name())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "没有该成员的照护授权");
@@ -51,10 +52,10 @@ public class GrowthGuardPermissionGate implements PermissionGate {
     public void ensureCanViewRecord(GrowthGuardRecord record, Long viewerUserId) {
         if (viewerUserId.equals(record.getCreatedBy())
                 || viewerUserId.equals(record.getTargetUserId())
-                || "FAMILY_VISIBLE".equalsIgnoreCase(record.getVisibility())) {
+                || MemoryScope.FAMILY_VISIBLE.name().equalsIgnoreCase(record.getVisibility())) {
             return;
         }
-        if (record.getTargetUserId() != null && careAuthorizationService.canViewCareScope(
+        if (record.getTargetUserId() != null && careAuthorizationFacade.canViewScope(
                 record.getFamilyId(),
                 record.getTargetUserId(),
                 viewerUserId,
@@ -71,7 +72,7 @@ public class GrowthGuardPermissionGate implements PermissionGate {
             return;
         }
         try {
-            familyService.checkOwner(record.getFamilyId());
+            familyMembershipFacade.checkOwner(record.getFamilyId());
             return;
         } catch (BusinessException ignored) {
             // Fall through to forbidden.
@@ -85,7 +86,7 @@ public class GrowthGuardPermissionGate implements PermissionGate {
         boolean selfCreated = viewerUserId.equals(record.getCreatedBy());
         boolean familyOwner = false;
         try {
-            familyService.checkOwner(record.getFamilyId());
+            familyMembershipFacade.checkOwner(record.getFamilyId());
             familyOwner = true;
         } catch (BusinessException ignored) {
             // Fall through to creator-only permission.

@@ -10,9 +10,9 @@ import com.familyagent.module.diary.dto.CreateDiaryEntryRequest;
 import com.familyagent.module.diary.dto.DiaryEntryMetadata;
 import com.familyagent.module.diary.dto.UpdateDiaryEntryRequest;
 import com.familyagent.module.diary.entity.DiaryEntry;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.FamilyMembershipFacade;
+import com.familyagent.module.memory.facade.MemoryIndexMetadataFacade;
 import com.familyagent.module.memory.facade.UnifiedDiaryRecordFacade;
-import com.familyagent.module.memory.service.MemoryIndexMetadataBuilder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,13 +41,14 @@ public class DiaryEntryService {
             "DAILY", "IMPORTANT_EVENT", "LESSON", "EMOTION", "MESSAGE_TO_FAMILY", "SELF_REFLECTION");
 
     private final UnifiedDiaryRecordFacade diaryRecords;
-    private final FamilyService familyService;
+    private final FamilyMembershipFacade familyMembership;
     private final DiaryMemorySyncSupport memorySyncSupport;
+    private final MemoryIndexMetadataFacade indexMetadataFacade;
 
     @Transactional
     public DiaryEntry create(CreateDiaryEntryRequest request) {
         Long userId = CurrentUserGuard.currentUserId();
-        familyService.checkMembership(request.getFamilyId());
+        familyMembership.checkMembership(request.getFamilyId());
 
         if (diaryRecords.countTodayByUser(userId) >= MAX_ENTRIES_PER_DAY) {
             throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED,
@@ -83,7 +84,7 @@ public class DiaryEntryService {
                     mergedContent));
             existing.setMood(blankToNull(request.getMood()) == null ? existing.getMood() : blankToNull(request.getMood()));
             existing.setTags(mergeTags(existing.getTags(), request.getTags()));
-            existing.setMetadata(MemoryIndexMetadataBuilder.enrichDiary(
+            existing.setMetadata(indexMetadataFacade.enrichDiary(
                     metadata,
                     existing.getRawText(),
                     String.valueOf(((Map<?, ?>) existing.getStructured()).get("entryType")),
@@ -104,7 +105,7 @@ public class DiaryEntryService {
         entry.setPrivacyLevel(visibility);
         entry.setPermissionScope(Map.of());
         entry.setSource(DiaryEntryMetadataSupport.resolveEntrySource(inputMetadata));
-        entry.setMetadata(MemoryIndexMetadataBuilder.enrichDiary(
+        entry.setMetadata(indexMetadataFacade.enrichDiary(
                 requestMetadata,
                 entry.getRawText(),
                 String.valueOf(((Map<?, ?>) entry.getStructured()).get("entryType")),
@@ -115,7 +116,7 @@ public class DiaryEntryService {
     }
 
     public List<DiaryEntry> listFamilyEntries(Long familyId, int limit) {
-        familyService.checkMembership(familyId);
+        familyMembership.checkMembership(familyId);
         return diaryRecords.findVisibleByFamily(
                 familyId,
                 CurrentUserGuard.currentUserId(),
@@ -123,7 +124,7 @@ public class DiaryEntryService {
     }
 
     public PageResult<DiaryEntry> searchFamilyEntries(Long familyId, Long targetUserId, String keyword, int page, int pageSize) {
-        familyService.checkMembership(familyId);
+        familyMembership.checkMembership(familyId);
         Long viewerUserId = CurrentUserGuard.currentUserId();
         int normalizedPageSize = normalizePageSize(pageSize);
         String normalizedKeyword = normalizeKeyword(keyword);
@@ -149,7 +150,7 @@ public class DiaryEntryService {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         CurrentUserGuard.requireSelf(entry.getUserId());
-        familyService.checkMembership(entry.getFamilyId());
+        familyMembership.checkMembership(entry.getFamilyId());
 
         entry.setRawText(request.getContent().trim());
         entry.setStructured(buildStructured(request.getEntryType(), request.getTitle(), request.getContent()));
@@ -158,7 +159,7 @@ public class DiaryEntryService {
         String visibility = normalizeVisibility(request.getVisibility());
         entry.setVisibility(visibility);
         entry.setPrivacyLevel(visibility);
-        entry.setMetadata(MemoryIndexMetadataBuilder.enrichDiary(
+        entry.setMetadata(indexMetadataFacade.enrichDiary(
                 DiaryEntryMetadataSupport.merge(entry.getMetadata(), request.getMetadata()),
                 entry.getRawText(),
                 String.valueOf(((Map<?, ?>) entry.getStructured()).get("entryType")),

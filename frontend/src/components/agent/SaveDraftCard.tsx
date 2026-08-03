@@ -77,7 +77,7 @@ export default function SaveDraftCard({
       : DEFAULT_VISIBILITY_OPTIONS;
 
   return (
-    <div className="mt-3 w-full max-w-2xl rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 text-left text-stone-800 shadow-sm">
+    <div data-testid="save-draft-card" className="mt-3 w-full max-w-2xl rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 text-left text-stone-800 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-emerald-900">保存草稿</p>

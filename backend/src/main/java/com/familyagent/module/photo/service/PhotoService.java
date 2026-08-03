@@ -4,7 +4,7 @@ import com.familyagent.common.constant.PhotoScope;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.FamilyMembershipFacade;
 import com.familyagent.module.photo.dto.PhotoClusterMetadata;
 import com.familyagent.module.photo.dto.PhotoContentResource;
 import com.familyagent.module.photo.dto.PhotoUploadResponse;
@@ -32,7 +32,7 @@ public class PhotoService {
 
     private final PhotoStorageService storageService;
     private final PhotoMapper photoMapper;
-    private final FamilyService familyService;
+    private final FamilyMembershipFacade familyMembershipFacade;
     private final ObjectMapper objectMapper;
 
     private static final int MAX_FILES = 50;
@@ -43,7 +43,7 @@ public class PhotoService {
 
     @Transactional
     public List<PhotoUploadResponse> upload(Long familyId, String scopeValue, String description, List<MultipartFile> files) {
-        familyService.checkMembership(familyId);
+        familyMembershipFacade.checkMembership(familyId);
         PhotoScope scope = parseUploadScope(scopeValue);
         if (files == null || files.isEmpty()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Please upload at least one photo");
@@ -115,7 +115,7 @@ public class PhotoService {
     }
 
     public List<PhotoUploadResponse> listByFamily(Long familyId, int limit) {
-        familyService.checkMembership(familyId);
+        familyMembershipFacade.checkMembership(familyId);
         return photoMapper.selectByFamilyIdAndScope(familyId, PhotoScope.FAMILY.name(), normalizeLimit(limit)).stream()
                 .map(this::toResponse)
                 .toList();
@@ -164,7 +164,7 @@ public class PhotoService {
             }
             return photo;
         }
-        familyService.checkMembership(photo.getFamilyId());
+        familyMembershipFacade.checkMembership(photo.getFamilyId());
         return photo;
     }
 
@@ -178,7 +178,7 @@ public class PhotoService {
             throw new BusinessException(ErrorCode.FORBIDDEN, "Only the uploader can update this photo");
         }
         if (PhotoScope.fromNullable(photo.getScope()) != PhotoScope.PERSONAL) {
-            familyService.checkMembership(photo.getFamilyId());
+            familyMembershipFacade.checkMembership(photo.getFamilyId());
         }
         return photo;
     }

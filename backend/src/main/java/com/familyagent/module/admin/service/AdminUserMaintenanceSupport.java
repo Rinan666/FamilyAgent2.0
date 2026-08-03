@@ -3,9 +3,9 @@ package com.familyagent.module.admin.service;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
-import com.familyagent.module.family.service.FamilyLifecycleService;
-import com.familyagent.module.user.entity.User;
-import com.familyagent.module.user.repository.UserRepository;
+import com.familyagent.module.family.facade.FamilyAdministrationFacade;
+import com.familyagent.module.user.facade.UserAccountAccess;
+import com.familyagent.module.user.facade.UserAccountAccessFacade;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -17,8 +17,8 @@ class AdminUserMaintenanceSupport {
 
     private final PlatformAdminAccessSupport adminAccessSupport;
     private final JdbcTemplate jdbcTemplate;
-    private final UserRepository userRepository;
-    private final FamilyLifecycleService familyLifecycleService;
+    private final UserAccountAccessFacade userAccountAccessFacade;
+    private final FamilyAdministrationFacade familyAdministrationFacade;
 
     @Transactional
     void deleteUser(Long userId) {
@@ -32,15 +32,13 @@ class AdminUserMaintenanceSupport {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Platform admin cannot delete the current account");
         }
 
-        User target = userRepository.findBasicById(userId);
-        if (target == null) {
-            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
-        }
-        if ("ADMIN".equalsIgnoreCase(target.getRole())) {
+        UserAccountAccess target = userAccountAccessFacade.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        if (target.platformAdmin()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Platform admin accounts cannot be deleted");
         }
 
-        familyLifecycleService.prepareFamiliesForUserDeletion(userId);
+        familyAdministrationFacade.prepareForUserDeletion(userId);
 
         updateNullIfTableExists("families", "created_by", userId);
         updateNullIfTableExists("invite_codes", "created_by", userId);

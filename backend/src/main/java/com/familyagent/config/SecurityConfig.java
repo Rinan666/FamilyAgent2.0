@@ -15,7 +15,7 @@ public class SecurityConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(new SaInterceptor(handle -> StpUtil.checkLogin()))
-                .addPathPatterns("/api/**")
+                .addPathPatterns("/api/**", "/actuator/**")
                 .excludePathPatterns(
                         "/api/users/register",
                         "/api/users/login",

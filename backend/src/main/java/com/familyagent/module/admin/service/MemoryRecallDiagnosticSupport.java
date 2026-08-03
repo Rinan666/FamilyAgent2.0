@@ -4,9 +4,9 @@ import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.admin.dto.MemoryRecallDiagnosticRequest;
 import com.familyagent.module.admin.dto.MemoryRecallDiagnosticResponse;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.FamilyAdministrationFacade;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
-import com.familyagent.module.memory.service.AuthorizedMemoryRecallService;
+import com.familyagent.module.memory.facade.MemoryRecallDiagnosticFacade;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -17,19 +17,19 @@ import java.util.List;
 class MemoryRecallDiagnosticSupport {
 
     private final PlatformAdminAccessSupport adminAccessSupport;
-    private final FamilyService familyService;
-    private final AuthorizedMemoryRecallService memoryRecallService;
+    private final FamilyAdministrationFacade familyAdministrationFacade;
+    private final MemoryRecallDiagnosticFacade memoryRecallFacade;
 
     MemoryRecallDiagnosticResponse diagnoseMemoryRecall(MemoryRecallDiagnosticRequest request) {
         adminAccessSupport.requirePlatformAdmin();
         if (request == null || request.getFamilyId() == null || request.getViewerUserId() == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "familyId and viewerUserId are required");
         }
-        familyService.getFamilyMember(request.getFamilyId(), request.getViewerUserId());
+        familyAdministrationFacade.requireMember(request.getFamilyId(), request.getViewerUserId());
 
         int diaryLimit = clampLimit(request.getDiaryLimit(), 3, 10);
         int memoryLimit = clampLimit(request.getMemoryLimit(), 3, 10);
-        AuthorizedMemoryRecallResult recall = memoryRecallService.recallForFamilyAfterViewerValidated(
+        AuthorizedMemoryRecallResult recall = memoryRecallFacade.recallAfterViewerValidated(
                 request.getFamilyId(),
                 request.getViewerUserId(),
                 request.getQuery(),

@@ -1,20 +1,17 @@
 package com.familyagent.module.mirror.service;
 
 import com.familyagent.common.constant.DiaryRecallSource;
-import com.familyagent.common.constant.MemoryType;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.family.dto.FamilyMemberVO;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.memory.entity.MemoryEntry;
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryItem;
 import com.familyagent.module.mirror.entity.MirrorAgentData;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.math.BigDecimal;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
 import java.time.Period;
 import java.time.format.DateTimeParseException;
 import java.util.Arrays;
@@ -24,46 +21,16 @@ import java.util.List;
 import java.util.Map;
 
 @Component
+@RequiredArgsConstructor
 public class MirrorContextPromptBuilder {
+
+    private final MirrorTemporalLayerAnnotator temporalLayerAnnotator;
 
     public void annotateTemporalLayers(
             List<DiaryEntry> diaries,
             List<MemoryEntry> memories,
             List<GrowthGuardRecord> growthRecords) {
-        if (diaries != null) {
-            diaries.forEach(entry -> {
-                TemporalLayer layer = temporalLayer(
-                        temporalReferenceTime(entry.getMetadata(), entry.getCreatedAt()),
-                        false,
-                        0,
-                        TemporalKind.DIARY);
-                entry.setMetadata(mergeTemporalMetadata(entry.getMetadata(), layer));
-            });
-        }
-        if (memories != null) {
-            memories.forEach(memory -> {
-                boolean core = isCoreMemory(memory);
-                LocalDateTime fallbackTime = memory.getUpdatedAt() == null ? memory.getCreatedAt() : memory.getUpdatedAt();
-                TemporalLayer layer = temporalLayer(
-                        temporalReferenceTime(memory.getMetadata(), fallbackTime),
-                        core,
-                        memory.getImportance() == null ? 0 : memory.getImportance(),
-                        temporalKind(memory));
-                memory.setMetadata(mergeTemporalMetadata(memory.getMetadata(), layer));
-            });
-        }
-        if (growthRecords != null) {
-            growthRecords.forEach(record -> {
-                TemporalLayer layer = temporalLayer(
-                        temporalReferenceTime(
-                                record.getMetadata(),
-                                record.getObservedAt() == null ? record.getCreatedAt() : record.getObservedAt().atStartOfDay()),
-                        false,
-                        record.getSeverity() == null ? 0 : record.getSeverity(),
-                        TemporalKind.GROWTH_OBSERVATION);
-                record.setMetadata(mergeTemporalMetadata(record.getMetadata(), layer));
-            });
-        }
+        temporalLayerAnnotator.annotate(diaries, memories, growthRecords);
     }
 
     public String buildPrivateStyleReference(
@@ -333,7 +300,7 @@ public class MirrorContextPromptBuilder {
         return mapText(profile.getTraits(), 600);
     }
 
-    private static String diaryLines(List<DiaryEntry> diaries) {
+    private String diaryLines(List<DiaryEntry> diaries) {
         if (diaries == null || diaries.isEmpty()) {
             return "暂无该成员的授权日记。";
         }
@@ -362,7 +329,7 @@ public class MirrorContextPromptBuilder {
         return builder.toString().trim();
     }
 
-    private static String memoryLines(List<MemoryEntry> memories) {
+    private String memoryLines(List<MemoryEntry> memories) {
         if (memories == null || memories.isEmpty()) {
             return "暂无可见经验沉淀。";
         }
@@ -389,7 +356,7 @@ public class MirrorContextPromptBuilder {
         return builder.toString().trim();
     }
 
-    private static String growthLines(List<GrowthGuardRecord> growthRecords) {
+    private String growthLines(List<GrowthGuardRecord> growthRecords) {
         if (growthRecords == null || growthRecords.isEmpty()) {
             return "暂无可见成长观察。";
         }
@@ -441,8 +408,8 @@ public class MirrorContextPromptBuilder {
         return builder.toString().trim();
     }
 
-    private static String diaryRecordContext(DiaryEntry entry, boolean related) {
-        LocalDateTime recordTime = temporalReferenceTime(entry.getMetadata(), entry.getCreatedAt());
+    private String diaryRecordContext(DiaryEntry entry, boolean related) {
+        LocalDateTime recordTime = temporalLayerAnnotator.referenceTime(entry.getMetadata(), entry.getCreatedAt());
         String source = related
                 ? textFromMap(entry.getMetadata(), "relatedMemberName", "家人补充")
                 : "镜像对象本人";
@@ -452,21 +419,21 @@ public class MirrorContextPromptBuilder {
                 + "；时间层级：" + textFromMap(entry.getMetadata(), "temporalLayerLabel", "未分层");
     }
 
-    private static String memoryRecordContext(MemoryEntry memory) {
+    private String memoryRecordContext(MemoryEntry memory) {
         String status = textFromMap(memory.getMetadata(), "curationStatus", "");
         String reason = firstNonBlank(
                 textFromMap(memory.getMetadata(), "promotionReason", ""),
                 textFromMap(memory.getMetadata(), "coreReason", ""),
                 textFromMap(memory.getMetadata(), "curationReason", ""));
         String proposer = textFromMap(memory.getMetadata(), "promotedByName", textFromMap(memory.getMetadata(), "createdByName", ""));
-        return "记录时间：" + timeLabel(temporalReferenceTime(memory.getMetadata(), memory.getCreatedAt()))
+        return "记录时间：" + timeLabel(temporalLayerAnnotator.referenceTime(memory.getMetadata(), memory.getCreatedAt()))
                 + "；更新时间：" + timeLabel(memory.getUpdatedAt())
                 + (status.isBlank() ? "" : "；沉淀状态：" + status)
                 + (reason.isBlank() ? "" : "；沉淀理由：" + truncate(reason, 80))
                 + (proposer.isBlank() ? "" : "；提出人：" + proposer);
     }
 
-    private static String growthRecordContext(GrowthGuardRecord record) {
+    private String growthRecordContext(GrowthGuardRecord record) {
         return "观察日期：" + (record.getObservedAt() == null ? "未知" : record.getObservedAt())
                 + "；创建时间：" + timeLabel(record.getCreatedAt())
                 + "；可见范围：" + (record.getVisibility() == null ? "UNKNOWN" : record.getVisibility())
@@ -501,179 +468,6 @@ public class MirrorContextPromptBuilder {
 
     private static int safeSize(List<?> values) {
         return values == null ? 0 : values.size();
-    }
-
-    private static boolean isCoreMemory(MemoryEntry memory) {
-        if (memory == null) {
-            return false;
-        }
-        if ("true".equalsIgnoreCase(textFromMap(memory.getMetadata(), "coreMemory", ""))) {
-            return true;
-        }
-        if (memory.getImportance() != null && memory.getImportance() >= 4) {
-            return true;
-        }
-        String type = memory.getType() == null ? "" : memory.getType();
-        return MemoryType.ELDER_ADVICE.name().equals(type)
-                || MemoryType.VALUE.name().equals(type)
-                || MemoryType.FAMILY_STORY.name().equals(type);
-    }
-
-    private static TemporalKind temporalKind(MemoryEntry memory) {
-        if (memory == null) {
-            return TemporalKind.FAMILY_MEMORY;
-        }
-        String sourceType = textFromMap(memory.getMetadata(), "sourceType", "");
-        String plannedTool = textFromMap(memory.getMetadata(), "plannedTool", "");
-        String type = memory.getType() == null ? "" : memory.getType();
-        if ("GROWTH_OBSERVATION".equals(sourceType) || "GROWTH_GUARD".equals(plannedTool)) {
-            return TemporalKind.GROWTH_OBSERVATION;
-        }
-        if ("LEARNING".equals(type) || "MISTAKE".equals(type)) {
-            return TemporalKind.DIARY;
-        }
-        return TemporalKind.FAMILY_MEMORY;
-    }
-
-    private static TemporalLayer temporalLayer(
-            LocalDateTime time,
-            boolean coreMemory,
-            int importance,
-            TemporalKind kind) {
-        if (coreMemory) {
-            double weight = importance >= 5 ? 1.0 : 0.9;
-            return new TemporalLayer(
-                    "CORE_MEMORY",
-                    "沉淀记忆",
-                    BigDecimal.valueOf(weight),
-                    "这类记录更像经验沉淀或价值观沉淀，时间衰减较慢。");
-        }
-        if (time == null) {
-            return new TemporalLayer(
-                    "IMPRESSION",
-                    "印象",
-                    BigDecimal.valueOf(0.35),
-                    "缺少明确时间，只能作为模糊印象参考。");
-        }
-        long days = Math.max(0, Duration.between(time, LocalDateTime.now()).toDays());
-        if (kind == TemporalKind.GROWTH_OBSERVATION) {
-            return growthTemporalLayer(days);
-        }
-        if (kind == TemporalKind.FAMILY_MEMORY) {
-            return familyMemoryTemporalLayer(days);
-        }
-        return diaryTemporalLayer(days);
-    }
-
-    private static TemporalLayer diaryTemporalLayer(long days) {
-        if (days <= 30) {
-            return new TemporalLayer(
-                    "FRESH",
-                    "近期",
-                    BigDecimal.valueOf(1.0),
-                    "近期记录，可以作为当前线索，但仍需结合上下文。");
-        }
-        if (days <= 180) {
-            return new TemporalLayer(
-                    "FADING",
-                    "淡出",
-                    BigDecimal.valueOf(0.65),
-                    "这件事正在淡出，只能说明一段时间内有过相关迹象。");
-        }
-        return new TemporalLayer(
-                "IMPRESSION",
-                "印象",
-                BigDecimal.valueOf(0.35),
-                "时间较久，只能作为过去印象，不能直接判断当前状态。");
-    }
-
-    private static TemporalLayer growthTemporalLayer(long days) {
-        if (days <= 14) {
-            return new TemporalLayer(
-                    "FRESH",
-                    "近期观察",
-                    BigDecimal.valueOf(1.0),
-                    "近期成长观察可以作为当前线索，但只能提示继续观察，不能当作诊断。");
-        }
-        if (days <= 90) {
-            return new TemporalLayer(
-                    "FADING",
-                    "待复核",
-                    BigDecimal.valueOf(0.55),
-                    "这条成长观察已经过了一段时间，只能说明曾经出现过相关信号，需要复核后再判断现状。");
-        }
-        return new TemporalLayer(
-                "IMPRESSION",
-                "旧观察",
-                BigDecimal.valueOf(0.25),
-                "这条成长观察时间较久，不能表示当前状态，只能作为历史线索。");
-    }
-
-    private static TemporalLayer familyMemoryTemporalLayer(long days) {
-        if (days <= 180) {
-            return new TemporalLayer(
-                    "FRESH",
-                    "近期经验",
-                    BigDecimal.valueOf(0.9),
-                    "这条经验沉淀较近，可以优先作为当前场景参考，但仍要结合用户当下处境。");
-        }
-        if (days <= 730) {
-            return new TemporalLayer(
-                    "FADING",
-                    "沉淀中",
-                    BigDecimal.valueOf(0.7),
-                    "这条经验沉淀正在沉淀，适合作为价值观或方法参考，不代表当前事实。");
-        }
-        return new TemporalLayer(
-                "IMPRESSION",
-                "远期经验",
-                BigDecimal.valueOf(0.5),
-                "这条经验时间较久，更适合作为家族历史和价值观背景，不能直接套用到当下。");
-    }
-
-    private static LocalDateTime temporalReferenceTime(Object metadata, LocalDateTime fallback) {
-        for (String key : List.of("eventAt", "occurredAt", "observedAt", "happenedAt", "recordedAt")) {
-            LocalDateTime parsed = parseMetadataTime(textFromMap(metadata, key, ""));
-            if (parsed != null) {
-                return parsed;
-            }
-        }
-        return fallback;
-    }
-
-    private static LocalDateTime parseMetadataTime(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        String text = value.trim();
-        try {
-            return OffsetDateTime.parse(text).toLocalDateTime();
-        } catch (DateTimeParseException ignored) {
-            // Try local date-time and date-only formats below.
-        }
-        try {
-            return LocalDateTime.parse(text);
-        } catch (DateTimeParseException ignored) {
-            // Try date-only format below.
-        }
-        try {
-            return LocalDate.parse(text).atStartOfDay();
-        } catch (DateTimeParseException ignored) {
-            return null;
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> mergeTemporalMetadata(Object metadata, TemporalLayer layer) {
-        Map<String, Object> next = new LinkedHashMap<>();
-        if (metadata instanceof Map<?, ?> map) {
-            next.putAll((Map<String, Object>) map);
-        }
-        next.put("temporalLayer", layer.code());
-        next.put("temporalLayerLabel", layer.label());
-        next.put("temporalWeight", layer.weight());
-        next.put("temporalNote", layer.note());
-        return next;
     }
 
     private static String ageLine(String label, FamilyMemberVO member) {
@@ -770,11 +564,4 @@ public class MirrorContextPromptBuilder {
         return truncate(builder.toString().trim(), maxLength);
     }
 
-    private enum TemporalKind {
-        DIARY,
-        GROWTH_OBSERVATION,
-        FAMILY_MEMORY
-    }
-
-    private record TemporalLayer(String code, String label, BigDecimal weight, String note) {}
 }

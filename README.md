@@ -99,21 +99,21 @@ CLOUDFLARED_CREDENTIALS_FILE=C:/Users/your-name/.cloudflared/00000000-0000-0000-
 ### 2. 构建并启动
 
 ```powershell
-docker compose --env-file .env -f docker-compose.stack.yml config --quiet
-docker compose --env-file .env -f docker-compose.stack.yml up -d --build
+docker compose --env-file .env -f compose.yml -f deploy/compose/local.yml config --quiet
+docker compose --env-file .env -f compose.yml -f deploy/compose/local.yml up -d --build
 ```
 
 首次构建需要下载 Maven、npm 和 Python 依赖，后续构建会复用 Docker 缓存。日常启动无需重新构建：
 
 ```powershell
-docker compose --env-file .env -f docker-compose.stack.yml up -d
+docker compose --env-file .env -f compose.yml -f deploy/compose/local.yml up -d
 ```
 
 ### 3. 检查状态
 
 ```powershell
-docker compose --env-file .env -f docker-compose.stack.yml ps
-docker compose --env-file .env -f docker-compose.stack.yml logs --tail=200
+docker compose --env-file .env -f compose.yml -f deploy/compose/local.yml ps
+docker compose --env-file .env -f compose.yml -f deploy/compose/local.yml logs --tail=200
 ```
 
 默认访问入口：
@@ -129,7 +129,7 @@ docker compose --env-file .env -f docker-compose.stack.yml logs --tail=200
 ### 4. 停止
 
 ```powershell
-docker compose --env-file .env -f docker-compose.stack.yml down
+docker compose --env-file .env -f compose.yml -f deploy/compose/local.yml down
 ```
 
 停止命令默认保留 PostgreSQL、Redis、RabbitMQ 和 MinIO 数据卷。更完整的生产配置与故障排查说明见 `docs/deployment/docker-stack.md`。

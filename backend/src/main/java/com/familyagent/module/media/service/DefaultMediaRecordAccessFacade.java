@@ -8,14 +8,14 @@ import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.diary.entity.DiaryEntry;
-import com.familyagent.module.family.service.CareAuthorizationService;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.FamilyCareAuthorizationFacade;
+import com.familyagent.module.family.facade.FamilyMembershipFacade;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
-import com.familyagent.module.growth.service.PermissionGate;
+import com.familyagent.module.growth.facade.GrowthRecordPermissionFacade;
 import com.familyagent.module.memory.entity.MemoryEntry;
+import com.familyagent.module.memory.facade.MediaMemoryRecordFacade;
 import com.familyagent.module.memory.facade.UnifiedDiaryRecordFacade;
 import com.familyagent.module.memory.facade.UnifiedGrowthRecordFacade;
-import com.familyagent.module.memory.repository.MemoryEntryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -27,10 +27,10 @@ public class DefaultMediaRecordAccessFacade implements MediaRecordAccessFacade {
 
     private final UnifiedDiaryRecordFacade diaryRecords;
     private final UnifiedGrowthRecordFacade growthRecords;
-    private final MemoryEntryRepository memoryRepository;
-    private final FamilyService familyService;
-    private final CareAuthorizationService careAuthorizationService;
-    private final PermissionGate growthPermissionGate;
+    private final MediaMemoryRecordFacade memoryRecords;
+    private final FamilyMembershipFacade familyMembership;
+    private final FamilyCareAuthorizationFacade careAuthorizationFacade;
+    private final GrowthRecordPermissionFacade growthPermissionFacade;
 
     @Override
     public MediaRecordAccess requireReadable(MediaRecordType recordType, Long recordId) {
@@ -53,7 +53,7 @@ public class DefaultMediaRecordAccessFacade implements MediaRecordAccessFacade {
     private MediaRecordAccess requireReadableDiary(Long recordId) {
         DiaryEntry entry = requireActiveDiary(recordId);
         Long viewerUserId = CurrentUserGuard.currentUserId();
-        familyService.checkMembership(entry.getFamilyId());
+        familyMembership.checkMembership(entry.getFamilyId());
         if (viewerUserId.equals(entry.getUserId())
                 || isFamilyVisible(entry.getVisibility())
                 || canViewCareDiary(entry, viewerUserId)) {
@@ -65,30 +65,30 @@ public class DefaultMediaRecordAccessFacade implements MediaRecordAccessFacade {
     private MediaRecordAccess requireWritableDiary(Long recordId) {
         DiaryEntry entry = requireActiveDiary(recordId);
         CurrentUserGuard.requireSelf(entry.getUserId());
-        familyService.checkMembership(entry.getFamilyId());
+        familyMembership.checkMembership(entry.getFamilyId());
         return access(MediaRecordType.DIARY, recordId, entry.getFamilyId());
     }
 
     private MediaRecordAccess requireReadableGrowth(Long recordId) {
         GrowthGuardRecord record = requireActiveGrowth(recordId);
         Long viewerUserId = CurrentUserGuard.currentUserId();
-        growthPermissionGate.checkMembership(record.getFamilyId());
-        growthPermissionGate.ensureCanViewRecord(record, viewerUserId);
+        growthPermissionFacade.checkMembership(record.getFamilyId());
+        growthPermissionFacade.ensureCanView(record, viewerUserId);
         return access(MediaRecordType.GROWTH, recordId, record.getFamilyId());
     }
 
     private MediaRecordAccess requireWritableGrowth(Long recordId) {
         GrowthGuardRecord record = requireActiveGrowth(recordId);
-        growthPermissionGate.checkMembership(record.getFamilyId());
-        growthPermissionGate.ensureCanModifyRecord(record);
+        growthPermissionFacade.checkMembership(record.getFamilyId());
+        growthPermissionFacade.ensureCanModify(record);
         return access(MediaRecordType.GROWTH, recordId, record.getFamilyId());
     }
 
     private MediaRecordAccess requireReadableMemory(Long recordId) {
         MemoryEntry entry = requireActiveMemory(recordId);
         Long viewerUserId = CurrentUserGuard.currentUserId();
-        familyService.checkMembership(entry.getFamilyId());
-        MemoryEntry visible = memoryRepository.findVisibleFamilyMemoryById(
+        familyMembership.checkMembership(entry.getFamilyId());
+        MemoryEntry visible = memoryRecords.findVisibleById(
                 entry.getFamilyId(),
                 recordId,
                 viewerUserId);
@@ -101,7 +101,7 @@ public class DefaultMediaRecordAccessFacade implements MediaRecordAccessFacade {
     private MediaRecordAccess requireWritableMemory(Long recordId) {
         MemoryEntry entry = requireActiveMemory(recordId);
         CurrentUserGuard.requireSelf(entry.getUserId());
-        familyService.checkMembership(entry.getFamilyId());
+        familyMembership.checkMembership(entry.getFamilyId());
         return access(MediaRecordType.MEMORY, recordId, entry.getFamilyId());
     }
 
@@ -122,7 +122,7 @@ public class DefaultMediaRecordAccessFacade implements MediaRecordAccessFacade {
     }
 
     private MemoryEntry requireActiveMemory(Long recordId) {
-        MemoryEntry entry = memoryRepository.selectById(recordId);
+        MemoryEntry entry = memoryRecords.findById(recordId);
         if (entry == null || !EntityStatus.ACTIVE.name().equals(entry.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
@@ -133,7 +133,7 @@ public class DefaultMediaRecordAccessFacade implements MediaRecordAccessFacade {
         if (!isCareVisible(entry.getVisibility())) {
             return false;
         }
-        return careAuthorizationService.canViewCareScope(
+        return careAuthorizationFacade.canViewScope(
                 entry.getFamilyId(),
                 entry.getUserId(),
                 viewerUserId,

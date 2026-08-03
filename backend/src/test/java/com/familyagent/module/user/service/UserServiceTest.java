@@ -3,8 +3,8 @@ package com.familyagent.module.user.service;
 import cn.dev33.satoken.stp.StpUtil;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
-import com.familyagent.module.invite.entity.InviteCode;
-import com.familyagent.module.invite.repository.InviteCodeRepository;
+import com.familyagent.module.invite.facade.RegistrationInviteDetails;
+import com.familyagent.module.invite.facade.RegistrationInviteFacade;
 import com.familyagent.module.user.dto.LoginRequest;
 import com.familyagent.module.user.dto.LoginResponse;
 import com.familyagent.module.user.dto.RegisterRequest;
@@ -49,7 +49,7 @@ import static org.mockito.Mockito.when;
 class UserServiceTest {
 
     @Mock private UserRepository userRepository;
-    @Mock private InviteCodeRepository inviteCodeRepository;
+    @Mock private RegistrationInviteFacade registrationInviteFacade;
     @Mock private RedissonClient redissonClient;
     @Mock private RAtomicLong loginFailureCounter;
     @InjectMocks private UserService userService;
@@ -69,8 +69,7 @@ class UserServiceTest {
         req.setInviteCode("ASDFGZXCVB");
 
         when(userRepository.countByUsername("testuser")).thenReturn(0);
-        mockInviteCode("ASDFGZXCVB", 20, 0);
-        when(inviteCodeRepository.incrementUsedCountByCode("ASDFGZXCVB")).thenReturn(1);
+        mockInviteCode("ASDFGZXCVB");
 
         userService.register(req);
 
@@ -104,8 +103,7 @@ class UserServiceTest {
         req.setInviteCode("ASDFGZXCVB");
 
         when(userRepository.countByUsername("existing")).thenReturn(0);
-        mockInviteCode("ASDFGZXCVB", 20, 0);
-        when(inviteCodeRepository.incrementUsedCountByCode("ASDFGZXCVB")).thenReturn(1);
+        mockInviteCode("ASDFGZXCVB");
         doThrow(new DataIntegrityViolationException("duplicate key value violates unique constraint users_username_key"))
                 .when(userRepository).insert(any(User.class));
 
@@ -122,8 +120,7 @@ class UserServiceTest {
         req.setInviteCode("ASDFGZXCVB");
 
         when(userRepository.countByUsername("existing")).thenReturn(0);
-        mockInviteCode("ASDFGZXCVB", 20, 0);
-        when(inviteCodeRepository.incrementUsedCountByCode("ASDFGZXCVB")).thenReturn(1);
+        mockInviteCode("ASDFGZXCVB");
         doThrow(new DataIntegrityViolationException(
                 "PreparedStatementCallback; SQL [select u.username from users u]; numeric value out of range for column username"))
                 .when(userRepository).insert(any(User.class));
@@ -141,8 +138,7 @@ class UserServiceTest {
         req.setInviteCode("ASDFGZXCVB");
 
         when(userRepository.countByUsername("existing")).thenReturn(0);
-        mockInviteCode("ASDFGZXCVB", 20, 0);
-        when(inviteCodeRepository.incrementUsedCountByCode("ASDFGZXCVB")).thenReturn(1);
+        mockInviteCode("ASDFGZXCVB");
 
         DataAccessResourceFailureException failure = new DataAccessResourceFailureException("db offline");
         doThrow(failure).when(userRepository).insert(any(User.class));
@@ -161,10 +157,8 @@ class UserServiceTest {
         req.setInviteCode("ASDFGZXCVB");
 
         when(userRepository.countByUsername("newbie")).thenReturn(0);
-        mockInviteCode("ASDFGZXCVB", 20, 0);
-
         DataAccessResourceFailureException failure = new DataAccessResourceFailureException("db offline");
-        when(inviteCodeRepository.incrementUsedCountByCode("ASDFGZXCVB")).thenThrow(failure);
+        when(registrationInviteFacade.consume("ASDFGZXCVB")).thenThrow(failure);
 
         DataAccessResourceFailureException thrown = assertThrows(DataAccessResourceFailureException.class,
                 () -> userService.register(req));
@@ -181,8 +175,7 @@ class UserServiceTest {
         req.setInviteCode("ASDFGZXCVB");
 
         when(userRepository.countByUsername("alice")).thenReturn(0);
-        mockInviteCode("ASDFGZXCVB", 20, 0);
-        when(inviteCodeRepository.incrementUsedCountByCode("ASDFGZXCVB")).thenReturn(1);
+        mockInviteCode("ASDFGZXCVB");
 
         userService.register(req);
 
@@ -199,8 +192,7 @@ class UserServiceTest {
         req.setInviteCode("ASDFGZXCVB");
 
         when(userRepository.countByUsername("newbie")).thenReturn(0);
-        mockInviteCode("ASDFGZXCVB", 20, 0);
-        when(inviteCodeRepository.incrementUsedCountByCode("ASDFGZXCVB")).thenReturn(1);
+        mockInviteCode("ASDFGZXCVB");
 
         userService.register(req);
 
@@ -218,6 +210,8 @@ class UserServiceTest {
         req.setPassword("pass123");
 
         when(userRepository.countByUsername("newbie")).thenReturn(0);
+        when(registrationInviteFacade.consume(null))
+                .thenThrow(new BusinessException(ErrorCode.INVITE_CODE_REQUIRED));
 
         BusinessException error = assertThrows(BusinessException.class, () -> userService.register(req));
 
@@ -233,7 +227,8 @@ class UserServiceTest {
         req.setInviteCode("ASDFGZXCVB");
 
         when(userRepository.countByUsername("newbie")).thenReturn(0);
-        mockInviteCode("ASDFGZXCVB", 20, 20);
+        when(registrationInviteFacade.consume("ASDFGZXCVB"))
+                .thenThrow(new BusinessException(ErrorCode.INVITE_CODE_EXHAUSTED));
 
         BusinessException error = assertThrows(BusinessException.class, () -> userService.register(req));
 
@@ -381,14 +376,8 @@ class UserServiceTest {
         }
     }
 
-    private void mockInviteCode(String code, Integer maxUses, Integer usedCount) {
-        InviteCode inviteCode = new InviteCode();
-        inviteCode.setId(7L);
-        inviteCode.setCode(code);
-        inviteCode.setSource("seed-test");
-        inviteCode.setStatus("ACTIVE");
-        inviteCode.setMaxUses(maxUses);
-        inviteCode.setUsedCount(usedCount);
-        when(inviteCodeRepository.findByCode(code)).thenReturn(inviteCode);
+    private void mockInviteCode(String code) {
+        when(registrationInviteFacade.consume(code))
+                .thenReturn(new RegistrationInviteDetails(code, "seed-test"));
     }
 }

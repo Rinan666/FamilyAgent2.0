@@ -14,7 +14,7 @@ import com.familyagent.module.admin.dto.SessionArchiveRangeSummary;
 import com.familyagent.module.admin.dto.SessionStorageHealthSummary;
 import com.familyagent.module.admin.dto.SuspiciousFamilySummary;
 import com.familyagent.module.family.dto.FamilyMemberVO;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.FamilyAdministrationFacade;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -48,14 +48,14 @@ class DatabaseHealthQuerySupport {
 
     private final PlatformAdminAccessSupport adminAccessSupport;
     private final JdbcTemplate jdbcTemplate;
-    private final FamilyService familyService;
+    private final FamilyAdministrationFacade familyAdministrationFacade;
 
     List<FamilyMemberVO> listFamilyMembers(Long familyId) {
         adminAccessSupport.requirePlatformAdmin();
         if (familyId == null || familyId <= 0) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "familyId is required");
         }
-        return familyService.listMemberViewsForAdmin(familyId);
+        return familyAdministrationFacade.listMemberViews(familyId);
     }
 
     DatabaseHealthResponse getHealth() {

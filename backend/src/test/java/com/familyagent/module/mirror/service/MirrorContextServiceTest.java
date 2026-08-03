@@ -249,7 +249,7 @@ class MirrorContextServiceTest {
     }
 
     private MirrorContextService service() {
-        MirrorContextPromptBuilder promptBuilder = new MirrorContextPromptBuilder();
+        MirrorContextPromptBuilder promptBuilder = new MirrorContextPromptBuilder(new MirrorTemporalLayerAnnotator());
         return new MirrorContextService(
                 familyService,
                 memoryStyleFacade,

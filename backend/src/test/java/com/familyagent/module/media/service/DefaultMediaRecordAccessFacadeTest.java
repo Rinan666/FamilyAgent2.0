@@ -5,14 +5,14 @@ import com.familyagent.common.constant.MediaRecordType;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.security.CurrentUserGuard;
 import com.familyagent.module.diary.entity.DiaryEntry;
-import com.familyagent.module.family.service.CareAuthorizationService;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.FamilyCareAuthorizationFacade;
+import com.familyagent.module.family.facade.FamilyMembershipFacade;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
-import com.familyagent.module.growth.service.PermissionGate;
+import com.familyagent.module.growth.facade.GrowthRecordPermissionFacade;
 import com.familyagent.module.memory.entity.MemoryEntry;
+import com.familyagent.module.memory.facade.MediaMemoryRecordFacade;
 import com.familyagent.module.memory.facade.UnifiedDiaryRecordFacade;
 import com.familyagent.module.memory.facade.UnifiedGrowthRecordFacade;
-import com.familyagent.module.memory.repository.MemoryEntryRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -31,10 +31,10 @@ class DefaultMediaRecordAccessFacadeTest {
 
     @Mock private UnifiedDiaryRecordFacade diaryRecords;
     @Mock private UnifiedGrowthRecordFacade growthRecords;
-    @Mock private MemoryEntryRepository memoryRepository;
-    @Mock private FamilyService familyService;
-    @Mock private CareAuthorizationService careAuthorizationService;
-    @Mock private PermissionGate growthPermissionGate;
+    @Mock private MediaMemoryRecordFacade memoryRecords;
+    @Mock private FamilyMembershipFacade familyMembership;
+    @Mock private FamilyCareAuthorizationFacade careAuthorizationFacade;
+    @Mock private GrowthRecordPermissionFacade growthPermissionFacade;
     @InjectMocks private DefaultMediaRecordAccessFacade accessFacade;
 
     @Test
@@ -47,7 +47,7 @@ class DefaultMediaRecordAccessFacadeTest {
 
             MediaRecordAccess access = accessFacade.requireWritable(MediaRecordType.DIARY, 12L);
 
-            verify(familyService).checkMembership(3L);
+            verify(familyMembership).checkMembership(3L);
             assertEquals(MediaRecordType.DIARY, access.recordType());
             assertEquals(3L, access.familyId());
         }
@@ -75,8 +75,8 @@ class DefaultMediaRecordAccessFacadeTest {
 
             MediaRecordAccess access = accessFacade.requireReadable(MediaRecordType.GROWTH, 12L);
 
-            verify(growthPermissionGate).checkMembership(3L);
-            verify(growthPermissionGate).ensureCanViewRecord(record, 43L);
+            verify(growthPermissionFacade).checkMembership(3L);
+            verify(growthPermissionFacade).ensureCanView(record, 43L);
             assertEquals(MediaRecordType.GROWTH, access.recordType());
         }
     }
@@ -84,15 +84,15 @@ class DefaultMediaRecordAccessFacadeTest {
     @Test
     void requireReadableMemory_usesExistingVisibleMemoryQuery() {
         MemoryEntry entry = memory(12L, 3L, 42L);
-        when(memoryRepository.selectById(12L)).thenReturn(entry);
-        when(memoryRepository.findVisibleFamilyMemoryById(3L, 12L, 43L)).thenReturn(entry);
+        when(memoryRecords.findById(12L)).thenReturn(entry);
+        when(memoryRecords.findVisibleById(3L, 12L, 43L)).thenReturn(entry);
 
         try (MockedStatic<CurrentUserGuard> currentUserMock = mockStatic(CurrentUserGuard.class)) {
             currentUserMock.when(CurrentUserGuard::currentUserId).thenReturn(43L);
 
             MediaRecordAccess access = accessFacade.requireReadable(MediaRecordType.MEMORY, 12L);
 
-            verify(familyService).checkMembership(3L);
+            verify(familyMembership).checkMembership(3L);
             assertEquals(MediaRecordType.MEMORY, access.recordType());
             assertEquals(3L, access.familyId());
         }

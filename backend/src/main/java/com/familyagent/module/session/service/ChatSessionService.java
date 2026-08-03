@@ -5,7 +5,7 @@ import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.FamilyMembershipFacade;
 import com.familyagent.module.session.dto.ChatSessionArchiveDetail;
 import com.familyagent.module.session.dto.ChatSessionArchiveSummary;
 import com.familyagent.module.session.dto.ChatSessionDetail;
@@ -51,7 +51,7 @@ public class ChatSessionService {
     private final ChatSessionRepository sessionRepository;
     private final ChatSessionMessageRepository messageRepository;
     private final ChatSessionArchiveRepository archiveRepository;
-    private final FamilyService familyService;
+    private final FamilyMembershipFacade familyMembershipFacade;
     private final ChatSessionMessagePersistenceSupport messagePersistenceSupport;
     private final ChatSessionArchiveSupport archiveSupport;
     private final ChatSessionArchiveStorageService archiveStorageService;
@@ -67,7 +67,7 @@ public class ChatSessionService {
         }
 
         if (session.getFamilyId() != null) {
-            familyService.checkMembership(session.getFamilyId());
+            familyMembershipFacade.checkMembership(session.getFamilyId());
         }
         if (session.getStatus() == null) {
             session.setStatus(STATUS_ACTIVE);
@@ -243,7 +243,7 @@ public class ChatSessionService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "familyId is required");
         }
         Long userId = CurrentUserGuard.currentUserId();
-        familyService.checkMembership(familyId);
+        familyMembershipFacade.checkMembership(familyId);
         List<ChatSession> sessions = sessionRepository.findFamilyAgentByUserAndFamily(userId, familyId);
         for (ChatSession session : sessions) {
             deleteSessionData(session);

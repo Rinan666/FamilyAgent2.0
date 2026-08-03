@@ -169,7 +169,12 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        <button type="submit" disabled={loading} className={authPrimaryButtonClassName}>
+        <button
+          type="submit"
+          data-testid="register-submit"
+          disabled={loading}
+          className={authPrimaryButtonClassName}
+        >
           {loading ? '创建中...' : '创建账号'}
         </button>
       </form>

@@ -1,0 +1,25 @@
+services:
+  cloudflared:
+    image: ${DOCKER_CLOUDFLARED_IMAGE:-cloudflare/cloudflared:latest}
+    restart: unless-stopped
+    command:
+      - tunnel
+      - --no-autoupdate
+      - --config
+      - /etc/cloudflared/config.yml
+      - run
+      - ${CLOUDFLARED_TUNNEL_ID:?CLOUDFLARED_TUNNEL_ID is required}
+    volumes:
+      - type: bind
+        source: ./deploy/cloudflared/config.yml
+        target: /etc/cloudflared/config.yml
+        read_only: true
+      - type: bind
+        source: ${CLOUDFLARED_CREDENTIALS_FILE:?CLOUDFLARED_CREDENTIALS_FILE is required}
+        target: /etc/cloudflared/credentials.json
+        read_only: true
+    depends_on:
+      frontend:
+        condition: service_healthy
+    networks:
+      - fa-network

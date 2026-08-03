@@ -4,17 +4,30 @@
 
 Docker Compose is the standard startup path for the complete application stack.
 
-For local Windows development, use the root `.env` file:
+The base file keeps all services on the internal Compose network. Local development adds loopback-only host ports:
 
 ```powershell
-docker compose --env-file .env -f docker-compose.stack.yml up -d --build
+docker compose --env-file .env `
+  -f compose.yml `
+  -f deploy/compose/local.yml `
+  up -d --build
 ```
 
-For deployment, prepare the dedicated Docker environment file:
+Production adds Cloudflare Tunnel without publishing database, queue, storage, AI, or Backend ports:
 
 ```bash
-cp .env.docker.example .env.docker
-docker compose --env-file .env.docker -f docker-compose.stack.yml up -d --build
+cp deploy/examples/stack.env.example .env.docker
+docker compose --env-file .env.docker \
+  -f compose.yml \
+  -f deploy/compose/production.yml \
+  up -d --build
+```
+
+The helper script selects the same overrides:
+
+```bash
+./scripts/docker-stack.sh up
+STACK_MODE=production ./scripts/docker-stack.sh up
 ```
 
 Keep `COMPOSE_PROJECT_NAME` aligned with the existing Compose project on each host. Existing cloud deployments using `fa-*` containers should set:
@@ -23,14 +36,13 @@ Keep `COMPOSE_PROJECT_NAME` aligned with the existing Compose project on each ho
 COMPOSE_PROJECT_NAME=fa
 ```
 
-Changing the project name on an existing host makes Compose treat the stack as a different application and can create duplicate containers or port conflicts. The local `.env.example` uses `familyagent`, while `.env.docker.example` uses `fa` for server compatibility.
+Changing the project name on an existing host makes Compose treat the stack as a different application and can create duplicate containers or port conflicts. The local `.env.example` uses `familyagent`, while `deploy/examples/stack.env.example` uses `fa` for server compatibility.
 
-- Frontend: `3000`
-- Backend: `8080`
-- AI: `8000`
+- Local Frontend: `127.0.0.1:3000`
+- Local Backend: `127.0.0.1:8080`
+- Local AI: `127.0.0.1:8000`
 - Public tunnel: Cloudflare routes to the `frontend` container
-- Logs: `docker compose --env-file .env.docker -f docker-compose.stack.yml logs -f`
-- Stop: `docker compose --env-file .env.docker -f docker-compose.stack.yml down`
+- Production host ports: none
 
 The host PowerShell launcher is not required for the Docker Stack.
 
@@ -44,6 +56,29 @@ CLOUDFLARED_CREDENTIALS_FILE=C:/Users/your-name/.cloudflared/00000000-0000-0000-
 ```
 
 On Linux, use an absolute Linux path for `CLOUDFLARED_CREDENTIALS_FILE`. The credential file is mounted read-only and is never copied into the image.
+
+## Production HTTP Exposure
+
+- Swagger UI and OpenAPI JSON are disabled by the `prod` Spring profile.
+- `/actuator/health` remains public for health checks.
+- Other actuator endpoints, including `/actuator/metrics`, require a valid Sa-Token login.
+- Only Cloudflare Tunnel should receive public traffic in the production override.
+
+## Invite Codes
+
+Migration V23 archives the public `FAMILY001` through `FAMILY010` seed codes. The development profile creates only `DEV-FAMILY-LOCAL` through a separate Flyway location.
+
+Generate a production invite with a random value, expiry, and usage limit:
+
+```bash
+bash scripts/generate-invite-code.sh 1 30 operations "Family onboarding"
+```
+
+The first argument is maximum uses and the second is validity in days. Deliver the printed code through a private channel.
+
+## Backup and Restore
+
+See [Backup and Restore](backup-restore.md) for encrypted PostgreSQL and MinIO backups, retention, offsite copies, the systemd timer, and restore drills.
 
 ## Required Production Secrets
 
@@ -78,7 +113,7 @@ openssl rand -hex 24
 Check the values that Docker Compose will inject:
 
 ```bash
-docker compose --env-file .env.docker -f docker-compose.stack.yml config | grep -E 'DB_PASSWORD|REDIS_PASSWORD|RABBITMQ_PASSWORD|AI_INTERNAL_SERVICE_TOKEN|MINIO_ACCESS_KEY|MINIO_SECRET_KEY'
+STACK_MODE=production ./scripts/docker-stack.sh config | grep -E 'DB_PASSWORD|REDIS_PASSWORD|RABBITMQ_PASSWORD|AI_INTERNAL_SERVICE_TOKEN|MINIO_ACCESS_KEY|MINIO_SECRET_KEY'
 ```
 
 ## Image Mirror Overrides
@@ -101,16 +136,16 @@ DOCKER_NODE_IMAGE=docker.m.daocloud.io/library/node:22-alpine
 The stack builds images from the local repository. When `requirements.txt`, `package-lock.json`, Dockerfiles, or backend dependencies change, recreate the affected service instead of only restarting it:
 
 ```bash
-docker compose --env-file .env.docker -f docker-compose.stack.yml up -d --build ai-service
-docker compose --env-file .env.docker -f docker-compose.stack.yml up -d --build backend
-docker compose --env-file .env.docker -f docker-compose.stack.yml up -d --build frontend
+docker compose --env-file .env.docker -f compose.yml up -d --build ai-service
+docker compose --env-file .env.docker -f compose.yml up -d --build backend
+docker compose --env-file .env.docker -f compose.yml up -d --build frontend
 ```
 
 Use `--no-cache` if pip/npm/maven keeps an old dependency layer:
 
 ```bash
-docker compose --env-file .env.docker -f docker-compose.stack.yml build --no-cache ai-service
-docker compose --env-file .env.docker -f docker-compose.stack.yml up -d ai-service
+docker compose --env-file .env.docker -f compose.yml build --no-cache ai-service
+docker compose --env-file .env.docker -f compose.yml up -d ai-service
 ```
 
 ## Album Face Clustering Dependencies
@@ -136,20 +171,20 @@ Install ai-service requirements to enable these endpoints.
 it means the running `ai-service` image does not contain `insightface`. Rebuild the AI image and recreate the container:
 
 ```bash
-docker compose --env-file .env.docker -f docker-compose.stack.yml build --no-cache ai-service
-docker compose --env-file .env.docker -f docker-compose.stack.yml up -d ai-service
+docker compose --env-file .env.docker -f compose.yml build --no-cache ai-service
+docker compose --env-file .env.docker -f compose.yml up -d ai-service
 ```
 
 Verify inside the container:
 
 ```bash
-docker compose --env-file .env.docker -f docker-compose.stack.yml exec ai-service python -c "import insightface, onnxruntime; print('dip dependencies ok')"
+docker compose --env-file .env.docker -f compose.yml exec ai-service python -c "import insightface, onnxruntime; print('dip dependencies ok')"
 ```
 
 Then check logs:
 
 ```bash
-docker compose --env-file .env.docker -f docker-compose.stack.yml logs --tail=120 ai-service
+docker compose --env-file .env.docker -f compose.yml logs --tail=120 ai-service
 ```
 
 The first face-clustering request may download or initialize InsightFace model files, so the first request can be slower than later requests.
@@ -159,28 +194,22 @@ The first face-clustering request may download or initialize InsightFace model f
 Check container status:
 
 ```bash
-docker compose --env-file .env.docker -f docker-compose.stack.yml ps
+STACK_MODE=production ./scripts/docker-stack.sh status
 ```
 
 Check service logs:
 
 ```bash
-docker compose --env-file .env.docker -f docker-compose.stack.yml logs --tail=200 backend
-docker compose --env-file .env.docker -f docker-compose.stack.yml logs --tail=200 ai-service
-docker compose --env-file .env.docker -f docker-compose.stack.yml logs --tail=200 frontend
-docker compose --env-file .env.docker -f docker-compose.stack.yml logs --tail=200 cloudflared
+STACK_MODE=production ./scripts/docker-stack.sh logs backend
+STACK_MODE=production ./scripts/docker-stack.sh logs ai-service
+STACK_MODE=production ./scripts/docker-stack.sh logs frontend
+STACK_MODE=production ./scripts/docker-stack.sh logs cloudflared
 ```
 
-Check backend health:
+Production services are not published on host ports. Check their container health through Compose:
 
 ```bash
-curl http://127.0.0.1:8080/actuator/health
-```
-
-Check AI service health:
-
-```bash
-curl http://127.0.0.1:8000/ai/health
+STACK_MODE=production ./scripts/docker-stack.sh status
 ```
 
 For login issues, first confirm the backend is running and not failing production secret checks. For album face-clustering issues, first confirm the AI container has `insightface` and `onnxruntime` installed.

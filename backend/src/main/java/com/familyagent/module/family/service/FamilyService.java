@@ -13,8 +13,8 @@ import com.familyagent.module.family.entity.FamilyRelationship;
 import com.familyagent.module.family.repository.FamilyMemberRepository;
 import com.familyagent.module.family.repository.FamilyRelationshipRepository;
 import com.familyagent.module.family.repository.FamilyRepository;
-import com.familyagent.module.user.entity.User;
-import com.familyagent.module.user.service.UserService;
+import com.familyagent.module.user.facade.UserAccountAccess;
+import com.familyagent.module.user.facade.UserAccountAccessFacade;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -42,14 +42,14 @@ public class FamilyService {
     private final FamilyMemberRepository memberRepository;
     private final FamilyRelationshipRepository relationshipRepository;
     private final FamilyLifecycleService familyLifecycleService;
-    private final UserService userService;
+    private final UserAccountAccessFacade userAccountAccessFacade;
     private static final Set<String> MUTABLE_FAMILY_ROLES = Set.of("MEMBER");
 
     @Transactional
     public Family createFamily(CreateFamilyRequest request) {
-        User currentUser = userService.getCurrentUser();
+        UserAccountAccess currentUser = userAccountAccessFacade.requireCurrent();
 
-        if (familyRepository.countByCreatedBy(currentUser.getId()) >= MAX_FAMILIES_PER_USER) {
+        if (familyRepository.countByCreatedBy(currentUser.userId()) >= MAX_FAMILIES_PER_USER) {
             throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED,
                     "每个用户最多创建 " + MAX_FAMILIES_PER_USER + " 个家族空间");
         }
@@ -57,7 +57,7 @@ public class FamilyService {
         Family family = new Family();
         family.setName(request.getName());
         family.setDescription(request.getDescription());
-        family.setCreatedBy(currentUser.getId());
+        family.setCreatedBy(currentUser.userId());
         family.setMaxMembers(20);
         family.setInviteCode(generateInviteCode());
         familyRepository.insert(family);
@@ -65,17 +65,17 @@ public class FamilyService {
         // Add the creator as the initial owner.
         FamilyMember member = new FamilyMember();
         member.setFamilyId(family.getId());
-        member.setUserId(currentUser.getId());
+        member.setUserId(currentUser.userId());
         member.setRole("OWNER");
         memberRepository.insert(member);
 
-        log.info("Family created: name={}, id={}, owner={}", family.getName(), family.getId(), currentUser.getId());
+        log.info("Family created: name={}, id={}, owner={}", family.getName(), family.getId(), currentUser.userId());
         return family;
     }
 
     @Transactional
     public FamilyMember joinFamily(String inviteCode) {
-        User currentUser = userService.getCurrentUser();
+        UserAccountAccess currentUser = userAccountAccessFacade.requireCurrent();
 
         Family family = familyRepository.findByInviteCode(inviteCode);
         if (family == null) {
@@ -83,7 +83,7 @@ public class FamilyService {
         }
 
         // Reject duplicate memberships.
-        FamilyMember existing = memberRepository.findByFamilyAndUser(family.getId(), currentUser.getId());
+        FamilyMember existing = memberRepository.findByFamilyAndUser(family.getId(), currentUser.userId());
         if (existing != null) {
             throw new BusinessException(ErrorCode.ALREADY_MEMBER);
         }
@@ -96,11 +96,11 @@ public class FamilyService {
 
         FamilyMember member = new FamilyMember();
         member.setFamilyId(family.getId());
-        member.setUserId(currentUser.getId());
+        member.setUserId(currentUser.userId());
         member.setRole("MEMBER");
         memberRepository.insert(member);
 
-        log.info("User joined family: userId={}, familyId={}, role=MEMBER", currentUser.getId(), family.getId());
+        log.info("User joined family: userId={}, familyId={}, role=MEMBER", currentUser.userId(), family.getId());
         return member;
     }
 
@@ -115,8 +115,8 @@ public class FamilyService {
     }
 
     public List<Family> getMyFamilies() {
-        User currentUser = userService.getCurrentUser();
-        List<FamilyMember> memberships = memberRepository.findByUserId(currentUser.getId());
+        UserAccountAccess currentUser = userAccountAccessFacade.requireCurrent();
+        List<FamilyMember> memberships = memberRepository.findByUserId(currentUser.userId());
         List<Long> familyIds = memberships.stream().map(FamilyMember::getFamilyId).toList();
         if (familyIds.isEmpty()) {
             return List.of();
@@ -125,8 +125,8 @@ public class FamilyService {
     }
 
     public FamilyCreationQuotaVO getCreationQuota() {
-        User currentUser = userService.getCurrentUser();
-        int createdFamilies = familyRepository.countByCreatedBy(currentUser.getId());
+        UserAccountAccess currentUser = userAccountAccessFacade.requireCurrent();
+        int createdFamilies = familyRepository.countByCreatedBy(currentUser.userId());
         return FamilyCreationQuotaVO.builder()
                 .maxFamilies(MAX_FAMILIES_PER_USER)
                 .createdFamilies(createdFamilies)
@@ -135,10 +135,10 @@ public class FamilyService {
     }
 
     public List<FamilyMemberVO> getMembers(Long familyId) {
-        User currentUser = userService.getCurrentUser();
+        UserAccountAccess currentUser = userAccountAccessFacade.requireCurrent();
         checkMembership(familyId);
         List<FamilyMemberVO> members = memberRepository.findMemberViewsByFamilyId(familyId);
-        attachRelationshipLabels(familyId, currentUser.getId(), members);
+        attachRelationshipLabels(familyId, currentUser.userId(), members);
         return members;
     }
 
@@ -162,9 +162,9 @@ public class FamilyService {
     @Transactional
     public FamilyMemberVO updateMemberRole(Long familyId, Long userId, String role) {
         String nextRole = normalizeFamilyRole(role);
-        User currentUser = userService.getCurrentUser();
-        FamilyMember currentMember = memberRepository.findByFamilyAndUser(familyId, currentUser.getId());
-        boolean platformAdmin = "ADMIN".equalsIgnoreCase(currentUser.getRole());
+        UserAccountAccess currentUser = userAccountAccessFacade.requireCurrent();
+        FamilyMember currentMember = memberRepository.findByFamilyAndUser(familyId, currentUser.userId());
+        boolean platformAdmin = currentUser.platformAdmin();
         if (!platformAdmin && (currentMember == null || !isOwner(currentMember.getRole()))) {
             throw new BusinessException(ErrorCode.INSUFFICIENT_PERMISSION);
         }
@@ -173,7 +173,7 @@ public class FamilyService {
         if (targetMember == null) {
             throw new BusinessException(ErrorCode.NOT_FAMILY_MEMBER);
         }
-        if (currentUser.getId().equals(userId)) {
+        if (currentUser.userId().equals(userId)) {
             throw new BusinessException(ErrorCode.INSUFFICIENT_PERMISSION, "不能修改自己的家庭角色");
         }
         if ("OWNER".equalsIgnoreCase(targetMember.getRole())) {
@@ -182,16 +182,16 @@ public class FamilyService {
         targetMember.setRole(nextRole);
         memberRepository.updateById(targetMember);
         log.info("Family member role updated: familyId={}, operator={}, target={}, role={}",
-                familyId, currentUser.getId(), userId, nextRole);
+                familyId, currentUser.userId(), userId, nextRole);
         FamilyMemberVO updated = memberRepository.findMemberViewByFamilyAndUser(familyId, userId);
-        attachRelationshipLabels(familyId, currentUser.getId(), List.of(updated));
+        attachRelationshipLabels(familyId, currentUser.userId(), List.of(updated));
         return updated;
     }
 
 
     public void checkMembership(Long familyId) {
-        User currentUser = userService.getCurrentUser();
-        FamilyMember member = memberRepository.findByFamilyAndUser(familyId, currentUser.getId());
+        UserAccountAccess currentUser = userAccountAccessFacade.requireCurrent();
+        FamilyMember member = memberRepository.findByFamilyAndUser(familyId, currentUser.userId());
         if (member == null) {
             throw new BusinessException(ErrorCode.NOT_FAMILY_MEMBER);
         }
@@ -236,8 +236,8 @@ public class FamilyService {
     }
 
     public void checkOwner(Long familyId) {
-        User currentUser = userService.getCurrentUser();
-        FamilyMember member = memberRepository.findByFamilyAndUser(familyId, currentUser.getId());
+        UserAccountAccess currentUser = userAccountAccessFacade.requireCurrent();
+        FamilyMember member = memberRepository.findByFamilyAndUser(familyId, currentUser.userId());
         if (member == null || !isOwner(member.getRole())) {
             throw new BusinessException(ErrorCode.INSUFFICIENT_PERMISSION);
         }
@@ -245,33 +245,33 @@ public class FamilyService {
 
     @Transactional
     public void transferOwner(Long familyId, Long targetUserId) {
-        User currentUser = userService.getCurrentUser();
+        UserAccountAccess currentUser = userAccountAccessFacade.requireCurrent();
         Family family = familyRepository.selectById(familyId);
         if (family == null) {
             throw new BusinessException(ErrorCode.FAMILY_NOT_FOUND);
         }
 
-        boolean platformAdmin = "ADMIN".equalsIgnoreCase(currentUser.getRole());
+        boolean platformAdmin = currentUser.platformAdmin();
         if (!platformAdmin) {
-            FamilyMember currentMember = memberRepository.findByFamilyAndUser(familyId, currentUser.getId());
+            FamilyMember currentMember = memberRepository.findByFamilyAndUser(familyId, currentUser.userId());
             if (currentMember == null || !isOwner(currentMember.getRole())) {
                 throw new BusinessException(ErrorCode.INSUFFICIENT_PERMISSION);
             }
         }
 
-        familyLifecycleService.transferOwner(familyId, targetUserId, currentUser.getId());
+        familyLifecycleService.transferOwner(familyId, targetUserId, currentUser.userId());
     }
 
     @Transactional
     public void deleteFamily(Long familyId, DeleteFamilyRequest request) {
-        User currentUser = userService.getCurrentUser();
+        UserAccountAccess currentUser = userAccountAccessFacade.requireCurrent();
         Family family = familyRepository.selectById(familyId);
         if (family == null) {
             throw new BusinessException(ErrorCode.FAMILY_NOT_FOUND);
         }
 
-        boolean platformAdmin = "ADMIN".equalsIgnoreCase(currentUser.getRole());
-        FamilyMember currentMember = memberRepository.findByFamilyAndUser(familyId, currentUser.getId());
+        boolean platformAdmin = currentUser.platformAdmin();
+        FamilyMember currentMember = memberRepository.findByFamilyAndUser(familyId, currentUser.userId());
         if (!platformAdmin && (currentMember == null || !isOwner(currentMember.getRole()))) {
             throw new BusinessException(ErrorCode.INSUFFICIENT_PERMISSION);
         }
@@ -284,7 +284,7 @@ public class FamilyService {
 
         familyLifecycleService.dissolveFamily(familyId, FAMILY_DELETE_REASON);
         log.info("Family delete requested: familyId={}, operatorUserId={}, platformAdmin={}",
-                familyId, currentUser.getId(), platformAdmin);
+                familyId, currentUser.userId(), platformAdmin);
     }
 
     private String normalizeFamilyRole(String role) {

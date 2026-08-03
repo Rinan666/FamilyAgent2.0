@@ -136,7 +136,12 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <button type="submit" disabled={loading} className={authPrimaryButtonClassName}>
+        <button
+          type="submit"
+          data-testid="login-submit"
+          disabled={loading}
+          className={authPrimaryButtonClassName}
+        >
           {loading ? '登录中...' : '登录'}
         </button>
       </form>

@@ -9,7 +9,7 @@ cd "$ROOT_DIR"
 # --- Pre-flight checks ---
 if [[ ! -f .env.docker ]]; then
   echo "[ERROR] Missing .env.docker"
-  echo "       cp .env.docker.example .env.docker"
+  echo "       cp deploy/examples/stack.env.example .env.docker"
   echo "       Then edit .env.docker and set your API keys and secrets."
   exit 1
 fi
@@ -31,4 +31,8 @@ done
 
 echo "[OK] Pre-flight checks passed. Building and starting the stack..."
 
-docker compose --env-file .env.docker -f docker-compose.stack.yml up -d --build
+STACK_ENV_FILE="$ROOT_DIR/.env.docker" docker compose \
+  --env-file .env.docker \
+  -f compose.yml \
+  -f deploy/compose/production.yml \
+  up -d --build

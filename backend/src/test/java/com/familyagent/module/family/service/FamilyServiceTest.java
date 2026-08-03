@@ -8,8 +8,8 @@ import com.familyagent.module.family.entity.FamilyMember;
 import com.familyagent.module.family.repository.FamilyMemberRepository;
 import com.familyagent.module.family.repository.FamilyRelationshipRepository;
 import com.familyagent.module.family.repository.FamilyRepository;
-import com.familyagent.module.user.entity.User;
-import com.familyagent.module.user.service.UserService;
+import com.familyagent.module.user.facade.UserAccountAccess;
+import com.familyagent.module.user.facade.UserAccountAccessFacade;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -29,12 +29,12 @@ class FamilyServiceTest {
     @Mock private FamilyMemberRepository memberRepository;
     @Mock private FamilyRelationshipRepository relationshipRepository;
     @Mock private FamilyLifecycleService familyLifecycleService;
-    @Mock private UserService userService;
+    @Mock private UserAccountAccessFacade userAccountAccessFacade;
     @InjectMocks private FamilyService familyService;
 
     @Test
     void deleteFamily_allowsOwnerWithExactConfirmation() {
-        when(userService.getCurrentUser()).thenReturn(user(8L, "USER"));
+        when(userAccountAccessFacade.requireCurrent()).thenReturn(user(8L, false));
         when(familyRepository.selectById(10L)).thenReturn(family(10L, "Smith Family"));
         when(memberRepository.findByFamilyAndUser(10L, 8L)).thenReturn(member(10L, 8L, "OWNER"));
 
@@ -45,7 +45,7 @@ class FamilyServiceTest {
 
     @Test
     void deleteFamily_allowsPlatformAdminWithoutMembership() {
-        when(userService.getCurrentUser()).thenReturn(user(1L, "ADMIN"));
+        when(userAccountAccessFacade.requireCurrent()).thenReturn(user(1L, true));
         when(familyRepository.selectById(10L)).thenReturn(family(10L, "Smith Family"));
         when(memberRepository.findByFamilyAndUser(10L, 1L)).thenReturn(null);
 
@@ -56,7 +56,7 @@ class FamilyServiceTest {
 
     @Test
     void deleteFamily_rejectsNonOwner() {
-        when(userService.getCurrentUser()).thenReturn(user(8L, "USER"));
+        when(userAccountAccessFacade.requireCurrent()).thenReturn(user(8L, false));
         when(familyRepository.selectById(10L)).thenReturn(family(10L, "Smith Family"));
         when(memberRepository.findByFamilyAndUser(10L, 8L)).thenReturn(member(10L, 8L, "MEMBER"));
 
@@ -70,7 +70,7 @@ class FamilyServiceTest {
 
     @Test
     void deleteFamily_rejectsMismatchedConfirmation() {
-        when(userService.getCurrentUser()).thenReturn(user(8L, "USER"));
+        when(userAccountAccessFacade.requireCurrent()).thenReturn(user(8L, false));
         when(familyRepository.selectById(10L)).thenReturn(family(10L, "Smith Family"));
         when(memberRepository.findByFamilyAndUser(10L, 8L)).thenReturn(member(10L, 8L, "OWNER"));
 
@@ -104,10 +104,7 @@ class FamilyServiceTest {
         return member;
     }
 
-    private static User user(Long id, String role) {
-        User user = new User();
-        user.setId(id);
-        user.setRole(role);
-        return user;
+    private static UserAccountAccess user(Long id, boolean platformAdmin) {
+        return new UserAccountAccess(id, platformAdmin);
     }
 }

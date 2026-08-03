@@ -3,8 +3,8 @@ package com.familyagent.module.admin.service;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
-import com.familyagent.module.user.entity.User;
-import com.familyagent.module.user.repository.UserRepository;
+import com.familyagent.module.user.facade.UserAccountAccess;
+import com.familyagent.module.user.facade.UserAccountAccessFacade;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -12,12 +12,14 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 class PlatformAdminAccessSupport {
 
-    private final UserRepository userRepository;
+    private final UserAccountAccessFacade userAccountAccessFacade;
 
     void requirePlatformAdmin() {
         Long userId = CurrentUserGuard.currentUserId();
-        User user = userRepository.findBasicById(userId);
-        if (user == null || !"ADMIN".equalsIgnoreCase(user.getRole())) {
+        boolean platformAdmin = userAccountAccessFacade.findById(userId)
+                .map(UserAccountAccess::platformAdmin)
+                .orElse(false);
+        if (!platformAdmin) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "Platform admin permission is required");
         }
     }

@@ -7,14 +7,12 @@ import com.familyagent.module.admin.dto.AdminUserSummary;
 import com.familyagent.module.admin.dto.MemoryRecallDiagnosticRequest;
 import com.familyagent.module.admin.dto.MemoryRecallDiagnosticResponse;
 import com.familyagent.module.family.dto.FamilyMemberVO;
-import com.familyagent.module.family.entity.FamilyMember;
-import com.familyagent.module.family.service.FamilyLifecycleService;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.FamilyAdministrationFacade;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
 import com.familyagent.module.memory.dto.RecallSourceSummary;
-import com.familyagent.module.memory.service.AuthorizedMemoryRecallService;
-import com.familyagent.module.user.entity.User;
-import com.familyagent.module.user.repository.UserRepository;
+import com.familyagent.module.memory.facade.MemoryRecallDiagnosticFacade;
+import com.familyagent.module.user.facade.UserAccountAccess;
+import com.familyagent.module.user.facade.UserAccountAccessFacade;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,6 +24,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -46,22 +45,21 @@ import static org.mockito.Mockito.when;
 class DatabaseHealthServiceTest {
 
     @Mock private JdbcTemplate jdbcTemplate;
-    @Mock private UserRepository userRepository;
-    @Mock private FamilyService familyService;
-    @Mock private FamilyLifecycleService familyLifecycleService;
-    @Mock private AuthorizedMemoryRecallService memoryRecallService;
+    @Mock private UserAccountAccessFacade userAccountAccessFacade;
+    @Mock private FamilyAdministrationFacade familyAdministrationFacade;
+    @Mock private MemoryRecallDiagnosticFacade memoryRecallFacade;
 
     private DatabaseHealthService databaseHealthService;
 
     @BeforeEach
     void setUp() {
-        PlatformAdminAccessSupport adminAccessSupport = new PlatformAdminAccessSupport(userRepository);
+        PlatformAdminAccessSupport adminAccessSupport = new PlatformAdminAccessSupport(userAccountAccessFacade);
         DatabaseHealthQuerySupport querySupport = new DatabaseHealthQuerySupport(
-                adminAccessSupport, jdbcTemplate, familyService);
+                adminAccessSupport, jdbcTemplate, familyAdministrationFacade);
         AdminUserMaintenanceSupport userMaintenanceSupport = new AdminUserMaintenanceSupport(
-                adminAccessSupport, jdbcTemplate, userRepository, familyLifecycleService);
+                adminAccessSupport, jdbcTemplate, userAccountAccessFacade, familyAdministrationFacade);
         MemoryRecallDiagnosticSupport diagnosticSupport = new MemoryRecallDiagnosticSupport(
-                adminAccessSupport, familyService, memoryRecallService);
+                adminAccessSupport, familyAdministrationFacade, memoryRecallFacade);
         databaseHealthService = new DatabaseHealthService(querySupport, userMaintenanceSupport, diagnosticSupport);
     }
 
@@ -69,10 +67,7 @@ class DatabaseHealthServiceTest {
     void deleteUser_requiresPlatformAdmin() {
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(2L);
-            User user = new User();
-            user.setId(2L);
-            user.setRole("USER");
-            when(userRepository.findBasicById(2L)).thenReturn(user);
+            mockAccount(2L, false);
 
             BusinessException exception = assertThrows(
                     BusinessException.class,
@@ -87,7 +82,7 @@ class DatabaseHealthServiceTest {
     void deleteUser_rejectsDeletingCurrentAdmin() {
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(1L);
-            when(userRepository.findBasicById(1L)).thenReturn(adminUser());
+            mockAccount(1L, true);
 
             BusinessException exception = assertThrows(
                     BusinessException.class,
@@ -102,19 +97,15 @@ class DatabaseHealthServiceTest {
     void deleteUser_rejectsDeletingAnotherAdmin() {
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(1L);
-            when(userRepository.findBasicById(1L)).thenReturn(adminUser());
-
-            User target = new User();
-            target.setId(2L);
-            target.setRole("ADMIN");
-            when(userRepository.findBasicById(2L)).thenReturn(target);
+            mockAccount(1L, true);
+            mockAccount(2L, true);
 
             BusinessException exception = assertThrows(
                     BusinessException.class,
                     () -> databaseHealthService.deleteUser(2L));
 
             assertEquals(ErrorCode.BAD_REQUEST.getCode(), exception.getCode());
-            verify(familyLifecycleService, never()).prepareFamiliesForUserDeletion(2L);
+            verify(familyAdministrationFacade, never()).prepareForUserDeletion(2L);
             verify(jdbcTemplate, never()).update("DELETE FROM users WHERE id = ?", 2L);
         }
     }
@@ -123,12 +114,8 @@ class DatabaseHealthServiceTest {
     void deleteUser_deletesUserAndRelatedRecords() {
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(1L);
-            when(userRepository.findBasicById(1L)).thenReturn(adminUser());
-
-            User target = new User();
-            target.setId(88L);
-            target.setRole("USER");
-            when(userRepository.findBasicById(88L)).thenReturn(target);
+            mockAccount(1L, true);
+            mockAccount(88L, false);
 
             when(jdbcTemplate.queryForObject(eq("SELECT to_regclass(?) IS NOT NULL"), eq(Boolean.class), anyString()))
                     .thenReturn(true);
@@ -136,7 +123,7 @@ class DatabaseHealthServiceTest {
 
             databaseHealthService.deleteUser(88L);
 
-            verify(familyLifecycleService).prepareFamiliesForUserDeletion(88L);
+            verify(familyAdministrationFacade).prepareForUserDeletion(88L);
             verify(jdbcTemplate).update("UPDATE families SET created_by = NULL WHERE created_by = ?", 88L);
             verify(jdbcTemplate).update("DELETE FROM family_relationships WHERE from_user_id = ?", 88L);
             verify(jdbcTemplate).update("DELETE FROM memory_entry_votes WHERE user_id = ?", 88L);
@@ -150,14 +137,10 @@ class DatabaseHealthServiceTest {
     void deleteUser_stopsWhenFamilyLifecycleBlocksDeletion() {
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(1L);
-            when(userRepository.findBasicById(1L)).thenReturn(adminUser());
-
-            User target = new User();
-            target.setId(88L);
-            target.setRole("USER");
-            when(userRepository.findBasicById(88L)).thenReturn(target);
+            mockAccount(1L, true);
+            mockAccount(88L, false);
             org.mockito.Mockito.doThrow(new BusinessException(ErrorCode.BAD_REQUEST, "Transfer family owner first"))
-                    .when(familyLifecycleService).prepareFamiliesForUserDeletion(88L);
+                    .when(familyAdministrationFacade).prepareForUserDeletion(88L);
 
             BusinessException error = assertThrows(BusinessException.class, () -> databaseHealthService.deleteUser(88L));
 
@@ -170,9 +153,9 @@ class DatabaseHealthServiceTest {
     void diagnoseMemoryRecall_rejectsViewerOutsideFamily() {
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(1L);
-            when(userRepository.findBasicById(1L)).thenReturn(adminUser());
-            when(familyService.getFamilyMember(10L, 999L))
-                    .thenThrow(new BusinessException(ErrorCode.NOT_FAMILY_MEMBER));
+            mockAccount(1L, true);
+            org.mockito.Mockito.doThrow(new BusinessException(ErrorCode.NOT_FAMILY_MEMBER))
+                    .when(familyAdministrationFacade).requireMember(10L, 999L);
 
             MemoryRecallDiagnosticRequest request = new MemoryRecallDiagnosticRequest();
             request.setFamilyId(10L);
@@ -184,7 +167,7 @@ class DatabaseHealthServiceTest {
                     () -> databaseHealthService.diagnoseMemoryRecall(request));
 
             assertEquals(ErrorCode.NOT_FAMILY_MEMBER.getCode(), exception.getCode());
-            verify(memoryRecallService, never()).recallForFamilyAfterViewerValidated(
+            verify(memoryRecallFacade, never()).recallAfterViewerValidated(
                     eq(10L),
                     eq(999L),
                     eq("tooth"),
@@ -197,9 +180,8 @@ class DatabaseHealthServiceTest {
     void diagnoseMemoryRecall_returnsOnlySafeSummaryFields() {
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(1L);
-            when(userRepository.findBasicById(1L)).thenReturn(adminUser());
-            when(familyService.getFamilyMember(10L, 101L)).thenReturn(member(10L, 101L));
-            when(memoryRecallService.recallForFamilyAfterViewerValidated(eq(10L), eq(101L), eq("brush teeth"), eq(2), eq(4)))
+            mockAccount(1L, true);
+            when(memoryRecallFacade.recallAfterViewerValidated(eq(10L), eq(101L), eq("brush teeth"), eq(2), eq(4)))
                     .thenReturn(AuthorizedMemoryRecallResult.builder()
                             .diaryCount(1)
                             .memoryCount(1)
@@ -240,10 +222,7 @@ class DatabaseHealthServiceTest {
     void diagnoseMemoryRecall_requiresPlatformAdmin() {
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(2L);
-            User user = new User();
-            user.setId(2L);
-            user.setRole("USER");
-            when(userRepository.findBasicById(2L)).thenReturn(user);
+            mockAccount(2L, false);
 
             MemoryRecallDiagnosticRequest request = new MemoryRecallDiagnosticRequest();
             request.setFamilyId(10L);
@@ -254,7 +233,7 @@ class DatabaseHealthServiceTest {
                     () -> databaseHealthService.diagnoseMemoryRecall(request));
 
             assertEquals(ErrorCode.FORBIDDEN.getCode(), exception.getCode());
-            verify(familyService, never()).getFamilyMember(10L, 101L);
+            verify(familyAdministrationFacade, never()).requireMember(10L, 101L);
         }
     }
 
@@ -262,10 +241,7 @@ class DatabaseHealthServiceTest {
     void listUsers_requiresPlatformAdmin() {
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(2L);
-            User user = new User();
-            user.setId(2L);
-            user.setRole("USER");
-            when(userRepository.findBasicById(2L)).thenReturn(user);
+            mockAccount(2L, false);
 
             BusinessException exception = assertThrows(
                     BusinessException.class,
@@ -280,7 +256,7 @@ class DatabaseHealthServiceTest {
     void listUsers_returnsIdUsernameMapping() {
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(1L);
-            when(userRepository.findBasicById(1L)).thenReturn(adminUser());
+            mockAccount(1L, true);
             when(jdbcTemplate.queryForObject(eq("SELECT to_regclass(?) IS NOT NULL"), eq(Boolean.class), anyString()))
                     .thenReturn(true);
             when(jdbcTemplate.query(anyString(), any(RowMapper.class)))
@@ -303,7 +279,7 @@ class DatabaseHealthServiceTest {
     void searchUsers_returnsPaginatedMatches() {
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(1L);
-            when(userRepository.findBasicById(1L)).thenReturn(adminUser());
+            mockAccount(1L, true);
             when(jdbcTemplate.queryForObject(eq("SELECT to_regclass(?) IS NOT NULL"), eq(Boolean.class), anyString()))
                     .thenReturn(true);
             when(jdbcTemplate.queryForObject(contains("SELECT COUNT(*)"), eq(Long.class), any(Object[].class)))
@@ -325,7 +301,7 @@ class DatabaseHealthServiceTest {
     void searchFamilies_returnsPaginatedMatches() {
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(1L);
-            when(userRepository.findBasicById(1L)).thenReturn(adminUser());
+            mockAccount(1L, true);
             when(jdbcTemplate.queryForObject(eq("SELECT to_regclass(?) IS NOT NULL"), eq(Boolean.class), anyString()))
                     .thenReturn(true);
             when(jdbcTemplate.queryForObject(contains("SELECT COUNT(*)"), eq(Long.class), any(Object[].class)))
@@ -358,7 +334,7 @@ class DatabaseHealthServiceTest {
     void searchFamilies_buildsJoinBeforeWhereClause() {
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(1L);
-            when(userRepository.findBasicById(1L)).thenReturn(adminUser());
+            mockAccount(1L, true);
             when(jdbcTemplate.queryForObject(eq("SELECT to_regclass(?) IS NOT NULL"), eq(Boolean.class), anyString()))
                     .thenReturn(true);
             when(jdbcTemplate.queryForObject(contains("SELECT COUNT(*) FROM families f"), eq(Long.class), any(Object[].class)))
@@ -391,17 +367,14 @@ class DatabaseHealthServiceTest {
     void listFamilyMembers_requiresPlatformAdmin() {
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(2L);
-            User user = new User();
-            user.setId(2L);
-            user.setRole("USER");
-            when(userRepository.findBasicById(2L)).thenReturn(user);
+            mockAccount(2L, false);
 
             BusinessException exception = assertThrows(
                     BusinessException.class,
                     () -> databaseHealthService.listFamilyMembers(10L));
 
             assertEquals(ErrorCode.FORBIDDEN.getCode(), exception.getCode());
-            verify(familyService, never()).listMemberViewsForAdmin(anyLong());
+            verify(familyAdministrationFacade, never()).listMemberViews(anyLong());
         }
     }
 
@@ -409,8 +382,8 @@ class DatabaseHealthServiceTest {
     void listFamilyMembers_returnsAdminMemberViews() {
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(1L);
-            when(userRepository.findBasicById(1L)).thenReturn(adminUser());
-            when(familyService.listMemberViewsForAdmin(10L)).thenReturn(List.of(
+            mockAccount(1L, true);
+            when(familyAdministrationFacade.listMemberViews(10L)).thenReturn(List.of(
                     FamilyMemberVO.builder().userId(8L).username("owner").role("OWNER").build(),
                     FamilyMemberVO.builder().userId(9L).username("member").role("MEMBER").build()
             ));
@@ -423,19 +396,9 @@ class DatabaseHealthServiceTest {
         }
     }
 
-    private static User adminUser() {
-        User user = new User();
-        user.setId(1L);
-        user.setRole("ADMIN");
-        return user;
-    }
-
-    private static FamilyMember member(Long familyId, Long userId) {
-        FamilyMember member = new FamilyMember();
-        member.setFamilyId(familyId);
-        member.setUserId(userId);
-        member.setRole("MEMBER");
-        return member;
+    private void mockAccount(Long userId, boolean platformAdmin) {
+        when(userAccountAccessFacade.findById(userId))
+                .thenReturn(Optional.of(new UserAccountAccess(platformAdmin)));
     }
 
     private static int countOccurrences(String value, String token) {

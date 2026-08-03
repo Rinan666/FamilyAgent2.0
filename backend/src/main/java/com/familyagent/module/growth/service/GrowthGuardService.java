@@ -14,8 +14,8 @@ import com.familyagent.module.growth.dto.GrowthStalenessStats;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.entity.GrowthGuardStalenessVote;
 import com.familyagent.module.growth.repository.GrowthGuardStalenessVoteRepository;
+import com.familyagent.module.memory.facade.MemoryIndexMetadataFacade;
 import com.familyagent.module.memory.facade.UnifiedGrowthRecordFacade;
-import com.familyagent.module.memory.service.MemoryIndexMetadataBuilder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -46,6 +46,7 @@ public class GrowthGuardService {
     private final GrowthGuardStalenessVoteRepository stalenessVoteRepository;
     private final PermissionGate permissionGate;
     private final GrowthMemorySyncSupport memorySyncSupport;
+    private final MemoryIndexMetadataFacade indexMetadataFacade;
 
     @Transactional
     public GrowthGuardRecord createRecord(CreateGrowthGuardRecordRequest request) {
@@ -77,7 +78,7 @@ public class GrowthGuardService {
                 ? new HashMap<>()
                 : new HashMap<>(requestMetadata.toMap());
         metadata.putIfAbsent("followUpStatus", FollowUpStatus.PENDING.name());
-        record.setMetadata(MemoryIndexMetadataBuilder.enrichGrowth(
+        record.setMetadata(indexMetadataFacade.enrichGrowth(
                 metadata,
                 record.getContent(),
                 record.getCategory(),

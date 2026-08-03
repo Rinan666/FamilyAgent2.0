@@ -2,7 +2,7 @@ package com.familyagent.module.mirror.service;
 
 import com.familyagent.module.memorylibrary.dto.MemoryLibraryItem;
 import com.familyagent.module.memorylibrary.dto.MemoryLibrarySearchRequest;
-import com.familyagent.module.memorylibrary.service.MemoryLibraryService;
+import com.familyagent.module.memorylibrary.facade.MirrorMemoryLibraryFacade;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -17,7 +17,7 @@ public class MirrorContextLibraryService {
 
     private static final int LIBRARY_CONTEXT_LIMIT = 8;
 
-    private final MemoryLibraryService memoryLibraryService;
+    private final MirrorMemoryLibraryFacade memoryLibrary;
 
     public List<MemoryLibraryItem> recallLibraryItems(Long familyId, Long targetUserId, String query) {
         if (query == null || query.isBlank()) {
@@ -47,11 +47,7 @@ public class MirrorContextLibraryService {
         request.setKeyword(query);
         request.setType(type);
         request.setMemberUserId(memberUserId);
-        var page = memoryLibraryService.search(request);
-        if (page == null || page.getItems() == null) {
-            return List.of();
-        }
-        return page.getItems();
+        return memoryLibrary.search(request);
     }
 
     private static void appendLibraryItems(

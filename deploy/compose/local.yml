@@ -1,0 +1,30 @@
+services:
+  postgres:
+    ports:
+      - "${LOCAL_BIND_ADDRESS:-127.0.0.1}:${DB_PORT:-5432}:5432"
+
+  redis:
+    ports:
+      - "${LOCAL_BIND_ADDRESS:-127.0.0.1}:${REDIS_PORT:-6379}:6379"
+
+  rabbitmq:
+    ports:
+      - "${LOCAL_BIND_ADDRESS:-127.0.0.1}:${RABBITMQ_PORT:-5672}:5672"
+      - "${LOCAL_BIND_ADDRESS:-127.0.0.1}:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+
+  minio:
+    ports:
+      - "${LOCAL_BIND_ADDRESS:-127.0.0.1}:${MINIO_PORT:-9000}:9000"
+      - "${LOCAL_BIND_ADDRESS:-127.0.0.1}:${MINIO_CONSOLE_PORT:-9001}:9001"
+
+  ai-service:
+    ports:
+      - "${LOCAL_BIND_ADDRESS:-127.0.0.1}:${AI_SERVICE_PORT:-8000}:8000"
+
+  backend:
+    ports:
+      - "${LOCAL_BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT:-8080}:8080"
+
+  frontend:
+    ports:
+      - "${LOCAL_BIND_ADDRESS:-127.0.0.1}:${FRONTEND_PORT:-3000}:3000"

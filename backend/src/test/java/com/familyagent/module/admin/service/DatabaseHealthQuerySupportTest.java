@@ -2,7 +2,7 @@ package com.familyagent.module.admin.service;
 
 import com.familyagent.module.admin.dto.DatabaseHealthResponse;
 import com.familyagent.module.admin.dto.DatabaseTableCount;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.FamilyAdministrationFacade;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -23,7 +23,7 @@ class DatabaseHealthQuerySupportTest {
     void healthUsesOnlyUnifiedMemoryRecords() {
         PlatformAdminAccessSupport accessSupport = mock(PlatformAdminAccessSupport.class);
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
-        FamilyService familyService = mock(FamilyService.class);
+        FamilyAdministrationFacade familyAdministrationFacade = mock(FamilyAdministrationFacade.class);
         when(jdbcTemplate.queryForObject(
                 eq("SELECT to_regclass(?) IS NOT NULL"),
                 eq(Boolean.class),
@@ -37,7 +37,7 @@ class DatabaseHealthQuerySupportTest {
         DatabaseHealthQuerySupport support = new DatabaseHealthQuerySupport(
                 accessSupport,
                 jdbcTemplate,
-                familyService);
+                familyAdministrationFacade);
 
         DatabaseHealthResponse health = support.getHealth();
 

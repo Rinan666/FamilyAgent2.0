@@ -4,7 +4,7 @@ import com.familyagent.module.agent.constant.AgentAiArtifactVersions;
 import com.familyagent.module.agent.constant.AgentDraftSkillContract;
 import com.familyagent.module.agent.constant.AgentSaveMemorySkillContract;
 import com.familyagent.module.agent.harness.eval.dto.CoreAiOutputManifestItem;
-import com.familyagent.module.memory.service.AuthorizedMemoryRecallRankingService;
+import com.familyagent.module.memory.facade.MemoryRecallContract;
 
 import java.util.List;
 
@@ -40,7 +40,7 @@ public final class CoreAiOutputManifest {
                     null,
                     null,
                     null,
-                    AuthorizedMemoryRecallRankingService.ALGORITHM_VERSION,
+                    MemoryRecallContract.ALGORITHM_VERSION,
                     true,
                     "memory-recall-quality-eval"));
 

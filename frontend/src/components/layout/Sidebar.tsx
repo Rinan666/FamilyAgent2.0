@@ -3,7 +3,7 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { BookHeart, ChevronLeft, Images, Menu, Search, Settings, Sparkles, Users, X } from 'lucide-react';
+import { BookHeart, ChevronLeft, Menu, Search, Settings, Sparkles, Users, X } from 'lucide-react';
 import type { ViewerRole } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 
@@ -18,7 +18,6 @@ type NavItem = {
 const navItems: readonly NavItem[] = [
   { href: '/dashboard/agent', label: '家庭助手', icon: Sparkles, roles: ['MEMBER', 'ADMIN'] },
   { href: '/dashboard/memory-library', label: '记忆库', icon: BookHeart, roles: ['MEMBER', 'ADMIN'] },
-  { href: '/album', label: '相册', icon: Images, roles: ['MEMBER', 'ADMIN'] },
   { href: '/dashboard/family', label: '家庭空间', icon: Users, roles: ['MEMBER', 'ADMIN'] },
   { href: '/dashboard/settings', label: '设置', icon: Settings, roles: ['MEMBER', 'ADMIN'] },
 ] as const;
@@ -154,7 +153,7 @@ export function MobileNav({
   const pathname = usePathname();
 
   return (
-    <nav className="grid shrink-0 grid-cols-5 gap-1 border-t border-stone-200 bg-white px-2 py-1.5 lg:hidden">
+    <nav className="grid shrink-0 grid-cols-4 gap-1 border-t border-stone-200 bg-white px-2 py-1.5 lg:hidden">
       {visibleNavItems(viewerRole, isPlatformAdmin).map((item) => {
         const Icon = item.icon;
         const active = isActivePath(pathname, item.href);

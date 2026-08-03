@@ -6,9 +6,7 @@ import com.familyagent.module.growth.entity.GrowthGuardRecord;
 /**
  * Capability interface for permission checks used by growth guard operations.
  *
- * <p>Aggregates {@link com.familyagent.module.family.service.FamilyService},
- * {@link com.familyagent.module.family.service.CareAuthorizationService},
- * and {@link com.familyagent.module.family.repository.FamilyMemberRepository}
+ * <p>Aggregates family membership and care-authorization facades
  * behind a single responsibility boundary so that write/read services depend
  * on "what they can ask" rather than "who answers".</p>
  */

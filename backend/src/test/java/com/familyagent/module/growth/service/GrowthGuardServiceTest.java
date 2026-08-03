@@ -5,6 +5,7 @@ import com.familyagent.module.growth.dto.CreateGrowthGuardRecordRequest;
 import com.familyagent.module.growth.dto.GrowthGuardMetadata;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.growth.repository.GrowthGuardStalenessVoteRepository;
+import com.familyagent.module.memory.facade.MemoryIndexMetadataFacade;
 import com.familyagent.module.memory.facade.UnifiedGrowthRecordFacade;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -32,6 +34,7 @@ class GrowthGuardServiceTest {
     @Mock private GrowthGuardStalenessVoteRepository stalenessVoteRepository;
     @Mock private PermissionGate permissionGate;
     @Mock private GrowthMemorySyncSupport memorySyncSupport;
+    @Mock private MemoryIndexMetadataFacade indexMetadataFacade;
 
     @Test
     void createRecord_shouldPersistTypedMetadataAndDefaultFollowUpStatus() {
@@ -124,10 +127,13 @@ class GrowthGuardServiceTest {
         verify(stalenessVoteRepository).insert(any());
     }
     private GrowthGuardService service() {
+        lenient().when(indexMetadataFacade.enrichGrowth(any(), any(), any(), any(Integer.class), any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         return new GrowthGuardService(
                 growthRecords,
                 stalenessVoteRepository,
                 permissionGate,
-                memorySyncSupport);
+                memorySyncSupport,
+                indexMetadataFacade);
     }
 }

@@ -30,7 +30,6 @@ out/
 .turbo/
 *.tsbuildinfo
 .next
-miniprogram/
 
 # --- IDE ---
 .idea/
@@ -53,12 +52,13 @@ Desktop.ini
 # --- Environment ---
 .env
 .env.docker
+.env.backup
 
 # --- Runtime ---
 .service-pids.txt
 .codex-runtime-pids.txt
-desktop/
 /scripts/local_tools/
+backups/
 
 # --- Docker ---
 docker-compose.override.yml
@@ -81,6 +81,8 @@ checkpoints/
 coverage/
 .nyc_output/
 jacoco.exec
+frontend/output/playwright/
+frontend/.npm-cache/
 
 # --- Docs ---
 # Project-facing docs stay tracked under docs/product, docs/reference, docs/deployment.

@@ -353,7 +353,7 @@ FamilyAgent 的目标之一，是帮助家族成员在非面对面情况下更�
 
 - `docs/plans/SPIRITUAL_MEMBER_PLAN.md`
 - `README.md`
-- `docker-compose.stack.yml`
+- `compose.yml`
 
 ---
 

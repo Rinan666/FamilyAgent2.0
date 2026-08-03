@@ -370,6 +370,7 @@ export default function FamilyMembersPanel({
           <div className="grid grid-cols-2 gap-2 sm:flex">
             <button
               type="button"
+              data-testid="family-join-open"
               onClick={() => {
                 setShowJoin(true);
                 setShowCreate(false);
@@ -382,6 +383,7 @@ export default function FamilyMembersPanel({
             </button>
             <button
               type="button"
+              data-testid="family-create-open"
               onClick={() => {
                 if (derivedCreationQuota.remainingFamilies <= 0) return;
                 setShowCreate(true);
@@ -402,7 +404,10 @@ export default function FamilyMembersPanel({
       {successMsg && <div className="mb-4 rounded-md border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{successMsg}</div>}
 
       {canManageSpace && showCreate && (
-        <div className="mb-5 rounded-lg border border-stone-200 bg-white p-5 shadow-[0_1px_3px_rgba(24,39,32,0.05)]">
+        <div
+          data-testid="family-create-form"
+          className="mb-5 rounded-lg border border-stone-200 bg-white p-5 shadow-[0_1px_3px_rgba(24,39,32,0.05)]"
+        >
           <h3 className="mb-1 text-base font-semibold text-stone-950">创建新家庭</h3>
           <p className="mb-3 text-sm text-stone-500">
             还可创建 {derivedCreationQuota.remainingFamilies} 个家族空间
@@ -433,6 +438,7 @@ export default function FamilyMembersPanel({
             </button>
             <button
               type="button"
+              data-testid="family-create-submit"
               onClick={handleCreate}
               disabled={!newFamilyName.trim() || derivedCreationQuota.remainingFamilies <= 0}
               className="rounded-md bg-emerald-700 px-5 py-2 text-sm font-medium text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
@@ -458,6 +464,7 @@ export default function FamilyMembersPanel({
             />
             <button
               type="button"
+              data-testid="family-join-submit"
               onClick={handleJoin}
               disabled={inviteCode.trim().length < 8}
               className="rounded-md bg-emerald-700 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
@@ -482,6 +489,7 @@ export default function FamilyMembersPanel({
           {canManageSpace && (
             <button
               type="button"
+              data-testid="family-create-open"
               onClick={() => {
                 if (derivedCreationQuota.remainingFamilies <= 0) return;
                 setShowCreate(true);
@@ -539,6 +547,7 @@ export default function FamilyMembersPanel({
                       {canManageSpace && family.inviteCode && (
                         <button
                           type="button"
+                          data-testid="family-invite-code"
                           onClick={() => { void copyInviteCode(family.inviteCode!); }}
                           className="inline-flex h-9 items-center gap-1.5 rounded-md border border-stone-200 bg-white px-3 text-xs font-medium text-stone-600 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800"
                         >

@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     default_llm_model: str = "dashscope/qwen-flash"
     fallback_llm_model: str = "dashscope/qwen-turbo"
     ai_internal_service_token: Optional[str] = None
+    e2e_fixture_provider_enabled: bool = False
     embedding_model: str = "dashscope-multimodal/qwen3-vl-embedding"
     embedding_dimension: int = 1536
 

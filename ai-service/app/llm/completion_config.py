@@ -7,6 +7,10 @@ import litellm
 from openai import AsyncOpenAI
 
 from app.config import settings
+from app.llm.e2e_fixture_provider import (
+    build_e2e_fixture_completion,
+    is_e2e_fixture_model,
+)
 
 
 def completion_provider_kwargs(model: str) -> dict[str, str]:
@@ -25,6 +29,16 @@ def completion_provider_kwargs(model: str) -> dict[str, str]:
 
 async def provider_completion(*, model: str, **kwargs: Any) -> Any:
     """Use the direct OpenAI-compatible client for DashScope models."""
+    if is_e2e_fixture_model(model):
+        if settings.app_env.strip().lower() != "e2e" or not settings.e2e_fixture_provider_enabled:
+            raise RuntimeError("E2E fixture provider is disabled")
+        if kwargs.get("stream"):
+            raise ValueError("E2E fixture provider does not support streaming")
+        return build_e2e_fixture_completion(
+            messages=kwargs.get("messages"),
+            response_format=kwargs.get("response_format"),
+        )
+
     route = completion_provider_kwargs(model)
     routed_model = route["model"]
     if routed_model.startswith("openai/") and model.lower().startswith("dashscope/"):

@@ -2,7 +2,7 @@ package com.familyagent.module.session.service;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.FamilyMembershipFacade;
 import com.familyagent.module.session.dto.ChatSessionDetail;
 import com.familyagent.module.session.dto.ChatSessionMessagePage;
 import com.familyagent.module.session.dto.ChatSessionMessagePayload;
@@ -47,7 +47,7 @@ class ChatSessionServiceTest {
     @Mock private ChatSessionRepository sessionRepository;
     @Mock private ChatSessionMessageRepository messageRepository;
     @Mock private ChatSessionArchiveRepository archiveRepository;
-    @Mock private FamilyService familyService;
+    @Mock private FamilyMembershipFacade familyMembershipFacade;
     @Mock private ChatSessionArchiveStorageService archiveStorageService;
     @Mock private ChatSessionArchiveSummaryService archiveSummaryService;
 
@@ -62,7 +62,7 @@ class ChatSessionServiceTest {
                 new ChatSessionArchiveSupport(sessionRepository, messageRepository, archiveRepository,
                         archiveStorageService, archiveSummaryService);
         service = new ChatSessionService(sessionRepository, messageRepository, archiveRepository,
-                familyService, messagePersistenceSupport, archiveSupport, archiveStorageService);
+                familyMembershipFacade, messagePersistenceSupport, archiveSupport, archiveStorageService);
     }
 
     @Test
@@ -345,7 +345,7 @@ class ChatSessionServiceTest {
         int deleted = withUser(10L, () -> service.deleteFamilyAgentSessions(1L));
 
         assertEquals(2, deleted);
-        verify(familyService).checkMembership(1L);
+        verify(familyMembershipFacade).checkMembership(1L);
         verify(archiveStorageService).deleteTranscript("archive-1");
         verify(sessionRepository).deleteOwnedById(100L);
         verify(sessionRepository).deleteOwnedById(101L);

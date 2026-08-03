@@ -5,8 +5,9 @@ import cn.hutool.crypto.SecureUtil;
 import com.familyagent.common.constant.EntityStatus;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
-import com.familyagent.module.invite.entity.InviteCode;
-import com.familyagent.module.invite.repository.InviteCodeRepository;
+import com.familyagent.module.invite.facade.RegistrationInviteDetails;
+import com.familyagent.module.invite.facade.RegistrationInviteFacade;
+import com.familyagent.module.user.constant.UserRole;
 import com.familyagent.module.user.dto.ChangePasswordRequest;
 import org.redisson.api.RAtomicLong;
 import org.redisson.api.RedissonClient;
@@ -43,7 +44,7 @@ import java.util.concurrent.TimeUnit;
 public class UserService {
 
     private final UserRepository userRepository;
-    private final InviteCodeRepository inviteCodeRepository;
+    private final RegistrationInviteFacade registrationInviteFacade;
     private static final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
     private static final ObjectMapper objectMapper = new ObjectMapper();
     private static final int MAX_LOGIN_FAILURES_PER_WINDOW = 10;
@@ -64,19 +65,18 @@ public class UserService {
             throw new BusinessException(ErrorCode.USERNAME_EXISTS);
         }
 
-        InviteCode inviteCode = validateInviteCode(request.getInviteCode());
-        consumeInviteCode(inviteCode.getCode());
+        RegistrationInviteDetails invite = registrationInviteFacade.consume(request.getInviteCode());
 
         User user = new User();
         user.setUsername(request.getUsername());
         user.setPasswordHash(encoder.encode(request.getPassword()));
         user.setNickname(request.getNickname() != null ? request.getNickname() : request.getUsername());
         user.setEmail(request.getEmail());
-        user.setRole("USER");
+        user.setRole(UserRole.USER.name());
         user.setStatus(EntityStatus.ACTIVE.name());
         user.setMetadata(Map.of(
-                "inviteCode", inviteCode.getCode(),
-                "inviteSource", inviteCode.getSource() == null ? "unknown" : inviteCode.getSource()
+                "inviteCode", invite.code(),
+                "inviteSource", invite.source() == null ? "unknown" : invite.source()
         ));
 
         try {
@@ -87,11 +87,11 @@ public class UserService {
                 throw new BusinessException(ErrorCode.USERNAME_EXISTS);
             }
             log.error("Registration persistence failed: username={}, inviteCode={}",
-                    request.getUsername(), inviteCode.getCode(), e);
+                    request.getUsername(), invite.code(), e);
             throw new BusinessException(ErrorCode.DATA_PERSIST_FAILED);
         } catch (DataAccessException e) {
             log.error("Registration database access failed: username={}, inviteCode={}",
-                    request.getUsername(), inviteCode.getCode(), e);
+                    request.getUsername(), invite.code(), e);
             throw e;
         }
 
@@ -291,42 +291,6 @@ public class UserService {
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Failed to save profile");
         }
-    }
-
-    private InviteCode validateInviteCode(String rawInviteCode) {
-        if (rawInviteCode == null || rawInviteCode.trim().isEmpty()) {
-            throw new BusinessException(ErrorCode.INVITE_CODE_REQUIRED);
-        }
-
-        String normalizedCode = rawInviteCode.trim().toUpperCase();
-        InviteCode inviteCode = inviteCodeRepository.findByCode(normalizedCode);
-        if (inviteCode == null || !EntityStatus.ACTIVE.name().equals(inviteCode.getStatus())) {
-            throw new BusinessException(ErrorCode.INVITE_CODE_INVALID);
-        }
-        if (inviteCode.getExpiresAt() != null && !inviteCode.getExpiresAt().isAfter(LocalDateTime.now())) {
-            throw new BusinessException(ErrorCode.INVITE_CODE_INVALID);
-        }
-        if (inviteCode.getMaxUses() != null && inviteCode.getUsedCount() != null
-                && inviteCode.getUsedCount() >= inviteCode.getMaxUses()) {
-            throw new BusinessException(ErrorCode.INVITE_CODE_EXHAUSTED);
-        }
-        return inviteCode;
-    }
-
-    private void consumeInviteCode(String normalizedCode) {
-        int updated = inviteCodeRepository.incrementUsedCountByCode(normalizedCode);
-        if (updated > 0) {
-            return;
-        }
-
-        InviteCode latest = inviteCodeRepository.findByCode(normalizedCode);
-        if (latest == null || !EntityStatus.ACTIVE.name().equals(latest.getStatus())) {
-            throw new BusinessException(ErrorCode.INVITE_CODE_INVALID);
-        }
-        if (latest.getExpiresAt() != null && !latest.getExpiresAt().isAfter(LocalDateTime.now())) {
-            throw new BusinessException(ErrorCode.INVITE_CODE_INVALID);
-        }
-        throw new BusinessException(ErrorCode.INVITE_CODE_EXHAUSTED);
     }
 
     private boolean isUsernameConflict(Throwable error) {

@@ -4,7 +4,8 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.familyagent.module.diary.dto.CreateDiaryEntryRequest;
 import com.familyagent.module.diary.dto.DiaryEntryMetadata;
 import com.familyagent.module.diary.entity.DiaryEntry;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.FamilyMembershipFacade;
+import com.familyagent.module.memory.facade.MemoryIndexMetadataFacade;
 import com.familyagent.module.memory.facade.UnifiedDiaryRecordFacade;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -29,8 +31,9 @@ import static org.mockito.Mockito.when;
 class DiaryEntryServiceTest {
 
     @Mock private UnifiedDiaryRecordFacade diaryRecords;
-    @Mock private FamilyService familyService;
+    @Mock private FamilyMembershipFacade familyMembership;
     @Mock private DiaryMemorySyncSupport memorySyncSupport;
+    @Mock private MemoryIndexMetadataFacade indexMetadataFacade;
 
     @Test
     void create_shouldMergeOnlyManualSelfDiaryWhenThereIsExactlyOneCandidate() {
@@ -177,10 +180,13 @@ class DiaryEntryServiceTest {
     }
 
     private DiaryEntryService service() {
+        lenient().when(indexMetadataFacade.enrichDiary(any(), any(), any(), any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         return new DiaryEntryService(
                 diaryRecords,
-                familyService,
-                memorySyncSupport);
+                familyMembership,
+                memorySyncSupport,
+                indexMetadataFacade);
     }
 
     private static CreateDiaryEntryRequest manualRequest(Map<String, Object> metadata) {

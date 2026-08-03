@@ -4,7 +4,7 @@ import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.constant.PhotoScope;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
-import com.familyagent.module.family.service.FamilyService;
+import com.familyagent.module.family.facade.FamilyMembershipFacade;
 import com.familyagent.module.photo.dto.PhotoClusterMetadata;
 import com.familyagent.module.photo.dto.PhotoContentResource;
 import com.familyagent.module.photo.dto.PhotoUploadResponse;
@@ -41,7 +41,7 @@ class PhotoServiceTest {
 
     @Mock private PhotoStorageService storageService;
     @Mock private PhotoMapper photoMapper;
-    @Mock private FamilyService familyService;
+    @Mock private FamilyMembershipFacade familyMembershipFacade;
     @Spy private ObjectMapper objectMapper = new ObjectMapper();
     @InjectMocks private PhotoService photoService;
 
@@ -60,7 +60,7 @@ class PhotoServiceTest {
 
             List<PhotoUploadResponse> result = photoService.upload(10L, null, null, List.of(file));
 
-            verify(familyService).checkMembership(10L);
+            verify(familyMembershipFacade).checkMembership(10L);
             assertEquals(1, result.size());
             assertEquals(88L, result.get(0).getId());
             assertEquals(301L, result.get(0).getUploaderId());
@@ -93,7 +93,7 @@ class PhotoServiceTest {
 
         PhotoContentResource result = photoService.getPhotoContent(5L);
 
-        verify(familyService).checkMembership(10L);
+        verify(familyMembershipFacade).checkMembership(10L);
         verify(storageService).read("family/10/5.jpg");
         assertEquals("image/jpeg", result.contentType());
     }
@@ -164,7 +164,7 @@ class PhotoServiceTest {
 
             photoService.updateClusterResult(12L, metadata);
 
-            verify(familyService).checkMembership(20L);
+            verify(familyMembershipFacade).checkMembership(20L);
             verify(photoMapper).updateById(photo);
             assertEquals(metadata, photo.getMetadata());
         }
@@ -200,7 +200,7 @@ class PhotoServiceTest {
 
         List<PhotoUploadResponse> result = photoService.listByFamily(20L, 999);
 
-        verify(familyService).checkMembership(20L);
+        verify(familyMembershipFacade).checkMembership(20L);
         assertEquals(1, result.size());
         assertEquals("/api/photos/12/content", result.get(0).getAssetUrl());
     }

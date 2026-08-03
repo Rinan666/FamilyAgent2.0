@@ -1,0 +1,13 @@
+[Unit]
+Description=FamilyAgent encrypted PostgreSQL and MinIO backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/familyagent
+EnvironmentFile=/opt/familyagent/.env.backup
+ExecStart=/usr/bin/env bash /opt/familyagent/scripts/backup-stack.sh
+User=familyagent-backup
+Group=docker
+UMask=0077

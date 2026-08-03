@@ -3,6 +3,7 @@ package com.familyagent.module.memory.service;
 import com.familyagent.common.constant.MemoryEmbeddingSourceType;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallCandidate;
 import com.familyagent.module.memory.dto.EmbeddingCallObservation;
+import com.familyagent.module.memory.facade.MemoryRecallContract;
 import com.familyagent.module.memory.repository.MemoryRecallVectorRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,7 +16,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AuthorizedMemoryRecallRankingService {
 
-    public static final String ALGORITHM_VERSION = "authorized-memory-recall.v1";
+    public static final String ALGORITHM_VERSION = MemoryRecallContract.ALGORITHM_VERSION;
     private static final double MAX_VECTOR_DISTANCE = 0.72;
 
     private final AuthorizedMemoryRecallEmbeddingService embeddingService;
