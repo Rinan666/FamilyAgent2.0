@@ -19,17 +19,14 @@ const highlights = [
   {
     icon: BookHeart,
     title: '把日常留下来',
-    description: '用日记、片段和观察，慢慢积累属于这个家庭的长期记忆。',
   },
   {
     icon: Users,
     title: '让家人共享同一语境',
-    description: '把经验、角色和共同经历沉淀下来，减少信息散落和重复沟通。',
   },
   {
     icon: Brain,
     title: '让 AI 真正理解家庭',
-    description: '在授权范围内调用上下文，让每一次协助都更贴近真实关系。',
   },
 ] as const;
 
@@ -71,18 +68,19 @@ export default function LoginPage() {
     <AuthShell
       badge="家庭记忆"
       heroTitle="让每一段重要经历，都有稳定的落点。"
-      heroDescription="FamilyAgent 帮你整理家庭日记、成员角色、成长观察与共享知识，让协作和陪伴都回到同一个空间里。"
       highlights={highlights}
       formTitle="欢迎回来"
-      formDescription="登录后继续整理家庭记忆、查看协作内容，并在授权范围内获得更懂家庭语境的 AI 协助。"
-      footer={(
+      footer={
         <p className="text-center">
           还没有账号？{' '}
-          <Link href="/register" className="font-semibold text-emerald-700 transition hover:text-emerald-800">
+          <Link
+            href="/register"
+            className="font-semibold text-sky-700 transition hover:text-sky-800"
+          >
             立即注册
           </Link>
         </p>
-      )}
+      }
     >
       <form onSubmit={handleSubmit} onKeyDown={submitFormOnEnter} className="space-y-4">
         {error && (
@@ -91,7 +89,7 @@ export default function LoginPage() {
           </div>
         )}
         {notice && (
-          <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          <div className="rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-700">
             {notice}
           </div>
         )}

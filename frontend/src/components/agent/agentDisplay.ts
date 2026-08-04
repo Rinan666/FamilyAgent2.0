@@ -89,7 +89,7 @@ export function sessionBadge(metadata?: Record<string, unknown> | null) {
   if (normalized.agentMode === 'mirror') {
     return {
       label: '镜像参考',
-      className: 'bg-emerald-100 text-emerald-800',
+      className: 'bg-sky-100 text-sky-800',
     };
   }
   if (normalized.agentMode === 'persona') {
@@ -129,7 +129,7 @@ export function temporalLayerLabel(item: DiaryEntry | MemoryEntry | GrowthGuardR
 export function temporalLayerClass(item: DiaryEntry | MemoryEntry | GrowthGuardRecord) {
   switch (item.metadata?.temporalLayer) {
     case 'FRESH':
-      return 'bg-green-50 text-green-700';
+      return 'bg-sky-50 text-sky-700';
     case 'FADING':
       return 'bg-yellow-50 text-yellow-700';
     case 'CORE_MEMORY':

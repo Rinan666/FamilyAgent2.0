@@ -225,7 +225,7 @@ function renderInlineText(text: string): ReactNode[] {
             href={linkMatch[2]}
             target="_blank"
             rel="noreferrer"
-            className="font-medium text-emerald-700 underline underline-offset-4 hover:text-emerald-800"
+            className="font-medium text-sky-700 underline underline-offset-4 hover:text-sky-800"
           >
             {linkMatch[1]}
           </a>,
@@ -307,7 +307,7 @@ export default function MathRenderer({ content, className = '' }: MathRendererPr
           return (
             <blockquote
               key={`quote-${index}`}
-              className="my-3 border-l-4 border-emerald-200 bg-emerald-50/70 px-3 py-2 text-sm leading-7 text-stone-700"
+              className="my-3 border-l-4 border-sky-200 bg-sky-50/70 px-3 py-2 text-sm leading-7 text-stone-700"
             >
               {renderInlineText(block.content)}
             </blockquote>

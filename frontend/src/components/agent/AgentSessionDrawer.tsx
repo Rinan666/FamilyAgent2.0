@@ -70,7 +70,7 @@ export default function AgentSessionDrawer({
         <div className="flex items-start justify-between gap-3 border-b border-stone-200/80 px-5 py-5">
           <div>
             <div className="flex items-center gap-2 text-sm font-semibold text-stone-900">
-              <History className="h-4 w-4 text-emerald-700" />
+              <History className="h-4 w-4 text-sky-700" />
               会话历史
             </div>
             <p className="mt-1 text-sm text-stone-500">{familyName || '当前家庭'}</p>
@@ -136,7 +136,7 @@ export default function AgentSessionDrawer({
                     key={session.id}
                     className={cn(
                       'rounded-2xl border px-3 py-3 transition-colors',
-                      sessionId === session.id ? 'border-emerald-200 bg-emerald-50/80' : 'border-stone-200 bg-white hover:border-stone-300',
+                      sessionId === session.id ? 'border-sky-200 bg-sky-50/80' : 'border-stone-200 bg-white hover:border-stone-300',
                     )}
                   >
                     <button
@@ -161,7 +161,7 @@ export default function AgentSessionDrawer({
                         </span>
                       </div>
                       {metadata.targetMemberName && metadata.agentMode === 'mirror' && !metadata.hasTargetSwitches && (
-                        <div className="mt-2 text-[11px] text-emerald-700">
+                        <div className="mt-2 text-[11px] text-sky-700">
                           对象：{metadata.targetMemberName}
                         </div>
                       )}

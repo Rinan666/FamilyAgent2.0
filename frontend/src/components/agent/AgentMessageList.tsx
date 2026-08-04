@@ -6,14 +6,12 @@ import MathRenderer from '@/components/agent/MathRenderer';
 import AnswerEvidenceDisclosure from '@/components/agent/AnswerEvidenceDisclosure';
 import SaveDraftCard from '@/components/agent/SaveDraftCard';
 import { type SaveFeedback } from '@/components/agent/agentDisplay';
-import type { AgentMode, AgentSaveToolPlan, ChatMessage, Family } from '@/types';
+import type { AgentSaveToolPlan, ChatMessage, Family } from '@/types';
 
 interface AgentMessageListProps {
   messages: ChatMessage[];
   isLoadingMessages: boolean;
   isStreaming: boolean;
-  mode: AgentMode;
-  targetLabel: string;
   saveFeedback: Record<string, SaveFeedback>;
   onConfirmSaveDraft: (message: ChatMessage, plan: AgentSaveToolPlan) => void;
   onCancelSaveDraft: (message: ChatMessage) => void;
@@ -28,7 +26,7 @@ function AssistantThinkingIndicator() {
       className="inline-flex items-center gap-2 rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-500"
       aria-live="polite"
     >
-      <Loader2 className="h-4 w-4 animate-spin text-emerald-700" />
+      <Loader2 className="h-4 w-4 animate-spin text-sky-700" />
       <span>AI 正在思考...</span>
     </div>
   );
@@ -38,8 +36,6 @@ export default function AgentMessageList({
   messages,
   isLoadingMessages,
   isStreaming,
-  mode,
-  targetLabel,
   saveFeedback,
   onConfirmSaveDraft,
   onCancelSaveDraft,
@@ -51,29 +47,15 @@ export default function AgentMessageList({
     return (
       <div className="mx-auto flex w-full max-w-5xl min-h-0 flex-1 items-center justify-center overflow-y-auto px-4 py-8">
         <div className="w-full px-4 py-8 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-md bg-emerald-100 text-emerald-800 shadow-sm">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-md bg-sky-100 text-sky-800 shadow-sm">
             <Sparkles className="h-6 w-6" />
           </div>
-          <h3 className="mt-5 text-2xl font-semibold text-stone-950">
-            {mode === 'mirror'
-              ? `开始与 ${targetLabel} 的镜像参考对话`
-              : mode === 'persona'
-                ? `开始请教 ${targetLabel}`
-                : '开始一段家庭对话'}
-          </h3>
-          <p className="mx-auto mt-3 max-w-2xl text-sm leading-7 text-stone-500">
-            {mode === 'mirror'
-              ? '镜像 AI 会参考上下文、授权日常记录和成长观察，不使用家族经验沉淀。'
-              : mode === 'persona'
-                ? '精神成员会基于家族创建的档案和当前可见家庭经验，以稳定角色声音提供建议。'
-                : 'FamilyAgent 会参考当前上下文和家族经验沉淀，不召回日常记录或成长观察。'}
-          </p>
           {onOpenContext && (
-            <div className="mt-6">
+            <div className="mt-5">
               <button
                 type="button"
                 onClick={onOpenContext}
-                className="inline-flex h-10 items-center rounded-full border border-emerald-200 bg-emerald-50 px-4 text-sm font-medium text-emerald-800 transition hover:bg-emerald-100"
+                className="inline-flex h-10 items-center rounded-full border border-sky-200 bg-sky-50 px-4 text-sm font-medium text-sky-800 transition hover:bg-sky-100"
               >
                 查看上下文
               </button>
@@ -145,7 +127,7 @@ export default function AgentMessageList({
                 </div>
 
                 {isAssistant && message.metadata?.thinkingSummary && (
-                  <div className="mt-3 rounded-md border border-emerald-100 bg-emerald-50/80 px-3 py-2 text-xs leading-6 text-emerald-800">
+                  <div className="mt-3 rounded-md border border-sky-100 bg-sky-50/80 px-3 py-2 text-xs leading-6 text-sky-800">
                     <span className="font-medium">思路摘要：</span>
                     {message.metadata.thinkingSummary}
                   </div>
@@ -160,7 +142,7 @@ export default function AgentMessageList({
                         ? 'text-rose-600'
                         : feedback.status === 'skipped'
                           ? 'text-stone-500'
-                          : 'text-emerald-700'
+                          : 'text-sky-700'
                     }`}
                   >
                     {feedback.status === 'saving' || feedback.status === 'confirming' ? (
@@ -174,16 +156,19 @@ export default function AgentMessageList({
                         打开
                       </Link>
                     )}
-                    {feedback.draft && (feedback.status === 'draft' || feedback.status === 'confirming' || feedback.status === 'error') && (
-                      <SaveDraftCard
-                        plan={feedback.draft}
-                        isConfirming={feedback.status === 'confirming'}
-                        onConfirm={(plan) => onConfirmSaveDraft(message, plan)}
-                        onCancel={() => onCancelSaveDraft(message)}
-                        families={families}
-                        activeFamilyId={activeFamilyId}
-                      />
-                    )}
+                    {feedback.draft &&
+                      (feedback.status === 'draft' ||
+                        feedback.status === 'confirming' ||
+                        feedback.status === 'error') && (
+                        <SaveDraftCard
+                          plan={feedback.draft}
+                          isConfirming={feedback.status === 'confirming'}
+                          onConfirm={(plan) => onConfirmSaveDraft(message, plan)}
+                          onCancel={() => onCancelSaveDraft(message)}
+                          families={families}
+                          activeFamilyId={activeFamilyId}
+                        />
+                      )}
                   </div>
                 )}
               </div>

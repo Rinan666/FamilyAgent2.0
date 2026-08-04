@@ -48,7 +48,7 @@ export function masteryColor(probability: number): string {
   if (probability < 0.3) return 'text-red-500';
   if (probability < 0.6) return 'text-yellow-500';
   if (probability < 0.85) return 'text-blue-500';
-  return 'text-green-500';
+  return 'text-sky-500';
 }
 
 /**

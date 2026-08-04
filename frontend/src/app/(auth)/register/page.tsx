@@ -19,17 +19,14 @@ const highlights = [
   {
     icon: NotebookPen,
     title: '从真实生活开始',
-    description: '先把记忆、日记和观察沉淀下来，再逐步形成可协作、可延续的家庭内容。',
   },
   {
     icon: Users,
     title: '把家人放进同一空间',
-    description: '邀请成员一起维护共同语境，而不是让信息继续散落在不同聊天窗口里。',
   },
   {
     icon: ShieldCheck,
     title: '先定义边界，再启用 AI',
-    description: '权限和角色先行，默认保护家庭记忆的可见范围与使用方式。',
   },
 ] as const;
 
@@ -70,18 +67,16 @@ export default function RegisterPage() {
     <AuthShell
       badge="邀请制注册"
       heroTitle="先建立一个可靠的家庭空间，再慢慢填满它。"
-      heroDescription="注册只是入口。真正重要的是把记忆、经验、角色关系和长期协作沉淀进同一个稳定的家庭语境。"
       highlights={highlights}
       formTitle="创建账号"
-      formDescription="输入有效的邀请码，创建新账号并加入家庭空间。后续的共享范围、身份角色和协作关系都可以继续完善。"
-      footer={(
+      footer={
         <p className="text-center">
           已有账号？{' '}
-          <Link href="/login" className="font-semibold text-emerald-700 transition hover:text-emerald-800">
+          <Link href="/login" className="font-semibold text-sky-700 transition hover:text-sky-800">
             去登录
           </Link>
         </p>
-      )}
+      }
     >
       <form onSubmit={handleSubmit} onKeyDown={submitFormOnEnter} className="space-y-4">
         {error && (

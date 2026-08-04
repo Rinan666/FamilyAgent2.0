@@ -26,7 +26,7 @@ interface AgentContextPanelProps {
 }
 
 function readinessToneClass(tone: ModeReadiness['tone']) {
-  if (tone === 'green') return 'bg-emerald-100 text-emerald-800';
+  if (tone === 'green') return 'bg-sky-100 text-sky-800';
   if (tone === 'blue') return 'bg-sky-100 text-sky-800';
   if (tone === 'yellow') return 'bg-amber-100 text-amber-800';
   return 'bg-stone-200 text-stone-700';
@@ -37,10 +37,12 @@ function targetValue(selection: AgentTargetSelection) {
 }
 
 function memberOptionLabel(member: FamilyMember) {
-  return member.username?.trim()
-    || member.nickname?.trim()
-    || member.relationshipLabel?.trim()
-    || `用户 ${member.userId}`;
+  return (
+    member.username?.trim() ||
+    member.nickname?.trim() ||
+    member.relationshipLabel?.trim() ||
+    `用户 ${member.userId}`
+  );
 }
 
 export default function AgentContextPanel({
@@ -96,7 +98,7 @@ export default function AgentContextPanel({
         <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
           <div className="rounded-[24px] border border-stone-200 bg-stone-50/80 p-4">
             <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-stone-900">
-              <House className="h-4 w-4 text-emerald-700" />
+              <House className="h-4 w-4 text-sky-700" />
               当前家族
             </div>
             <p className="text-sm font-medium text-stone-900">{familyName}</p>
@@ -108,7 +110,7 @@ export default function AgentContextPanel({
                 <div className="text-sm font-semibold text-stone-900">说话对象</div>
                 <div className="mt-1 text-xs text-stone-500">当前：{targetLabel}</div>
               </div>
-              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
+              <span className="rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-medium text-sky-700">
                 {mode === 'persona' ? '精神成员' : mode === 'mirror' ? '镜像参考' : '家庭 Agent'}
               </span>
             </div>
@@ -119,15 +121,14 @@ export default function AgentContextPanel({
                 onClick={() => handleTargetChange('NONE')}
                 className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition ${
                   selectedValue === 'NONE'
-                    ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
-                    : 'border-stone-200 bg-stone-50/80 text-stone-700 hover:border-emerald-200 hover:bg-emerald-50/70'
+                    ? 'border-sky-300 bg-sky-50 text-sky-900'
+                    : 'border-stone-200 bg-stone-50/80 text-stone-700 hover:border-sky-200 hover:bg-sky-50/70'
                 }`}
               >
                 <span>
                   <span className="block text-sm font-semibold">家庭 Agent</span>
-                  <span className="mt-1 block text-xs text-stone-500">不指定成员，使用当前家族上下文</span>
                 </span>
-                {selectedValue === 'NONE' && <Check className="h-4 w-4 shrink-0 text-emerald-700" />}
+                {selectedValue === 'NONE' && <Check className="h-4 w-4 shrink-0 text-sky-700" />}
               </button>
 
               <div className="space-y-2">
@@ -140,15 +141,15 @@ export default function AgentContextPanel({
                   onClick={() => handleTargetChange('SELF')}
                   className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition ${
                     selectedValue === 'SELF'
-                      ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
-                      : 'border-stone-200 bg-white text-stone-700 hover:border-emerald-200 hover:bg-emerald-50/70'
+                      ? 'border-sky-300 bg-sky-50 text-sky-900'
+                      : 'border-stone-200 bg-white text-stone-700 hover:border-sky-200 hover:bg-sky-50/70'
                   }`}
                 >
                   <span>
                     <span className="block text-sm font-semibold">{selfTargetLabel}</span>
                     <span className="mt-1 block text-xs text-stone-500">镜像自己</span>
                   </span>
-                  {selectedValue === 'SELF' && <Check className="h-4 w-4 shrink-0 text-emerald-700" />}
+                  {selectedValue === 'SELF' && <Check className="h-4 w-4 shrink-0 text-sky-700" />}
                 </button>
                 {selectorOptions.map((member) => {
                   const value = String(member.userId);
@@ -159,17 +160,24 @@ export default function AgentContextPanel({
                       onClick={() => handleTargetChange(member.userId)}
                       className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition ${
                         selectedValue === value
-                          ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
-                          : 'border-stone-200 bg-white text-stone-700 hover:border-emerald-200 hover:bg-emerald-50/70'
+                          ? 'border-sky-300 bg-sky-50 text-sky-900'
+                          : 'border-stone-200 bg-white text-stone-700 hover:border-sky-200 hover:bg-sky-50/70'
                       }`}
                     >
                       <span>
-                        <span className="block text-sm font-semibold">{memberOptionLabel(member)}</span>
-                        {member.relationshipLabel && member.relationshipLabel !== memberOptionLabel(member) && (
-                          <span className="mt-1 block text-xs text-stone-500">{member.relationshipLabel}</span>
-                        )}
+                        <span className="block text-sm font-semibold">
+                          {memberOptionLabel(member)}
+                        </span>
+                        {member.relationshipLabel &&
+                          member.relationshipLabel !== memberOptionLabel(member) && (
+                            <span className="mt-1 block text-xs text-stone-500">
+                              {member.relationshipLabel}
+                            </span>
+                          )}
                       </span>
-                      {selectedValue === value && <Check className="h-4 w-4 shrink-0 text-emerald-700" />}
+                      {selectedValue === value && (
+                        <Check className="h-4 w-4 shrink-0 text-sky-700" />
+                      )}
                     </button>
                   );
                 })}
@@ -196,7 +204,9 @@ export default function AgentContextPanel({
                         }`}
                       >
                         <span className="text-sm font-semibold">{persona.name}</span>
-                        {selectedValue === stringValue && <Check className="h-4 w-4 shrink-0 text-violet-700" />}
+                        {selectedValue === stringValue && (
+                          <Check className="h-4 w-4 shrink-0 text-violet-700" />
+                        )}
                       </button>
                     );
                   })}
@@ -213,9 +223,7 @@ export default function AgentContextPanel({
             </div>
           </div>
 
-          {mode === 'family' ? (
-            null
-          ) : mode === 'persona' ? (
+          {mode === 'family' ? null : mode === 'persona' ? (
             <div className="rounded-[24px] border border-violet-100 bg-violet-50/80 p-4 text-xs leading-6 text-violet-900">
               <div className="text-sm font-semibold">精神成员档案</div>
               <div className="mt-3 space-y-2">
@@ -240,10 +248,12 @@ export default function AgentContextPanel({
                 </div>
               )}
 
-              <div className="rounded-[24px] border border-emerald-100 bg-emerald-50/80 p-4">
+              <div className="rounded-[24px] border border-sky-100 bg-sky-50/80 p-4">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="text-sm font-semibold text-emerald-900">资料充分度</div>
-                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${readinessToneClass(modeReadiness.tone)}`}>
+                  <div className="text-sm font-semibold text-sky-900">资料充分度</div>
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${readinessToneClass(modeReadiness.tone)}`}
+                  >
                     {modeReadiness.label}
                   </span>
                 </div>
@@ -254,13 +264,13 @@ export default function AgentContextPanel({
                 <div className="mt-3 space-y-2">
                   <Link
                     href={`/dashboard/family/member?familyId=${activeFamilyId}&userId=${mirrorContext?.targetMember?.userId || ''}`}
-                    className="block rounded-2xl border border-stone-200 bg-white px-3 py-2.5 text-stone-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800"
+                    className="block rounded-2xl border border-stone-200 bg-white px-3 py-2.5 text-stone-700 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-800"
                   >
                     查看成员授权资料
                   </Link>
                   <Link
                     href={`/dashboard/memory-library?compose=1&familyId=${activeFamilyId}${mirrorContext?.targetMember?.userId ? `&relatedUserId=${mirrorContext.targetMember.userId}&relatedMemberName=${encodeURIComponent(targetLabel)}` : ''}`}
-                    className="block rounded-2xl border border-stone-200 bg-white px-3 py-2.5 text-stone-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800"
+                    className="block rounded-2xl border border-stone-200 bg-white px-3 py-2.5 text-stone-700 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-800"
                   >
                     去补充相关记录
                   </Link>

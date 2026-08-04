@@ -85,7 +85,7 @@ export default function FamilyMemberCard({
     : memberProfileSummary(member);
 
   return (
-    <article className="group flex min-h-[220px] flex-col rounded-lg border border-stone-200 bg-white p-4 shadow-[0_1px_3px_rgba(24,39,32,0.06)] transition duration-200 hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-[0_12px_30px_rgba(24,39,32,0.08)]">
+    <article className="group flex min-h-[220px] flex-col rounded-lg border border-stone-200 bg-white p-4 shadow-[0_1px_3px_rgba(24,39,32,0.06)] transition duration-200 hover:-translate-y-0.5 hover:border-sky-200 hover:shadow-[0_12px_30px_rgba(24,39,32,0.08)]">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
           <div
@@ -123,13 +123,13 @@ export default function FamilyMemberCard({
                 autoFocus
                 onChange={(event) => onRelationshipDraftChange(event.target.value)}
                 placeholder="例如：妈妈、叔叔、小楠"
-                className="h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                className="h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
               />
               <div className="mt-2 flex items-center gap-2">
                 <button
                   type="submit"
                   disabled={updatingRelationshipKey === updateKey || !relationshipDraft.trim()}
-                  className="inline-flex h-8 items-center rounded-md bg-emerald-700 px-3 text-xs font-medium text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex h-8 items-center rounded-md bg-sky-700 px-3 text-xs font-medium text-white transition hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   保存
                 </button>
@@ -148,7 +148,7 @@ export default function FamilyMemberCard({
               <div className="flex min-w-0 items-center gap-1.5">
                 <Link
                   href={`/dashboard/family/member?familyId=${familyId}&userId=${member.userId}`}
-                  className="truncate text-base font-semibold text-stone-950 transition hover:text-emerald-700"
+                  className="truncate text-base font-semibold text-stone-950 transition hover:text-sky-700"
                 >
                   {memberDisplayName(member)}
                 </Link>
@@ -156,7 +156,7 @@ export default function FamilyMemberCard({
                   <button
                     type="button"
                     onClick={() => onStartEditRelationship(familyId, member)}
-                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-stone-400 transition hover:bg-emerald-50 hover:text-emerald-700"
+                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-stone-400 transition hover:bg-sky-50 hover:text-sky-700"
                     aria-label="编辑关系称呼"
                   >
                     <Pencil className="h-3.5 w-3.5" />
@@ -178,7 +178,7 @@ export default function FamilyMemberCard({
         <div className="grid grid-cols-2 gap-2">
           <Link
             href={`/dashboard/family/member?familyId=${familyId}&userId=${member.userId}`}
-            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-stone-200 bg-white px-3 text-xs font-medium text-stone-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800"
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-stone-200 bg-white px-3 text-xs font-medium text-stone-700 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-800"
           >
             <BookHeart className="h-3.5 w-3.5" />
             记忆
@@ -193,8 +193,8 @@ export default function FamilyMemberCard({
               className={cn(
                 'inline-flex h-9 items-center justify-center gap-2 rounded-md border px-2 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50',
                 careAuthorized
-                  ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
-                  : 'border-stone-200 bg-white text-stone-600 hover:border-emerald-200 hover:bg-stone-50',
+                  ? 'border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100'
+                  : 'border-stone-200 bg-white text-stone-600 hover:border-sky-200 hover:bg-stone-50',
               )}
             >
               {updatingCareKey === careKey ? (
@@ -203,7 +203,7 @@ export default function FamilyMemberCard({
                 <span
                   className={cn(
                     'relative h-4 w-7 rounded-full transition',
-                    careAuthorized ? 'bg-emerald-600' : 'bg-stone-300',
+                    careAuthorized ? 'bg-sky-600' : 'bg-stone-300',
                   )}
                 >
                   <span
@@ -229,7 +229,7 @@ export default function FamilyMemberCard({
             type="button"
             disabled={updatingRoleKey === updateKey}
             onClick={() => onUpdateRole(familyId, member, 'MEMBER')}
-            className="mt-2 inline-flex h-8 w-full items-center justify-center rounded-md border border-stone-200 bg-white px-3 text-xs font-medium text-stone-600 transition hover:border-emerald-200 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-2 inline-flex h-8 w-full items-center justify-center rounded-md border border-stone-200 bg-white px-3 text-xs font-medium text-stone-600 transition hover:border-sky-200 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             规范为成员
           </button>

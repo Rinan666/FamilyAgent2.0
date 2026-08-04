@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { CheckCircle, ChevronDown, Lock, RefreshCw, Save, Sparkles, Users } from 'lucide-react';
+import { CheckCircle, ChevronDown, RefreshCw, Save, Sparkles, Users } from 'lucide-react';
 import { familyApi, memoryApi, memoryLibraryApi, writeMemoryApi } from '@/lib/api';
 import { useViewerRole } from '@/hooks/useViewerRole';
 import { useAuthStore } from '@/stores/authStore';
@@ -150,14 +150,22 @@ function formatTags(raw: string) {
 
 function memberDisplayName(member?: FamilyMember | null) {
   if (!member) return '';
-  return member.relationshipLabel?.trim()
-    || member.nickname?.trim()
-    || member.username?.trim()
-    || `用户 ${member.userId}`;
+  return (
+    member.relationshipLabel?.trim() ||
+    member.nickname?.trim() ||
+    member.username?.trim() ||
+    `用户 ${member.userId}`
+  );
 }
 
 function normalizeVisibility(value?: string): DiaryVisibility | null {
-  if (value === 'PRIVATE' || value === 'FAMILY_VISIBLE' || value === 'CARE_VISIBLE' || value === 'LEGACY_VISIBLE') return value;
+  if (
+    value === 'PRIVATE' ||
+    value === 'FAMILY_VISIBLE' ||
+    value === 'CARE_VISIBLE' ||
+    value === 'LEGACY_VISIBLE'
+  )
+    return value;
   return null;
 }
 
@@ -230,11 +238,13 @@ function editTypeFromState(memoryType: MemoryEntryType) {
 }
 
 function titleFromFirstLine(value: string) {
-  return value
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .find(Boolean)
-    ?.slice(0, 120) || '';
+  return (
+    value
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find(Boolean)
+      ?.slice(0, 120) || ''
+  );
 }
 
 function splitFirstLineTitle(value: string) {
@@ -243,7 +253,10 @@ function splitFirstLineTitle(value: string) {
   if (titleIndex < 0) return { title: '', body: '' };
 
   const firstLineTitle = lines[titleIndex].trim().slice(0, 120);
-  const body = lines.slice(titleIndex + 1).join('\n').trim();
+  const body = lines
+    .slice(titleIndex + 1)
+    .join('\n')
+    .trim();
   return {
     title: firstLineTitle,
     body: body || value.trim(),
@@ -331,12 +344,15 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
     [searchParams],
   );
 
-  const requestedPrefill = useMemo(() => ({
-    title: searchParams.get('prefillTitle')?.trim() || '',
-    content: searchParams.get('prefillContent')?.trim() || '',
-    tags: searchParams.get('prefillTags')?.trim() || '',
-    visibility: normalizeVisibility(searchParams.get('prefillVisibility')?.trim() || ''),
-  }), [searchParams]);
+  const requestedPrefill = useMemo(
+    () => ({
+      title: searchParams.get('prefillTitle')?.trim() || '',
+      content: searchParams.get('prefillContent')?.trim() || '',
+      tags: searchParams.get('prefillTags')?.trim() || '',
+      visibility: normalizeVisibility(searchParams.get('prefillVisibility')?.trim() || ''),
+    }),
+    [searchParams],
+  );
 
   const selectedFamily = useMemo(
     () => families.find((family) => family.id === selectedFamilyId) || null,
@@ -362,21 +378,30 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
 
   const hasDraftContent = Boolean(content.trim() || title.trim() || tagText.trim());
 
-  const clearForm = useCallback((nextCategory?: WriteCategory) => {
-    const categoryToUse = nextCategory || category;
-    setContent('');
-    setTitle('');
-    setTagText('');
-    setVisibility(defaultVisibilityForCategory(categoryToUse));
-    setDiaryEntryType('DAILY');
-    setMemoryType(categoryToUse === 'OBSERVATION' ? 'OBSERVATION' : categoryToUse === 'EXPERIENCE' ? 'EXPERIENCE' : 'NOTE');
-    setGrowthCategory('OTHER');
-    setGrowthSeverity(3);
-    if (categoryToUse !== 'OBSERVATION') {
-      setRelatedUserId(requestedTargetUserId || undefined);
-    }
-    setDraftStatus('');
-  }, [category, requestedTargetUserId]);
+  const clearForm = useCallback(
+    (nextCategory?: WriteCategory) => {
+      const categoryToUse = nextCategory || category;
+      setContent('');
+      setTitle('');
+      setTagText('');
+      setVisibility(defaultVisibilityForCategory(categoryToUse));
+      setDiaryEntryType('DAILY');
+      setMemoryType(
+        categoryToUse === 'OBSERVATION'
+          ? 'OBSERVATION'
+          : categoryToUse === 'EXPERIENCE'
+            ? 'EXPERIENCE'
+            : 'NOTE',
+      );
+      setGrowthCategory('OTHER');
+      setGrowthSeverity(3);
+      if (categoryToUse !== 'OBSERVATION') {
+        setRelatedUserId(requestedTargetUserId || undefined);
+      }
+      setDraftStatus('');
+    },
+    [category, requestedTargetUserId],
+  );
 
   const flashSuccess = useCallback((message: string) => {
     if (successTimerRef.current !== null) window.clearTimeout(successTimerRef.current);
@@ -384,56 +409,62 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
     successTimerRef.current = window.setTimeout(() => setSuccess(''), 2500);
   }, []);
 
-  const persistDraftNow = useCallback((message?: string) => {
-    const key = draftKey(user?.id, selectedFamilyId, requestedTargetUserId || relatedUserId || null);
-    if (!key || typeof window === 'undefined') return;
-    if (!hasDraftContent) {
-      localStorage.removeItem(key);
+  const persistDraftNow = useCallback(
+    (message?: string) => {
+      const key = draftKey(
+        user?.id,
+        selectedFamilyId,
+        requestedTargetUserId || relatedUserId || null,
+      );
+      if (!key || typeof window === 'undefined') return;
+      if (!hasDraftContent) {
+        localStorage.removeItem(key);
+        if (message) setDraftStatus(message);
+        return;
+      }
+      const payload: WriteDraft = {
+        category,
+        content,
+        title,
+        tagText,
+        visibility,
+        relatedUserId,
+        diaryEntryType,
+        memoryType,
+        growthCategory,
+        growthSeverity,
+        updatedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(key, JSON.stringify(payload));
       if (message) setDraftStatus(message);
-      return;
-    }
-    const payload: WriteDraft = {
+    },
+    [
       category,
       content,
-      title,
-      tagText,
-      visibility,
-      relatedUserId,
       diaryEntryType,
-      memoryType,
       growthCategory,
       growthSeverity,
-      updatedAt: new Date().toISOString(),
-    };
-    localStorage.setItem(key, JSON.stringify(payload));
-    if (message) setDraftStatus(message);
-  }, [
-    category,
-    content,
-    diaryEntryType,
-    growthCategory,
-    growthSeverity,
-    hasDraftContent,
-    memoryType,
-    relatedUserId,
-    requestedTargetUserId,
-    selectedFamilyId,
-    tagText,
-    title,
-    user?.id,
-    visibility,
-  ]);
+      hasDraftContent,
+      memoryType,
+      relatedUserId,
+      requestedTargetUserId,
+      selectedFamilyId,
+      tagText,
+      title,
+      user?.id,
+      visibility,
+    ],
+  );
 
   useEffect(() => {
-    const nextFamilyId = (
-      editItem?.familyId && families.some((family) => family.id === editItem.familyId)
+    const nextFamilyId =
+      (editItem?.familyId && families.some((family) => family.id === editItem.familyId)
         ? editItem.familyId
         : requestedFamilyId && families.some((family) => family.id === requestedFamilyId)
-        ? requestedFamilyId
-        : activeFamilyId && families.some((family) => family.id === activeFamilyId)
-          ? activeFamilyId
-          : families[0]?.id
-    ) || null;
+          ? requestedFamilyId
+          : activeFamilyId && families.some((family) => family.id === activeFamilyId)
+            ? activeFamilyId
+            : families[0]?.id) || null;
     setSelectedFamilyId(nextFamilyId);
     if (nextFamilyId && activeFamilyId !== nextFamilyId) {
       setActiveFamilyId(nextFamilyId);
@@ -446,7 +477,8 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
       return;
     }
     let cancelled = false;
-    familyApi.getMembers(selectedFamilyId)
+    familyApi
+      .getMembers(selectedFamilyId)
       .then((result) => {
         if (!cancelled) setMembers(Array.isArray(result) ? result : []);
       })
@@ -461,25 +493,38 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
   useEffect(() => {
     if (isEditingExisting) return;
     const requestedType = defaultMemoryTypeForQuery(requestedMemoryType);
-    const initialCategory = requestedWriteCategory === 'OBSERVATION' || requestedGrowthCategory
-      ? 'OBSERVATION'
-      : requestedWriteCategory === 'EXPERIENCE'
-        ? 'EXPERIENCE'
-        : requestedMemoryType
-          ? categoryForMemoryType(requestedType)
-          : 'RECORD';
+    const initialCategory =
+      requestedWriteCategory === 'OBSERVATION' || requestedGrowthCategory
+        ? 'OBSERVATION'
+        : requestedWriteCategory === 'EXPERIENCE'
+          ? 'EXPERIENCE'
+          : requestedMemoryType
+            ? categoryForMemoryType(requestedType)
+            : 'RECORD';
     const key = `${requestedWriteCategory}:${requestedMemoryType}:${requestedGrowthCategory}:${requestedTargetUserId || ''}`;
     if (writeCategoryAppliedKeyRef.current === key) return;
     writeCategoryAppliedKeyRef.current = key;
 
     setCategory(initialCategory);
     setVisibility(defaultVisibilityForCategory(initialCategory));
-    setMemoryType(requestedMemoryType
-      ? requestedType
-      : initialCategory === 'OBSERVATION' ? 'OBSERVATION' : initialCategory === 'EXPERIENCE' ? 'EXPERIENCE' : 'NOTE');
+    setMemoryType(
+      requestedMemoryType
+        ? requestedType
+        : initialCategory === 'OBSERVATION'
+          ? 'OBSERVATION'
+          : initialCategory === 'EXPERIENCE'
+            ? 'EXPERIENCE'
+            : 'NOTE',
+    );
     setGrowthCategory(defaultGrowthCategoryForQuery(requestedGrowthCategory));
     if (requestedTargetUserId) setRelatedUserId(requestedTargetUserId);
-  }, [isEditingExisting, requestedGrowthCategory, requestedMemoryType, requestedTargetUserId, requestedWriteCategory]);
+  }, [
+    isEditingExisting,
+    requestedGrowthCategory,
+    requestedMemoryType,
+    requestedTargetUserId,
+    requestedWriteCategory,
+  ]);
 
   useEffect(() => {
     if (!editItem) return;
@@ -492,11 +537,16 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
     setContent(editItem.body || '');
     setTitle(editItem.title || titleFromFirstLine(editItem.body || ''));
     setTagText((editItem.tags || []).join(' '));
-    setVisibility((normalizeVisibility(editItem.visibility) || defaultVisibilityForCategory(nextCategory)) as DiaryVisibility);
+    setVisibility(
+      (normalizeVisibility(editItem.visibility) ||
+        defaultVisibilityForCategory(nextCategory)) as DiaryVisibility,
+    );
     setRelatedUserId(editItem.memberUserId || undefined);
     setDiaryEntryType('DAILY');
     setMemoryType(defaultMemoryTypeForQuery(editItem.type));
-    setGrowthCategory(nextCategory === 'OBSERVATION' ? defaultGrowthCategoryForQuery(editItem.type) : 'OTHER');
+    setGrowthCategory(
+      nextCategory === 'OBSERVATION' ? defaultGrowthCategoryForQuery(editItem.type) : 'OTHER',
+    );
     setGrowthSeverity(3);
     setDraftStatus('正在编辑已有内容');
     setError('');
@@ -534,7 +584,10 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
       setContent(saved.content || '');
       setTitle(saved.title || '');
       setTagText(saved.tagText || '');
-      setVisibility(normalizeVisibility(saved.visibility) || defaultVisibilityForCategory(saved.category || 'RECORD'));
+      setVisibility(
+        normalizeVisibility(saved.visibility) ||
+          defaultVisibilityForCategory(saved.category || 'RECORD'),
+      );
       setRelatedUserId(saved.relatedUserId || requestedTargetUserId || undefined);
       setDiaryEntryType(saved.diaryEntryType || 'DAILY');
       setMemoryType(defaultMemoryTypeForQuery(saved.memoryType));
@@ -543,19 +596,35 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
           ? saved.growthCategory
           : defaultGrowthCategoryForQuery(requestedGrowthCategory),
       );
-      setGrowthSeverity(saved.growthSeverity && saved.growthSeverity >= 1 && saved.growthSeverity <= 5 ? saved.growthSeverity : 3);
+      setGrowthSeverity(
+        saved.growthSeverity && saved.growthSeverity >= 1 && saved.growthSeverity <= 5
+          ? saved.growthSeverity
+          : 3,
+      );
       setDraftStatus('已恢复上次未提交的草稿');
     } catch {
       localStorage.removeItem(key);
     } finally {
       suppressDraftSaveRef.current = false;
     }
-  }, [isEditingExisting, requestedGrowthCategory, requestedTargetUserId, selectedFamilyId, user?.id]);
+  }, [
+    isEditingExisting,
+    requestedGrowthCategory,
+    requestedTargetUserId,
+    selectedFamilyId,
+    user?.id,
+  ]);
 
   useEffect(() => {
     if (isEditingExisting) return;
     if (!selectedFamilyId) return;
-    if (!requestedPrefill.title && !requestedPrefill.content && !requestedPrefill.tags && !requestedPrefill.visibility) return;
+    if (
+      !requestedPrefill.title &&
+      !requestedPrefill.content &&
+      !requestedPrefill.tags &&
+      !requestedPrefill.visibility
+    )
+      return;
     const key = `${selectedFamilyId}:${requestedPrefill.title}:${requestedPrefill.content}:${requestedPrefill.tags}:${requestedPrefill.visibility || ''}`;
     if (prefillAppliedKeyRef.current === `prefill:${key}`) return;
     prefillAppliedKeyRef.current = `prefill:${key}`;
@@ -570,7 +639,11 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
 
   useEffect(() => {
     if (isEditingExisting) return;
-    const key = draftKey(user?.id, selectedFamilyId, requestedTargetUserId || relatedUserId || null);
+    const key = draftKey(
+      user?.id,
+      selectedFamilyId,
+      requestedTargetUserId || relatedUserId || null,
+    );
     if (!key || typeof window === 'undefined' || hydratedDraftKeyRef.current !== key) return;
     if (suppressDraftSaveRef.current) {
       suppressDraftSaveRef.current = false;
@@ -581,11 +654,25 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
       persistDraftNow(hasDraftContent ? '草稿已自动保存在本地' : '');
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [hasDraftContent, isEditingExisting, persistDraftNow, relatedUserId, requestedTargetUserId, selectedFamilyId, user?.id]);
+  }, [
+    hasDraftContent,
+    isEditingExisting,
+    persistDraftNow,
+    relatedUserId,
+    requestedTargetUserId,
+    selectedFamilyId,
+    user?.id,
+  ]);
 
   const applyTemplate = useCallback((template: StarterTemplate) => {
     setCategory(template.category);
-    setMemoryType(template.category === 'OBSERVATION' ? 'OBSERVATION' : template.category === 'EXPERIENCE' ? 'EXPERIENCE' : 'NOTE');
+    setMemoryType(
+      template.category === 'OBSERVATION'
+        ? 'OBSERVATION'
+        : template.category === 'EXPERIENCE'
+          ? 'EXPERIENCE'
+          : 'NOTE',
+    );
     setContent(template.content);
     setTagText(template.tags || '');
     setVisibility(defaultVisibilityForCategory(template.category));
@@ -594,25 +681,32 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
   }, []);
 
   const clearDraft = useCallback(() => {
-    const key = draftKey(user?.id, selectedFamilyId, requestedTargetUserId || relatedUserId || null);
+    const key = draftKey(
+      user?.id,
+      selectedFamilyId,
+      requestedTargetUserId || relatedUserId || null,
+    );
     if (key && typeof window !== 'undefined') {
       localStorage.removeItem(key);
     }
     clearForm(category);
   }, [category, clearForm, relatedUserId, requestedTargetUserId, selectedFamilyId, user?.id]);
 
-  const handleMemoryTypeChange = useCallback((nextType: MemoryEntryType) => {
-    const nextCategory = categoryForMemoryType(nextType);
-    setMemoryType(nextType);
-    setCategory(nextCategory);
-    setVisibility((current) => {
-      if (nextCategory === 'OBSERVATION') return current === 'PRIVATE' ? 'CARE_VISIBLE' : current;
-      return current;
-    });
-    if (nextCategory !== 'OBSERVATION') {
-      setRelatedUserId(requestedTargetUserId || undefined);
-    }
-  }, [requestedTargetUserId]);
+  const handleMemoryTypeChange = useCallback(
+    (nextType: MemoryEntryType) => {
+      const nextCategory = categoryForMemoryType(nextType);
+      setMemoryType(nextType);
+      setCategory(nextCategory);
+      setVisibility((current) => {
+        if (nextCategory === 'OBSERVATION') return current === 'PRIVATE' ? 'CARE_VISIBLE' : current;
+        return current;
+      });
+      if (nextCategory !== 'OBSERVATION') {
+        setRelatedUserId(requestedTargetUserId || undefined);
+      }
+    },
+    [requestedTargetUserId],
+  );
 
   const handleOrganize = useCallback(async () => {
     if (!content.trim() || !selectedFamilyId) return;
@@ -624,21 +718,34 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
         content,
         scene: organizeScene(category),
         familyContext: selectedFamily?.description || selectedFamily?.name || '',
-        currentType: category === 'RECORD' ? diaryEntryType : category === 'EXPERIENCE' ? memoryType : growthCategory,
+        currentType:
+          category === 'RECORD'
+            ? diaryEntryType
+            : category === 'EXPERIENCE'
+              ? memoryType
+              : growthCategory,
         currentVisibility: visibility,
         target: relatedMemberLabel,
       });
       const draft = result.data;
       const organizedContent = (draft.content || content).trim();
-      const organizedTitle = draft.title?.trim() || title.trim() || titleFromFirstLine(organizedContent);
+      const organizedTitle =
+        draft.title?.trim() || title.trim() || titleFromFirstLine(organizedContent);
       setTitle(organizedTitle);
       setContent(organizedContent);
       if (draft.tags?.length) setTagText(draft.tags.join(' '));
       if (category === 'RECORD') {
         setDiaryEntryType(
-          draft.diaryEntryType
-            && ['DAILY', 'IMPORTANT_EVENT', 'LESSON', 'EMOTION', 'MESSAGE_TO_FAMILY', 'SELF_REFLECTION'].includes(draft.diaryEntryType)
-            ? draft.diaryEntryType as DiaryEntryType
+          draft.diaryEntryType &&
+            [
+              'DAILY',
+              'IMPORTANT_EVENT',
+              'LESSON',
+              'EMOTION',
+              'MESSAGE_TO_FAMILY',
+              'SELF_REFLECTION',
+            ].includes(draft.diaryEntryType)
+            ? (draft.diaryEntryType as DiaryEntryType)
             : diaryEntryType,
         );
         setMemoryType(memoryTypeForDiaryEntry(draft.diaryEntryType));
@@ -649,13 +756,16 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
       } else {
         setMemoryType('OBSERVATION');
         setGrowthCategory(
-          draft.growthCategory && validGrowthCategories.has(draft.growthCategory as GrowthGuardCategory)
-            ? draft.growthCategory as GrowthGuardCategory
+          draft.growthCategory &&
+            validGrowthCategories.has(draft.growthCategory as GrowthGuardCategory)
+            ? (draft.growthCategory as GrowthGuardCategory)
             : growthCategory,
         );
-        setGrowthSeverity(draft.growthSeverity && draft.growthSeverity >= 1 && draft.growthSeverity <= 5
-          ? draft.growthSeverity
-          : growthSeverity);
+        setGrowthSeverity(
+          draft.growthSeverity && draft.growthSeverity >= 1 && draft.growthSeverity <= 5
+            ? draft.growthSeverity
+            : growthSeverity,
+        );
         setVisibility(normalizeVisibility(draft.memoryScope) || visibility);
       }
       setDraftStatus(`已整理${draft.reason ? `：${draft.reason}` : ''}`);
@@ -721,7 +831,7 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
         content: bodyText,
         title: resolvedTitle || undefined,
         tags,
-        visibility: category === 'OBSERVATION' ? visibility as MemoryScope : visibility,
+        visibility: category === 'OBSERVATION' ? (visibility as MemoryScope) : visibility,
         relatedUserId: relatedUserId || undefined,
         diaryEntryType,
         memoryType,
@@ -736,7 +846,11 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
         },
       });
 
-      const key = draftKey(user?.id, selectedFamilyId, requestedTargetUserId || relatedUserId || null);
+      const key = draftKey(
+        user?.id,
+        selectedFamilyId,
+        requestedTargetUserId || relatedUserId || null,
+      );
       if (key && typeof window !== 'undefined') {
         localStorage.removeItem(key);
       }
@@ -777,7 +891,7 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
   if (loadingFamilies) {
     return (
       <WorkbenchSurface className="flex h-60 items-center justify-center text-stone-500">
-        <RefreshCw className="mr-2 h-5 w-5 animate-spin text-emerald-700" />
+        <RefreshCw className="mr-2 h-5 w-5 animate-spin text-sky-700" />
         正在加载...
       </WorkbenchSurface>
     );
@@ -788,15 +902,14 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
       <WorkbenchEmptyState
         icon={<Users className="h-6 w-6" />}
         title="先创建一个家族空间"
-        description="创建或加入家族后，就可以从这里统一记录日记、经验和观察。"
-        action={(
+        action={
           <Link
             href="/dashboard/family"
             className="inline-flex h-10 items-center justify-center rounded-2xl bg-stone-950 px-4 text-sm font-medium text-white shadow-[0_16px_36px_rgba(24,39,32,0.14)] transition hover:bg-stone-800"
           >
             前往家族空间
           </Link>
-        )}
+        }
       />
     );
   }
@@ -810,8 +923,8 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
       )}
 
       {success && (
-        <div className="flex items-center gap-2 rounded-md border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          <CheckCircle className="h-4 w-4 text-emerald-700" />
+        <div className="flex items-center gap-2 rounded-md border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+          <CheckCircle className="h-4 w-4 text-sky-700" />
           {success}
         </div>
       )}
@@ -824,7 +937,7 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
         onKeyDown={submitFormOnEnter}
         className="space-y-3"
       >
-        <div className="overflow-hidden rounded-[1.35rem] border border-emerald-400 bg-white shadow-sm transition focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100">
+        <div className="overflow-hidden rounded-[1.35rem] border border-sky-400 bg-white shadow-sm transition focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-100">
           <label className="sr-only" htmlFor="memory-title-input">
             记忆标题
           </label>
@@ -834,7 +947,7 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
             onChange={(event) => setTitle(event.target.value)}
             maxLength={120}
             placeholder="给这条记忆写一个标题"
-            className="h-14 w-full border-0 border-b border-stone-100 bg-white px-5 text-lg font-semibold text-stone-950 outline-none placeholder:text-stone-300 focus:border-emerald-200 sm:px-7"
+            className="h-14 w-full border-0 border-b border-stone-100 bg-white px-5 text-lg font-semibold text-stone-950 outline-none placeholder:text-stone-300 focus:border-sky-200 sm:px-7"
           />
           <textarea
             value={content}
@@ -859,7 +972,9 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
                     className="inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-3 text-sm font-medium text-stone-500 transition hover:bg-stone-100 hover:text-stone-900"
                   >
                     不会开头
-                    <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showTemplates ? 'rotate-180' : ''}`} />
+                    <ChevronDown
+                      className={`h-3.5 w-3.5 transition-transform ${showTemplates ? 'rotate-180' : ''}`}
+                    />
                   </button>
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Portal>
@@ -869,9 +984,9 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
                     sideOffset={8}
                     avoidCollisions={false}
                     collisionPadding={12}
-                    className="z-[70] w-72 max-w-[calc(100vw-3rem)] rounded-md border border-emerald-100 bg-emerald-50 p-3 shadow-xl"
+                    className="z-[70] w-72 max-w-[calc(100vw-3rem)] rounded-md border border-sky-100 bg-sky-50 p-3 shadow-xl"
                   >
-                    <p className="mb-2 text-xs font-medium text-emerald-800">
+                    <p className="mb-2 text-xs font-medium text-sky-800">
                       {'\u4ece\u4e00\u53e5\u5f00\u5934\u5f00\u59cb'}
                     </p>
                     <div className="grid grid-cols-1 gap-2">
@@ -880,7 +995,7 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
                           <button
                             type="button"
                             onClick={() => applyTemplate(template)}
-                            className="w-full rounded-md border border-emerald-100 bg-white px-3 py-2 text-left text-xs font-medium text-emerald-800 outline-none transition hover:bg-emerald-100 focus:bg-emerald-100"
+                            className="w-full rounded-md border border-sky-100 bg-white px-3 py-2 text-left text-xs font-medium text-sky-800 outline-none transition hover:bg-sky-100 focus:bg-sky-100"
                           >
                             {template.label}
                           </button>
@@ -890,19 +1005,24 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
                   </DropdownMenu.Content>
                 </DropdownMenu.Portal>
               </DropdownMenu.Root>
-              <VoiceInputButton onTranscript={(text) => {
-                setContent((current) => (current.trim() ? `${current.trim()}\n${text}` : text));
-              }}
-              disabled={saving || organizing}
-              className="shrink-0"
+              <VoiceInputButton
+                onTranscript={(text) => {
+                  setContent((current) => (current.trim() ? `${current.trim()}\n${text}` : text));
+                }}
+                disabled={saving || organizing}
+                className="shrink-0"
               />
               <button
                 type="button"
                 onClick={() => void handleOrganize()}
                 disabled={!content.trim() || saving || organizing}
-                className="inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-3 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-3 text-sm font-medium text-sky-700 transition hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {organizing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {organizing ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
                 帮我整理
               </button>
             </div>
@@ -926,9 +1046,17 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
                 className="inline-flex h-10 min-w-10 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-300"
                 aria-label={primaryActionLabel(category)}
               >
-                {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {saving ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
                 <span className="hidden sm:inline">
-                  {saving ? '正在保存...' : isEditingExisting ? '保存修改' : primaryActionLabel(category)}
+                  {saving
+                    ? '正在保存...'
+                    : isEditingExisting
+                      ? '保存修改'
+                      : primaryActionLabel(category)}
                 </span>
               </button>
             </div>
@@ -936,7 +1064,7 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
         </div>
 
         {relatedMemberLabel && (
-          <div className="rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          <div className="rounded-md border border-sky-100 bg-sky-50 px-3 py-2 text-sm text-sky-800">
             当前内容会关联到 {relatedMemberLabel}。
           </div>
         )}
@@ -952,10 +1080,12 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
                 setSelectedFamilyId(nextFamilyId);
                 if (nextFamilyId) setActiveFamilyId(nextFamilyId);
               }}
-              className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-800 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+              className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-800 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
             >
               {families.map((family) => (
-                <option key={family.id} value={family.id}>{family.name}</option>
+                <option key={family.id} value={family.id}>
+                  {family.name}
+                </option>
               ))}
             </select>
           </label>
@@ -965,10 +1095,12 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
             <select
               value={memoryType}
               onChange={(event) => handleMemoryTypeChange(event.target.value as MemoryEntryType)}
-              className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+              className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
             >
               {memoryTypeOptions.map((item) => (
-                <option key={item.value} value={item.value}>{item.label}</option>
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
               ))}
             </select>
           </label>
@@ -978,10 +1110,12 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
             <select
               value={visibility}
               onChange={(event) => setVisibility(event.target.value as DiaryVisibility)}
-              className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+              className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
             >
               {visibilityOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
               ))}
             </select>
           </label>
@@ -992,7 +1126,7 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
               value={tagText}
               onChange={(event) => setTagText(event.target.value)}
               placeholder="例如：日常 经验 观察 照护"
-              className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+              className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
             />
           </label>
 
@@ -1005,20 +1139,17 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
                   const value = Number(event.target.value);
                   setRelatedUserId(Number.isFinite(value) && value > 0 ? value : undefined);
                 }}
-                className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
               >
                 <option value="">不关联具体成员</option>
                 {members.map((member) => (
-                  <option key={member.userId} value={member.userId}>{memberDisplayName(member)}</option>
+                  <option key={member.userId} value={member.userId}>
+                    {memberDisplayName(member)}
+                  </option>
                 ))}
               </select>
             </label>
           )}
-
-          <div className="flex items-start gap-2 rounded-md bg-white px-3 py-2 text-xs leading-5 text-stone-500 md:col-span-2 xl:col-span-2">
-            <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-stone-500" />
-            <span>“帮我整理”只是辅助动作，不会自动合并，也不会替你自动保存。</span>
-          </div>
         </div>
       </form>
     </WorkbenchPage>

@@ -255,7 +255,7 @@ export default function SettingsPage() {
             <form onSubmit={handleUpdateProfile} className="space-y-3">
               {profileError && <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{profileError}</div>}
               {profileSuccess && (
-                <div className="flex items-center gap-2 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                <div className="flex items-center gap-2 rounded-md bg-sky-50 px-3 py-2 text-sm text-sky-700">
                   <CheckCircle className="h-4 w-4" />
                   {profileSuccess}
                 </div>
@@ -269,7 +269,7 @@ export default function SettingsPage() {
                     type="date"
                     value={birthDate}
                     onChange={(event) => setBirthDate(event.target.value)}
-                    className="mt-1 h-11 w-full rounded-md border border-stone-200 bg-stone-50 px-3 text-sm text-stone-900 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100"
+                    className="mt-1 h-11 w-full rounded-md border border-stone-200 bg-stone-50 px-3 text-sm text-stone-900 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-2 focus:ring-sky-100"
                   />
                 </label>
                 <div className="rounded-md bg-stone-50 px-3 py-2 text-sm">
@@ -295,7 +295,7 @@ export default function SettingsPage() {
             <form onSubmit={handleChangePassword} className="space-y-3">
               {passwordError && <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{passwordError}</div>}
               {passwordSuccess && (
-                <div className="flex items-center gap-2 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                <div className="flex items-center gap-2 rounded-md bg-sky-50 px-3 py-2 text-sm text-sky-700">
                   <CheckCircle className="h-4 w-4" />
                   {passwordSuccess}
                 </div>
@@ -309,7 +309,7 @@ export default function SettingsPage() {
                     type="password"
                     value={currentPassword}
                     onChange={(event) => setCurrentPassword(event.target.value)}
-                    className="mt-1 h-10 w-full rounded-md border border-stone-200 bg-stone-50 px-3 text-sm text-stone-900 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100"
+                    className="mt-1 h-10 w-full rounded-md border border-stone-200 bg-stone-50 px-3 text-sm text-stone-900 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-2 focus:ring-sky-100"
                     autoComplete="current-password"
                     required
                   />
@@ -321,7 +321,7 @@ export default function SettingsPage() {
                     type="password"
                     value={newPassword}
                     onChange={(event) => setNewPassword(event.target.value)}
-                    className="mt-1 h-10 w-full rounded-md border border-stone-200 bg-stone-50 px-3 text-sm text-stone-900 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100"
+                    className="mt-1 h-10 w-full rounded-md border border-stone-200 bg-stone-50 px-3 text-sm text-stone-900 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-2 focus:ring-sky-100"
                     autoComplete="new-password"
                     minLength={6}
                     required
@@ -334,7 +334,7 @@ export default function SettingsPage() {
                     type="password"
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
-                    className="mt-1 h-10 w-full rounded-md border border-stone-200 bg-stone-50 px-3 text-sm text-stone-900 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100"
+                    className="mt-1 h-10 w-full rounded-md border border-stone-200 bg-stone-50 px-3 text-sm text-stone-900 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-2 focus:ring-sky-100"
                     autoComplete="new-password"
                     minLength={6}
                     required
@@ -428,7 +428,7 @@ export default function SettingsPage() {
 
             {deleteFamilyError && <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{deleteFamilyError}</div>}
             {deleteFamilySuccess && (
-              <div className="flex items-center gap-2 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              <div className="flex items-center gap-2 rounded-md bg-sky-50 px-3 py-2 text-sm text-sky-700">
                 <CheckCircle className="h-4 w-4" />
                 {deleteFamilySuccess}
               </div>

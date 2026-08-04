@@ -44,7 +44,12 @@ function createEmptyPage<T>(): PageResult<T> {
 
 function memberDisplayName(member?: FamilyMember | null) {
   if (!member) return '家族成员';
-  return member.relationshipLabel?.trim() || member.nickname?.trim() || member.username?.trim() || `用户 ${member.userId}`;
+  return (
+    member.relationshipLabel?.trim() ||
+    member.nickname?.trim() ||
+    member.username?.trim() ||
+    `用户 ${member.userId}`
+  );
 }
 
 function memberAccountName(member?: FamilyMember | null) {
@@ -58,10 +63,11 @@ function memberInitial(member?: FamilyMember | null) {
 
 function memberBirthDate(member?: FamilyMember | null) {
   if (!member) return '';
-  const value = member.birthDate
-    || (typeof member.metadata?.birthDate === 'string' ? member.metadata.birthDate : '')
-    || (typeof member.metadata?.birthday === 'string' ? member.metadata.birthday : '')
-    || (typeof member.metadata?.dateOfBirth === 'string' ? member.metadata.dateOfBirth : '');
+  const value =
+    member.birthDate ||
+    (typeof member.metadata?.birthDate === 'string' ? member.metadata.birthDate : '') ||
+    (typeof member.metadata?.birthday === 'string' ? member.metadata.birthday : '') ||
+    (typeof member.metadata?.dateOfBirth === 'string' ? member.metadata.dateOfBirth : '');
   return value ? value.slice(0, 10) : '';
 }
 
@@ -78,7 +84,9 @@ function memberAge(member?: FamilyMember | null) {
     }
   }
 
-  const year = Number(member?.birthYear || member?.metadata?.birthYear || member?.metadata?.yearOfBirth);
+  const year = Number(
+    member?.birthYear || member?.metadata?.birthYear || member?.metadata?.yearOfBirth,
+  );
   if (Number.isFinite(year) && year > 1870 && year <= new Date().getFullYear()) {
     return new Date().getFullYear() - year;
   }
@@ -87,17 +95,20 @@ function memberAge(member?: FamilyMember | null) {
 }
 
 function memberSignature(member?: FamilyMember | null) {
-  const value = member?.metadata?.signature || member?.metadata?.bio || member?.metadata?.statusText;
+  const value =
+    member?.metadata?.signature || member?.metadata?.bio || member?.metadata?.statusText;
   return typeof value === 'string' && value.trim()
     ? value.trim()
     : '个性签名即将支持由成员自行上传。';
 }
 
 function diaryTitle(entry: DiaryEntry) {
-  return entry.structured?.title?.trim()
-    || entry.structured?.summary?.trim()
-    || entry.rawText.trim().slice(0, 34)
-    || '未命名记录';
+  return (
+    entry.structured?.title?.trim() ||
+    entry.structured?.summary?.trim() ||
+    entry.rawText.trim().slice(0, 34) ||
+    '未命名记录'
+  );
 }
 
 function memoryTitle(memory: MemoryEntry) {
@@ -114,15 +125,24 @@ function growthTitle(record: GrowthGuardRecord) {
 
 function growthCategoryLabel(category?: string) {
   switch ((category || '').toUpperCase()) {
-    case 'POSTURE': return '体态观察';
-    case 'DENTAL': return '牙齿观察';
-    case 'VISION': return '视力观察';
-    case 'SLEEP': return '睡眠观察';
-    case 'EXERCISE': return '运动观察';
-    case 'SCREEN_TIME': return '屏幕观察';
-    case 'EMOTION': return '情绪观察';
-    case 'COMMUNICATION': return '沟通观察';
-    default: return '成长观察';
+    case 'POSTURE':
+      return '体态观察';
+    case 'DENTAL':
+      return '牙齿观察';
+    case 'VISION':
+      return '视力观察';
+    case 'SLEEP':
+      return '睡眠观察';
+    case 'EXERCISE':
+      return '运动观察';
+    case 'SCREEN_TIME':
+      return '屏幕观察';
+    case 'EMOTION':
+      return '情绪观察';
+    case 'COMMUNICATION':
+      return '沟通观察';
+    default:
+      return '成长观察';
   }
 }
 
@@ -192,7 +212,9 @@ function VideoRecordSection<T>({
       </div>
 
       {error ? (
-        <div className="rounded-md border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-600">{error}</div>
+        <div className="rounded-md border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+          {error}
+        </div>
       ) : loading && items.length === 0 ? (
         <div className="flex h-36 items-center justify-center text-sm text-stone-400">
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -208,7 +230,7 @@ function VideoRecordSection<T>({
             {items.map((item) => (
               <article key={getKey(item)} className="group">
                 <div className="relative aspect-video overflow-hidden rounded-md bg-stone-100 shadow-sm">
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(16,185,129,0.28),transparent_35%),linear-gradient(135deg,#f5f5f4,#e7e5e4)]" />
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(14,165,233,0.28),transparent_35%),linear-gradient(135deg,#f5f5f4,#e7e5e4)]" />
                   <div className="absolute left-3 top-3 inline-flex items-center gap-1 rounded bg-stone-950/75 px-2 py-1 text-xs font-medium text-white">
                     {icon}
                     FamilyAgent
@@ -217,7 +239,7 @@ function VideoRecordSection<T>({
                     {getDate(item) || '未记录'}
                   </div>
                 </div>
-                <h3 className="mt-2 line-clamp-2 text-sm font-medium leading-6 text-stone-950 group-hover:text-emerald-700">
+                <h3 className="mt-2 line-clamp-2 text-sm font-medium leading-6 text-stone-950 group-hover:text-sky-700">
                   {getTitle(item)}
                 </h3>
               </article>
@@ -234,7 +256,9 @@ function VideoRecordSection<T>({
               >
                 上一页
               </button>
-              <span>{currentPage} / {pageCount}</span>
+              <span>
+                {currentPage} / {pageCount}
+              </span>
               <button
                 type="button"
                 onClick={() => onPageChange(Math.min(pageCount, currentPage + 1))}
@@ -253,7 +277,12 @@ function VideoRecordSection<T>({
 
 export default function FamilyMemberMemoryPage() {
   const searchParams = useSearchParams();
-  const { families, activeFamilyId, setActiveFamilyId, isLoading: loadingFamilies } = useViewerRole();
+  const {
+    families,
+    activeFamilyId,
+    setActiveFamilyId,
+    isLoading: loadingFamilies,
+  } = useViewerRole();
 
   const [selectedFamilyId, setSelectedFamilyId] = useState<number | null>(null);
   const [targetUserId, setTargetUserId] = useState<number | null>(null);
@@ -273,7 +302,8 @@ export default function FamilyMemberMemoryPage() {
   const [memoryError, setMemoryError] = useState('');
 
   const [growthPage, setGrowthPage] = useState(1);
-  const [growthResults, setGrowthResults] = useState<PageResult<GrowthGuardRecord>>(createEmptyPage());
+  const [growthResults, setGrowthResults] =
+    useState<PageResult<GrowthGuardRecord>>(createEmptyPage());
   const [loadingGrowthRecords, setLoadingGrowthRecords] = useState(false);
   const [growthError, setGrowthError] = useState('');
 
@@ -290,13 +320,17 @@ export default function FamilyMemberMemoryPage() {
   useEffect(() => {
     if (loadingFamilies) return;
 
-    const familyFromQuery = requestedFamilyId && families.some((family) => family.id === requestedFamilyId)
-      ? requestedFamilyId
-      : null;
-    const nextFamilyId = familyFromQuery
-      || (activeFamilyId && families.some((family) => family.id === activeFamilyId) ? activeFamilyId : null)
-      || families[0]?.id
-      || null;
+    const familyFromQuery =
+      requestedFamilyId && families.some((family) => family.id === requestedFamilyId)
+        ? requestedFamilyId
+        : null;
+    const nextFamilyId =
+      familyFromQuery ||
+      (activeFamilyId && families.some((family) => family.id === activeFamilyId)
+        ? activeFamilyId
+        : null) ||
+      families[0]?.id ||
+      null;
 
     setSelectedFamilyId(nextFamilyId);
     if (familyFromQuery && familyFromQuery !== activeFamilyId) {
@@ -316,7 +350,8 @@ export default function FamilyMemberMemoryPage() {
     setLoadingData(true);
     setError('');
 
-    familyApi.getMembers(selectedFamilyId)
+    familyApi
+      .getMembers(selectedFamilyId)
       .then((memberList) => {
         if (!active) return;
         const nextMembers = Array.isArray(memberList) ? memberList : [];
@@ -330,7 +365,7 @@ export default function FamilyMemberMemoryPage() {
 
           return current && nextMembers.some((member) => member.userId === current)
             ? current
-            : nextMembers[0]?.userId ?? null;
+            : (nextMembers[0]?.userId ?? null);
         });
       })
       .catch((err) => {
@@ -355,7 +390,8 @@ export default function FamilyMemberMemoryPage() {
     }
 
     let active = true;
-    mirrorApi.getContext(selectedFamilyId, targetUserId)
+    mirrorApi
+      .getContext(selectedFamilyId, targetUserId)
       .then((context) => {
         if (active) setMirrorContext(context);
       })
@@ -379,12 +415,13 @@ export default function FamilyMemberMemoryPage() {
     setLoadingDiaries(true);
     setDiaryError('');
 
-    diaryApi.searchFamilyEntries({
-      familyId: selectedFamilyId,
-      targetUserId,
-      page: diaryPage,
-      pageSize: PAGE_SIZE,
-    })
+    diaryApi
+      .searchFamilyEntries({
+        familyId: selectedFamilyId,
+        targetUserId,
+        page: diaryPage,
+        pageSize: PAGE_SIZE,
+      })
       .then((pageResult) => {
         if (!active) return;
         setDiaryResults(pageResult);
@@ -415,12 +452,13 @@ export default function FamilyMemberMemoryPage() {
     setLoadingMemories(true);
     setMemoryError('');
 
-    memoryApi.searchFamilyMemories({
-      familyId: selectedFamilyId,
-      targetUserId,
-      page: memoryPage,
-      pageSize: PAGE_SIZE,
-    })
+    memoryApi
+      .searchFamilyMemories({
+        familyId: selectedFamilyId,
+        targetUserId,
+        page: memoryPage,
+        pageSize: PAGE_SIZE,
+      })
       .then((pageResult) => {
         if (!active) return;
         setMemoryResults(pageResult);
@@ -451,12 +489,13 @@ export default function FamilyMemberMemoryPage() {
     setLoadingGrowthRecords(true);
     setGrowthError('');
 
-    growthGuardApi.searchFamilyRecords({
-      familyId: selectedFamilyId,
-      targetUserId,
-      page: growthPage,
-      pageSize: PAGE_SIZE,
-    })
+    growthGuardApi
+      .searchFamilyRecords({
+        familyId: selectedFamilyId,
+        targetUserId,
+        page: growthPage,
+        pageSize: PAGE_SIZE,
+      })
       .then((pageResult) => {
         if (!active) return;
         setGrowthResults(pageResult);
@@ -490,7 +529,11 @@ export default function FamilyMemberMemoryPage() {
 
   const targetMember = useMemo(() => {
     if (missingRequestedUser) return null;
-    return members.find((member) => member.userId === targetUserId) || mirrorContext?.targetMember || null;
+    return (
+      members.find((member) => member.userId === targetUserId) ||
+      mirrorContext?.targetMember ||
+      null
+    );
   }, [members, mirrorContext?.targetMember, missingRequestedUser, targetUserId]);
 
   if (loadingFamilies) {
@@ -524,7 +567,7 @@ export default function FamilyMemberMemoryPage() {
     <div className="mx-auto w-full max-w-[1500px]">
       <Link
         href={`/dashboard/family?tab=members${selectedFamilyId ? `&familyId=${selectedFamilyId}` : ''}`}
-        className="mb-4 inline-flex items-center gap-2 text-sm text-emerald-700 hover:text-emerald-800 hover:underline"
+        className="mb-4 inline-flex items-center gap-2 text-sm text-sky-700 hover:text-sky-800 hover:underline"
       >
         <ArrowLeft className="h-4 w-4" />
         返回家族成员
@@ -549,15 +592,19 @@ export default function FamilyMemberMemoryPage() {
       ) : (
         <>
           <section className="overflow-hidden rounded-md border border-stone-200 bg-white">
-            <div className="relative h-44 bg-[radial-gradient(circle_at_20%_20%,rgba(16,185,129,0.35),transparent_28%),linear-gradient(120deg,#57534e,#a8a29e_48%,#d6d3d1)]">
+            <div className="relative h-44 bg-[radial-gradient(circle_at_20%_20%,rgba(14,165,233,0.35),transparent_28%),linear-gradient(120deg,#57534e,#a8a29e_48%,#d6d3d1)]">
               <div className="absolute inset-0 opacity-40 [background-image:linear-gradient(90deg,rgba(255,255,255,0.16)_1px,transparent_1px),linear-gradient(rgba(255,255,255,0.12)_1px,transparent_1px)] [background-size:42px_42px]" />
               <div className="absolute bottom-5 left-6 flex items-end gap-5">
-                <div className="relative h-24 w-24 overflow-hidden rounded-full border-4 border-white bg-emerald-100 shadow-lg">
+                <div className="relative h-24 w-24 overflow-hidden rounded-full border-4 border-white bg-sky-100 shadow-lg">
                   {avatarUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={avatarUrl} alt={memberDisplayName(targetMember)} className="h-full w-full object-cover" />
+                    <img
+                      src={avatarUrl}
+                      alt={memberDisplayName(targetMember)}
+                      className="h-full w-full object-cover"
+                    />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center text-3xl font-bold text-emerald-700">
+                    <div className="flex h-full w-full items-center justify-center text-3xl font-bold text-sky-700">
                       {memberInitial(targetMember)}
                     </div>
                   )}
@@ -569,7 +616,9 @@ export default function FamilyMemberMemoryPage() {
                       {familyRoleLabel(targetMember.role)}
                     </span>
                   </div>
-                  <p className="mt-2 max-w-3xl text-sm font-medium text-white/90">{memberSignature(targetMember)}</p>
+                  <p className="mt-2 max-w-3xl text-sm font-medium text-white/90">
+                    {memberSignature(targetMember)}
+                  </p>
                 </div>
               </div>
               <div className="absolute bottom-6 right-6 hidden rounded-md bg-white/15 px-3 py-2 text-sm font-medium text-white ring-1 ring-white/25 backdrop-blur md:block">
@@ -579,7 +628,7 @@ export default function FamilyMemberMemoryPage() {
 
             <div className="flex flex-col gap-4 px-6 py-4 lg:flex-row lg:items-center lg:justify-between">
               <nav className="flex flex-wrap items-center gap-8 text-sm font-medium">
-                <span className="inline-flex items-center gap-2 border-b-2 border-emerald-500 pb-3 text-emerald-700">
+                <span className="inline-flex items-center gap-2 border-b-2 border-sky-500 pb-3 text-sky-700">
                   <Home className="h-4 w-4" />
                   主页
                 </span>
@@ -621,13 +670,10 @@ export default function FamilyMemberMemoryPage() {
             <main className="min-w-0">
               <section className="mb-8 flex min-h-40 items-center justify-center rounded-md border border-stone-200 bg-white px-6 text-center">
                 <div>
-                  <MessageCircle className="mx-auto mb-3 h-10 w-10 text-emerald-500" />
-                  <p className="text-sm font-medium text-stone-500">
-                    头像和个性签名后端接入后，这里会展示成员自己的主页资料。
-                  </p>
+                  <MessageCircle className="mx-auto mb-3 h-10 w-10 text-sky-500" />
                   <Link
                     href={`/dashboard/agent${selectedFamilyId && targetUserId ? `?familyId=${selectedFamilyId}&targetUserId=${targetUserId}` : ''}`}
-                    className="mt-4 inline-flex h-10 items-center rounded-md bg-emerald-600 px-4 text-sm font-medium text-white hover:bg-emerald-700"
+                    className="inline-flex h-10 items-center rounded-md bg-sky-600 px-4 text-sm font-medium text-white hover:bg-sky-700"
                   >
                     进入镜像 Agent
                   </Link>
@@ -676,7 +722,7 @@ export default function FamilyMemberMemoryPage() {
                 loading={loadingGrowthRecords}
                 error={growthError}
                 emptyText="暂无该成员成长观察。"
-                activeTone="bg-emerald-500"
+                activeTone="bg-sky-500"
                 currentPage={growthResults.page}
                 pageCount={Math.max(growthResults.totalPages, 1)}
                 onPageChange={setGrowthPage}
@@ -695,13 +741,6 @@ export default function FamilyMemberMemoryPage() {
                   <p>生日：{memberBirthDate(targetMember) || '未设置'}</p>
                   <p>当前家族：{selectedFamily?.name || '未选择'}</p>
                 </div>
-              </section>
-
-              <section className="rounded-md bg-stone-100 p-5">
-                <h2 className="text-lg font-semibold text-stone-950">公告</h2>
-                <p className="mt-4 text-sm leading-6 text-stone-500">
-                  这里预留给成员个人公告、个性签名和主页说明。
-                </p>
               </section>
 
               <section className="rounded-md bg-stone-100 p-5">

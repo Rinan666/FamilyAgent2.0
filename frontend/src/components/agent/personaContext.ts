@@ -23,7 +23,10 @@ function personaMaterialLines(materials: PersonaMaterial[]) {
   return `材料卡：\n${materials.map((item, index) => `${index + 1}. ${item.title}\n${item.content}`).join('\n\n')}`;
 }
 
-export function buildPersonaProfileContext(persona: PersonaMember, materials: PersonaMaterial[] = []) {
+export function buildPersonaProfileContext(
+  persona: PersonaMember,
+  materials: PersonaMaterial[] = [],
+) {
   return [
     ...PERSONA_AGENT_CONTEXT_RULES,
     personaProfileLines(persona).join('\n'),
@@ -32,5 +35,5 @@ export function buildPersonaProfileContext(persona: PersonaMember, materials: Pe
 }
 
 export function personaSwitchMessage(targetLabel: string) {
-  return `已切换到精神成员 “${targetLabel}”。后续回答将忠于该档案设定，并以稳定角色声音提供建议。`;
+  return `已切换到精神成员“${targetLabel}”`;
 }

@@ -79,6 +79,9 @@ public class CareAuthorizationService {
         } else {
             authorizationRepository.updateById(authorization);
         }
+        if (CareAuthorizationScope.ALL.name().equals(scope)) {
+            revokeLegacyScopedAuthorizations(familyId, subjectUserId, caregiverUserId, viewerUserId, now);
+        }
         return toVO(authorization);
     }
 
@@ -119,6 +122,46 @@ public class CareAuthorizationService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "照护授权范围不支持");
         }
         return normalized;
+    }
+
+    private void revokeLegacyScopedAuthorizations(
+            Long familyId,
+            Long subjectUserId,
+            Long caregiverUserId,
+            Long viewerUserId,
+            LocalDateTime now) {
+        List.of(
+                        CareAuthorizationScope.DIARY,
+                        CareAuthorizationScope.MEMORY,
+                        CareAuthorizationScope.GROWTH_GUARD)
+                .forEach(scope -> revokeLegacyScope(
+                        familyId,
+                        subjectUserId,
+                        caregiverUserId,
+                        viewerUserId,
+                        now,
+                        scope));
+    }
+
+    private void revokeLegacyScope(
+            Long familyId,
+            Long subjectUserId,
+            Long caregiverUserId,
+            Long viewerUserId,
+            LocalDateTime now,
+            CareAuthorizationScope scope) {
+        CareAuthorization legacy = authorizationRepository.findOne(
+                familyId,
+                subjectUserId,
+                caregiverUserId,
+                scope.name());
+        if (legacy == null || CareAuthorizationStatus.REVOKED.name().equals(legacy.getStatus())) {
+            return;
+        }
+        legacy.setStatus(CareAuthorizationStatus.REVOKED.name());
+        legacy.setUpdatedBy(viewerUserId);
+        legacy.setUpdatedAt(now);
+        authorizationRepository.updateById(legacy);
     }
 
     private CareAuthorizationVO toVO(CareAuthorization authorization) {

@@ -12,12 +12,10 @@ import {
   RotateCcw,
   Trash2,
 } from 'lucide-react';
-import { memoryLibraryApi } from '@/lib/api';
+import { familyApi, memoryLibraryApi } from '@/lib/api';
 import { useViewerRole } from '@/hooks/useViewerRole';
-import type {
-  MemoryLibraryItem,
-  PageResult,
-} from '@/types';
+import MemoryRecordCard, { MemoryRecordHeader } from './MemoryRecordCard';
+import type { MemoryLibraryItem, PageResult, FamilyMember } from '@/types';
 
 type LibraryViewMode = 'ACTIVE' | 'ARCHIVED';
 
@@ -37,22 +35,9 @@ function visibilityLabel(value?: string) {
   const text = String(value || '').toUpperCase();
   if (text === 'PRIVATE') return '仅自己可见';
   if (text === 'CARE_VISIBLE') return '照护可见';
-  if (text === 'LEGACY_VISIBLE') return '传承预留';
+  if (text === 'LEGACY_VISIBLE') return '传承可见';
   if (text === 'FAMILY_VISIBLE' || text === 'FAMILY') return '全家可见';
   return value || '按权限可见';
-}
-
-function formatDateTime(value?: string) {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 }
 
 function isLegacyAiSummary(item: MemoryLibraryItem) {
@@ -61,6 +46,38 @@ function isLegacyAiSummary(item: MemoryLibraryItem) {
 
 function editVisibilityOptions(item: MemoryLibraryItem) {
   return item.sourceType === 'LIFE_RECORD' ? diaryVisibilityOptions : familyVisibilityOptions;
+}
+
+function familyMemoryTypeLabel(value?: string) {
+  const labels: Record<string, string> = {
+    DAILY: '日常',
+    IMPORTANT_EVENT: '重要事件',
+    LESSON: '经验',
+    EMOTION: '情绪',
+    MESSAGE_TO_FAMILY: '家书',
+    SELF_REFLECTION: '反思',
+    NOTE: '笔记',
+    KNOWLEDGE: '新知',
+    INSIGHT: '感悟',
+    EXPERIENCE: '经历',
+    OBSERVATION: '观察',
+  };
+  return labels[String(value || '').toUpperCase()] || value || '记忆';
+}
+
+function resolveMemberHeader(
+  item: MemoryLibraryItem,
+  members: FamilyMember[],
+  viewerUserId?: number,
+) {
+  const memberId = item.memberUserId ?? item.authorUserId;
+  const member = members.find((candidate) => candidate.userId === memberId);
+  return {
+    relationshipLabel:
+      memberId === viewerUserId ? '我' : member?.relationshipLabel?.trim() || '家人',
+    memberName:
+      member?.nickname?.trim() || member?.username?.trim() || item.memberName || '家庭成员',
+  };
 }
 
 interface MemoryLibraryWorkbenchProps {
@@ -99,7 +116,9 @@ export default function MemoryLibraryWorkbench({
   }, [libraryViewMode, searchParams]);
 
   const latestLoadRequestId = useRef(0);
-  const [pageData, setPageData] = useState<PageResult<MemoryLibraryItem>>(() => emptyPage(pageSizeOptions[0]));
+  const [pageData, setPageData] = useState<PageResult<MemoryLibraryItem>>(() =>
+    emptyPage(pageSizeOptions[0]),
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -113,6 +132,7 @@ export default function MemoryLibraryWorkbench({
   const [deletingItemId, setDeletingItemId] = useState('');
   const [savingItemId, setSavingItemId] = useState('');
   const [openItemMenuId, setOpenItemMenuId] = useState('');
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
 
   const canManageLibrary = activeMembership?.role === 'OWNER' || viewerRole === 'ADMIN';
   const totalPages = Math.max(1, pageData.totalPages || 1);
@@ -131,7 +151,9 @@ export default function MemoryLibraryWorkbench({
     setIsLoading(true);
     setError('');
     try {
-      const nextPage = await (viewMode === 'ARCHIVED' ? memoryLibraryApi.archived : memoryLibraryApi.search)({
+      const nextPage = await (
+        viewMode === 'ARCHIVED' ? memoryLibraryApi.archived : memoryLibraryApi.search
+      )({
         familyId: activeFamilyId,
         page: currentPage,
         pageSize,
@@ -149,22 +171,15 @@ export default function MemoryLibraryWorkbench({
         setIsLoading(false);
       }
     }
-  }, [
-    activeFamilyId,
-    currentPage,
-    debouncedQuery,
-    pageSize,
-    viewMode,
-  ]);
+  }, [activeFamilyId, currentPage, debouncedQuery, pageSize, viewMode]);
 
   useEffect(() => {
-    const nextFamilyId = (
-      requestedFamilyId && families.some((family) => family.id === requestedFamilyId)
+    const nextFamilyId =
+      (requestedFamilyId && families.some((family) => family.id === requestedFamilyId)
         ? requestedFamilyId
         : activeFamilyId && families.some((family) => family.id === activeFamilyId)
           ? activeFamilyId
-          : families[0]?.id
-    ) || null;
+          : families[0]?.id) || null;
     if (nextFamilyId && activeFamilyId !== nextFamilyId) {
       setActiveFamilyId(nextFamilyId);
     }
@@ -197,6 +212,17 @@ export default function MemoryLibraryWorkbench({
   }, [loadData]);
 
   useEffect(() => {
+    if (!activeFamilyId) {
+      setFamilyMembers([]);
+      return;
+    }
+    familyApi
+      .getMembers(activeFamilyId)
+      .then(setFamilyMembers)
+      .catch(() => setFamilyMembers([]));
+  }, [activeFamilyId]);
+
+  useEffect(() => {
     if (pageData.totalPages > 0 && currentPage > pageData.totalPages) {
       setCurrentPage(pageData.totalPages);
     }
@@ -211,82 +237,94 @@ export default function MemoryLibraryWorkbench({
     void refreshAll();
   }, [refreshAll, refreshSignal]);
 
-  const handleArchiveItem = useCallback(async (item: MemoryLibraryItem) => {
-    if (!activeFamilyId) return;
-    if (!window.confirm('确认归档这条记忆吗？')) return;
-    setArchivingItemId(item.id);
-    setError('');
-    try {
-      await memoryLibraryApi.archiveItem(activeFamilyId, item.id);
-      setSuccess('已归档');
-      await refreshAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '归档失败');
-    } finally {
-      setArchivingItemId('');
-    }
-  }, [activeFamilyId, refreshAll]);
+  const handleArchiveItem = useCallback(
+    async (item: MemoryLibraryItem) => {
+      if (!activeFamilyId) return;
+      if (!window.confirm('确认归档这条记忆吗？')) return;
+      setArchivingItemId(item.id);
+      setError('');
+      try {
+        await memoryLibraryApi.archiveItem(activeFamilyId, item.id);
+        setSuccess('已归档');
+        await refreshAll();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '归档失败');
+      } finally {
+        setArchivingItemId('');
+      }
+    },
+    [activeFamilyId, refreshAll],
+  );
 
-  const handleRestoreItem = useCallback(async (item: MemoryLibraryItem) => {
-    if (!activeFamilyId) return;
-    if (!window.confirm('确认恢复这条记忆吗？')) return;
-    setRestoringItemId(item.id);
-    setError('');
-    try {
-      await memoryLibraryApi.restoreItem(activeFamilyId, item.id);
-      setSuccess('已恢复');
-      await refreshAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '恢复失败');
-    } finally {
-      setRestoringItemId('');
-    }
-  }, [activeFamilyId, refreshAll]);
+  const handleRestoreItem = useCallback(
+    async (item: MemoryLibraryItem) => {
+      if (!activeFamilyId) return;
+      if (!window.confirm('确认恢复这条记忆吗？')) return;
+      setRestoringItemId(item.id);
+      setError('');
+      try {
+        await memoryLibraryApi.restoreItem(activeFamilyId, item.id);
+        setSuccess('已恢复');
+        await refreshAll();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '恢复失败');
+      } finally {
+        setRestoringItemId('');
+      }
+    },
+    [activeFamilyId, refreshAll],
+  );
 
-  const handleDeleteItem = useCallback(async (item: MemoryLibraryItem) => {
-    if (!activeFamilyId) return;
-    const deletingLegacyAiSummary = viewMode === 'ACTIVE' && isLegacyAiSummary(item);
-    const confirmMessage = deletingLegacyAiSummary
-      ? '确认永久删除这条历史 AI 摘要吗？删除后无法恢复。'
-      : '确认永久删除这条已归档记忆吗？删除后无法恢复。';
-    if (!window.confirm(confirmMessage)) return;
-    setDeletingItemId(item.id);
-    setError('');
-    try {
-      await memoryLibraryApi.deleteArchivedItem(activeFamilyId, item.id);
-      setSuccess('已永久删除');
-      await refreshAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '删除失败');
-    } finally {
-      setDeletingItemId('');
-    }
-  }, [activeFamilyId, refreshAll, viewMode]);
+  const handleDeleteItem = useCallback(
+    async (item: MemoryLibraryItem) => {
+      if (!activeFamilyId) return;
+      const deletingLegacyAiSummary = viewMode === 'ACTIVE' && isLegacyAiSummary(item);
+      const confirmMessage = deletingLegacyAiSummary
+        ? '确认永久删除这条历史 AI 摘要吗？删除后无法恢复。'
+        : '确认永久删除这条已归档记忆吗？删除后无法恢复。';
+      if (!window.confirm(confirmMessage)) return;
+      setDeletingItemId(item.id);
+      setError('');
+      try {
+        await memoryLibraryApi.deleteArchivedItem(activeFamilyId, item.id);
+        setSuccess('已永久删除');
+        await refreshAll();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '删除失败');
+      } finally {
+        setDeletingItemId('');
+      }
+    },
+    [activeFamilyId, refreshAll, viewMode],
+  );
 
-  const handleUpdateVisibility = useCallback(async (item: MemoryLibraryItem, nextVisibility: string) => {
-    if (!activeFamilyId || nextVisibility === item.visibility) return;
-    const body = item.body?.trim() || item.title?.trim();
-    if (!body) return;
-    setSavingItemId(item.id);
-    setError('');
-    try {
-      await memoryLibraryApi.updateItem({
-        familyId: activeFamilyId,
-        itemId: item.id,
-        title: item.title || undefined,
-        body,
-        type: item.type || undefined,
-        visibility: nextVisibility,
-        tags: item.tags || [],
-      });
-      setSuccess('权限已更新');
-      await refreshAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '权限更新失败');
-    } finally {
-      setSavingItemId('');
-    }
-  }, [activeFamilyId, refreshAll]);
+  const handleUpdateVisibility = useCallback(
+    async (item: MemoryLibraryItem, nextVisibility: string) => {
+      if (!activeFamilyId || nextVisibility === item.visibility) return;
+      const body = item.body?.trim() || item.title?.trim();
+      if (!body) return;
+      setSavingItemId(item.id);
+      setError('');
+      try {
+        await memoryLibraryApi.updateItem({
+          familyId: activeFamilyId,
+          itemId: item.id,
+          title: item.title || undefined,
+          body,
+          type: item.type || undefined,
+          visibility: nextVisibility,
+          tags: item.tags || [],
+        });
+        setSuccess('权限已更新');
+        await refreshAll();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '权限更新失败');
+      } finally {
+        setSavingItemId('');
+      }
+    },
+    [activeFamilyId, refreshAll],
+  );
 
   const renderItemMenu = (item: MemoryLibraryItem) => {
     if (!canManageLibrary || openItemMenuId !== item.id) return null;
@@ -318,10 +356,12 @@ export default function MemoryLibraryWorkbench({
                   value={item.visibility || ''}
                   onChange={(event) => void handleUpdateVisibility(item, event.target.value)}
                   disabled={savingItemId === item.id}
-                  className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-2 text-sm text-stone-700 outline-none transition focus:border-emerald-400 disabled:opacity-60"
+                  className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-2 text-sm text-stone-700 outline-none transition focus:border-sky-400 disabled:opacity-60"
                 >
                   {editVisibilityOptions(item).map((option) => (
-                    <option key={option} value={option}>{visibilityLabel(option)}</option>
+                    <option key={option} value={option}>
+                      {visibilityLabel(option)}
+                    </option>
                   ))}
                 </select>
               </label>
@@ -335,7 +375,11 @@ export default function MemoryLibraryWorkbench({
               disabled={archivingItemId === item.id}
               className="flex h-11 w-full items-center gap-3 px-4 text-sm text-stone-700 hover:bg-stone-50 disabled:opacity-60"
             >
-              {archivingItemId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
+              {archivingItemId === item.id ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Archive className="h-4 w-4" />
+              )}
               归档
             </button>
           </>
@@ -351,7 +395,11 @@ export default function MemoryLibraryWorkbench({
               disabled={restoringItemId === item.id}
               className="flex h-11 w-full items-center gap-3 px-4 text-sm text-stone-700 hover:bg-stone-50 disabled:opacity-60"
             >
-              {restoringItemId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+              {restoringItemId === item.id ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RotateCcw className="h-4 w-4" />
+              )}
               恢复
             </button>
             <button
@@ -363,7 +411,11 @@ export default function MemoryLibraryWorkbench({
               disabled={deletingItemId === item.id}
               className="flex h-11 w-full items-center gap-3 px-4 text-sm text-red-600 hover:bg-red-50 disabled:opacity-60"
             >
-              {deletingItemId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              {deletingItemId === item.id ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
               删除
             </button>
           </>
@@ -378,7 +430,11 @@ export default function MemoryLibraryWorkbench({
             disabled={deletingItemId === item.id}
             className="flex h-11 w-full items-center gap-3 px-4 text-sm text-red-600 hover:bg-red-50 disabled:opacity-60"
           >
-            {deletingItemId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+            {deletingItemId === item.id ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4" />
+            )}
             删除
           </button>
         )}
@@ -400,7 +456,6 @@ export default function MemoryLibraryWorkbench({
       <div className="mx-auto max-w-3xl rounded-xl border border-gray-200 bg-white p-10 text-center">
         <BookHeart className="mx-auto mb-3 h-10 w-10 text-gray-300" />
         <h1 className="text-lg font-semibold text-gray-900">先创建一个家族空间</h1>
-        <p className="mt-2 text-sm text-gray-500">记忆库会统一收纳记录、经验和观察。</p>
         <Link
           href="/dashboard/family"
           className="mt-5 inline-flex h-10 items-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
@@ -413,8 +468,16 @@ export default function MemoryLibraryWorkbench({
 
   return (
     <div className={simplified ? 'w-full' : 'mx-auto w-full max-w-[1500px]'}>
-      {error && <div className="mb-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
-      {success && <div className="mb-4 rounded-lg border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-700">{success}</div>}
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="mb-4 rounded-lg border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-700">
+          {success}
+        </div>
+      )}
 
       <section>
         {isLoading ? (
@@ -426,62 +489,61 @@ export default function MemoryLibraryWorkbench({
           <div className="flex h-64 items-center justify-center rounded-lg bg-white text-center shadow-sm ring-1 ring-stone-100">
             <div className="text-stone-400">
               <BookHeart className="mx-auto mb-3 h-10 w-10 opacity-40" />
-              <p className="text-sm">{viewMode === 'ARCHIVED' ? '归档箱里暂无内容。' : '还没有记忆记录。'}</p>
+              <p className="text-sm">
+                {viewMode === 'ARCHIVED' ? '归档箱里暂无内容。' : '还没有记忆记录。'}
+              </p>
             </div>
           </div>
         ) : (
           <div className={simplified ? 'space-y-4' : 'space-y-6'}>
             {pageData.items.map((item) => {
               const tags = (item.tags || []).slice(0, 4);
+              const memberHeader = resolveMemberHeader(
+                item,
+                familyMembers,
+                activeMembership?.userId,
+              );
               return (
-                <article
+                <MemoryRecordCard
                   key={item.id}
-                  className="relative rounded-lg bg-white px-6 py-6 shadow-sm ring-1 ring-stone-100 transition hover:-translate-y-0.5 hover:shadow-md sm:px-9 sm:py-8"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="text-sm text-stone-400">
-                        {[item.memberName, formatDateTime(item.createdAt)].filter(Boolean).join(' · ') || '未记录时间'}
-                      </p>
-                      {tags.length > 0 && (
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          {tags.map((tag) => (
-                            <span
-                              key={`${item.id}-tag-${tag}`}
-                              className="rounded-md bg-blue-50 px-2 py-1 text-sm font-medium text-blue-600"
-                            >
-                              #{tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {canManageLibrary && (
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setOpenItemMenuId((current) => (current === item.id ? '' : item.id));
-                        }}
-                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-stone-400 transition hover:bg-stone-100 hover:text-stone-700"
-                        aria-label="打开操作菜单"
-                        aria-expanded={openItemMenuId === item.id}
-                      >
-                        <MoreHorizontal className="h-5 w-5" />
-                      </button>
-                    )}
-
-                    {renderItemMenu(item)}
-                  </div>
-
-                  <h2 className="mt-8 text-2xl font-semibold leading-snug text-stone-950">
-                    {item.title || '未命名记忆'}
-                  </h2>
-                  <p className="mt-5 whitespace-pre-wrap text-base leading-8 text-stone-800 sm:text-xl sm:leading-10">
-                    {item.body || '暂无正文内容。'}
-                  </p>
-                </article>
+                  header={
+                    <MemoryRecordHeader
+                      relationshipLabel={memberHeader.relationshipLabel}
+                      memberName={memberHeader.memberName}
+                      typeLabel={familyMemoryTypeLabel(item.type)}
+                      createdAt={item.createdAt}
+                    />
+                  }
+                  badges={tags.map((tag) => (
+                    <span
+                      key={`${item.id}-tag-${tag}`}
+                      className="rounded-md bg-blue-50 px-2 py-1 text-sm font-medium text-blue-600"
+                    >
+                      #{tag}
+                    </span>
+                  ))}
+                  title={item.title || '未命名记忆'}
+                  body={item.body || '暂无正文内容。'}
+                  actions={
+                    canManageLibrary ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setOpenItemMenuId((current) => (current === item.id ? '' : item.id));
+                          }}
+                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-stone-400 transition hover:bg-stone-100 hover:text-stone-700"
+                          aria-label="打开操作菜单"
+                          aria-expanded={openItemMenuId === item.id}
+                        >
+                          <MoreHorizontal className="h-5 w-5" />
+                        </button>
+                        {renderItemMenu(item)}
+                      </>
+                    ) : null
+                  }
+                />
               );
             })}
           </div>
@@ -497,13 +559,17 @@ export default function MemoryLibraryWorkbench({
                 className="h-8 rounded-md border border-stone-200 bg-white px-2 text-xs text-stone-700 outline-none"
               >
                 {pageSizeOptions.map((option) => (
-                  <option key={option} value={option}>{option}</option>
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
                 ))}
               </select>
               <span>条</span>
             </div>
             <div className="flex items-center gap-2">
-              <span>第 {pageData.page} / {totalPages} 页</span>
+              <span>
+                第 {pageData.page} / {totalPages} 页
+              </span>
               <button
                 type="button"
                 onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}

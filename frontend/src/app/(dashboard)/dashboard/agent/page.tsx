@@ -67,10 +67,11 @@ function buildSessionMetadata(
 ): AgentSessionMetadata {
   return {
     entry: 'agent',
-    contextLabel: mode === 'mirror' ? 'mirror_agent' : mode === 'persona' ? 'persona_member' : 'family_memory',
+    contextLabel:
+      mode === 'mirror' ? 'mirror_agent' : mode === 'persona' ? 'persona_member' : 'family_memory',
     agentMode: mode,
-    targetUserId: mode === 'mirror' ? targetMember?.userId ?? null : null,
-    targetPersonaId: mode === 'persona' ? targetPersona?.id ?? null : null,
+    targetUserId: mode === 'mirror' ? (targetMember?.userId ?? null) : null,
+    targetPersonaId: mode === 'persona' ? (targetPersona?.id ?? null) : null,
     targetMemberName: mode === 'mirror' ? targetLabel : null,
     targetPersonaName: mode === 'persona' ? targetLabel : null,
     hasTargetSwitches,
@@ -145,13 +146,13 @@ function buildMirrorAnswerMetadata(
   };
 }
 
-function normalizeMirrorAssistantMetadata(metadata: Record<string, unknown>): NonNullable<ChatMessage['metadata']> {
+function normalizeMirrorAssistantMetadata(
+  metadata: Record<string, unknown>,
+): NonNullable<ChatMessage['metadata']> {
   const webSearch = metadata.web_search;
   const responseMode = metadata.response_mode;
   const baseMetadata: NonNullable<ChatMessage['metadata']> = {
-    ...(responseMode === 'quick' || responseMode === 'think'
-      ? { responseMode }
-      : {}),
+    ...(responseMode === 'quick' || responseMode === 'think' ? { responseMode } : {}),
     ...(typeof metadata.thinking_summary === 'string' && metadata.thinking_summary.trim()
       ? { thinkingSummary: metadata.thinking_summary.trim() }
       : {}),
@@ -167,7 +168,9 @@ function normalizeMirrorAssistantMetadata(metadata: Record<string, unknown>): No
       pending: Boolean(data.pending),
       resultCount: Number(data.result_count) || 0,
       sources: rawSources
-        .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+        .filter(
+          (item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object',
+        )
         .map((item) => ({
           title: typeof item.title === 'string' ? item.title : '未命名来源',
           url: typeof item.url === 'string' ? item.url : '',
@@ -190,12 +193,19 @@ function buildTargetSwitchMessage(
   nextTarget: FamilyMember | null,
   nextPersona: PersonaMember | null,
 ): ChatMessage {
-  const targetLabel = nextMode === 'mirror'
-    ? `已切换到 “${nextTargetLabel}” 的镜像参考模式。后续回答只基于授权可见记录，不代表本人真实意图。`
-    : nextMode === 'persona'
-      ? personaSwitchMessage(nextTargetLabel)
-      : '已切回家庭 Agent 自身上下文。后续回答将基于当前家庭共享记忆与记录。';
-  const sessionContextPatch = buildSessionMetadata(nextMode, nextTargetLabel, nextTarget, nextPersona, true);
+  const targetLabel =
+    nextMode === 'mirror'
+      ? `已切换到“${nextTargetLabel}”镜像参考`
+      : nextMode === 'persona'
+        ? personaSwitchMessage(nextTargetLabel)
+        : '已切回家庭 Agent';
+  const sessionContextPatch = buildSessionMetadata(
+    nextMode,
+    nextTargetLabel,
+    nextTarget,
+    nextPersona,
+    true,
+  );
   return {
     id: generateId(),
     role: 'system',
@@ -213,9 +223,18 @@ export default function AgentPage() {
   const searchParams = useSearchParams();
   const user = useAuthStore((state) => state.user);
   const routePrompt = searchParams.get('prompt')?.trim() || '';
-  const requestedFamilyId = useMemo(() => parsePositiveNumber(searchParams.get('familyId')), [searchParams]);
-  const requestedTargetUserId = useMemo(() => parsePositiveNumber(searchParams.get('targetUserId')), [searchParams]);
-  const requestedPersonaId = useMemo(() => parsePositiveNumber(searchParams.get('targetPersonaId')), [searchParams]);
+  const requestedFamilyId = useMemo(
+    () => parsePositiveNumber(searchParams.get('familyId')),
+    [searchParams],
+  );
+  const requestedTargetUserId = useMemo(
+    () => parsePositiveNumber(searchParams.get('targetUserId')),
+    [searchParams],
+  );
+  const requestedPersonaId = useMemo(
+    () => parsePositiveNumber(searchParams.get('targetPersonaId')),
+    [searchParams],
+  );
 
   const routePromptAppliedRef = useRef('');
   const sessionSavedMemoriesRef = useRef<SessionSavedMemory[]>([]);
@@ -280,17 +299,20 @@ export default function AgentPage() {
     [selfUserId, targetSelection],
   );
   const targetMember = useMemo(
-    () => selectionTargetMember(targetSelection, members, mirrorTargetUserId, mirrorContext?.targetMember || null),
+    () =>
+      selectionTargetMember(
+        targetSelection,
+        members,
+        mirrorTargetUserId,
+        mirrorContext?.targetMember || null,
+      ),
     [members, mirrorContext?.targetMember, mirrorTargetUserId, targetSelection],
   );
   const selfMember = useMemo(
     () => members.find((member) => member.userId === selfUserId) || null,
     [members, selfUserId],
   );
-  const targetPersonaId = useMemo(
-    () => selectionPersonaId(targetSelection),
-    [targetSelection],
-  );
+  const targetPersonaId = useMemo(() => selectionPersonaId(targetSelection), [targetSelection]);
   const targetPersona = useMemo(
     () => selectionTargetPersona(targetSelection, personas),
     [personas, targetSelection],
@@ -300,49 +322,49 @@ export default function AgentPage() {
     [selfUserId, targetSelection],
   );
   const selfTargetLabel = useMemo(
-    () => selfMember?.username?.trim()
-      || user?.username?.trim()
-      || selfMember?.nickname?.trim()
-      || user?.nickname?.trim()
-      || (selfUserId ? `用户 ${selfUserId}` : '我'),
+    () =>
+      selfMember?.username?.trim() ||
+      user?.username?.trim() ||
+      selfMember?.nickname?.trim() ||
+      user?.nickname?.trim() ||
+      (selfUserId ? `用户 ${selfUserId}` : '我'),
     [selfMember, selfUserId, user?.nickname, user?.username],
   );
   const targetLabel = useMemo(
-    () => targetSelection === 'SELF'
-      ? selfTargetLabel
-      : selectionLabel(targetSelection, targetMember, targetPersona),
+    () =>
+      targetSelection === 'SELF'
+        ? selfTargetLabel
+        : selectionLabel(targetSelection, targetMember, targetPersona),
     [selfTargetLabel, targetMember, targetPersona, targetSelection],
   );
   const modeReadiness = useMemo(() => readinessLevel(mirrorContext), [mirrorContext]);
-  const saveTargetName = mode === 'mirror'
-    ? memberName(targetMember)
-    : mode === 'persona'
-      ? targetPersona?.name || targetLabel
-      : activeMembership?.relationshipLabel || '';
+  const saveTargetName =
+    mode === 'mirror'
+      ? memberName(targetMember)
+      : mode === 'persona'
+        ? targetPersona?.name || targetLabel
+        : activeMembership?.relationshipLabel || '';
   const handleDraftSaved = useCallback((plan: AgentSaveToolPlan, savedAt: string) => {
     const savedMemory = savedMemoryFromPlan(plan, savedAt);
     if (savedMemory) {
-      sessionSavedMemoriesRef.current = [...sessionSavedMemoriesRef.current, savedMemory].slice(-10);
+      sessionSavedMemoriesRef.current = [...sessionSavedMemoriesRef.current, savedMemory].slice(
+        -10,
+      );
     }
   }, []);
-  const {
-    saveFeedback,
-    resetSaveDrafts,
-    prepareSaveDraft,
-    confirmSaveDraft,
-    cancelSaveDraft,
-  } = useAgentSaveDraft({
-    activeFamilyId,
-    familyName: activeFamily?.name,
-    viewerRole,
-    mode,
-    targetName: saveTargetName,
-    targetUserId: mirrorTargetUserId,
-    targetPersonaId: targetPersona?.id ?? targetPersonaId,
-    targetPersonaName: mode === 'persona' ? saveTargetName : '',
-    sessionId: () => sessionIdRef.current,
-    onSaved: handleDraftSaved,
-  });
+  const { saveFeedback, resetSaveDrafts, prepareSaveDraft, confirmSaveDraft, cancelSaveDraft } =
+    useAgentSaveDraft({
+      activeFamilyId,
+      familyName: activeFamily?.name,
+      viewerRole,
+      mode,
+      targetName: saveTargetName,
+      targetUserId: mirrorTargetUserId,
+      targetPersonaId: targetPersona?.id ?? targetPersonaId,
+      targetPersonaName: mode === 'persona' ? saveTargetName : '',
+      sessionId: () => sessionIdRef.current,
+      onSaved: handleDraftSaved,
+    });
 
   const upsertSession = useCallback((session: ChatSessionSummary) => {
     setSessions((current) => {
@@ -355,67 +377,87 @@ export default function AgentPage() {
     });
   }, []);
 
-  const loadMembers = useCallback(async (familyId: number, forceRefresh: boolean = false) => {
-    const applySelection = (current: AgentTargetSelection, nextMembers: FamilyMember[], nextPersonas: PersonaMember[]) => {
-      const preferredPersona = selectionFromRequestedPersonaId(requestedPersonaId, nextPersonas);
-      if (preferredPersona !== 'NONE') return preferredPersona;
-      const preferredMember = selectionFromRequestedTargetUserId(requestedTargetUserId, selfUserId, nextMembers);
-      if (preferredMember !== 'NONE') return preferredMember;
+  const loadMembers = useCallback(
+    async (familyId: number, forceRefresh: boolean = false) => {
+      const applySelection = (
+        current: AgentTargetSelection,
+        nextMembers: FamilyMember[],
+        nextPersonas: PersonaMember[],
+      ) => {
+        const preferredPersona = selectionFromRequestedPersonaId(requestedPersonaId, nextPersonas);
+        if (preferredPersona !== 'NONE') return preferredPersona;
+        const preferredMember = selectionFromRequestedTargetUserId(
+          requestedTargetUserId,
+          selfUserId,
+          nextMembers,
+        );
+        if (preferredMember !== 'NONE') return preferredMember;
 
-      const normalizedCurrent = normalizeTargetSelection(current, selfUserId);
-      if (normalizedCurrent === 'SELF') return 'SELF';
-      const currentPersonaId = selectionPersonaId(normalizedCurrent);
-      if (currentPersonaId && nextPersonas.some((persona) => persona.id === currentPersonaId)) {
-        return normalizedCurrent;
-      }
-      if (typeof normalizedCurrent === 'number' && nextMembers.some((member) => member.userId === normalizedCurrent)) {
-        return normalizedCurrent;
-      }
-      return 'NONE';
-    };
-
-    const cachedMembersForFamily = cachedAgentMembersByFamilyId[familyId];
-    const cachedPersonasForFamily = cachedAgentPersonasByFamilyId[familyId];
-    const cacheHasRequestedPersona = !requestedPersonaId
-      || cachedPersonasForFamily?.some((persona) => persona.id === requestedPersonaId);
-    if (!forceRefresh && cachedMembersForFamily && cachedPersonasForFamily && cacheHasRequestedPersona) {
-      const cachedMembers = cachedMembersForFamily;
-      const cachedPersonas = cachedPersonasForFamily;
-      setMembers(cachedMembers);
-      setPersonas(cachedPersonas);
-      setTargetSelection((current) => applySelection(current, cachedMembers, cachedPersonas));
-      return;
-    }
-
-    setIsLoadingMembers(true);
-    setContextError('');
-    try {
-      const personaRequest = familyApi.listPersonaMembers(familyId).catch((error) => {
-        if (requestedPersonaId) {
-          throw error;
+        const normalizedCurrent = normalizeTargetSelection(current, selfUserId);
+        if (normalizedCurrent === 'SELF') return 'SELF';
+        const currentPersonaId = selectionPersonaId(normalizedCurrent);
+        if (currentPersonaId && nextPersonas.some((persona) => persona.id === currentPersonaId)) {
+          return normalizedCurrent;
         }
-        return [] as PersonaMember[];
-      });
-      const [memberList, personaList] = await Promise.all([
-        familyApi.getMembers(familyId),
-        personaRequest,
-      ]);
-      const nextMembers = Array.isArray(memberList) ? memberList : [];
-      const nextPersonas = Array.isArray(personaList) ? personaList : [];
-      cachedAgentMembersByFamilyId[familyId] = nextMembers;
-      cachedAgentPersonasByFamilyId[familyId] = nextPersonas;
-      setMembers(nextMembers);
-      setPersonas(nextPersonas);
-      setTargetSelection((current) => applySelection(current, nextMembers, nextPersonas));
-    } catch (error) {
-      setMembers([]);
-      setPersonas([]);
-      setTargetSelection('NONE');
-      setContextError(error instanceof Error ? error.message : '加载对话对象失败。');
-    } finally {
-      setIsLoadingMembers(false);
-    }
-  }, [requestedPersonaId, requestedTargetUserId, selfUserId]);
+        if (
+          typeof normalizedCurrent === 'number' &&
+          nextMembers.some((member) => member.userId === normalizedCurrent)
+        ) {
+          return normalizedCurrent;
+        }
+        return 'NONE';
+      };
+
+      const cachedMembersForFamily = cachedAgentMembersByFamilyId[familyId];
+      const cachedPersonasForFamily = cachedAgentPersonasByFamilyId[familyId];
+      const cacheHasRequestedPersona =
+        !requestedPersonaId ||
+        cachedPersonasForFamily?.some((persona) => persona.id === requestedPersonaId);
+      if (
+        !forceRefresh &&
+        cachedMembersForFamily &&
+        cachedPersonasForFamily &&
+        cacheHasRequestedPersona
+      ) {
+        const cachedMembers = cachedMembersForFamily;
+        const cachedPersonas = cachedPersonasForFamily;
+        setMembers(cachedMembers);
+        setPersonas(cachedPersonas);
+        setTargetSelection((current) => applySelection(current, cachedMembers, cachedPersonas));
+        return;
+      }
+
+      setIsLoadingMembers(true);
+      setContextError('');
+      try {
+        const personaRequest = familyApi.listPersonaMembers(familyId).catch((error) => {
+          if (requestedPersonaId) {
+            throw error;
+          }
+          return [] as PersonaMember[];
+        });
+        const [memberList, personaList] = await Promise.all([
+          familyApi.getMembers(familyId),
+          personaRequest,
+        ]);
+        const nextMembers = Array.isArray(memberList) ? memberList : [];
+        const nextPersonas = Array.isArray(personaList) ? personaList : [];
+        cachedAgentMembersByFamilyId[familyId] = nextMembers;
+        cachedAgentPersonasByFamilyId[familyId] = nextPersonas;
+        setMembers(nextMembers);
+        setPersonas(nextPersonas);
+        setTargetSelection((current) => applySelection(current, nextMembers, nextPersonas));
+      } catch (error) {
+        setMembers([]);
+        setPersonas([]);
+        setTargetSelection('NONE');
+        setContextError(error instanceof Error ? error.message : '加载对话对象失败。');
+      } finally {
+        setIsLoadingMembers(false);
+      }
+    },
+    [requestedPersonaId, requestedTargetUserId, selfUserId],
+  );
 
   useEffect(() => {
     if (!activeFamilyId) {
@@ -429,20 +471,23 @@ export default function AgentPage() {
     void loadMembers(activeFamilyId);
   }, [activeFamilyId, loadMembers]);
 
-  const refreshMirrorContext = useCallback(async (familyId: number, userId: number, query?: string) => {
-    const cacheKey = `${familyId}:${userId}`;
-    if (!query && cachedMirrorContextByFamilyTarget[cacheKey]) {
-      const cached = cachedMirrorContextByFamilyTarget[cacheKey];
-      setMirrorContext(cached);
-      return cached;
-    }
-    const context = await mirrorApi.getContext(familyId, userId, query);
-    if (!query) {
-      cachedMirrorContextByFamilyTarget[cacheKey] = context;
-    }
-    setMirrorContext(context);
-    return context;
-  }, []);
+  const refreshMirrorContext = useCallback(
+    async (familyId: number, userId: number, query?: string) => {
+      const cacheKey = `${familyId}:${userId}`;
+      if (!query && cachedMirrorContextByFamilyTarget[cacheKey]) {
+        const cached = cachedMirrorContextByFamilyTarget[cacheKey];
+        setMirrorContext(cached);
+        return cached;
+      }
+      const context = await mirrorApi.getContext(familyId, userId, query);
+      if (!query) {
+        cachedMirrorContextByFamilyTarget[cacheKey] = context;
+      }
+      setMirrorContext(context);
+      return context;
+    },
+    [],
+  );
 
   useEffect(() => {
     if (mode !== 'mirror' || !activeFamilyId || !mirrorTargetUserId || responseMode === 'quick') {
@@ -472,99 +517,128 @@ export default function AgentPage() {
     };
   }, [activeFamilyId, mirrorTargetUserId, mode, refreshMirrorContext, responseMode]);
 
-  const memoryContextResolver = useCallback(async ({
-    query,
-    defaultRecall,
-  }: {
-    query: string;
-    history: Pick<ChatMessage, 'role' | 'content'>[];
-    defaultRecall: () => Promise<{ context: string; metadata?: NonNullable<ChatMessage['metadata']> }>;
-  }) => {
-    if (mode === 'persona' && targetPersona) {
-      const metadata: NonNullable<ChatMessage['metadata']> = {
-        agentMode: 'persona',
-        responseMode,
-        targetPersonaId: targetPersona.id,
-        targetPersonaName: targetPersona.name,
-        targetMemberName: targetPersona.name,
-        sourceSummary: responseMode === 'quick'
-          ? '由后端基于精神成员档案生成快速上下文。'
-          : '由后端基于精神成员档案、材料卡和当前家庭可见经验沉淀生成上下文。',
-      };
-      return {
-        context: '',
-        metadata,
-      };
-    }
-    if (mode === 'mirror' && responseMode === 'quick') {
-      const quickMetadata: NonNullable<ChatMessage['metadata']> = {
-        agentMode: 'mirror',
-        responseMode: 'quick',
-        targetUserId: targetMember?.userId ?? mirrorTargetUserId,
-        targetMemberName: targetLabel,
-      };
-      return {
-        context: '',
-        metadata: quickMetadata,
-      };
-    }
-    if (mode !== 'mirror' || !activeFamilyId || !mirrorTargetUserId) {
-      return defaultRecall();
-    }
-    try {
-      const context = await refreshMirrorContext(activeFamilyId, mirrorTargetUserId, query);
-      setContextError('');
-      return {
-        context: '',
-        metadata: buildMirrorAnswerMetadata(context, targetMember),
-      };
-    } catch (error) {
-      setContextError(error instanceof Error ? `镜像上下文刷新失败，已使用当前资料：${error.message}` : '镜像上下文刷新失败，已使用当前资料。');
-      return {
-        context: '',
-        metadata: buildMirrorAnswerMetadata(mirrorContext, targetMember),
-      };
-    }
-  }, [activeFamilyId, mirrorContext, mirrorTargetUserId, mode, refreshMirrorContext, responseMode, targetLabel, targetMember, targetPersona]);
+  const memoryContextResolver = useCallback(
+    async ({
+      query,
+      defaultRecall,
+    }: {
+      query: string;
+      history: Pick<ChatMessage, 'role' | 'content'>[];
+      defaultRecall: () => Promise<{
+        context: string;
+        metadata?: NonNullable<ChatMessage['metadata']>;
+      }>;
+    }) => {
+      if (mode === 'persona' && targetPersona) {
+        const metadata: NonNullable<ChatMessage['metadata']> = {
+          agentMode: 'persona',
+          responseMode,
+          targetPersonaId: targetPersona.id,
+          targetPersonaName: targetPersona.name,
+          targetMemberName: targetPersona.name,
+          sourceSummary:
+            responseMode === 'quick'
+              ? '由后端基于精神成员档案生成快速上下文。'
+              : '由后端基于精神成员档案、材料卡和当前家庭可见经验沉淀生成上下文。',
+        };
+        return {
+          context: '',
+          metadata,
+        };
+      }
+      if (mode === 'mirror' && responseMode === 'quick') {
+        const quickMetadata: NonNullable<ChatMessage['metadata']> = {
+          agentMode: 'mirror',
+          responseMode: 'quick',
+          targetUserId: targetMember?.userId ?? mirrorTargetUserId,
+          targetMemberName: targetLabel,
+        };
+        return {
+          context: '',
+          metadata: quickMetadata,
+        };
+      }
+      if (mode !== 'mirror' || !activeFamilyId || !mirrorTargetUserId) {
+        return defaultRecall();
+      }
+      try {
+        const context = await refreshMirrorContext(activeFamilyId, mirrorTargetUserId, query);
+        setContextError('');
+        return {
+          context: '',
+          metadata: buildMirrorAnswerMetadata(context, targetMember),
+        };
+      } catch (error) {
+        setContextError(
+          error instanceof Error
+            ? `镜像上下文刷新失败，已使用当前资料：${error.message}`
+            : '镜像上下文刷新失败，已使用当前资料。',
+        );
+        return {
+          context: '',
+          metadata: buildMirrorAnswerMetadata(mirrorContext, targetMember),
+        };
+      }
+    },
+    [
+      activeFamilyId,
+      mirrorContext,
+      mirrorTargetUserId,
+      mode,
+      refreshMirrorContext,
+      responseMode,
+      targetLabel,
+      targetMember,
+      targetPersona,
+    ],
+  );
 
-  const prepareRequest = useCallback(async ({ defaultRequest }: {
-    message: string;
-    history: Pick<ChatMessage, 'role' | 'content'>[];
-    memoryContext: { context: string; metadata?: NonNullable<ChatMessage['metadata']> };
-    defaultRequest: UseChatRequestConfig;
-  }) => {
-    if (mode === 'persona' && targetPersona) {
+  const prepareRequest = useCallback(
+    async ({
+      defaultRequest,
+    }: {
+      message: string;
+      history: Pick<ChatMessage, 'role' | 'content'>[];
+      memoryContext: { context: string; metadata?: NonNullable<ChatMessage['metadata']> };
+      defaultRequest: UseChatRequestConfig;
+    }) => {
+      if (mode === 'persona' && targetPersona) {
+        return {
+          ...defaultRequest,
+          subject: 'PersonaMemberAgent',
+          contextLabel: 'persona_member',
+          targetPersonaId: targetPersona.id,
+          targetRole: 'MEMBER' as const,
+        };
+      }
+      if (mode !== 'mirror' || !targetMember) {
+        return defaultRequest;
+      }
       return {
         ...defaultRequest,
-        subject: 'PersonaMemberAgent',
-        contextLabel: 'persona_member',
-        targetPersonaId: targetPersona.id,
+        subject: 'MirrorAgent',
+        contextLabel: 'mirror_agent',
+        targetUserId: targetMember.userId,
         targetRole: 'MEMBER' as const,
       };
-    }
-    if (mode !== 'mirror' || !targetMember) {
-      return defaultRequest;
-    }
-    return {
-      ...defaultRequest,
-      subject: 'MirrorAgent',
-      contextLabel: 'mirror_agent',
-      targetUserId: targetMember.userId,
-      targetRole: 'MEMBER' as const,
-    };
-  }, [mode, targetMember, targetPersona]);
+    },
+    [mode, targetMember, targetPersona],
+  );
 
   const getInitialAssistantMetadata = useCallback(
     () => buildSessionMetadata(mode, targetLabel, targetMember, targetPersona, false),
     [mode, targetLabel, targetMember, targetPersona],
   );
 
-  const normalizeStreamMetadata = useCallback((metadata: Record<string, unknown>): NonNullable<ChatMessage['metadata']> => ({
-    ...getInitialAssistantMetadata(),
-    ...(mode === 'mirror'
-      ? normalizeMirrorAssistantMetadata(metadata)
-      : normalizeAssistantMetadata(metadata)),
-  }), [getInitialAssistantMetadata, mode]);
+  const normalizeStreamMetadata = useCallback(
+    (metadata: Record<string, unknown>): NonNullable<ChatMessage['metadata']> => ({
+      ...getInitialAssistantMetadata(),
+      ...(mode === 'mirror'
+        ? normalizeMirrorAssistantMetadata(metadata)
+        : normalizeAssistantMetadata(metadata)),
+    }),
+    [getInitialAssistantMetadata, mode],
+  );
 
   const ensureSessionHeader = useCallback(async () => {
     if (!activeFamilyId) {
@@ -615,38 +689,34 @@ export default function AgentPage() {
     return createSessionPromiseRef.current;
   }, [activeFamilyId, mode, setSessionId, targetLabel, targetMember, targetPersona, upsertSession]);
 
-  const appendSessionMessages = useCallback(async (newMessages: ChatMessage[]) => {
-    if (!newMessages.length || !activeFamilyId) return;
-    const generation = sessionGenerationRef.current;
-    const isUserMessageDraft = newMessages.length === 1 && newMessages[0].role === 'user';
-    setSessionError('');
-    try {
-      const detail = await ensureSessionHeader();
-      const updated = await sessionApi.appendMessages(detail.id, newMessages);
-      if (sessionGenerationRef.current !== generation) {
-        return;
+  const appendSessionMessages = useCallback(
+    async (newMessages: ChatMessage[]) => {
+      if (!newMessages.length || !activeFamilyId) return;
+      const generation = sessionGenerationRef.current;
+      const isUserMessageDraft = newMessages.length === 1 && newMessages[0].role === 'user';
+      setSessionError('');
+      try {
+        const detail = await ensureSessionHeader();
+        const updated = await sessionApi.appendMessages(detail.id, newMessages);
+        if (sessionGenerationRef.current !== generation) {
+          return;
+        }
+        sessionIdRef.current = updated.id;
+        activeSessionDetailRef.current = updated;
+        setSessionId(updated.id);
+        setActiveSessionDetail(updated);
+        upsertSession(updated);
+      } catch (error) {
+        if (sessionGenerationRef.current === generation && !isUserMessageDraft) {
+          setSessionError(error instanceof Error ? error.message : '自动保存聊天记录失败。');
+        }
+        throw error;
       }
-      sessionIdRef.current = updated.id;
-      activeSessionDetailRef.current = updated;
-      setSessionId(updated.id);
-      setActiveSessionDetail(updated);
-      upsertSession(updated);
-    } catch (error) {
-      if (sessionGenerationRef.current === generation && !isUserMessageDraft) {
-        setSessionError(error instanceof Error ? error.message : '自动保存聊天记录失败。');
-      }
-      throw error;
-    }
-  }, [activeFamilyId, ensureSessionHeader, setSessionId, upsertSession]);
+    },
+    [activeFamilyId, ensureSessionHeader, setSessionId, upsertSession],
+  );
 
-  const {
-    messages,
-    isStreaming,
-    sendMessage,
-    stopStreaming,
-    discardStreaming,
-    reset,
-  } = useChat({
+  const { messages, isStreaming, sendMessage, stopStreaming, discardStreaming, reset } = useChat({
     viewerRole,
     targetRole: 'MEMBER',
     activeFamilyId,
@@ -679,10 +749,11 @@ export default function AgentPage() {
     setSessionError('');
     try {
       const list = await sessionApi.getUserSessions(undefined, 30);
-      const filtered = (list || []).filter((session) => (
-        session.familyId === activeFamilyId
-          && (!session.source || session.source === 'FAMILY_AGENT' || session.source === 'TUTOR')
-      ));
+      const filtered = (list || []).filter(
+        (session) =>
+          session.familyId === activeFamilyId &&
+          (!session.source || session.source === 'FAMILY_AGENT' || session.source === 'TUTOR'),
+      );
       cachedAgentSessionsByFamilyId[activeFamilyId] = filtered;
       setSessions(filtered);
       setSessionsLoaded(true);
@@ -773,41 +844,53 @@ export default function AgentPage() {
     sessionSavedMemoriesRef.current = [];
   }, [discardStreaming, reset, resetSaveDrafts, setSessionId]);
 
-  const loadAllSessionMessages = useCallback((targetSessionId: number) => (
-    loadSessionMessagesChronologically(sessionApi.getSessionMessages, targetSessionId, 40)
-  ), []);
+  const loadAllSessionMessages = useCallback(
+    (targetSessionId: number) =>
+      loadSessionMessagesChronologically(sessionApi.getSessionMessages, targetSessionId, 40),
+    [],
+  );
 
-  const handleLoadSession = useCallback(async (targetSessionId: number) => {
-    discardStreaming();
-    const generation = sessionGenerationRef.current + 1;
-    sessionGenerationRef.current = generation;
-    createSessionPromiseRef.current = null;
-    setIsLoadingMessages(true);
-    setSessionError('');
-    try {
-      const detail = await sessionApi.getSession(targetSessionId);
-      const restoredMessages = await loadAllSessionMessages(targetSessionId);
-      if (sessionGenerationRef.current !== generation) {
-        return;
+  const handleLoadSession = useCallback(
+    async (targetSessionId: number) => {
+      discardStreaming();
+      const generation = sessionGenerationRef.current + 1;
+      sessionGenerationRef.current = generation;
+      createSessionPromiseRef.current = null;
+      setIsLoadingMessages(true);
+      setSessionError('');
+      try {
+        const detail = await sessionApi.getSession(targetSessionId);
+        const restoredMessages = await loadAllSessionMessages(targetSessionId);
+        if (sessionGenerationRef.current !== generation) {
+          return;
+        }
+        sessionIdRef.current = detail.id;
+        activeSessionDetailRef.current = detail;
+        setSessionId(detail.id);
+        setMessages(restoredMessages);
+        setActiveSessionDetail(detail);
+        resetSaveDrafts();
+        sessionSavedMemoriesRef.current = [];
+        upsertSession(detail);
+      } catch (error) {
+        if (sessionGenerationRef.current === generation) {
+          setSessionError(error instanceof Error ? error.message : '加载所选会话失败。');
+        }
+      } finally {
+        if (sessionGenerationRef.current === generation) {
+          setIsLoadingMessages(false);
+        }
       }
-      sessionIdRef.current = detail.id;
-      activeSessionDetailRef.current = detail;
-      setSessionId(detail.id);
-      setMessages(restoredMessages);
-      setActiveSessionDetail(detail);
-      resetSaveDrafts();
-      sessionSavedMemoriesRef.current = [];
-      upsertSession(detail);
-    } catch (error) {
-      if (sessionGenerationRef.current === generation) {
-        setSessionError(error instanceof Error ? error.message : '加载所选会话失败。');
-      }
-    } finally {
-      if (sessionGenerationRef.current === generation) {
-        setIsLoadingMessages(false);
-      }
-    }
-  }, [discardStreaming, loadAllSessionMessages, resetSaveDrafts, setMessages, setSessionId, upsertSession]);
+    },
+    [
+      discardStreaming,
+      loadAllSessionMessages,
+      resetSaveDrafts,
+      setMessages,
+      setSessionId,
+      upsertSession,
+    ],
+  );
 
   useEffect(() => {
     if (!activeFamilyId || autoRestoreFamilyIdRef.current === activeFamilyId) return;
@@ -819,12 +902,12 @@ export default function AgentPage() {
     const restoreRecentSession = async () => {
       const availableSessions = await loadSessions();
       if (
-        cancelled
-        || sessionGenerationRef.current !== generation
-        || sessionIdRef.current
-        || activeSessionDetailRef.current
-        || messages.length > 0
-        || isStreaming
+        cancelled ||
+        sessionGenerationRef.current !== generation ||
+        sessionIdRef.current ||
+        activeSessionDetailRef.current ||
+        messages.length > 0 ||
+        isStreaming
       ) {
         return;
       }
@@ -834,7 +917,10 @@ export default function AgentPage() {
         .sort((left, right) => {
           const rightTime = Date.parse(right.lastMessageAt || right.startedAt || '');
           const leftTime = Date.parse(left.lastMessageAt || left.startedAt || '');
-          return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
+          return (
+            (Number.isFinite(rightTime) ? rightTime : 0) -
+            (Number.isFinite(leftTime) ? leftTime : 0)
+          );
         })[0];
 
       if (recentSession) {
@@ -848,23 +934,26 @@ export default function AgentPage() {
     };
   }, [activeFamilyId, handleLoadSession, isStreaming, loadSessions, messages.length]);
 
-  const handleDeleteSession = useCallback(async (targetSessionId: number) => {
-    try {
-      await sessionApi.deleteSession(targetSessionId);
-      setSessions((current) => {
-        const next = current.filter((session) => session.id !== targetSessionId);
-        if (activeFamilyId) {
-          cachedAgentSessionsByFamilyId[activeFamilyId] = next;
+  const handleDeleteSession = useCallback(
+    async (targetSessionId: number) => {
+      try {
+        await sessionApi.deleteSession(targetSessionId);
+        setSessions((current) => {
+          const next = current.filter((session) => session.id !== targetSessionId);
+          if (activeFamilyId) {
+            cachedAgentSessionsByFamilyId[activeFamilyId] = next;
+          }
+          return next;
+        });
+        if (sessionId === targetSessionId) {
+          handleNewChat();
         }
-        return next;
-      });
-      if (sessionId === targetSessionId) {
-        handleNewChat();
+      } catch (error) {
+        setSessionError(error instanceof Error ? error.message : '删除会话失败。');
       }
-    } catch (error) {
-      setSessionError(error instanceof Error ? error.message : '删除会话失败。');
-    }
-  }, [activeFamilyId, handleNewChat, sessionId]);
+    },
+    [activeFamilyId, handleNewChat, sessionId],
+  );
 
   const handleClearSessions = useCallback(async () => {
     if (!activeFamilyId || sessions.length === 0 || isClearingSessions) return;
@@ -889,47 +978,72 @@ export default function AgentPage() {
     }
   }, [activeFamilyId, handleNewChat, isClearingSessions, loadSessions, sessionId, sessions]);
 
-  const handleTargetChange = useCallback(async (nextTargetSelection: AgentTargetSelection) => {
-    const normalizedSelection = normalizeTargetSelection(nextTargetSelection, selfUserId);
-    const currentSelection = normalizeTargetSelection(targetSelection, selfUserId);
-    if (normalizedSelection === currentSelection) {
-      return;
-    }
-    if (isStreaming) {
-      stopStreaming();
-    }
-
-    const nextMode: AgentMode = selectionMode(normalizedSelection, selfUserId);
-    const nextMirrorTargetUserId = selectionMirrorTargetUserId(normalizedSelection, selfUserId);
-    const nextTargetMember = selectionTargetMember(normalizedSelection, members, nextMirrorTargetUserId, null);
-    const nextPersona = selectionTargetPersona(normalizedSelection, personas);
-    const nextTargetLabel = selectionLabel(normalizedSelection, nextTargetMember, nextPersona);
-    const hasConversation = useChatStore.getState().messages.length > 0 || Boolean(activeSessionDetailRef.current?.messageCount);
-
-    setTargetSelection(normalizedSelection);
-    resetSaveDrafts();
-
-    if (!hasConversation) {
-      return;
-    }
-
-    const marker = buildTargetSwitchMessage(nextMode, nextTargetLabel, nextTargetMember, nextPersona);
-    setMessages([...useChatStore.getState().messages, marker]);
-    try {
-      await appendSessionMessages([marker]);
-    } catch {
-      // appendSessionMessages already exposes the failure in page state.
-    }
-    if (activeSessionDetailRef.current?.id) {
-      try {
-        await sessionApi.patchSession(activeSessionDetailRef.current.id, {
-          metadata: { ...activeSessionDetailRef.current.metadata, hasTargetSwitches: true },
-        });
-      } catch {
-        // non-critical
+  const handleTargetChange = useCallback(
+    async (nextTargetSelection: AgentTargetSelection) => {
+      const normalizedSelection = normalizeTargetSelection(nextTargetSelection, selfUserId);
+      const currentSelection = normalizeTargetSelection(targetSelection, selfUserId);
+      if (normalizedSelection === currentSelection) {
+        return;
       }
-    }
-  }, [appendSessionMessages, isStreaming, members, personas, resetSaveDrafts, selfUserId, setMessages, stopStreaming, targetSelection]);
+      if (isStreaming) {
+        stopStreaming();
+      }
+
+      const nextMode: AgentMode = selectionMode(normalizedSelection, selfUserId);
+      const nextMirrorTargetUserId = selectionMirrorTargetUserId(normalizedSelection, selfUserId);
+      const nextTargetMember = selectionTargetMember(
+        normalizedSelection,
+        members,
+        nextMirrorTargetUserId,
+        null,
+      );
+      const nextPersona = selectionTargetPersona(normalizedSelection, personas);
+      const nextTargetLabel = selectionLabel(normalizedSelection, nextTargetMember, nextPersona);
+      const hasConversation =
+        useChatStore.getState().messages.length > 0 ||
+        Boolean(activeSessionDetailRef.current?.messageCount);
+
+      setTargetSelection(normalizedSelection);
+      resetSaveDrafts();
+
+      if (!hasConversation) {
+        return;
+      }
+
+      const marker = buildTargetSwitchMessage(
+        nextMode,
+        nextTargetLabel,
+        nextTargetMember,
+        nextPersona,
+      );
+      setMessages([...useChatStore.getState().messages, marker]);
+      try {
+        await appendSessionMessages([marker]);
+      } catch {
+        // appendSessionMessages already exposes the failure in page state.
+      }
+      if (activeSessionDetailRef.current?.id) {
+        try {
+          await sessionApi.patchSession(activeSessionDetailRef.current.id, {
+            metadata: { ...activeSessionDetailRef.current.metadata, hasTargetSwitches: true },
+          });
+        } catch {
+          // non-critical
+        }
+      }
+    },
+    [
+      appendSessionMessages,
+      isStreaming,
+      members,
+      personas,
+      resetSaveDrafts,
+      selfUserId,
+      setMessages,
+      stopStreaming,
+      targetSelection,
+    ],
+  );
 
   const handleSubmit = useCallback(async () => {
     if (isStreaming || isProcessingSaveCommand) return;
@@ -955,20 +1069,30 @@ export default function AgentPage() {
     } catch {
       // The chat pipeline already surfaces provider failures inline.
     }
-  }, [appendSessionMessages, input, isProcessingSaveCommand, isStreaming, prepareSaveDraft, sendMessage]);
+  }, [
+    appendSessionMessages,
+    input,
+    isProcessingSaveCommand,
+    isStreaming,
+    prepareSaveDraft,
+    sendMessage,
+  ]);
 
-  const handleInputKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (!isPlainEnter(event)) return;
+  const handleInputKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (!isPlainEnter(event)) return;
 
-    event.preventDefault();
-    if (isStreaming) {
-      stopStreaming();
-      return;
-    }
-    if (!isProcessingSaveCommand) {
-      void handleSubmit();
-    }
-  }, [handleSubmit, isProcessingSaveCommand, isStreaming, stopStreaming]);
+      event.preventDefault();
+      if (isStreaming) {
+        stopStreaming();
+        return;
+      }
+      if (!isProcessingSaveCommand) {
+        void handleSubmit();
+      }
+    },
+    [handleSubmit, isProcessingSaveCommand, isStreaming, stopStreaming],
+  );
 
   const selectorOptions = useMemo(
     () => members.filter((member) => member.userId !== selfUserId),
@@ -988,13 +1112,10 @@ export default function AgentPage() {
     return (
       <div className="mx-auto max-w-3xl px-4 py-10">
         <div className="rounded-[32px] border border-dashed border-stone-300 bg-white/88 p-10 text-center shadow-[0_18px_48px_rgba(24,39,32,0.06)]">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-800">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-100 text-sky-800">
             <Sparkles className="h-6 w-6" />
           </div>
           <h1 className="mt-5 text-2xl font-semibold text-stone-950">请先选择家庭</h1>
-          <p className="mt-3 text-sm leading-7 text-stone-500">
-            FamilyAgent 会把家庭记忆、日记和成长记录作为对话上下文，先进入一个家庭空间再开始聊天。
-          </p>
           <Link
             href="/dashboard/family"
             className="mt-6 inline-flex h-11 items-center rounded-full bg-stone-950 px-5 text-sm font-medium text-white transition hover:bg-stone-800"
@@ -1008,27 +1129,27 @@ export default function AgentPage() {
 
   const currentSessionTitle = activeSessionDetail
     ? getSessionTitle(activeSessionDetail)
-    : (mode === 'mirror'
-        ? `与 ${targetLabel} 的镜像对话`
-        : mode === 'persona'
-          ? `请教 ${targetLabel}`
-          : '新的家庭对话');
+    : mode === 'mirror'
+      ? `与 ${targetLabel} 的镜像对话`
+      : mode === 'persona'
+        ? `请教 ${targetLabel}`
+        : '新的家庭对话';
 
   return (
     <div className="h-[calc(100dvh-0.75rem)] overflow-hidden px-0 py-0 lg:h-[calc(100dvh-2rem)]">
-      <div className="mx-auto flex h-full max-w-[1600px] min-h-0 overflow-hidden bg-white">
-        <section className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
+      <div className="glass-panel-strong mx-auto flex h-full max-w-[1600px] min-h-0 overflow-hidden rounded-[28px]">
+        <section className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white/35">
           {sessionError && (
             <div className="mx-3 mt-3 shrink-0 rounded-md border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700 lg:hidden">
               {sessionError}
             </div>
           )}
 
-          <div className="sticky top-0 z-10 shrink-0 bg-white/96 px-14 py-3.5 backdrop-blur">
+          <div className="sticky top-0 z-10 shrink-0 border-b border-white/70 bg-white/56 px-14 py-3.5 backdrop-blur-xl">
             <button
               type="button"
               onClick={() => setIsSessionsOpen(true)}
-              className="absolute left-3 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-stone-950 transition hover:bg-stone-100 hover:text-emerald-700 md:left-5"
+              className="absolute left-3 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-stone-950 transition hover:bg-stone-100 hover:text-sky-700 md:left-5"
               aria-label="会话历史"
               title="会话历史"
             >
@@ -1037,16 +1158,10 @@ export default function AgentPage() {
             <h1 className="mx-auto max-w-[min(34rem,calc(100%-10rem))] truncate text-center text-base font-semibold leading-5 text-stone-950">
               {currentSessionTitle}
             </h1>
-            <p className="mt-1 text-center text-xs leading-4 text-stone-400">
-              {responseMode === 'think' ? '思考模式' : '快速模式'}
-            </p>
-            <p className="text-center text-xs leading-4 text-stone-400">
-              回答由 AI 生成，仅供参考
-            </p>
             <button
               type="button"
               onClick={handleNewChat}
-              className="absolute right-3 top-1/2 inline-flex h-9 -translate-y-1/2 items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 text-sm font-medium text-stone-900 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 md:right-5"
+              className="absolute right-3 top-1/2 inline-flex h-9 -translate-y-1/2 items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 text-sm font-medium text-stone-900 shadow-sm transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 md:right-5"
               aria-label="新会话"
               title="新会话"
             >
@@ -1059,8 +1174,6 @@ export default function AgentPage() {
             messages={messages}
             isLoadingMessages={isLoadingMessages}
             isStreaming={isStreaming}
-            mode={mode}
-            targetLabel={targetLabel}
             saveFeedback={saveFeedback}
             families={families}
             activeFamilyId={activeFamilyId}
@@ -1080,7 +1193,7 @@ export default function AgentPage() {
             }}
             className="shrink-0 bg-white px-3 pb-3 pt-2 md:px-5 md:pb-5"
           >
-            <div className="mx-auto max-w-4xl rounded-[26px] border border-stone-100 bg-white p-2.5 shadow-[0_12px_34px_rgba(24,39,32,0.12)] md:p-3">
+            <div className="glass-panel-strong mx-auto max-w-4xl rounded-[26px] p-2.5 md:p-3">
               <textarea
                 ref={inputTextareaRef}
                 value={input}
@@ -1141,7 +1254,9 @@ export default function AgentPage() {
                   <VoiceInputButton
                     compact
                     className="[&>button]:h-9 [&>button]:w-9 [&>button]:rounded-full [&>button]:border-stone-200 [&>button]:bg-stone-50 [&>button]:text-stone-600 [&>button:hover]:bg-stone-100"
-                    onTranscript={(text) => setInput((current) => (current ? `${current}\n${text}` : text))}
+                    onTranscript={(text) =>
+                      setInput((current) => (current ? `${current}\n${text}` : text))
+                    }
                     disabled={isStreaming || isProcessingSaveCommand}
                   />
                   <button
@@ -1149,15 +1264,19 @@ export default function AgentPage() {
                     disabled={isProcessingSaveCommand || (isStreaming ? false : !input.trim())}
                     className={cn(
                       'inline-flex h-9 min-w-9 items-center justify-center gap-2 rounded-full px-3 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50',
-                      isStreaming ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-700 hover:bg-emerald-800',
+                      isStreaming ? 'bg-rose-600 hover:bg-rose-700' : 'bg-sky-700 hover:bg-sky-800',
                     )}
-                    aria-label={isStreaming ? '停止输出' : isProcessingSaveCommand ? '正在保存' : '发送消息'}
+                    aria-label={
+                      isStreaming ? '停止输出' : isProcessingSaveCommand ? '正在保存' : '发送消息'
+                    }
                   >
-                    {isStreaming
-                      ? <Square className="h-4 w-4" />
-                      : isProcessingSaveCommand
-                        ? <Loader2 className="h-4 w-4 animate-spin" />
-                        : <Send className="h-4 w-4" />}
+                    {isStreaming ? (
+                      <Square className="h-4 w-4" />
+                    ) : isProcessingSaveCommand ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -1181,9 +1300,15 @@ export default function AgentPage() {
           setSessionsLoaded(false);
           void loadSessions();
         }}
-        onLoadSession={(targetSessionId) => { void handleLoadSession(targetSessionId); }}
-        onDeleteSession={(targetSessionId) => { void handleDeleteSession(targetSessionId); }}
-        onClearSessions={() => { void handleClearSessions(); }}
+        onLoadSession={(targetSessionId) => {
+          void handleLoadSession(targetSessionId);
+        }}
+        onDeleteSession={(targetSessionId) => {
+          void handleDeleteSession(targetSessionId);
+        }}
+        onClearSessions={() => {
+          void handleClearSessions();
+        }}
       />
 
       <AgentContextPanel
@@ -1202,7 +1327,9 @@ export default function AgentPage() {
         contextError={contextError}
         activeFamilyId={activeFamilyId}
         onClose={() => setIsContextOpen(false)}
-        onTargetChange={(nextTargetSelection) => { void handleTargetChange(nextTargetSelection); }}
+        onTargetChange={(nextTargetSelection) => {
+          void handleTargetChange(nextTargetSelection);
+        }}
       />
     </div>
   );

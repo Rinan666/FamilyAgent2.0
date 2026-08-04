@@ -9,8 +9,8 @@ import { cn } from '@/lib/utils';
 
 function LoadingShell() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-stone-50 px-4">
-      <div className="rounded-md border border-stone-200 bg-white px-4 py-2 text-sm text-stone-500">
+    <div className="app-shell flex min-h-screen items-center justify-center px-4">
+      <div className="glass-panel-strong rounded-2xl px-5 py-3 text-sm text-stone-500">
         正在进入家庭空间...
       </div>
     </div>
@@ -32,7 +32,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   }
 
   return (
-    <div className="relative flex h-dvh flex-col overflow-hidden bg-stone-50 text-stone-900">
+    <div className="app-shell relative flex h-dvh flex-col overflow-hidden text-stone-900">
       <Sidebar viewerRole={viewerRole} isPlatformAdmin={platformAdmin} className="relative z-20" />
       <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
         <main className={cn(

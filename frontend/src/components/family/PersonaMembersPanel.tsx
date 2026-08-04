@@ -16,6 +16,7 @@ import type {
 interface PersonaMembersPanelProps {
   familyId?: number | null;
   isOwner?: boolean;
+  graphMode?: boolean;
 }
 
 const PERSONA_FIELDS: { key: keyof CreatePersonaMemberRequest; label: string; rows?: number }[] = [
@@ -62,16 +63,20 @@ function PersonaCard({
               <p className="mt-0.5 text-xs text-gray-500">{persona.eraIdentity}</p>
             )}
             {persona.description && (
-              <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-600">{persona.description}</p>
+              <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-600">
+                {persona.description}
+              </p>
             )}
             <div className="mt-2 flex flex-wrap gap-1.5">
               {persona.hasMaterial ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700">
+                <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] text-sky-700">
                   <BookOpen className="h-3 w-3" />
                   已有材料
                 </span>
               ) : (
-                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500">暂无材料</span>
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500">
+                  暂无材料
+                </span>
               )}
             </div>
           </div>
@@ -86,30 +91,30 @@ function PersonaCard({
           </Link>
           {isOwner && (
             <>
-            <button
-              type="button"
-              onClick={() => onMaterials(persona)}
-              className="rounded-lg p-1.5 text-gray-400 hover:bg-emerald-50 hover:text-emerald-700"
-              title="材料"
-            >
-              <BookOpen className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => onEdit(persona)}
-              className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-              title="编辑"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => onDelete(persona)}
-              className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
-              title="删除"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
+              <button
+                type="button"
+                onClick={() => onMaterials(persona)}
+                className="rounded-lg p-1.5 text-gray-400 hover:bg-sky-50 hover:text-sky-700"
+                title="材料"
+              >
+                <BookOpen className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onEdit(persona)}
+                className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                title="编辑"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onDelete(persona)}
+                className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                title="删除"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
             </>
           )}
         </div>
@@ -147,7 +152,11 @@ function PersonaFormModal({
       <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
           <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1 text-gray-400 hover:bg-gray-100"
+          >
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -225,8 +234,9 @@ function DeleteConfirmModal({
       <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
         <h2 className="text-base font-semibold text-gray-900">删除精神成员</h2>
         <p className="mt-2 text-sm text-gray-600">
-          即将删除 <span className="font-medium text-gray-900">「{persona.name}」</span>，此操作不可撤销。
-          请输入 <span className="font-medium text-red-600">确认删除</span> 以继续。
+          即将删除 <span className="font-medium text-gray-900">「{persona.name}」</span>
+          ，此操作不可撤销。 请输入 <span className="font-medium text-red-600">确认删除</span>{' '}
+          以继续。
         </p>
         <input
           ref={inputRef}
@@ -282,7 +292,9 @@ function profileFromPersona(persona: PersonaMember): CreatePersonaMemberRequest 
   };
 }
 
-function normalizeDraftProfile(profile: PersonaMaterialDraft['profile']): CreatePersonaMemberRequest {
+function normalizeDraftProfile(
+  profile: PersonaMaterialDraft['profile'],
+): CreatePersonaMemberRequest {
   return {
     name: profile.name || '',
     description: profile.description || '',
@@ -306,7 +318,9 @@ function PersonaMaterialModal({
 }) {
   const [materials, setMaterials] = useState<PersonaMaterial[]>([]);
   const [rawText, setRawText] = useState('');
-  const [draftProfile, setDraftProfile] = useState<CreatePersonaMemberRequest>(profileFromPersona(persona));
+  const [draftProfile, setDraftProfile] = useState<CreatePersonaMemberRequest>(
+    profileFromPersona(persona),
+  );
   const [draftCards, setDraftCards] = useState<PersonaMaterialDraftCard[]>([]);
   const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);
@@ -336,9 +350,9 @@ function PersonaMaterialModal({
   }
 
   function setCard(index: number, patch: Partial<PersonaMaterialDraftCard>) {
-    setDraftCards((current) => current.map((card, itemIndex) => (
-      itemIndex === index ? { ...card, ...patch } : card
-    )));
+    setDraftCards((current) =>
+      current.map((card, itemIndex) => (itemIndex === index ? { ...card, ...patch } : card)),
+    );
   }
 
   async function handleOrganize() {
@@ -379,7 +393,9 @@ function PersonaMaterialModal({
     setError('');
     try {
       await familyApi.updatePersonaMember(familyId, persona.id, draftProfile);
-      await Promise.all(cards.map((card) => familyApi.createPersonaMaterial(familyId, persona.id, card)));
+      await Promise.all(
+        cards.map((card) => familyApi.createPersonaMaterial(familyId, persona.id, card)),
+      );
       setRawText('');
       setDraftCards([]);
       setReason('');
@@ -414,14 +430,20 @@ function PersonaMaterialModal({
             <h2 className="text-base font-semibold text-gray-900">整理精神成员材料</h2>
             <p className="mt-1 text-xs text-gray-500">{persona.name}</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1 text-gray-400 hover:bg-gray-100"
+          >
             <X className="h-4 w-4" />
           </button>
         </div>
 
         <div className="max-h-[78vh] overflow-y-auto px-5 py-4">
           {error && (
-            <div className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
+            <div className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+              {error}
+            </div>
           )}
 
           <div className="grid gap-4 lg:grid-cols-[1fr_1.15fr]">
@@ -437,7 +459,9 @@ function PersonaMaterialModal({
               </div>
               <button
                 type="button"
-                onClick={() => { void handleOrganize(); }}
+                onClick={() => {
+                  void handleOrganize();
+                }}
                 disabled={organizing || rawText.trim().length < 8}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
               >
@@ -450,19 +474,28 @@ function PersonaMaterialModal({
                 {loading ? (
                   <div className="text-sm text-gray-400">正在加载材料...</div>
                 ) : materials.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-gray-200 px-3 py-4 text-sm text-gray-400">暂无材料卡</div>
+                  <div className="rounded-xl border border-dashed border-gray-200 px-3 py-4 text-sm text-gray-400">
+                    暂无材料卡
+                  </div>
                 ) : (
                   <div className="space-y-2">
                     {materials.map((material) => (
-                      <div key={material.id} className="rounded-xl border border-gray-200 px-3 py-3">
+                      <div
+                        key={material.id}
+                        className="rounded-xl border border-gray-200 px-3 py-3"
+                      >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-gray-900">{material.title}</p>
-                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">{material.content}</p>
+                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">
+                              {material.content}
+                            </p>
                           </div>
                           <button
                             type="button"
-                            onClick={() => { void handleDeleteMaterial(material.id); }}
+                            onClick={() => {
+                              void handleDeleteMaterial(material.id);
+                            }}
                             disabled={saving}
                             className="shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
                             title="删除材料"
@@ -500,11 +533,18 @@ function PersonaMaterialModal({
               {draftCards.length > 0 && (
                 <div className="space-y-3">
                   {draftCards.map((card, index) => (
-                    <div key={`${card.title}-${index}`} className="rounded-xl border border-gray-200 px-3 py-3">
+                    <div
+                      key={`${card.title}-${index}`}
+                      className="rounded-xl border border-gray-200 px-3 py-3"
+                    >
                       <div className="flex justify-end">
                         <button
                           type="button"
-                          onClick={() => setDraftCards((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                          onClick={() =>
+                            setDraftCards((current) =>
+                              current.filter((_, itemIndex) => itemIndex !== index),
+                            )
+                          }
                           className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
                           title="移除草案"
                         >
@@ -532,7 +572,9 @@ function PersonaMaterialModal({
                         <span className="mb-1 block text-xs font-medium text-gray-700">标签</span>
                         <input
                           value={tagsToText(card.tags)}
-                          onChange={(event) => setCard(index, { tags: textToTags(event.target.value) })}
+                          onChange={(event) =>
+                            setCard(index, { tags: textToTags(event.target.value) })
+                          }
                           className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400"
                         />
                       </label>
@@ -553,9 +595,11 @@ function PersonaMaterialModal({
             </button>
             <button
               type="button"
-              onClick={() => { void handleSaveDraft(); }}
+              onClick={() => {
+                void handleSaveDraft();
+              }}
               disabled={saving || draftCards.length === 0}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
             >
               {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               保存草案
@@ -567,7 +611,11 @@ function PersonaMaterialModal({
   );
 }
 
-export default function PersonaMembersPanel({ familyId, isOwner = false }: PersonaMembersPanelProps) {
+export default function PersonaMembersPanel({
+  familyId,
+  isOwner = false,
+  graphMode = false,
+}: PersonaMembersPanelProps) {
   const [personas, setPersonas] = useState<PersonaMember[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -582,7 +630,8 @@ export default function PersonaMembersPanel({ familyId, isOwner = false }: Perso
     if (!familyId) return;
     setLoading(true);
     setError('');
-    familyApi.listPersonaMembers(familyId)
+    familyApi
+      .listPersonaMembers(familyId)
       .then(setPersonas)
       .catch((err) => setError(err instanceof Error ? err.message : '加载精神成员失败'))
       .finally(() => setLoading(false));
@@ -646,9 +695,11 @@ export default function PersonaMembersPanel({ familyId, isOwner = false }: Perso
   }
 
   return (
-    <div className="space-y-4">
+    <div className={graphMode ? 'space-y-3' : 'space-y-4'}>
       {error && (
-        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
+        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+          {error}
+        </div>
       )}
 
       {loading ? (
@@ -658,13 +709,52 @@ export default function PersonaMembersPanel({ familyId, isOwner = false }: Perso
         </div>
       ) : (
         <>
-          {personas.length === 0 ? (
+          {graphMode ? (
+            <div className="flex flex-wrap items-start justify-center gap-4">
+              {personas.map((persona) => (
+                <button
+                  key={persona.id}
+                  type="button"
+                  onClick={() => setEditTarget(persona)}
+                  className="group flex w-28 flex-col items-center gap-2 text-center"
+                  title="查看并编辑精神成员"
+                >
+                  <span className="flex h-24 w-24 items-center justify-center rounded-full border-4 border-violet-100 bg-gradient-to-br from-violet-500 to-fuchsia-500 text-2xl font-semibold text-white shadow-[0_12px_28px_rgba(124,58,237,0.22)] transition group-hover:-translate-y-1 group-hover:border-violet-200">
+                    {persona.name.charAt(0)}
+                  </span>
+                  <span className="max-w-full truncate text-sm font-semibold text-stone-800">
+                    {persona.name}
+                  </span>
+                  <span className="max-w-full truncate text-[11px] text-violet-600">精神成员</span>
+                </button>
+              ))}
+              {isOwner && personas.length < 3 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormError('');
+                    setShowCreate(true);
+                  }}
+                  className="group flex w-28 flex-col items-center gap-2 text-center"
+                  title="新增精神成员"
+                >
+                  <span className="flex h-24 w-24 items-center justify-center rounded-full border-2 border-dashed border-violet-300 bg-violet-50/70 text-violet-600 transition group-hover:-translate-y-1 group-hover:border-violet-400 group-hover:bg-violet-100">
+                    <Plus className="h-7 w-7" />
+                  </span>
+                  <span className="text-sm font-semibold text-violet-700">新增精神成员</span>
+                </button>
+              )}
+              {!isOwner && personas.length === 0 && (
+                <div className="w-full rounded-2xl border border-dashed border-gray-200 px-4 py-10 text-center">
+                  <UserCheck className="mx-auto mb-2 h-8 w-8 text-gray-300" />
+                  <p className="text-sm text-gray-500">还没有精神成员</p>
+                </div>
+              )}
+            </div>
+          ) : personas.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-gray-200 px-4 py-10 text-center">
               <UserCheck className="mx-auto mb-2 h-8 w-8 text-gray-300" />
               <p className="text-sm text-gray-500">还没有精神成员</p>
-              {isOwner && (
-                <p className="mt-1 text-xs text-gray-400">点击下方按钮添加第一个精神顾问</p>
-              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -681,10 +771,13 @@ export default function PersonaMembersPanel({ familyId, isOwner = false }: Perso
             </div>
           )}
 
-          {isOwner && personas.length < 3 && (
+          {isOwner && !graphMode && personas.length < 3 && (
             <button
               type="button"
-              onClick={() => { setFormError(''); setShowCreate(true); }}
+              onClick={() => {
+                setFormError('');
+                setShowCreate(true);
+              }}
               className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-violet-300 py-3 text-sm font-medium text-violet-600 hover:border-violet-400 hover:bg-violet-50"
             >
               <Plus className="h-4 w-4" />
@@ -693,7 +786,9 @@ export default function PersonaMembersPanel({ familyId, isOwner = false }: Perso
           )}
 
           {isOwner && personas.length >= 3 && (
-            <p className="text-center text-xs text-gray-400">已达到 3 个精神成员上限，请先删除一个再添加。</p>
+            <p className="text-center text-xs text-gray-400">
+              已达到 3 个精神成员上限，请先删除一个再添加。
+            </p>
           )}
         </>
       )}
@@ -744,7 +839,9 @@ export default function PersonaMembersPanel({ familyId, isOwner = false }: Perso
       )}
 
       {formError && (
-        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{formError}</div>
+        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+          {formError}
+        </div>
       )}
     </div>
   );

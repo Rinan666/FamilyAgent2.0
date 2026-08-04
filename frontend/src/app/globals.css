@@ -4,13 +4,13 @@
 
 @layer base {
   :root {
-    --background: 45 24% 97%;
-    --foreground: 164 16% 15%;
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 164 16% 15%;
-    --border: 40 14% 86%;
-    --input: 40 14% 86%;
-    --ring: 158 45% 34%;
+    --card-foreground: 222 47% 11%;
+    --border: 214 24% 88%;
+    --input: 214 24% 88%;
+    --ring: 199 89% 48%;
   }
 
   html {
@@ -26,18 +26,106 @@
   body {
     @apply antialiased;
     min-height: 100vh;
-    background: #fafaf9;
-    color: #18231d;
-    font-family: "Avenir Next", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+    position: relative;
+    overflow-x: hidden;
+    background:
+      radial-gradient(circle at 10% -10%, rgba(186, 230, 253, 0.42), transparent 34%),
+      radial-gradient(circle at 96% 0%, rgba(214, 226, 255, 0.32), transparent 32%),
+      linear-gradient(145deg, #f7fbff 0%, #f8f8fb 52%, #f4f8ff 100%);
+    color: #0f172a;
+    font-family:
+      'Avenir Next', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui,
+      sans-serif;
+  }
+
+  body::before,
+  body::after {
+    position: fixed;
+    z-index: -1;
+    width: 26rem;
+    height: 26rem;
+    border-radius: 999px;
+    content: '';
+    filter: blur(72px);
+    opacity: 0.3;
+    pointer-events: none;
+  }
+
+  body::before {
+    top: 8rem;
+    left: -10rem;
+    background: rgba(125, 211, 252, 0.34);
+  }
+
+  body::after {
+    right: -10rem;
+    bottom: -8rem;
+    background: rgba(157, 181, 255, 0.24);
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background: rgba(100, 116, 139, 0.28);
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(30, 41, 59, 0.44);
+    background-clip: content-box;
   }
 
   ::selection {
-    background: rgba(21, 128, 100, 0.18);
-    color: #14211b;
+    background: rgba(14, 165, 233, 0.2);
+    color: #0f172a;
   }
 }
 
 @layer components {
+  .app-shell {
+    position: relative;
+    isolation: isolate;
+    background: rgba(248, 250, 252, 0.58);
+  }
+
+  .glass-panel {
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    background: rgba(255, 255, 255, 0.68);
+    box-shadow:
+      0 20px 60px rgba(15, 23, 42, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.82);
+    backdrop-filter: blur(24px) saturate(135%);
+    -webkit-backdrop-filter: blur(24px) saturate(135%);
+  }
+
+  .glass-panel-strong {
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.82);
+    box-shadow:
+      0 24px 70px rgba(15, 23, 42, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(30px) saturate(145%);
+    -webkit-backdrop-filter: blur(30px) saturate(145%);
+  }
+
+  .glass-control {
+    border: 1px solid rgba(203, 213, 225, 0.76);
+    background: rgba(255, 255, 255, 0.62);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  .glass-control:hover {
+    border-color: rgba(14, 165, 233, 0.38);
+    background: rgba(255, 255, 255, 0.82);
+  }
+
   .typing-cursor::after {
     content: '|';
     animation: blink 1s step-end infinite;

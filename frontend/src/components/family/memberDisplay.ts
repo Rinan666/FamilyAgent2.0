@@ -1,7 +1,7 @@
 import type { FamilyMember } from '@/types';
 
 const avatarToneClasses = [
-  'from-emerald-700 to-teal-500 text-white',
+  'from-sky-700 to-blue-500 text-white',
   'from-sky-700 to-cyan-500 text-white',
   'from-violet-700 to-fuchsia-500 text-white',
   'from-amber-600 to-orange-500 text-white',

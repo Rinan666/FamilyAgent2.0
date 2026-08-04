@@ -21,16 +21,18 @@ function persona(overrides: Partial<PersonaMember> = {}): PersonaMember {
 
 describe('personaContext', () => {
   it('builds immersive persona context around setting consistency', () => {
-    const context = buildPersonaProfileContext(persona(), [{
-      id: 11,
-      familyId: 1,
-      personaId: 7,
-      title: '做事风格',
-      content: '先把责任扛起来，再谈委屈。',
-      tags: ['价值观'],
-      createdBy: 100,
-      createdAt: '2026-06-13T00:00:00.000Z',
-    }]);
+    const context = buildPersonaProfileContext(persona(), [
+      {
+        id: 11,
+        familyId: 1,
+        personaId: 7,
+        title: '做事风格',
+        content: '先把责任扛起来，再谈委屈。',
+        tags: ['价值观'],
+        createdBy: 100,
+        createdAt: '2026-06-13T00:00:00.000Z',
+      },
+    ]);
 
     expect(context).toContain('档案驱动的角色型成员');
     expect(context).toContain('忠于设定');
@@ -40,7 +42,7 @@ describe('personaContext', () => {
   });
 
   it('uses role voice in persona switch copy', () => {
-    expect(personaSwitchMessage('外公')).toContain('稳定角色声音');
+    expect(personaSwitchMessage('外公')).toBe('已切换到精神成员“外公”');
     expect(personaSwitchMessage('外公')).not.toContain('真实成员');
   });
 });

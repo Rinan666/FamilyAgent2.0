@@ -69,7 +69,7 @@ export default function PersonalMemoryComposer({
         <input
           value={title}
           onChange={(event) => setTitle(event.target.value.slice(0, 80))}
-          className="mt-1 w-full rounded-lg border border-stone-200 bg-white px-3 py-2.5 outline-none focus:border-emerald-500"
+          className="mt-1 w-full rounded-lg border border-stone-200 bg-white px-3 py-2.5 outline-none focus:border-sky-500"
           placeholder="可选"
         />
       </label>
@@ -79,7 +79,7 @@ export default function PersonalMemoryComposer({
           value={content}
           onChange={(event) => setContent(event.target.value.slice(0, 8000))}
           rows={10}
-          className="mt-1 w-full resize-y rounded-lg border border-stone-200 bg-white px-3 py-2.5 leading-7 outline-none focus:border-emerald-500"
+          className="mt-1 w-full resize-y rounded-lg border border-stone-200 bg-white px-3 py-2.5 leading-7 outline-none focus:border-sky-500"
           placeholder="写下想长期保留的知识、观点、感悟、偏好或计划"
         />
       </label>
@@ -118,7 +118,7 @@ export default function PersonalMemoryComposer({
         </fieldset>
       )}
       <div className="flex justify-end">
-        <button type="button" onClick={() => void save()} disabled={!canSave} className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50">
+        <button type="button" onClick={() => void save()} disabled={!canSave} className="inline-flex items-center gap-2 rounded-lg bg-sky-700 px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50">
           {saving && <Loader2 className="h-4 w-4 animate-spin" />}
           确认保存
         </button>

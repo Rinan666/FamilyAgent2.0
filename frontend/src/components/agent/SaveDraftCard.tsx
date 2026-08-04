@@ -2,12 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Check, Loader2, X } from 'lucide-react';
-import type {
-  AgentSaveTool,
-  AgentSaveToolPlan,
-  Family,
-  SaveMemoryVisibility,
-} from '@/types';
+import type { AgentSaveTool, AgentSaveToolPlan, Family, SaveMemoryVisibility } from '@/types';
 
 interface SaveDraftCardProps {
   plan: AgentSaveToolPlan;
@@ -65,24 +60,26 @@ export default function SaveDraftCard({
   }, [activeFamilyId, plan]);
 
   const effectiveVisibility = tool === 'GROWTH_GUARD' ? 'CARE_VISIBLE' : visibility;
-  const needsSelectedFamilies = tool === 'PERSONAL_MEMORY'
-    && effectiveVisibility === 'SELECTED_FAMILIES_VISIBLE';
-  const canConfirm = Boolean(title.trim() && content.trim())
-    && (!needsSelectedFamilies || selectedFamilyIds.length > 0)
-    && !isConfirming;
-  const visibilityOptions = tool === 'PERSONAL_MEMORY'
-    ? PERSONAL_VISIBILITY_OPTIONS
-    : tool === 'FAMILY_MEMORY'
-      ? DEFAULT_VISIBILITY_OPTIONS.filter((option) => option.value !== 'PRIVATE')
-      : DEFAULT_VISIBILITY_OPTIONS;
+  const needsSelectedFamilies =
+    tool === 'PERSONAL_MEMORY' && effectiveVisibility === 'SELECTED_FAMILIES_VISIBLE';
+  const canConfirm =
+    Boolean(title.trim() && content.trim()) &&
+    (!needsSelectedFamilies || selectedFamilyIds.length > 0) &&
+    !isConfirming;
+  const visibilityOptions =
+    tool === 'PERSONAL_MEMORY'
+      ? PERSONAL_VISIBILITY_OPTIONS
+      : tool === 'FAMILY_MEMORY'
+        ? DEFAULT_VISIBILITY_OPTIONS.filter((option) => option.value !== 'PRIVATE')
+        : DEFAULT_VISIBILITY_OPTIONS;
 
   return (
-    <div data-testid="save-draft-card" className="mt-3 w-full max-w-2xl rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 text-left text-stone-800 shadow-sm">
+    <div
+      data-testid="save-draft-card"
+      className="mt-3 w-full max-w-2xl rounded-xl border border-sky-200 bg-sky-50/50 p-4 text-left text-stone-800 shadow-sm"
+    >
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-emerald-900">保存草稿</p>
-          <p className="mt-0.5 text-xs text-emerald-700">尚未保存，可直接修改后确认。</p>
-        </div>
+        <p className="text-sm font-semibold text-sky-900">保存草稿</p>
         <select
           value={tool}
           onChange={(event) => {
@@ -91,11 +88,13 @@ export default function SaveDraftCard({
             setVisibility(defaultVisibilityForTool(nextTool, visibility));
           }}
           disabled={isConfirming}
-          className="rounded-md border border-emerald-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-emerald-500"
+          className="rounded-md border border-sky-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-sky-500"
           aria-label="保存类型"
         >
           {TOOL_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
           ))}
         </select>
       </div>
@@ -107,7 +106,7 @@ export default function SaveDraftCard({
           onChange={(event) => setTitle(event.target.value.slice(0, 24))}
           disabled={isConfirming}
           maxLength={24}
-          className="mt-1 w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
+          className="mt-1 w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-500"
         />
       </label>
 
@@ -119,7 +118,7 @@ export default function SaveDraftCard({
           disabled={isConfirming}
           maxLength={1200}
           rows={5}
-          className="mt-1 w-full resize-y rounded-md border border-stone-200 bg-white px-3 py-2 text-sm leading-6 outline-none focus:border-emerald-500"
+          className="mt-1 w-full resize-y rounded-md border border-stone-200 bg-white px-3 py-2 text-sm leading-6 outline-none focus:border-sky-500"
         />
       </label>
 
@@ -130,10 +129,12 @@ export default function SaveDraftCard({
             value={effectiveVisibility}
             onChange={(event) => setVisibility(event.target.value as SaveMemoryVisibility)}
             disabled={isConfirming || tool === 'GROWTH_GUARD'}
-            className="mt-1 w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 disabled:bg-stone-100"
+            className="mt-1 w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-500 disabled:bg-stone-100"
           >
             {visibilityOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
             ))}
           </select>
         </label>
@@ -145,7 +146,7 @@ export default function SaveDraftCard({
             onChange={(event) => setTags(event.target.value)}
             disabled={isConfirming}
             placeholder="用逗号分隔"
-            className="mt-1 w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
+            className="mt-1 w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-500"
           />
         </label>
       </div>
@@ -159,9 +160,11 @@ export default function SaveDraftCard({
                 <input
                   type="checkbox"
                   checked={selectedFamilyIds.includes(family.id)}
-                  onChange={() => setSelectedFamilyIds(toggleFamilyId(selectedFamilyIds, family.id))}
+                  onChange={() =>
+                    setSelectedFamilyIds(toggleFamilyId(selectedFamilyIds, family.id))
+                  }
                   disabled={isConfirming}
-                  className="h-4 w-4 rounded border-stone-300 text-emerald-700"
+                  className="h-4 w-4 rounded border-stone-300 text-sky-700"
                 />
                 <span className="truncate">{family.name}</span>
               </label>
@@ -171,10 +174,6 @@ export default function SaveDraftCard({
             <p className="text-xs text-stone-500">当前没有可选择的家族。</p>
           )}
         </fieldset>
-      )}
-
-      {plan.reason && (
-        <p className="mt-3 text-xs leading-5 text-stone-500">AI 整理说明：{plan.reason}</p>
       )}
 
       <div className="mt-4 flex justify-end gap-2">
@@ -189,19 +188,27 @@ export default function SaveDraftCard({
         </button>
         <button
           type="button"
-          onClick={() => onConfirm(buildEditedPlan(
-            plan,
-            title,
-            content,
-            tool,
-            effectiveVisibility,
-            tags,
-            selectedFamilyIds,
-          ))}
+          onClick={() =>
+            onConfirm(
+              buildEditedPlan(
+                plan,
+                title,
+                content,
+                tool,
+                effectiveVisibility,
+                tags,
+                selectedFamilyIds,
+              ),
+            )
+          }
           disabled={!canConfirm}
-          className="inline-flex items-center gap-1 rounded-md bg-emerald-700 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center gap-1 rounded-md bg-sky-700 px-3 py-2 text-sm font-medium text-white transition hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {isConfirming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+          {isConfirming ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Check className="h-4 w-4" />
+          )}
           确认保存
         </button>
       </div>
@@ -211,8 +218,13 @@ export default function SaveDraftCard({
 
 function draftVisibility(plan: AgentSaveToolPlan): SaveMemoryVisibility {
   const value = String(plan.scope || plan.visibility || '').toUpperCase();
-  if (value === 'CARE_VISIBLE' || value === 'FAMILY_VISIBLE'
-    || value === 'ALL_FAMILIES_VISIBLE' || value === 'SELECTED_FAMILIES_VISIBLE') return value;
+  if (
+    value === 'CARE_VISIBLE' ||
+    value === 'FAMILY_VISIBLE' ||
+    value === 'ALL_FAMILIES_VISIBLE' ||
+    value === 'SELECTED_FAMILIES_VISIBLE'
+  )
+    return value;
   return 'PRIVATE';
 }
 
@@ -259,9 +271,13 @@ function defaultVisibilityForTool(
   if (tool === 'GROWTH_GUARD') return 'CARE_VISIBLE';
   if (tool === 'FAMILY_MEMORY') return current === 'CARE_VISIBLE' ? current : 'FAMILY_VISIBLE';
   if (tool === 'PERSONAL_MEMORY') {
-    return PERSONAL_VISIBILITY_OPTIONS.some((option) => option.value === current) ? current : 'PRIVATE';
+    return PERSONAL_VISIBILITY_OPTIONS.some((option) => option.value === current)
+      ? current
+      : 'PRIVATE';
   }
-  return DEFAULT_VISIBILITY_OPTIONS.some((option) => option.value === current) ? current : 'PRIVATE';
+  return DEFAULT_VISIBILITY_OPTIONS.some((option) => option.value === current)
+    ? current
+    : 'PRIVATE';
 }
 
 function toggleFamilyId(selected: number[], familyId: number) {

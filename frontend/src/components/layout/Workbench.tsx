@@ -4,11 +4,11 @@ import { cn } from '@/lib/utils';
 type WorkbenchTone = 'neutral' | 'accent' | 'danger' | 'warning' | 'success';
 
 const toneClassNames: Record<WorkbenchTone, string> = {
-  neutral: 'border-stone-200 bg-stone-50 text-stone-700',
-  accent: 'border-emerald-100 bg-emerald-50 text-emerald-700',
-  danger: 'border-red-100 bg-red-50 text-red-700',
-  warning: 'border-amber-100 bg-amber-50 text-amber-800',
-  success: 'border-emerald-100 bg-emerald-50 text-emerald-800',
+  neutral: 'border-stone-200/70 bg-white/55 text-stone-700 backdrop-blur',
+  accent: 'border-sky-100/80 bg-sky-50/75 text-sky-700 backdrop-blur',
+  danger: 'border-red-100/80 bg-red-50/75 text-red-700 backdrop-blur',
+  warning: 'border-amber-100/80 bg-amber-50/75 text-amber-800 backdrop-blur',
+  success: 'border-sky-100/80 bg-sky-50/75 text-sky-800 backdrop-blur',
 };
 
 export function WorkbenchPage({
@@ -31,7 +31,7 @@ export function WorkbenchSurface({
   return (
     <section
       className={cn(
-        'rounded-md border border-stone-200 bg-white p-4 sm:p-5',
+        'glass-panel rounded-[24px] p-4 sm:p-5',
         className,
       )}
     >
@@ -54,7 +54,7 @@ export function WorkbenchBadge({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs font-medium',
+        'inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium',
         toneClassNames[tone],
         className,
       )}
@@ -79,13 +79,13 @@ export function WorkbenchButton({
     <button
       type="button"
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50',
+        'inline-flex items-center justify-center gap-2 rounded-full text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50',
         size === 'sm' && 'h-8 px-3 text-xs',
         size === 'md' && 'h-10 px-4',
         size === 'icon' && 'h-9 w-9 p-0',
-        variant === 'primary' && 'bg-stone-950 text-white hover:bg-stone-800',
-        variant === 'secondary' && 'border border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50',
-        variant === 'ghost' && 'text-stone-600 hover:bg-stone-100 hover:text-stone-950',
+        variant === 'primary' && 'bg-gradient-to-r from-sky-700 to-blue-600 text-white shadow-[0_10px_24px_rgba(14,165,233,0.2)] hover:from-sky-600 hover:to-blue-500',
+        variant === 'secondary' && 'glass-control text-stone-700 hover:text-stone-950',
+        variant === 'ghost' && 'text-stone-600 hover:bg-white/70 hover:text-stone-950',
         variant === 'danger' && 'bg-red-600 text-white hover:bg-red-700',
         className,
       )}
@@ -113,10 +113,10 @@ export function WorkbenchAlert({
 }
 
 export const workbenchInputClassName =
-  'h-10 w-full rounded-md border border-stone-200 bg-stone-50 px-3 text-sm text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-500';
+  'glass-control h-10 w-full rounded-2xl px-3 text-sm text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-sky-500 focus:bg-white/90 focus:ring-2 focus:ring-sky-100 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-500';
 
 export const workbenchTextareaClassName =
-  'w-full resize-none rounded-md border border-stone-200 bg-white px-4 py-3 text-sm leading-7 text-stone-800 outline-none transition placeholder:text-stone-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-500';
+  'glass-control w-full resize-none rounded-2xl px-4 py-3 text-sm leading-7 text-stone-800 outline-none transition placeholder:text-stone-400 focus:border-sky-500 focus:bg-white/90 focus:ring-2 focus:ring-sky-100 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-500';
 
 export function WorkbenchHero({
   badge,
@@ -134,7 +134,7 @@ export function WorkbenchHero({
   className?: string;
 }) {
   return (
-    <div className={cn('flex flex-col gap-3 px-1 py-1 lg:flex-row lg:items-end lg:justify-between', className)}>
+    <div className={cn('flex flex-col gap-3 px-1 py-2 lg:flex-row lg:items-end lg:justify-between', className)}>
       <div className="min-w-0 space-y-2">
         {badge ? <div>{badge}</div> : null}
         <h1 className="truncate text-xl font-semibold text-stone-950 sm:text-2xl">{title}</h1>
@@ -184,7 +184,7 @@ export function WorkbenchEmptyState({
   return (
     <WorkbenchSurface className={cn('px-6 py-8 text-center', className)}>
       {icon ? (
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-md bg-emerald-100 text-emerald-800">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-md bg-sky-100 text-sky-800">
           {icon}
         </div>
       ) : null}

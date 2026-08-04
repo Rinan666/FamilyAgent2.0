@@ -15,8 +15,6 @@ function renderMessageList(saveFeedback = {}) {
       messages={[message]}
       isLoadingMessages={false}
       isStreaming={false}
-      mode="family"
-      targetLabel="家庭成员"
       saveFeedback={saveFeedback}
       families={[]}
       activeFamilyId={null}
@@ -59,7 +57,6 @@ describe('AgentMessageList save controls', () => {
     });
 
     expect(markup).toContain('保存草稿');
-    expect(markup).toContain('尚未保存，可直接修改后确认');
     expect(markup).toContain('应用题先复述题意');
     expect(markup).toContain('确认保存');
     expect(markup).toContain('取消');

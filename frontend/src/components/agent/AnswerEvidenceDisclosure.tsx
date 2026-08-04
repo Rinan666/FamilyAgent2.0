@@ -18,12 +18,12 @@ export default function AnswerEvidenceDisclosure({ message }: { message: ChatMes
   }
 
   return (
-    <details className="mt-3 overflow-hidden rounded-2xl border border-emerald-100 bg-emerald-50/70 text-xs text-stone-600">
+    <details className="mt-3 overflow-hidden rounded-2xl border border-sky-100 bg-sky-50/70 text-xs text-stone-600">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5">
         <span className="font-medium text-stone-800">回答依据</span>
         <span className="text-[11px] text-stone-500">{status}</span>
       </summary>
-      <div className="space-y-3 border-t border-emerald-100 px-3 py-3">
+      <div className="space-y-3 border-t border-sky-100 px-3 py-3">
         {sections.map((section) => (
           <section key={section.title} className="space-y-2">
             <div className="flex items-center justify-between gap-3">
