@@ -181,6 +181,14 @@ export function normalizeAssistantMetadata(metadata: Record<string, unknown>): N
   const sourceSummary = stringValue(metadata.sourceSummary) || stringValue(metadata.source_summary);
   const requestId = stringValue(metadata.requestId) || stringValue(metadata.request_id);
   const runId = positiveNumberValue(metadata.runId, metadata.run_id);
+  const effectiveContext = stringValue(metadata.effectiveContext) || stringValue(metadata.effective_context);
+  const answerDepth = stringValue(metadata.answerDepth) || stringValue(metadata.answer_depth);
+  const recallDepth = stringValue(metadata.recallDepth) || stringValue(metadata.recall_depth);
+  const webSearchPolicy = stringValue(metadata.webSearchPolicy) || stringValue(metadata.web_search_policy);
+  const sourceCount = numberValue(metadata.sourceCount, metadata.source_count);
+  const targetUserId = positiveNumberValue(metadata.targetUserId, metadata.target_user_id);
+  const targetPersonaId = positiveNumberValue(metadata.targetPersonaId, metadata.target_persona_id);
+  const targetLabel = stringValue(metadata.targetLabel) || stringValue(metadata.target_label);
   const baseMetadata: NonNullable<ChatMessage['metadata']> = {
     ...(responseMode === 'quick' || responseMode === 'think'
       ? { responseMode }
@@ -193,6 +201,41 @@ export function normalizeAssistantMetadata(metadata: Record<string, unknown>): N
     ...(sourceSummary ? { sourceSummary } : {}),
     ...(requestId ? { requestId } : {}),
     ...(runId ? { runId } : {}),
+    ...(effectiveContext === 'FAMILY' || effectiveContext === 'MIRROR' || effectiveContext === 'PERSONA'
+      ? { effectiveContext }
+      : {}),
+    ...(answerDepth === 'BRIEF' || answerDepth === 'STANDARD' || answerDepth === 'DEEP'
+      ? { answerDepth }
+      : {}),
+    ...(recallDepth === 'NONE' || recallDepth === 'BRIEF' || recallDepth === 'STANDARD' || recallDepth === 'DEEP'
+      ? { recallDepth }
+      : {}),
+    ...(webSearchPolicy === 'NONE' || webSearchPolicy === 'AUTO' || webSearchPolicy === 'REQUIRED'
+      ? { webSearchPolicy }
+      : {}),
+    ...(typeof metadata.decisionSupport === 'boolean'
+      ? { decisionSupport: metadata.decisionSupport }
+      : typeof metadata.decision_support === 'boolean'
+        ? { decisionSupport: metadata.decision_support }
+        : {}),
+    ...(typeof metadata.intentDegraded === 'boolean'
+      ? { intentDegraded: metadata.intentDegraded }
+      : typeof metadata.intent_degraded === 'boolean'
+        ? { intentDegraded: metadata.intent_degraded }
+        : {}),
+    ...(typeof metadata.contextChanged === 'boolean'
+      ? { contextChanged: metadata.contextChanged }
+      : typeof metadata.context_changed === 'boolean'
+        ? { contextChanged: metadata.context_changed }
+        : {}),
+    ...(sourceCount ? { sourceCount } : {}),
+    ...(targetUserId ? { targetUserId } : {}),
+    ...(targetPersonaId ? { targetPersonaId } : {}),
+    ...(targetLabel
+      ? effectiveContext === 'PERSONA'
+        ? { targetPersonaName: targetLabel, targetMemberName: targetLabel }
+        : { targetMemberName: targetLabel }
+      : {}),
     ...(typeof metadata.insufficientSources === 'boolean'
       ? { insufficientSources: metadata.insufficientSources }
       : {}),

@@ -2,7 +2,6 @@ import { request, sseStreamRequest } from './shared';
 import type { ViewerRole } from '@/lib/roles';
 import type {
   AgentConfirmationDecision,
-  AgentResponseMode,
   AgentSaveMemoryToolRequest,
   AgentToolExecutionResult,
   AgentToolConfirmationDecisionResult,
@@ -22,6 +21,7 @@ export const agentApi = {
   streamChat: (
     body: {
       message: string;
+      sessionId?: number | null;
       familyId?: number | null;
       targetUserId?: number | null;
       targetPersonaId?: number | null;
@@ -31,7 +31,6 @@ export const agentApi = {
       memoryContext?: string;
       viewerRole?: ViewerRole;
       targetRole?: ViewerRole;
-      responseMode?: AgentResponseMode;
       clientTimestamp?: string;
       clientTimezone?: string;
     },
@@ -42,6 +41,7 @@ export const agentApi = {
     onAbort?: () => void,
   ) => sseStreamRequest('/agent/chat/stream', {
     member_message: body.message,
+    session_id: body.sessionId || null,
     family_id: body.familyId || null,
     target_user_id: body.targetUserId || null,
     target_persona_id: body.targetPersonaId || null,
@@ -51,7 +51,6 @@ export const agentApi = {
     memory_context: body.memoryContext || '',
     viewer_role: body.viewerRole || 'MEMBER',
     target_role: body.targetRole || 'MEMBER',
-    response_mode: body.responseMode || 'think',
     client_timestamp: body.clientTimestamp || new Date().toISOString(),
     client_timezone: body.clientTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
   }, onChunk, onDone, onError, onMetadata, onAbort),

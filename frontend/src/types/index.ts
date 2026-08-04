@@ -55,6 +55,10 @@ export interface RegisterRequest {
 
 export type AgentMode = 'family' | 'mirror' | 'persona';
 export type AgentResponseMode = 'quick' | 'think';
+export type AgentAnswerDepth = 'BRIEF' | 'STANDARD' | 'DEEP';
+export type MemoryRecallDepth = 'NONE' | 'BRIEF' | 'STANDARD' | 'DEEP';
+export type AgentWebSearchPolicy = 'NONE' | 'AUTO' | 'REQUIRED';
+export type AgentContextType = 'FAMILY' | 'MIRROR' | 'PERSONA';
 export type WriteCategory = 'RECORD' | 'EXPERIENCE' | 'OBSERVATION';
 export type MediaRecordType = 'DIARY' | 'GROWTH' | 'MEMORY';
 
@@ -293,6 +297,14 @@ export interface ChatMessage {
     requestId?: string;
     runId?: number;
     thinkingSummary?: string;
+    effectiveContext?: AgentContextType;
+    answerDepth?: AgentAnswerDepth;
+    recallDepth?: MemoryRecallDepth;
+    webSearchPolicy?: AgentWebSearchPolicy;
+    decisionSupport?: boolean;
+    intentDegraded?: boolean;
+    contextChanged?: boolean;
+    sourceCount?: number;
     rag?: {
       retrievalMode?: string;
       embeddingReadyCount?: number;
@@ -329,6 +341,9 @@ export interface ChatSessionSummary {
   status: 'ACTIVE' | 'ENDED';
   visibility?: string;
   source?: string;
+  agentContextType?: AgentContextType;
+  targetUserId?: number;
+  targetPersonaId?: number;
   messageCount?: number;
   tokenCount?: number;
   lastMessageAt?: string;

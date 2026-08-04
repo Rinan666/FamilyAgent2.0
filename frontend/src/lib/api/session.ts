@@ -19,7 +19,9 @@ import type {
 export const sessionApi = {
   createSession: (data: {
     familyId?: number; subject?: string;
-    title?: string; summary?: string; messages?: ChatMessage[]; visibility?: string; source?: string; metadata?: Record<string, unknown>;
+    title?: string; summary?: string; messages?: ChatMessage[]; visibility?: string; source?: string;
+    agentContextType?: 'FAMILY' | 'MIRROR' | 'PERSONA'; targetUserId?: number; targetPersonaId?: number;
+    metadata?: Record<string, unknown>;
   }) => request<ChatSessionDetail>('/sessions', {
     method: 'POST',
     body: JSON.stringify({

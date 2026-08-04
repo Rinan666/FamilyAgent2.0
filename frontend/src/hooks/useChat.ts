@@ -6,7 +6,7 @@ import { agentApi } from '@/lib/api/agent';
 import { memoryApi } from '@/lib/api/memory';
 import type { AIStreamHandle } from '@/lib/api/shared';
 import { enqueuePersistMessages } from '@/lib/sessionPersistence';
-import type { AgentResponseMode, ChatMessage } from '@/types';
+import type { ChatMessage } from '@/types';
 import type { ViewerRole } from '@/lib/roles';
 import {
   buildFamilyRecallQuery,
@@ -35,6 +35,7 @@ type MemoryContextResult = {
 
 export type UseChatRequestConfig = {
   message: string;
+  sessionId?: number | null;
   familyId?: number | null;
   targetUserId?: number | null;
   targetPersonaId?: number | null;
@@ -42,7 +43,6 @@ export type UseChatRequestConfig = {
   contextLabel?: string;
   memoryContext?: string;
   targetRole?: ViewerRole;
-  responseMode?: AgentResponseMode;
 };
 
 const FAMILY_CONTEXT_TIMEOUT_MS = 1800;
@@ -50,8 +50,8 @@ const FAMILY_CONTEXT_TIMEOUT_MS = 1800;
 interface UseChatOptions {
   viewerRole?: ViewerRole;
   targetRole?: ViewerRole;
-  responseMode?: AgentResponseMode;
   activeFamilyId?: number | null;
+  getSessionId?: () => number | null;
   appendSessionMessages?: (messages: ChatMessage[]) => Promise<void>;
   onChatDone?: (message: string) => void;
   viewerIdentityContext?: string;
@@ -88,8 +88,8 @@ export function useChat(options: UseChatOptions = {}) {
   const {
     viewerRole = 'MEMBER',
     targetRole = 'MEMBER',
-    responseMode = 'think',
     activeFamilyId,
+    getSessionId,
     appendSessionMessages,
     onChatDone,
     viewerIdentityContext,
@@ -171,9 +171,6 @@ export function useChat(options: UseChatOptions = {}) {
     history: Pick<ChatMessage, 'role' | 'content'>[] = [],
   ) => {
     try {
-      if (responseMode === 'quick') {
-        return { context: '' } satisfies MemoryContextResult;
-      }
       if (activeFamilyId && contextLabel === 'family_memory') {
         return { context: '' } satisfies MemoryContextResult;
       }
@@ -232,7 +229,7 @@ export function useChat(options: UseChatOptions = {}) {
       console.log('Family context memories not loaded:', error);
       return { context: '' } satisfies MemoryContextResult;
     }
-  }, [activeFamilyId, contextLabel, getSessionSavedMemories, responseMode, viewerIdentityContext]);
+  }, [activeFamilyId, contextLabel, getSessionSavedMemories, viewerIdentityContext]);
 
   const sendMessage = useCallback(async (message: string) => {
     if (isStreaming) return;
@@ -275,12 +272,12 @@ export function useChat(options: UseChatOptions = {}) {
 
     const defaultRequest: UseChatRequestConfig = {
       message,
+      sessionId: getSessionId?.() ?? null,
       familyId: activeFamilyId,
       subject,
       contextLabel,
       memoryContext: memoryContext.context,
       targetRole,
-      responseMode,
     };
     const requestConfig = prepareRequest
       ? await prepareRequest({
@@ -301,6 +298,7 @@ export function useChat(options: UseChatOptions = {}) {
     const handle = agentApi.streamChat(
       {
         message: requestConfig.message,
+        sessionId: requestConfig.sessionId ?? getSessionId?.() ?? null,
         familyId: requestConfig.familyId ?? activeFamilyId,
         targetUserId: requestConfig.targetUserId,
         targetPersonaId: requestConfig.targetPersonaId,
@@ -312,7 +310,6 @@ export function useChat(options: UseChatOptions = {}) {
           : requestConfig.memoryContext || '',
         viewerRole,
         targetRole: requestConfig.targetRole || targetRole,
-        responseMode: requestConfig.responseMode || responseMode,
         ...timeContext,
       },
       (chunk) => {
@@ -402,7 +399,7 @@ export function useChat(options: UseChatOptions = {}) {
     subject,
     targetRole,
     viewerRole,
-    responseMode,
+    getSessionId,
   ]);
 
   return {
@@ -423,7 +420,7 @@ function shouldOmitClientMemoryContext(
   const contextLabel = requestConfig.contextLabel || defaultContextLabel;
   const hasFamilyId = Boolean(requestConfig.familyId ?? activeFamilyId);
   if (!hasFamilyId) return false;
-  if (contextLabel === 'family_memory') return requestConfig.responseMode !== 'quick';
+  if (contextLabel === 'family_memory') return true;
   if (contextLabel === 'mirror_agent') return Boolean(requestConfig.targetUserId);
   if (contextLabel === 'persona_member') return Boolean(requestConfig.targetPersonaId);
   return false;

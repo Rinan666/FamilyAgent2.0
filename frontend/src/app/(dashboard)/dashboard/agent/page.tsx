@@ -46,7 +46,6 @@ import { loadSessionMessagesChronologically } from '@/lib/sessionHistory';
 import { routeAgentSubmission, todayString, toolLabel } from '@/lib/savePlan';
 import type {
   AgentMode,
-  AgentResponseMode,
   AgentSaveToolPlan,
   AgentSessionMetadata,
   ChatMessage,
@@ -149,37 +148,7 @@ function buildMirrorAnswerMetadata(
 function normalizeMirrorAssistantMetadata(
   metadata: Record<string, unknown>,
 ): NonNullable<ChatMessage['metadata']> {
-  const webSearch = metadata.web_search;
-  const responseMode = metadata.response_mode;
-  const baseMetadata: NonNullable<ChatMessage['metadata']> = {
-    ...(responseMode === 'quick' || responseMode === 'think' ? { responseMode } : {}),
-    ...(typeof metadata.thinking_summary === 'string' && metadata.thinking_summary.trim()
-      ? { thinkingSummary: metadata.thinking_summary.trim() }
-      : {}),
-  };
-  if (!webSearch || typeof webSearch !== 'object') return baseMetadata;
-  const data = webSearch as Record<string, unknown>;
-  const rawSources = Array.isArray(data.sources) ? data.sources : [];
-  return {
-    ...baseMetadata,
-    webSearch: {
-      needed: Boolean(data.needed),
-      used: Boolean(data.used),
-      pending: Boolean(data.pending),
-      resultCount: Number(data.result_count) || 0,
-      sources: rawSources
-        .filter(
-          (item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object',
-        )
-        .map((item) => ({
-          title: typeof item.title === 'string' ? item.title : '未命名来源',
-          url: typeof item.url === 'string' ? item.url : '',
-          snippet: typeof item.snippet === 'string' ? item.snippet : '',
-        }))
-        .filter((item) => item.url)
-        .slice(0, 4),
-    },
-  };
+  return normalizeAssistantMetadata(metadata);
 }
 
 let cachedAgentMembersByFamilyId: Record<number, FamilyMember[]> = {};
@@ -217,6 +186,19 @@ function buildTargetSwitchMessage(
       sessionContextPatch,
     },
   };
+}
+
+function selectionFromSessionContext(
+  session: ChatSessionDetail,
+  selfUserId: number | null,
+): AgentTargetSelection {
+  if (session.agentContextType === 'MIRROR' && session.targetUserId) {
+    return normalizeTargetSelection(session.targetUserId, selfUserId);
+  }
+  if (session.agentContextType === 'PERSONA' && session.targetPersonaId) {
+    return `PERSONA:${session.targetPersonaId}`;
+  }
+  return 'NONE';
 }
 
 export default function AgentPage() {
@@ -260,7 +242,6 @@ export default function AgentPage() {
   const [contextError, setContextError] = useState('');
   const [isSessionsOpen, setIsSessionsOpen] = useState(false);
   const [isContextOpen, setIsContextOpen] = useState(false);
-  const [responseMode, setResponseMode] = useState<AgentResponseMode>('think');
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
   const [isProcessingSaveCommand, setIsProcessingSaveCommand] = useState(false);
 
@@ -490,7 +471,7 @@ export default function AgentPage() {
   );
 
   useEffect(() => {
-    if (mode !== 'mirror' || !activeFamilyId || !mirrorTargetUserId || responseMode === 'quick') {
+    if (mode !== 'mirror' || !activeFamilyId || !mirrorTargetUserId) {
       setMirrorContext(null);
       if (mode === 'family' || mode === 'persona') {
         setContextError('');
@@ -515,7 +496,7 @@ export default function AgentPage() {
     return () => {
       active = false;
     };
-  }, [activeFamilyId, mirrorTargetUserId, mode, refreshMirrorContext, responseMode]);
+  }, [activeFamilyId, mirrorTargetUserId, mode, refreshMirrorContext]);
 
   const memoryContextResolver = useCallback(
     async ({
@@ -532,30 +513,14 @@ export default function AgentPage() {
       if (mode === 'persona' && targetPersona) {
         const metadata: NonNullable<ChatMessage['metadata']> = {
           agentMode: 'persona',
-          responseMode,
           targetPersonaId: targetPersona.id,
           targetPersonaName: targetPersona.name,
           targetMemberName: targetPersona.name,
-          sourceSummary:
-            responseMode === 'quick'
-              ? '由后端基于精神成员档案生成快速上下文。'
-              : '由后端基于精神成员档案、材料卡和当前家庭可见经验沉淀生成上下文。',
+          sourceSummary: '由后端基于精神成员档案、材料卡和当前家庭可见经验沉淀生成上下文。',
         };
         return {
           context: '',
           metadata,
-        };
-      }
-      if (mode === 'mirror' && responseMode === 'quick') {
-        const quickMetadata: NonNullable<ChatMessage['metadata']> = {
-          agentMode: 'mirror',
-          responseMode: 'quick',
-          targetUserId: targetMember?.userId ?? mirrorTargetUserId,
-          targetMemberName: targetLabel,
-        };
-        return {
-          context: '',
-          metadata: quickMetadata,
         };
       }
       if (mode !== 'mirror' || !activeFamilyId || !mirrorTargetUserId) {
@@ -586,7 +551,6 @@ export default function AgentPage() {
       mirrorTargetUserId,
       mode,
       refreshMirrorContext,
-      responseMode,
       targetLabel,
       targetMember,
       targetPersona,
@@ -631,12 +595,24 @@ export default function AgentPage() {
   );
 
   const normalizeStreamMetadata = useCallback(
-    (metadata: Record<string, unknown>): NonNullable<ChatMessage['metadata']> => ({
-      ...getInitialAssistantMetadata(),
-      ...(mode === 'mirror'
+    (metadata: Record<string, unknown>): NonNullable<ChatMessage['metadata']> => {
+      const normalized = mode === 'mirror'
         ? normalizeMirrorAssistantMetadata(metadata)
-        : normalizeAssistantMetadata(metadata)),
-    }),
+        : normalizeAssistantMetadata(metadata);
+      if (normalized.contextChanged) {
+        if (normalized.effectiveContext === 'FAMILY') {
+          setTargetSelection('NONE');
+        } else if (normalized.effectiveContext === 'MIRROR' && normalized.targetUserId) {
+          setTargetSelection(normalized.targetUserId);
+        } else if (normalized.effectiveContext === 'PERSONA' && normalized.targetPersonaId) {
+          setTargetSelection(`PERSONA:${normalized.targetPersonaId}`);
+        }
+      }
+      return {
+        ...getInitialAssistantMetadata(),
+        ...normalized,
+      };
+    },
     [getInitialAssistantMetadata, mode],
   );
 
@@ -665,6 +641,9 @@ export default function AgentPage() {
         familyId: activeFamilyId,
         subject: mode === 'persona' ? 'PersonaMemberAgent' : 'FamilyAgent',
         source: 'FAMILY_AGENT',
+        agentContextType: mode === 'mirror' ? 'MIRROR' : mode === 'persona' ? 'PERSONA' : 'FAMILY',
+        targetUserId: mode === 'mirror' ? targetMember?.userId : undefined,
+        targetPersonaId: mode === 'persona' ? targetPersona?.id : undefined,
         metadata: buildSessionMetadata(mode, targetLabel, targetMember, targetPersona, false),
       });
       let createRequest: Promise<ChatSessionDetail>;
@@ -722,9 +701,9 @@ export default function AgentPage() {
     activeFamilyId,
     appendSessionMessages,
     getSessionSavedMemories: () => sessionSavedMemoriesRef.current,
+    getSessionId: () => sessionIdRef.current,
     subject: 'FamilyAgent',
     contextLabel: 'family_memory',
-    responseMode,
     memoryContextResolver,
     prepareRequest,
     normalizeStreamMetadata,
@@ -869,6 +848,7 @@ export default function AgentPage() {
         setSessionId(detail.id);
         setMessages(restoredMessages);
         setActiveSessionDetail(detail);
+        setTargetSelection(selectionFromSessionContext(detail, selfUserId));
         resetSaveDrafts();
         sessionSavedMemoriesRef.current = [];
         upsertSession(detail);
@@ -886,6 +866,7 @@ export default function AgentPage() {
       discardStreaming,
       loadAllSessionMessages,
       resetSaveDrafts,
+      selfUserId,
       setMessages,
       setSessionId,
       upsertSession,
@@ -1065,6 +1046,7 @@ export default function AgentPage() {
     }
 
     try {
+      await ensureSessionHeader();
       await sendMessage(submission.content);
     } catch {
       // The chat pipeline already surfaces provider failures inline.
@@ -1074,6 +1056,7 @@ export default function AgentPage() {
     input,
     isProcessingSaveCommand,
     isStreaming,
+    ensureSessionHeader,
     prepareSaveDraft,
     sendMessage,
   ]);
@@ -1218,36 +1201,14 @@ export default function AgentPage() {
                     )}
                   >
                     <Bot className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">上下文</span>
+                    <span className="max-w-40 truncate">
+                      {mode === 'mirror'
+                        ? `${targetLabel} · 镜像参考`
+                        : mode === 'persona'
+                          ? `${targetLabel} · 补充视角`
+                          : '家庭上下文'}
+                    </span>
                   </button>
-                  <div className="inline-flex rounded-full bg-stone-100/90 p-1">
-                    <button
-                      type="button"
-                      onClick={() => setResponseMode('quick')}
-                      disabled={isStreaming || isProcessingSaveCommand}
-                      className={cn(
-                        'inline-flex h-7 items-center rounded-full px-3 text-xs font-medium transition',
-                        responseMode === 'quick'
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'text-stone-600 hover:bg-white/80',
-                      )}
-                    >
-                      快速
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setResponseMode('think')}
-                      disabled={isStreaming || isProcessingSaveCommand}
-                      className={cn(
-                        'inline-flex h-7 items-center rounded-full px-3 text-xs font-medium transition',
-                        responseMode === 'think'
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'text-blue-700 hover:bg-white/80',
-                      )}
-                    >
-                      思考
-                    </button>
-                  </div>
                 </div>
 
                 <div className="flex shrink-0 items-center justify-end gap-2">
