@@ -39,6 +39,14 @@ public class AuthorizedMemoryRecallTextRanker {
                 diaries.usedVector() || memories.usedVector() || growth.usedVector());
     }
 
+    public List<AuthorizedMemoryRecallCandidate> rankUnified(
+            List<AuthorizedMemoryRecallCandidate> candidates,
+            List<Long> vectorIds,
+            String query,
+            int limit) {
+        return merge(candidates, vectorIds, query, limit).candidates();
+    }
+
     private MergeResult merge(
             List<AuthorizedMemoryRecallCandidate> candidates,
             List<Long> vectorIds,

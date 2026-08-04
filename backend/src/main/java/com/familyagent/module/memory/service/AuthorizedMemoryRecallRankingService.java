@@ -59,6 +59,35 @@ public class AuthorizedMemoryRecallRankingService {
                 vectorCandidates.embeddingObservation());
     }
 
+    public RankedUnifiedRecall rankUnified(
+            Long familyId,
+            String query,
+            List<AuthorizedMemoryRecallCandidate> candidates,
+            int resultLimit,
+            long readyEmbeddings) {
+        if (resultLimit <= 0 || candidates == null || candidates.isEmpty()) {
+            return new RankedUnifiedRecall(List.of(), false, null);
+        }
+        List<Long> vectorIds = List.of();
+        EmbeddingCallObservation observation = null;
+        if (readyEmbeddings > 0 && query != null && !query.isBlank()) {
+            AuthorizedMemoryRecallEmbeddingService.RecallQueryEmbedding embedding = embeddingService.embed(familyId, query);
+            observation = embedding.observation();
+            if (observation.success()) {
+                try {
+                    vectorIds = rankSourceIds(familyId, candidates, embedding.values(), resultLimit);
+                } catch (RuntimeException error) {
+                    log.warn("Unified vector memory recall failed, using text fallback: errorType={}",
+                            error.getClass().getSimpleName());
+                    vectorIds = List.of();
+                }
+            }
+        }
+        List<AuthorizedMemoryRecallCandidate> ranked = textRanker.rankUnified(
+                candidates, vectorIds, query == null ? "" : query, resultLimit);
+        return new RankedUnifiedRecall(ranked, !vectorIds.isEmpty(), observation);
+    }
+
     private VectorCandidateIds loadVectorCandidates(
             Long familyId,
             String query,
@@ -126,6 +155,12 @@ public class AuthorizedMemoryRecallRankingService {
                 boolean usedVector) {
             this(diaries, memories, growthRecords, usedVector, null);
         }
+    }
+
+    public record RankedUnifiedRecall(
+            List<AuthorizedMemoryRecallCandidate> items,
+            boolean usedVector,
+            EmbeddingCallObservation embeddingObservation) {
     }
 
     private record VectorCandidateIds(

@@ -32,12 +32,28 @@ public class AuthorizedMemoryRecallSourceAssembler {
         return summaries;
     }
 
+    public List<RecallSourceSummary> assemble(
+            List<AuthorizedMemoryRecallCandidate> candidates,
+            FamilyRelationshipGraphView relationships) {
+        List<RecallSourceSummary> summaries = new ArrayList<>();
+        append(summaries, candidates, relationships);
+        return summaries;
+    }
+
     public Set<Long> participantUserIds(
             List<AuthorizedMemoryRecallCandidate> diaries,
             List<AuthorizedMemoryRecallCandidate> memories,
             List<AuthorizedMemoryRecallCandidate> growthRecords) {
         return Stream.of(diaries, memories, growthRecords)
                 .flatMap(List::stream)
+                .filter(Objects::nonNull)
+                .flatMap(candidate -> Stream.of(candidate.authorUserId(), candidate.subjectUserId()))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    public Set<Long> participantUserIds(List<AuthorizedMemoryRecallCandidate> candidates) {
+        return candidates.stream()
                 .filter(Objects::nonNull)
                 .flatMap(candidate -> Stream.of(candidate.authorUserId(), candidate.subjectUserId()))
                 .filter(Objects::nonNull)

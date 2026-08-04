@@ -21,6 +21,28 @@ public class AuthorizedMemoryRecallCandidateLoader {
     private final AuthorizedMemoryRecallRepository recallRepository;
     private final AuthorizedMemoryRecallSocialSupport socialSupport;
 
+    List<AuthorizedMemoryRecallCandidate> loadUnifiedFamily(
+            Long familyId,
+            Long viewerUserId,
+            int candidateLimit) {
+        List<AuthorizedMemoryRecallCandidate> candidates = candidates(
+                recallRepository.findVisibleAuthorizedRecords(familyId, viewerUserId, candidateLimit));
+        attachUnifiedSocialWeights(candidates, viewerUserId);
+        return candidates;
+    }
+
+    List<AuthorizedMemoryRecallCandidate> loadUnifiedTarget(
+            Long familyId,
+            Long targetUserId,
+            Long viewerUserId,
+            int candidateLimit) {
+        List<AuthorizedMemoryRecallCandidate> candidates = candidates(
+                recallRepository.findVisibleAuthorizedRecordsForTarget(
+                        familyId, targetUserId, viewerUserId, candidateLimit));
+        attachUnifiedSocialWeights(candidates, viewerUserId);
+        return candidates;
+    }
+
     RecallCandidates loadFamily(Long familyId, Long viewerUserId, int diaryLimit, int memoryLimit) {
         int diaryCandidateLimit = candidateLimit(diaryLimit);
         int memoryCandidateLimit = candidateLimit(memoryLimit);
@@ -105,6 +127,20 @@ public class AuthorizedMemoryRecallCandidateLoader {
     private static List<AuthorizedMemoryRecallCandidate> candidates(
             List<com.familyagent.module.memory.entity.MemoryEntry> entries) {
         return entries.stream().map(AuthorizedMemoryRecallCandidate::from).toList();
+    }
+
+    private void attachUnifiedSocialWeights(
+            List<AuthorizedMemoryRecallCandidate> candidates,
+            Long viewerUserId) {
+        List<AuthorizedMemoryRecallCandidate> memories = candidates.stream()
+                .filter(candidate -> candidate.sourceType()
+                        == com.familyagent.common.constant.MemoryRecallSourceType.FAMILY_EXPERIENCE)
+                .toList();
+        List<AuthorizedMemoryRecallCandidate> growth = candidates.stream()
+                .filter(candidate -> candidate.sourceType()
+                        == com.familyagent.common.constant.MemoryRecallSourceType.GROWTH_OBSERVATION)
+                .toList();
+        socialSupport.attachSocialWeights(memories, growth, viewerUserId);
     }
 
     record RecallCandidates(

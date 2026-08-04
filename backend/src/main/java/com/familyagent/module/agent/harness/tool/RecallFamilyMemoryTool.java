@@ -73,7 +73,8 @@ class RecallFamilyMemoryTool implements AgentTool<RecallFamilyMemoryInput, Recal
                     context.familyId(),
                     context.viewerUserId(),
                     input.memberMessage(),
-                    input.recentUserMessages());
+                    input.recentUserMessages(),
+                    input.recallPlan());
             if (result.success()) {
                 completeTrace(span);
             } else {

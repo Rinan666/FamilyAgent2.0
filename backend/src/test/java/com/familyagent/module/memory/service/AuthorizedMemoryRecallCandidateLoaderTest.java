@@ -47,6 +47,20 @@ class AuthorizedMemoryRecallCandidateLoaderTest {
     }
 
     @Test
+    void loadUnifiedFamily_usesSingleAuthorizedRecordQuery() {
+        MemoryEntry diary = entry(101L, 1L, MemoryOriginType.DIARY);
+        MemoryEntry memory = entry(2L, null, null);
+        when(recallRepository.findVisibleAuthorizedRecords(10L, 101L, 40))
+                .thenReturn(List.of(diary, memory));
+
+        List<AuthorizedMemoryRecallCandidate> candidates =
+                candidateLoader.loadUnifiedFamily(10L, 101L, 40);
+
+        assertEquals(2, candidates.size());
+        verify(recallRepository).findVisibleAuthorizedRecords(10L, 101L, 40);
+    }
+
+    @Test
     void loadMirror_marksSelfAndRelatedDiarySourcesWithoutMutatingMetadata() {
         MemoryEntry self = entry(111L, 11L, MemoryOriginType.DIARY);
         MemoryEntry related = entry(112L, 12L, MemoryOriginType.DIARY);

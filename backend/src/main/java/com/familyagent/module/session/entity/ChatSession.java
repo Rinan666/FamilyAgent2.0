@@ -38,6 +38,9 @@ public class ChatSession {
     private Object permissionScope;
 
     private String source;
+    private String agentContextType;
+    private Long targetUserId;
+    private Long targetPersonaId;
 
     @TableField(typeHandler = PgJsonbTypeHandler.class)
     private Object metadata;

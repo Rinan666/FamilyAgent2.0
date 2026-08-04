@@ -20,6 +20,7 @@ public interface ChatSessionRepository extends BaseMapper<ChatSession> {
     @Select("""
             SELECT id, user_id, family_id, subject,
                    title, summary, status, visibility, source, metadata,
+                   agent_context_type, target_user_id, target_persona_id,
                    started_at, ended_at, last_message_at, message_count, token_count,
                    archived_before_seq, archive_status, archive_metadata
             FROM chat_sessions
@@ -32,6 +33,7 @@ public interface ChatSessionRepository extends BaseMapper<ChatSession> {
     @Select("""
             SELECT id, user_id, family_id, subject,
                    title, summary, status, visibility, source, metadata,
+                   agent_context_type, target_user_id, target_persona_id,
                    started_at, ended_at, last_message_at, message_count, token_count,
                    archived_before_seq, archive_status, archive_metadata
             FROM chat_sessions
@@ -44,6 +46,7 @@ public interface ChatSessionRepository extends BaseMapper<ChatSession> {
     @Select("""
             SELECT id, user_id, family_id, subject,
                    title, summary, status, visibility, permission_scope, source, metadata,
+                   agent_context_type, target_user_id, target_persona_id,
                    started_at, ended_at, last_message_at, message_count, token_count,
                    archived_before_seq, archive_status, archive_metadata
             FROM chat_sessions
@@ -57,6 +60,7 @@ public interface ChatSessionRepository extends BaseMapper<ChatSession> {
     @Select("""
             SELECT id, user_id, family_id, subject,
                    title, summary, status, visibility, source, metadata,
+                   agent_context_type, target_user_id, target_persona_id,
                    started_at, ended_at, last_message_at, message_count, token_count,
                    archived_before_seq, archive_status, archive_metadata
             FROM chat_sessions
@@ -124,4 +128,16 @@ public interface ChatSessionRepository extends BaseMapper<ChatSession> {
     int updateStorageMetadata(@Param("sessionId") Long sessionId,
                               @Param("metadata") Object metadata,
                               @Param("archiveMetadata") Object archiveMetadata);
+
+    @Update("""
+            UPDATE chat_sessions
+            SET agent_context_type = #{contextType},
+                target_user_id = #{targetUserId, jdbcType=BIGINT},
+                target_persona_id = #{targetPersonaId, jdbcType=BIGINT}
+            WHERE id = #{sessionId}
+            """)
+    int updateAgentContext(@Param("sessionId") Long sessionId,
+                           @Param("contextType") String contextType,
+                           @Param("targetUserId") Long targetUserId,
+                           @Param("targetPersonaId") Long targetPersonaId);
 }

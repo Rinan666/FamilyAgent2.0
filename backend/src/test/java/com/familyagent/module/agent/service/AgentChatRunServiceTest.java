@@ -3,6 +3,10 @@ package com.familyagent.module.agent.service;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.agent.dto.AgentChatStreamRequest;
+import com.familyagent.module.agent.dto.AgentIntentPlan;
+import com.familyagent.module.agent.dto.AgentResponsePlan;
+import com.familyagent.common.constant.AgentContextScope;
+import com.familyagent.common.constant.AgentContextType;
 import com.familyagent.module.agent.harness.AgentRunContext;
 import com.familyagent.module.agent.harness.AgentRunLifecycleService;
 import com.familyagent.module.agent.harness.AgentTraceRecorder;
@@ -34,7 +38,7 @@ class AgentChatRunServiceTest {
         when(lifecycleService.startOrResume(org.mockito.ArgumentMatchers.any()))
                 .thenAnswer(invocation -> ((AgentRunContext) invocation.getArgument(0)).withRunId(91L));
 
-        AgentRunContext context = service.start(request, 101L, "request-1");
+        AgentRunContext context = service.start(request, intentPlan(), 101L, "request-1");
 
         assertEquals(91L, context.runId());
         assertEquals("request-1", context.requestId());
@@ -112,5 +116,18 @@ class AgentChatRunServiceTest {
                 "FamilyAgent",
                 "chat_stream",
                 false);
+    }
+
+    private AgentIntentPlan intentPlan() {
+        return new AgentIntentPlan(
+                AgentContextType.FAMILY,
+                AgentContextScope.TURN,
+                null,
+                null,
+                "家庭 Agent",
+                "hello",
+                new AgentResponsePlan(null, null, null, false, false),
+                false,
+                null);
     }
 }

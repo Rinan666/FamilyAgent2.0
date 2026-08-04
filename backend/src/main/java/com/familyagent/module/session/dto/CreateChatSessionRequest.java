@@ -19,5 +19,8 @@ public class CreateChatSessionRequest {
     private String visibility;
     private Map<String, Object> permissionScope;
     private String source;
+    private String agentContextType;
+    private Long targetUserId;
+    private Long targetPersonaId;
     private Map<String, Object> metadata;
 }

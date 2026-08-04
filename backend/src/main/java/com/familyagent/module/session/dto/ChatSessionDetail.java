@@ -20,6 +20,9 @@ public class ChatSessionDetail {
     private String status;
     private String visibility;
     private String source;
+    private String agentContextType;
+    private Long targetUserId;
+    private Long targetPersonaId;
     private Integer messageCount;
     private Integer tokenCount;
     private Integer archivedBeforeSeq;

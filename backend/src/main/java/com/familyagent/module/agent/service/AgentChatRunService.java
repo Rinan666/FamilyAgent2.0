@@ -3,6 +3,7 @@ package com.familyagent.module.agent.service;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.module.agent.dto.AgentChatStreamRequest;
+import com.familyagent.module.agent.dto.AgentIntentPlan;
 import com.familyagent.module.agent.harness.AgentRunContext;
 import com.familyagent.module.agent.harness.AgentRunLifecycleService;
 import com.familyagent.module.agent.harness.AgentTraceRecorder;
@@ -22,6 +23,7 @@ public class AgentChatRunService {
 
     public AgentRunContext start(
             AgentChatStreamRequest request,
+            AgentIntentPlan intentPlan,
             Long userId,
             String requestId) {
         AgentRunContext context = new AgentRunContext(
@@ -29,8 +31,8 @@ public class AgentChatRunService {
                 requestId,
                 request.getFamilyId(),
                 userId,
-                null,
-                request.getKnowledgePoint(),
+                request.getSessionId(),
+                intentPlan.contextType().name(),
                 request.getSubject(),
                 "chat_stream",
                 false);
@@ -63,6 +65,10 @@ public class AgentChatRunService {
 
     public void failIo(AgentRunContext context) {
         runLifecycleService.fail(context, AgentRunErrorCode.IO_ERROR.code());
+    }
+
+    public void completeDirect(AgentRunContext context) {
+        runLifecycleService.succeed(context);
     }
 
     private String preparationErrorCode(RuntimeException error) {

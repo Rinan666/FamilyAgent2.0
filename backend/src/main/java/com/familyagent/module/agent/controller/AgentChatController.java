@@ -8,9 +8,13 @@ import com.familyagent.infra.ai.AIServiceClient;
 import com.familyagent.infra.ai.dto.AIStreamErrorEvent;
 import com.familyagent.infra.ai.dto.AgentChatStreamPayload;
 import com.familyagent.module.agent.dto.AgentChatMetadataEvent;
+import com.familyagent.module.agent.dto.AgentChatContentEvent;
+import com.familyagent.module.agent.dto.AgentChatDoneEvent;
+import com.familyagent.module.agent.dto.AgentIntentPlan;
 import com.familyagent.module.agent.dto.AgentChatStreamRequest;
 import com.familyagent.module.agent.harness.AgentRunContext;
 import com.familyagent.module.agent.service.AgentChatMemoryResolution;
+import com.familyagent.module.agent.service.AgentChatIntentResolver;
 import com.familyagent.module.agent.service.AgentChatMemoryContextResolver;
 import com.familyagent.module.agent.service.AgentChatRunService;
 import com.familyagent.module.agent.service.AgentChatStreamTracker;
@@ -55,6 +59,7 @@ public class AgentChatController {
     private static final String RUN_ID_HEADER = "X-Agent-Run-Id";
     private final AIServiceClient aiServiceClient;
     private final AgentChatMemoryContextResolver memoryContextResolver;
+    private final AgentChatIntentResolver intentResolver;
     private final AgentChatRunService chatRunService;
     private final RedissonClient redissonClient;
     private final ObjectMapper objectMapper;
@@ -67,12 +72,21 @@ public class AgentChatController {
                        HttpServletResponse response) throws IOException {
         Long userId = CurrentUserGuard.currentUserId();
         String effectiveRequestId = normalizeRequestId(requestId);
-        AgentRunContext runContext = chatRunService.start(request, userId, effectiveRequestId);
+        AgentIntentPlan intentPlan = intentResolver.resolve(request, userId);
+        AgentRunContext runContext = chatRunService.start(request, intentPlan, userId, effectiveRequestId);
+        if (intentPlan.hasDirectResponse()) {
+            writeDirectResponse(response, intentPlan, effectiveRequestId, runContext);
+            chatRunService.completeDirect(runContext);
+            return;
+        }
         AgentChatMemoryResolution memoryResolution;
         AgentChatStreamPayload aiPayload;
         try {
-            memoryResolution = memoryContextResolver.resolve(request, runContext);
-            aiPayload = request.toAiPayload(memoryResolution.context());
+            memoryResolution = memoryContextResolver.resolve(request, intentPlan, runContext);
+            aiPayload = request.toAiPayload(
+                    memoryResolution.context(),
+                    intentPlan.effectiveMessage(),
+                    intentPlan.responsePlan());
             enforceRequestSize(aiPayload);
             enforceQuota(userId);
         } catch (RuntimeException error) {
@@ -93,7 +107,12 @@ public class AgentChatController {
 
         try (OutputStream outputStream = response.getOutputStream()) {
             AgentChatStreamTracker tracker = new AgentChatStreamTracker(outputStream, objectMapper);
-            writeMetadataEvent(tracker, memoryResolution.metadata(), effectiveRequestId, runContext.runId());
+            writeMetadataEvent(
+                    tracker,
+                    memoryResolution.metadata(),
+                    intentPlan,
+                    effectiveRequestId,
+                    runContext.runId());
             aiServiceClient.proxyChatStream(
                     aiPayload,
                     tracker,
@@ -171,14 +190,49 @@ public class AgentChatController {
     private void writeMetadataEvent(
             OutputStream outputStream,
             AgentMemoryContextMetadata metadata,
+            AgentIntentPlan intentPlan,
             String requestId,
             Long runId) throws IOException {
         AgentChatMetadataEvent event = AgentChatMetadataEvent.create(
                 metadata,
+                intentPlan,
                 normalizeRequestId(requestId),
                 runId);
         outputStream.write(AIStreamEventEncoder.encode(objectMapper, event));
         outputStream.flush();
+    }
+
+    private void writeDirectResponse(
+            HttpServletResponse response,
+            AgentIntentPlan intentPlan,
+            String requestId,
+            AgentRunContext runContext) throws IOException {
+        response.setStatus(HttpServletResponse.SC_OK);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setContentType(MediaType.TEXT_EVENT_STREAM_VALUE + ";charset=UTF-8");
+        response.setHeader("Cache-Control", "no-cache");
+        response.setHeader("Connection", "keep-alive");
+        response.setHeader("X-Accel-Buffering", "no");
+        response.setHeader(REQUEST_ID_HEADER, requestId);
+        if (runContext.runId() != null) {
+            response.setHeader(RUN_ID_HEADER, String.valueOf(runContext.runId()));
+        }
+        try (OutputStream outputStream = response.getOutputStream()) {
+            outputStream.write(AIStreamEventEncoder.encode(
+                    objectMapper,
+                    AgentChatMetadataEvent.create(
+                            AgentMemoryContextMetadata.empty(),
+                            intentPlan,
+                            requestId,
+                            runContext.runId())));
+            outputStream.write(AIStreamEventEncoder.encode(
+                    objectMapper,
+                    new AgentChatContentEvent(intentPlan.directResponseMessage(), requestId, runContext.runId())));
+            outputStream.write(AIStreamEventEncoder.encode(
+                    objectMapper,
+                    new AgentChatDoneEvent(intentPlan.responsePlan().degraded(), requestId, runContext.runId())));
+            outputStream.flush();
+        }
     }
 
     private String toJsonString(String value) {

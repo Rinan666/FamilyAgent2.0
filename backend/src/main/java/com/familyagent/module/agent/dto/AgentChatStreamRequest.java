@@ -42,6 +42,10 @@ public class AgentChatStreamRequest {
     private Long familyId;
 
     @Positive
+    @JsonProperty("session_id")
+    private Long sessionId;
+
+    @Positive
     @JsonProperty("target_user_id")
     private Long targetUserId;
 
@@ -59,7 +63,7 @@ public class AgentChatStreamRequest {
 
     @Size(max = 16)
     @JsonProperty("response_mode")
-    private String responseMode = "think";
+    private String responseMode = "auto";
 
     @Size(max = 64)
     @JsonProperty("client_timestamp")
@@ -70,12 +74,19 @@ public class AgentChatStreamRequest {
     private String clientTimezone = "";
 
     public AgentChatStreamPayload toAiPayload() {
-        return toAiPayload(memoryContext);
+        return toAiPayload(memoryContext, memberMessage, null);
     }
 
     public AgentChatStreamPayload toAiPayload(String effectiveMemoryContext) {
+        return toAiPayload(effectiveMemoryContext, memberMessage, null);
+    }
+
+    public AgentChatStreamPayload toAiPayload(
+            String effectiveMemoryContext,
+            String effectiveMessage,
+            AgentResponsePlan responsePlan) {
         return new AgentChatStreamPayload(
-                memberMessage,
+                effectiveMessage,
                 history == null ? List.of() : history.stream().map(HistoryMessage::toAiPayload).toList(),
                 subject,
                 knowledgePoint,
@@ -83,6 +94,7 @@ public class AgentChatStreamRequest {
                 viewerRole,
                 targetRole,
                 responseMode,
+                responsePlan == null ? null : responsePlan.toAiPayload(),
                 clientTimestamp,
                 clientTimezone
         );
@@ -90,8 +102,7 @@ public class AgentChatStreamRequest {
 
     public boolean shouldUseServerFamilyMemoryContext() {
         return familyId != null
-                && FAMILY_MEMORY_CONTEXT.equalsIgnoreCase(contextLabel())
-                && !"quick".equalsIgnoreCase(responseMode == null ? "" : responseMode.trim());
+                && FAMILY_MEMORY_CONTEXT.equalsIgnoreCase(contextLabel());
     }
 
     public boolean shouldUseServerMirrorContext() {

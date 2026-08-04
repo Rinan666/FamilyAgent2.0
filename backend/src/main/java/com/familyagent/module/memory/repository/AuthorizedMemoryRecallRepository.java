@@ -23,6 +23,19 @@ public interface AuthorizedMemoryRecallRepository {
             @Param("viewerUserId") Long viewerUserId,
             @Param("limit") int limit);
 
+    @SelectProvider(type = AuthorizedMemoryRecallSql.class, method = "visibleAuthorizedRecords")
+    List<MemoryEntry> findVisibleAuthorizedRecords(
+            @Param("familyId") Long familyId,
+            @Param("viewerUserId") Long viewerUserId,
+            @Param("limit") int limit);
+
+    @SelectProvider(type = AuthorizedMemoryRecallSql.class, method = "visibleAuthorizedRecordsForTarget")
+    List<MemoryEntry> findVisibleAuthorizedRecordsForTarget(
+            @Param("familyId") Long familyId,
+            @Param("targetUserId") Long targetUserId,
+            @Param("viewerUserId") Long viewerUserId,
+            @Param("limit") int limit);
+
     @SelectProvider(type = AuthorizedMemoryRecallSql.class, method = "visibleMirrorSelfDiaries")
     List<MemoryEntry> findVisibleMirrorSelfDiaries(
             @Param("familyId") Long familyId,

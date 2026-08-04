@@ -1,6 +1,7 @@
 package com.familyagent.module.session.service;
 
 import com.familyagent.common.constant.EntityStatus;
+import com.familyagent.common.constant.AgentContextType;
 import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
@@ -78,6 +79,7 @@ public class ChatSessionService {
         if (session.getSource() == null || session.getSource().isBlank()) {
             session.setSource("FAMILY_AGENT");
         }
+        normalizeAgentContext(session);
         session.setMessageCount(0);
         session.setTokenCount(0);
         session.setArchivedBeforeSeq(0);
@@ -342,6 +344,9 @@ public class ChatSessionService {
                 .status(session.getStatus())
                 .visibility(session.getVisibility())
                 .source(session.getSource())
+                .agentContextType(session.getAgentContextType())
+                .targetUserId(session.getTargetUserId())
+                .targetPersonaId(session.getTargetPersonaId())
                 .messageCount(session.getMessageCount())
                 .tokenCount(session.getTokenCount())
                 .archivedBeforeSeq(session.getArchivedBeforeSeq())
@@ -385,6 +390,9 @@ public class ChatSessionService {
                 .status(session.getStatus())
                 .visibility(session.getVisibility())
                 .source(session.getSource())
+                .agentContextType(session.getAgentContextType())
+                .targetUserId(session.getTargetUserId())
+                .targetPersonaId(session.getTargetPersonaId())
                 .messageCount(session.getMessageCount())
                 .tokenCount(session.getTokenCount())
                 .lastMessageAt(session.getLastMessageAt())
@@ -392,6 +400,35 @@ public class ChatSessionService {
                 .endedAt(session.getEndedAt())
                 .metadata(ChatSessionSupportUtils.castMap(session.getMetadata()))
                 .build();
+    }
+
+    private static void normalizeAgentContext(ChatSession session) {
+        AgentContextType contextType;
+        try {
+            contextType = AgentContextType.valueOf(
+                    session.getAgentContextType() == null
+                            ? AgentContextType.FAMILY.name()
+                            : session.getAgentContextType().trim().toUpperCase());
+        } catch (IllegalArgumentException ignored) {
+            contextType = AgentContextType.FAMILY;
+        }
+        session.setAgentContextType(contextType.name());
+        if (contextType == AgentContextType.FAMILY) {
+            session.setTargetUserId(null);
+            session.setTargetPersonaId(null);
+            return;
+        }
+        if (contextType == AgentContextType.MIRROR) {
+            if (session.getTargetUserId() == null) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "Mirror session requires targetUserId");
+            }
+            session.setTargetPersonaId(null);
+            return;
+        }
+        if (session.getTargetPersonaId() == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Persona session requires targetPersonaId");
+        }
+        session.setTargetUserId(null);
     }
 
     private ChatSessionArchiveSummary toArchiveSummary(ChatSessionArchive archive) {

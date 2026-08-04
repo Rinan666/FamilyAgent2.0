@@ -222,6 +222,7 @@ class AIServiceClientTest {
                 "MEMBER",
                 "MEMBER",
                 "think",
+                null,
                 "",
                 ""
         );

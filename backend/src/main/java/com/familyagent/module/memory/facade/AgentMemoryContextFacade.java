@@ -2,7 +2,9 @@ package com.familyagent.module.memory.facade;
 
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
-import com.familyagent.module.memory.service.AuthorizedMemoryRecallService;
+import com.familyagent.module.memory.dto.MemoryRecallPlan;
+import com.familyagent.module.memory.dto.UnifiedAuthorizedMemoryRecallResult;
+import com.familyagent.module.memory.service.UnifiedAuthorizedMemoryRecallService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -16,12 +18,8 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class AgentMemoryContextFacade {
 
-    private static final String FAMILY_AGENT_SCENE = "FAMILY_AGENT";
-    private static final int DIARY_LIMIT = 8;
-    private static final int MEMORY_LIMIT = 8;
-
-    private final AuthorizedMemoryRecallService recallService;
-    private final AgentMemoryContextFormatter formatter;
+    private final UnifiedAuthorizedMemoryRecallService recallService;
+    private final AgentUnifiedMemoryContextFormatter formatter;
 
     public String buildFamilyAgentContext(
             Long familyId,
@@ -32,7 +30,12 @@ public class AgentMemoryContextFacade {
                 familyId,
                 viewerUserId,
                 memberMessage,
-                recentUserMessages).context();
+                recentUserMessages,
+                new MemoryRecallPlan(
+                        com.familyagent.common.constant.MemoryRecallDepth.STANDARD,
+                        List.of(buildRecallQuery(memberMessage, recentUserMessages)),
+                        List.of(),
+                        null)).context();
     }
 
     public AgentMemoryContextResult buildFamilyAgentContextResult(
@@ -40,15 +43,31 @@ public class AgentMemoryContextFacade {
             Long viewerUserId,
             String memberMessage,
             List<String> recentUserMessages) {
+        return buildFamilyAgentContextResult(
+                familyId,
+                viewerUserId,
+                memberMessage,
+                recentUserMessages,
+                new MemoryRecallPlan(
+                        com.familyagent.common.constant.MemoryRecallDepth.STANDARD,
+                        List.of(buildRecallQuery(memberMessage, recentUserMessages)),
+                        List.of(),
+                        null));
+    }
+
+    public AgentMemoryContextResult buildFamilyAgentContextResult(
+            Long familyId,
+            Long viewerUserId,
+            String memberMessage,
+            List<String> recentUserMessages,
+            MemoryRecallPlan plan) {
         try {
-            AuthorizedMemoryRecallResult recall = recallService.recallForFamily(
+            UnifiedAuthorizedMemoryRecallResult recall = recallService.recall(
                     familyId,
                     viewerUserId,
-                    buildRecallQuery(memberMessage, recentUserMessages),
-                    FAMILY_AGENT_SCENE,
-                    DIARY_LIMIT,
-                    MEMORY_LIMIT);
-            return AgentMemoryContextResult.fromRecall(formatter.format(recall), recall);
+                    plan == null ? null : plan.preferredSubjectUserId(),
+                    plan);
+            return AgentMemoryContextResult.fromUnified(formatter.format(recall, plan), recall);
         } catch (BusinessException e) {
             throw e;
         } catch (RuntimeException e) {

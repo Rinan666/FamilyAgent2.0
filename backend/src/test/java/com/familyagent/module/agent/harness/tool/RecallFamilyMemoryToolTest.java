@@ -63,7 +63,8 @@ class RecallFamilyMemoryToolTest {
                 10L,
                 101L,
                 "How should I talk about bedtime?",
-                List.of("earlier turn")))
+                List.of("earlier turn"),
+                null))
                 .thenReturn(new com.familyagent.module.memory.facade.AgentMemoryContextResult(
                         "family_memory_hits:\n1. bedtime",
                         metadataWithMemoryCount(1)));
@@ -79,7 +80,8 @@ class RecallFamilyMemoryToolTest {
                 10L,
                 101L,
                 "How should I talk about bedtime?",
-                List.of("earlier turn"));
+                List.of("earlier turn"),
+                null);
         ArgumentCaptor<AgentTraceSpanDescriptor> traceCaptor = ArgumentCaptor.forClass(AgentTraceSpanDescriptor.class);
         verify(traceRecorder).start(org.mockito.ArgumentMatchers.eq(context), traceCaptor.capture());
         assertEquals(AgentRunStepType.MEMORY_RECALL, traceCaptor.getValue().stepType());
@@ -94,7 +96,7 @@ class RecallFamilyMemoryToolTest {
         AgentRunStepRecord span = new AgentRunStepRecord();
         span.setId(501L);
         when(traceRecorder.start(any(), any())).thenReturn(span);
-        when(memoryContextFacade.buildFamilyAgentContextResult(10L, 101L, "hello", List.of()))
+        when(memoryContextFacade.buildFamilyAgentContextResult(10L, 101L, "hello", List.of(), null))
                 .thenReturn(AgentMemoryContextResult.failed(AgentMemoryContextErrorCode.RECALL_FAILED));
 
         RecallFamilyMemoryOutput output = tool.execute(context, input);
@@ -110,7 +112,7 @@ class RecallFamilyMemoryToolTest {
         AgentRunContext context = context();
         RecallFamilyMemoryInput input = new RecallFamilyMemoryInput("hello", List.of());
         when(traceRecorder.start(any(), any())).thenThrow(new RuntimeException("trace database unavailable"));
-        when(memoryContextFacade.buildFamilyAgentContextResult(10L, 101L, "hello", List.of()))
+        when(memoryContextFacade.buildFamilyAgentContextResult(10L, 101L, "hello", List.of(), null))
                 .thenReturn(AgentMemoryContextResult.empty());
 
         RecallFamilyMemoryOutput output = tool.execute(context, input);
@@ -137,7 +139,7 @@ class RecallFamilyMemoryToolTest {
                 21L,
                 "AI_EMBEDDING_DIMENSION_MISMATCH");
         when(traceRecorder.start(any(), any())).thenReturn(span);
-        when(memoryContextFacade.buildFamilyAgentContextResult(10L, 101L, "hello", List.of()))
+        when(memoryContextFacade.buildFamilyAgentContextResult(10L, 101L, "hello", List.of(), null))
                 .thenReturn(new AgentMemoryContextResult(
                         "",
                         AgentMemoryContextMetadata.empty(),

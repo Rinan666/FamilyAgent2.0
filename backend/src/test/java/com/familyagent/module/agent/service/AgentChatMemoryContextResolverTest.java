@@ -1,6 +1,11 @@
 package com.familyagent.module.agent.service;
 
 import com.familyagent.module.agent.dto.AgentChatStreamRequest;
+import com.familyagent.module.agent.dto.AgentIntentPlan;
+import com.familyagent.module.agent.dto.AgentResponsePlan;
+import com.familyagent.common.constant.AgentContextScope;
+import com.familyagent.common.constant.AgentContextType;
+import com.familyagent.common.constant.MemoryRecallDepth;
 import com.familyagent.module.agent.harness.AgentRunContext;
 import com.familyagent.module.agent.harness.constant.AgentToolName;
 import com.familyagent.module.agent.harness.AgentToolExecutor;
@@ -33,7 +38,8 @@ class AgentChatMemoryContextResolverTest {
     private final AgentChatMemoryContextResolver resolver = new AgentChatMemoryContextResolver(
             toolExecutor,
             mirrorContextFacade,
-            personaContextFacade);
+            personaContextFacade,
+            new AgentMemoryRecallPlanFactory());
 
     @Test
     void resolve_familyMemoryContext_usesRecallToolExecutor() {
@@ -49,7 +55,7 @@ class AgentChatMemoryContextResolverTest {
         when(toolExecutor.execute(org.mockito.ArgumentMatchers.any()))
                 .thenReturn(AgentToolCallResult.success(new RecallFamilyMemoryOutput("authorized context")));
 
-        AgentChatMemoryResolution resolution = resolver.resolve(request, runContext());
+        AgentChatMemoryResolution resolution = resolver.resolve(request, intentPlan(), runContext());
 
         assertEquals("authorized context", resolution.context());
         ArgumentCaptor<AgentToolCallRequest<RecallFamilyMemoryInput>> captor = ArgumentCaptor.forClass(AgentToolCallRequest.class);
@@ -76,21 +82,29 @@ class AgentChatMemoryContextResolverTest {
                         "denied",
                         false));
 
-        AgentChatMemoryResolution resolution = resolver.resolve(request, runContext());
+        AgentChatMemoryResolution resolution = resolver.resolve(request, intentPlan(), runContext());
 
         assertEquals("", resolution.context());
         assertTrue(resolution.metadata().isEmpty());
     }
 
     @Test
-    void resolve_quickMode_usesClientContextForBackwardCompatibility() {
+    void resolve_noRecallIntent_returnsEmptyContext() {
         AgentChatStreamRequest request = familyMemoryRequest();
-        request.setResponseMode("quick");
-        request.setMemoryContext("client context");
+        AgentIntentPlan plan = new AgentIntentPlan(
+                AgentContextType.FAMILY,
+                AgentContextScope.TURN,
+                null,
+                null,
+                "家庭 Agent",
+                "hello",
+                new AgentResponsePlan(null, MemoryRecallDepth.NONE, null, false, false),
+                false,
+                null);
 
-        AgentChatMemoryResolution resolution = resolver.resolve(request, runContext());
+        AgentChatMemoryResolution resolution = resolver.resolve(request, plan, runContext());
 
-        assertEquals("client context", resolution.context());
+        assertEquals("", resolution.context());
         verify(toolExecutor, never()).execute(org.mockito.ArgumentMatchers.any());
     }
 
@@ -108,7 +122,7 @@ class AgentChatMemoryContextResolverTest {
                                 new AgentMemoryRagMetadata(null, 0, 0, 1, 0, 0, 0, 1, List.of()),
                                 null))));
 
-        AgentChatMemoryResolution resolution = resolver.resolve(request, runContext());
+        AgentChatMemoryResolution resolution = resolver.resolve(request, personaIntentPlan(), runContext());
 
         assertTrue(resolution.context().contains("persona context"));
         assertTrue(resolution.context().contains("family_visible_reference"));
@@ -137,5 +151,31 @@ class AgentChatMemoryContextResolverTest {
                 "FamilyAgent",
                 "chat_stream",
                 false);
+    }
+
+    private AgentIntentPlan intentPlan() {
+        return new AgentIntentPlan(
+                AgentContextType.FAMILY,
+                AgentContextScope.TURN,
+                null,
+                null,
+                "家庭 Agent",
+                "How should I talk about bedtime?",
+                new AgentResponsePlan(null, MemoryRecallDepth.STANDARD, null, true, false),
+                false,
+                null);
+    }
+
+    private AgentIntentPlan personaIntentPlan() {
+        return new AgentIntentPlan(
+                AgentContextType.PERSONA,
+                AgentContextScope.TURN,
+                null,
+                202L,
+                "Persona",
+                "How should I talk about bedtime?",
+                new AgentResponsePlan(null, MemoryRecallDepth.STANDARD, null, false, false),
+                false,
+                null);
     }
 }

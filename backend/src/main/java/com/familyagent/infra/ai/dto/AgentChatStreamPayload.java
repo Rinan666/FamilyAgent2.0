@@ -13,6 +13,7 @@ public record AgentChatStreamPayload(
         @JsonProperty("viewer_role") String viewerRole,
         @JsonProperty("target_role") String targetRole,
         @JsonProperty("response_mode") String responseMode,
+        @JsonProperty("response_plan") AgentResponsePlanPayload responsePlan,
         @JsonProperty("client_timestamp") String clientTimestamp,
         @JsonProperty("client_timezone") String clientTimezone
 ) {
@@ -25,6 +26,7 @@ public record AgentChatStreamPayload(
         viewerRole = valueOrDefault(viewerRole, "MEMBER");
         targetRole = valueOrDefault(targetRole, "MEMBER");
         responseMode = valueOrDefault(responseMode, "think");
+        responsePlan = responsePlan == null ? AgentResponsePlanPayload.defaults() : responsePlan;
         clientTimestamp = valueOrEmpty(clientTimestamp);
         clientTimezone = valueOrEmpty(clientTimezone);
     }

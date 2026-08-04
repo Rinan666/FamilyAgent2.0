@@ -44,6 +44,9 @@ public class ChatSessionController {
         session.setVisibility(request.getVisibility());
         session.setPermissionScope(request.getPermissionScope());
         session.setSource(request.getSource());
+        session.setAgentContextType(request.getAgentContextType());
+        session.setTargetUserId(request.getTargetUserId());
+        session.setTargetPersonaId(request.getTargetPersonaId());
         session.setMetadata(request.getMetadata());
         return Result.success(sessionService.createSession(session, request.getMessages()));
     }

@@ -3,6 +3,7 @@ package com.familyagent.module.memory.facade;
 import com.familyagent.module.memory.dto.AuthorizedMemoryRecallResult;
 import com.familyagent.module.memory.dto.EmbeddingCallObservation;
 import com.familyagent.module.memory.dto.RecallSourceSummary;
+import com.familyagent.module.memory.dto.UnifiedAuthorizedMemoryRecallResult;
 
 import java.util.List;
 
@@ -62,6 +63,34 @@ public record AgentMemoryContextResult(
                 recall.getEmbeddingObservation());
     }
 
+    public static AgentMemoryContextResult fromUnified(
+            String context,
+            UnifiedAuthorizedMemoryRecallResult recall) {
+        if (recall == null) {
+            return new AgentMemoryContextResult(context, AgentMemoryContextMetadata.empty());
+        }
+        int diaryCount = sourceCount(recall.sources(), "LIFE_RECORD");
+        int memoryCount = sourceCount(recall.sources(), "FAMILY_EXPERIENCE")
+                + sourceCount(recall.sources(), "PERSONAL_MEMORY");
+        int growthCount = sourceCount(recall.sources(), "GROWTH_OBSERVATION");
+        AgentMemoryRagMetadata rag = new AgentMemoryRagMetadata(
+                recall.retrievalMode(),
+                recall.embeddingReadyCount(),
+                diaryCount,
+                memoryCount,
+                growthCount,
+                0,
+                0,
+                recall.items().size(),
+                mapSources(recall.sources()));
+        return new AgentMemoryContextResult(
+                context,
+                new AgentMemoryContextMetadata(rag, String.join(" | ", recall.queries())),
+                true,
+                null,
+                recall.embeddingObservation());
+    }
+
     private static List<AgentMemoryRecallSource> mapSources(List<RecallSourceSummary> sources) {
         if (sources == null) {
             return List.of();
@@ -80,6 +109,15 @@ public record AgentMemoryContextResult(
                         source.getObserver(),
                         source.getSubject()))
                 .toList();
+    }
+
+    private static int sourceCount(List<RecallSourceSummary> sources, String sourceType) {
+        if (sources == null) {
+            return 0;
+        }
+        return (int) sources.stream()
+                .filter(source -> source != null && sourceType.equals(source.getSourceType()))
+                .count();
     }
 
 }
