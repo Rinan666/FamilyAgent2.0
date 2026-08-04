@@ -57,6 +57,14 @@ class AgentHistoryMessage(BaseModel):
         return "" if value is None else str(value)
 
 
+class AgentResponsePlan(BaseModel):
+    answer_depth: Literal["BRIEF", "STANDARD", "DEEP"] = "STANDARD"
+    recall_depth: Literal["NONE", "BRIEF", "STANDARD", "DEEP"] = "STANDARD"
+    web_search_policy: Literal["NONE", "AUTO", "REQUIRED"] = "AUTO"
+    decision_support: bool = False
+    degraded: bool = False
+
+
 class AgentChatRequest(BaseModel):
     member_message: str = Field(default="", description="User message")
     history: list[AgentHistoryMessage] | None = Field(default=None, max_length=20, description="Conversation history")
@@ -65,7 +73,8 @@ class AgentChatRequest(BaseModel):
     memory_context: str = Field(default="", description="Authorized memory context")
     viewer_role: str = Field(default="MEMBER", description="Viewer role label")
     target_role: str = Field(default="MEMBER", description="Target role label")
-    response_mode: str = Field(default="think", description="Agent response mode: quick or think")
+    response_mode: str = Field(default="auto", description="Deprecated compatibility response mode")
+    response_plan: AgentResponsePlan = Field(default_factory=AgentResponsePlan)
     client_timestamp: str = Field(default="", description="Client timestamp in ISO format")
     client_timezone: str = Field(default="", description="Client timezone")
 
@@ -127,6 +136,7 @@ async def stream_chat(request: AgentChatRequest, http_request: Request):
                     viewer_role=request.viewer_role,
                     target_role=request.target_role,
                     response_mode=request.response_mode,
+                    response_plan=request.response_plan.model_dump(),
                     client_timestamp=request.client_timestamp,
                     client_timezone=request.client_timezone,
                 ):

@@ -34,6 +34,29 @@ def test_build_family_agent_system_prompt_uses_defaults():
     assert "不把真话说成刀子" in prompt
     assert "按用户当前问题自然回应" in prompt
     assert "不协助现实伤害" in prompt
+    assert "answer_depth: STANDARD" in prompt
+    assert "decision_support: false" in prompt
+
+
+def test_build_family_agent_system_prompt_adds_decision_support_contract():
+    prompt = build_family_agent_system_prompt(
+        subject="FamilyAgent",
+        context_label="family_memory",
+        memory_context="家族经历",
+        viewer_role="MEMBER",
+        target_role="MEMBER",
+        response_mode="auto",
+        answer_depth="DEEP",
+        recall_depth="DEEP",
+        web_search_policy="NONE",
+        decision_support=True,
+    )
+
+    assert "answer_depth: DEEP" in prompt
+    assert "recall_depth: DEEP" in prompt
+    assert "decision_support: true" in prompt
+    assert "先给有边界的倾向性建议" in prompt
+    assert "最终决定仍由用户作出" in prompt
 
 
 def test_build_family_agent_system_prompt_includes_full_context():

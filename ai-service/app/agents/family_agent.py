@@ -19,8 +19,7 @@ from app.utils.safety_limits import (
 )
 
 _WEB_SEARCH_TIMEOUT_FALLBACK = "联网搜索未在时限内完成，本轮不使用搜索结果。"
-_QUICK_MODE_WEB_CONTEXT = "- 本轮为快速模式，禁止联网搜索。"
-_THINKING_SUMMARY = "我会先梳理问题、判断是否需要外部信息，再结合已授权上下文给出结论。"
+_NO_WEB_CONTEXT = "- 本轮不需要联网搜索。"
 
 
 class FamilyAgent:
@@ -35,6 +34,7 @@ class FamilyAgent:
         viewer_role: str = "MEMBER",
         target_role: str = "MEMBER",
         response_mode: str = "think",
+        response_plan: dict | None = None,
         client_timestamp: str = "",
         client_timezone: str = "",
     ) -> AsyncIterator[dict]:
@@ -49,25 +49,30 @@ class FamilyAgent:
             label="family agent stream request",
         )
 
-        normalized_mode = (response_mode or "").strip().lower()
-        is_quick_mode = normalized_mode == "quick"
+        plan = _normalize_response_plan(response_plan, response_mode)
 
         yield {
             "type": "metadata",
-            "response_mode": "quick" if is_quick_mode else "think",
-            **({"thinking_summary": _THINKING_SUMMARY} if not is_quick_mode else {}),
+            "answer_depth": plan["answer_depth"],
+            "recall_depth": plan["recall_depth"],
+            "web_search_policy": plan["web_search_policy"],
+            "decision_support": plan["decision_support"],
+            "intent_degraded": plan["degraded"],
         }
 
-        web_search_task = None if is_quick_mode else asyncio.create_task(
-            build_web_search_context(member_message, normalized_mode)
+        web_search_task = None if plan["web_search_policy"] == "NONE" else asyncio.create_task(
+            build_web_search_context(
+                member_message,
+                response_mode="auto",
+                web_search_policy=plan["web_search_policy"],
+            )
         )
         web_search_context = None
 
         try:
-            if is_quick_mode:
+            if web_search_task is None:
                 yield {
                     "type": "metadata",
-                    "response_mode": "quick",
                     "web_search": {
                         "needed": False,
                         "used": False,
@@ -100,7 +105,6 @@ class FamilyAgent:
                     }
                     yield {
                         "type": "metadata",
-                        "response_mode": "think",
                         "web_search": {
                             "needed": False,
                             "used": False,
@@ -121,7 +125,6 @@ class FamilyAgent:
                     }
                 yield {
                     "type": "metadata",
-                    "response_mode": "think",
                     "web_search": {
                         "needed": web_search_context.needed,
                         "used": len(web_search_context.results) > 0,
@@ -141,7 +144,7 @@ class FamilyAgent:
             web_prompt = (
                 web_search_context.prompt_context
                 if web_search_context is not None
-                else (_QUICK_MODE_WEB_CONTEXT if is_quick_mode else _WEB_SEARCH_TIMEOUT_FALLBACK)
+                else (_NO_WEB_CONTEXT if web_search_task is None else _WEB_SEARCH_TIMEOUT_FALLBACK)
             )
 
             messages = [
@@ -153,7 +156,11 @@ class FamilyAgent:
                         memory_context=memory_context,
                         viewer_role=viewer_role,
                         target_role=target_role,
-                        response_mode=normalized_mode,
+                        response_mode="auto",
+                        answer_depth=plan["answer_depth"],
+                        recall_depth=plan["recall_depth"],
+                        web_search_policy=plan["web_search_policy"],
+                        decision_support=plan["decision_support"],
                         client_timestamp=client_timestamp,
                         client_timezone=client_timezone,
                         public_web_context=web_prompt,
@@ -193,3 +200,16 @@ class FamilyAgent:
 
 
 family_agent = FamilyAgent()
+
+
+def _normalize_response_plan(response_plan: dict | None, response_mode: str | None) -> dict:
+    raw = response_plan or {}
+    legacy_mode = (response_mode or "").strip().lower()
+    legacy_quick = legacy_mode == "quick" and not response_plan
+    return {
+        "answer_depth": str(raw.get("answer_depth") or ("BRIEF" if legacy_quick else "STANDARD")).upper(),
+        "recall_depth": str(raw.get("recall_depth") or ("NONE" if legacy_quick else "STANDARD")).upper(),
+        "web_search_policy": str(raw.get("web_search_policy") or ("NONE" if legacy_quick else "AUTO")).upper(),
+        "decision_support": bool(raw.get("decision_support", False)),
+        "degraded": bool(raw.get("degraded", False)),
+    }

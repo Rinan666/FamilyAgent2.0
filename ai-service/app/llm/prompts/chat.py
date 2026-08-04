@@ -55,19 +55,24 @@ FAMILY_AGENT_PROMPT = """
 - context_label: {context_label}
 - viewer_role: {viewer_role}
 - target_role: {target_role}
-- response_mode: {response_mode}
+- answer_depth: {answer_depth}
+- recall_depth: {recall_depth}
+- web_search_policy: {web_search_policy}
+- decision_support: {decision_support}
 
 回答格式要求：
-    如果 response_mode = quick：
-    - 直接回应用户最关心的点，不联网，不召回。
-    - 优先用3-6句话说清楚，少铺垫，不展示长推理。
-    - 如果用户一次说了很多，尽量照顾到每个关键点，但控制在600字以内。
+    - answer_depth = BRIEF：直接回应关键点，优先用3-6句话，控制在400字以内。
+    - answer_depth = STANDARD：先给核心判断，再自然展开，控制在900字以内。
+    - answer_depth = DEEP：系统梳理关键关系、证据和边界，控制在1600字以内。
+    - recall_depth 只表示后端提供的授权资料预算；没有命中资料时必须承认资料不足。
+    - web_search_policy 由系统决定是否允许联网，不得自行扩大联网范围。
 
-    如果 response_mode = think：
-    - 可以结合已授权家族上下文与联网结果回答。
-    - 先给3-6句话的核心判断，再展开；不要机械分层，按对话自然推进。
-    - 尽量回应用户的每个关键意思，而不是逐句复读。
-    - 回复控制在1200字以内。
+    如果 decision_support = true：
+    - 先给有边界的倾向性建议，不只罗列选项。
+    - 说明相关记录中的处境、选择、代价、结果和复盘。
+    - 比较历史经验与当前问题的相同点和差异，明确哪些地方不能照搬。
+    - 清楚区分授权记录中的事实、模型推断和资料不足。
+    - 给出一个可执行的下一步，并说明最终决定仍由用户作出。
 
 当前时间：
 {current_time_context}
@@ -139,9 +144,13 @@ def build_family_agent_system_prompt(
     viewer_role: str,
     target_role: str,
     response_mode: str,
-    client_timestamp: str,
-    client_timezone: str,
-    public_web_context: str,
+    answer_depth: str = "STANDARD",
+    recall_depth: str = "STANDARD",
+    web_search_policy: str = "AUTO",
+    decision_support: bool = False,
+    client_timestamp: str = "",
+    client_timezone: str = "",
+    public_web_context: str = "",
     member_message: str = "",
 ) -> str:
     normalized_subject = subject or "FamilyAgent"
@@ -154,7 +163,11 @@ def build_family_agent_system_prompt(
         memory_context=memory_context or "当前没有命中明确的已授权家族上下文。",
         viewer_role=viewer_role or "MEMBER",
         target_role=target_role or "MEMBER",
-        response_mode=response_mode or "think",
+        response_mode=response_mode or "auto",
+        answer_depth=answer_depth or "STANDARD",
+        recall_depth=recall_depth or "STANDARD",
+        web_search_policy=web_search_policy or "AUTO",
+        decision_support=str(bool(decision_support)).lower(),
         current_time_context=_current_time_context(client_timestamp, client_timezone),
         public_web_context=public_web_context or "未触发联网搜索。",
     )

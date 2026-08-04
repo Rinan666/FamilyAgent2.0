@@ -139,9 +139,16 @@ def is_thinking_mode(response_mode: str | None) -> bool:
     return (response_mode or "").strip().lower() == "think"
 
 
-def needs_web_search(query: str, response_mode: str | None = "think") -> bool:
+def needs_web_search(
+    query: str,
+    response_mode: str | None = "think",
+    web_search_policy: str | None = None,
+) -> bool:
     """Return true when a public query likely needs fresh information."""
-    if not is_thinking_mode(response_mode):
+    policy = (web_search_policy or "").strip().upper()
+    if policy == "NONE":
+        return False
+    if not policy and not is_thinking_mode(response_mode):
         return False
     normalized = (query or "").strip()
     if len(normalized) < 4:
@@ -156,7 +163,7 @@ def needs_web_search(query: str, response_mode: str | None = "think") -> bool:
         re.search(pattern, normalized, re.IGNORECASE)
         for pattern in TIME_SENSITIVE_PATTERNS
     )
-    return explicit_search or time_sensitive
+    return policy == "REQUIRED" or explicit_search or time_sensitive
 
 
 def rewrite_public_search_query(query: str) -> str:
@@ -185,10 +192,13 @@ def is_private_web_search_query(query: str) -> bool:
     return any(re.search(pattern, normalized, re.IGNORECASE) for pattern in PRIVATE_WEB_SEARCH_BLOCK_PATTERNS)
 
 
-def format_web_context(results: list[WebSearchResult], query: str, response_mode: str | None = "think") -> str:
-    if not is_thinking_mode(response_mode):
-        return "- 本轮为快速模式，禁止联网搜索，只基于当前输入和已有上下文回答。"
-    if not needs_web_search(query, response_mode):
+def format_web_context(
+    results: list[WebSearchResult],
+    query: str,
+    response_mode: str | None = "think",
+    web_search_policy: str | None = None,
+) -> str:
+    if not needs_web_search(query, response_mode, web_search_policy):
         return (
             "- 本轮问题未明显涉及公共时效信息，不需要联网搜索。\n"
             "- 如果用户追问最新事实、新闻、价格、政策、版本或现任人物，应提醒需要联网确认。"
@@ -210,17 +220,22 @@ def format_web_context(results: list[WebSearchResult], query: str, response_mode
     return "\n".join(lines)
 
 
-async def search_public_web(query: str, response_mode: str | None = "think") -> list[WebSearchResult]:
+async def search_public_web(
+    query: str,
+    response_mode: str | None = "think",
+    web_search_policy: str | None = None,
+) -> list[WebSearchResult]:
     """Search public web results when enabled and needed."""
-    results, _, _, _ = await _search_public_web_observed(query, response_mode)
+    results, _, _, _ = await _search_public_web_observed(query, response_mode, web_search_policy)
     return results
 
 
 async def _search_public_web_observed(
     query: str,
     response_mode: str | None = "think",
+    web_search_policy: str | None = None,
 ) -> tuple[list[WebSearchResult], str | None, bool, str | None]:
-    if not needs_web_search(query, response_mode):
+    if not needs_web_search(query, response_mode, web_search_policy):
         return [], None, True, None
     if not settings.web_search_enabled:
         return [], None, False, "WEB_SEARCH_DISABLED"
@@ -248,14 +263,20 @@ async def build_web_context(query: str, response_mode: str | None = "think") -> 
     return format_web_context(await search_public_web(query, response_mode), query, response_mode)
 
 
-async def build_web_search_context(query: str, response_mode: str | None = "think") -> WebSearchContext:
-    needed = needs_web_search(query, response_mode)
+async def build_web_search_context(
+    query: str,
+    response_mode: str | None = "think",
+    web_search_policy: str | None = None,
+) -> WebSearchContext:
+    needed = needs_web_search(query, response_mode, web_search_policy)
     started_at = time.monotonic()
-    results, provider, success, error_code = await _search_public_web_observed(query, response_mode)
+    results, provider, success, error_code = await _search_public_web_observed(
+        query, response_mode, web_search_policy
+    )
     return WebSearchContext(
         needed=needed,
         results=results,
-        prompt_context=format_web_context(results, query, response_mode),
+        prompt_context=format_web_context(results, query, response_mode, web_search_policy),
         provider=provider,
         latency_ms=max(0, round((time.monotonic() - started_at) * 1000)),
         success=success,
