@@ -71,7 +71,8 @@ class CreateDiaryEntryToolTest {
         assertEquals(List.of("bedtime"), request.getTags());
         assertEquals("FAMILY_SHARED", request.getVisibility());
         assertEquals("FAMILY_COMPANION_TOOL", request.getMetadata().getSource());
-        assertEquals("DIARY", request.getMetadata().toMap().get("plannedTool"));
+        assertEquals("FAMILY", request.getMetadata().toMap().get("memoryLibrary"));
+        assertEquals("NOTE", request.getMetadata().toMap().get("memoryType"));
         assertEquals(88L, output.diaryEntryId());
     }
 
@@ -92,7 +93,8 @@ class CreateDiaryEntryToolTest {
     private static AgentSaveMemoryMetadata metadata() {
         AgentSaveMemoryMetadata metadata = new AgentSaveMemoryMetadata();
         metadata.setSource("FAMILY_COMPANION_TOOL");
-        metadata.setPlannedTool("DIARY");
+        metadata.setMemoryLibrary("FAMILY");
+        metadata.setMemoryType("NOTE");
         metadata.setSavedFromMessageRole("user");
         return metadata;
     }

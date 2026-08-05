@@ -9,7 +9,7 @@ from app.runtime.artifact_versions import (
     PERSONA_MATERIAL_DRAFT_SCHEMA_VERSION,
     PERSONA_MATERIAL_PROMPT_VERSION,
     SAVE_MEMORY_PROMPT_VERSION,
-    SAVE_TOOL_PLAN_SCHEMA_VERSION,
+    MEMORY_SAVE_PLAN_SCHEMA_VERSION,
 )
 
 
@@ -39,10 +39,10 @@ SAVE_MEMORY_PLAN_MANIFEST = SkillManifest(
     name="save_memory",
     version="1.0.0",
     description="Plan whether a conversation fragment should become a family record.",
-    input_schema="save_tool_plan.request.v1",
-    output_schema="save_tool_plan.response.v1",
+    input_schema="memory_save_plan.request.v1",
+    output_schema="memory_save_plan.response.v1",
     prompt_version=SAVE_MEMORY_PROMPT_VERSION,
-    schema_version=SAVE_TOOL_PLAN_SCHEMA_VERSION,
+    schema_version=MEMORY_SAVE_PLAN_SCHEMA_VERSION,
     reads=("L0", "L4"),
     writes=("L0", "L1", "L4"),
     requires_confirmation=True,

@@ -46,7 +46,8 @@ class GrowthGuardServiceTest {
         request.setContent("最近入睡偏晚，需要继续观察。");
         request.setMetadata(GrowthGuardMetadata.fromMap(Map.of(
                 "source", "MIRROR_AGENT_TOOL",
-                "plannedTool", "GROWTH_GUARD")));
+                "memoryLibrary", "FAMILY",
+                "memoryType", "OBSERVATION")));
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginIdAsLong).thenReturn(10L);
@@ -57,7 +58,8 @@ class GrowthGuardServiceTest {
         verify(memorySyncSupport).create(captor.capture());
         Map<?, ?> metadata = (Map<?, ?>) captor.getValue().getMetadata();
         assertEquals("MIRROR_AGENT_TOOL", metadata.get("source"));
-        assertEquals("GROWTH_GUARD", metadata.get("plannedTool"));
+        assertEquals("FAMILY", metadata.get("memoryLibrary"));
+        assertEquals("OBSERVATION", metadata.get("memoryType"));
         assertEquals("PENDING", metadata.get("followUpStatus"));
     }
 

@@ -36,12 +36,17 @@ class OrganizeDraftUseCase:
 
     async def _organize(self, request: OrganizeDraftRequest, llm_client: LLMClient) -> dict[str, object]:
         content = request.content.strip()
-        scene = _choice(request.scene, {"DIARY", "HERITAGE", "GROWTH_GUARD"}, "DIARY")
+        memory_library = _choice(request.memory_library, {"PERSONAL", "FAMILY"}, "FAMILY")
+        current_memory_type = _choice(
+            request.current_memory_type,
+            {"NOTE", "KNOWLEDGE", "INSIGHT", "EXPERIENCE", "OBSERVATION", "PREFERENCE", "PLAN"},
+            "NOTE",
+        )
         try:
             raw = await llm_client.chat(
                 messages=self._prompt_renderer.render(
-                    scene=scene,
-                    current_type=request.current_type,
+                    memory_library=memory_library,
+                    current_memory_type=current_memory_type,
                     current_visibility=request.current_visibility,
                     target=request.target,
                     family_context=request.family_context,
@@ -56,7 +61,12 @@ class OrganizeDraftUseCase:
             return skill_failure(SkillErrorCode.PROVIDER_ERROR, "Draft organization unavailable")
 
         try:
-            data = self._output_parser.parse(raw, scene=scene, fallback_content=content)
+            data = self._output_parser.parse(
+                raw,
+                memory_library=memory_library,
+                current_memory_type=current_memory_type,
+                fallback_content=content,
+            )
             return skill_success(data)
         except SkillOutputParseError as error:
             logger.error("Organize-draft output invalid: errorType=%s", type(error).__name__)

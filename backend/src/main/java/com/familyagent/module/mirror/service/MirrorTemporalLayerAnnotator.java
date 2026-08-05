@@ -1,6 +1,6 @@
 package com.familyagent.module.mirror.service;
 
-import com.familyagent.common.constant.MemoryType;
+import com.familyagent.common.constant.MemoryContentType;
 import com.familyagent.module.diary.entity.DiaryEntry;
 import com.familyagent.module.growth.entity.GrowthGuardRecord;
 import com.familyagent.module.memory.entity.MemoryEntry;
@@ -77,9 +77,9 @@ public class MirrorTemporalLayerAnnotator {
             return true;
         }
         String type = memory.getType() == null ? "" : memory.getType();
-        return MemoryType.ELDER_ADVICE.name().equals(type)
-                || MemoryType.VALUE.name().equals(type)
-                || MemoryType.FAMILY_STORY.name().equals(type);
+        return MemoryContentType.KNOWLEDGE.name().equals(type)
+                || MemoryContentType.INSIGHT.name().equals(type)
+                || MemoryContentType.EXPERIENCE.name().equals(type);
     }
 
     private static TemporalKind kind(MemoryEntry memory) {
@@ -87,13 +87,12 @@ public class MirrorTemporalLayerAnnotator {
             return TemporalKind.FAMILY_MEMORY;
         }
         String sourceType = metadataText(memory.getMetadata(), "sourceType");
-        String plannedTool = metadataText(memory.getMetadata(), "plannedTool");
+        String plannedMemoryType = metadataText(memory.getMetadata(), "memoryType");
         String type = memory.getType() == null ? "" : memory.getType();
-        if ("GROWTH_OBSERVATION".equals(sourceType) || "GROWTH_GUARD".equals(plannedTool)) {
+        if ("GROWTH_OBSERVATION".equals(sourceType)
+                || MemoryContentType.OBSERVATION.name().equals(type)
+                || MemoryContentType.OBSERVATION.name().equals(plannedMemoryType)) {
             return TemporalKind.GROWTH_OBSERVATION;
-        }
-        if ("LEARNING".equals(type) || "MISTAKE".equals(type)) {
-            return TemporalKind.DIARY;
         }
         return TemporalKind.FAMILY_MEMORY;
     }

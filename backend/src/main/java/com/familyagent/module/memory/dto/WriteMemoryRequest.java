@@ -1,7 +1,5 @@
 package com.familyagent.module.memory.dto;
 
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -15,7 +13,10 @@ public class WriteMemoryRequest {
     private Long familyId;
 
     @NotBlank
-    private String writeCategory;
+    private String memoryLibrary;
+
+    @NotBlank
+    private String memoryType;
 
     @NotBlank
     private String content;
@@ -24,16 +25,7 @@ public class WriteMemoryRequest {
     private List<String> tags;
     private String visibility;
     private Long relatedUserId;
-    private String diaryEntryType;
-    private String memoryType;
-    private String personalMemoryType;
-    private String memoryLibrary;
     private List<Long> selectedFamilyIds;
-    private String growthCategory;
-
-    @Min(1)
-    @Max(5)
-    private Integer growthSeverity;
 
     private WriteMemoryMetadata metadata;
 }

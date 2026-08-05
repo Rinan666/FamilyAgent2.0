@@ -9,7 +9,7 @@ import uuid
 
 from openai import AuthenticationError, PermissionDeniedError, RateLimitError
 
-from app.api.memory_contracts import SAVE_TOOL_PLAN_SCHEMA
+from app.api.memory_contracts import MEMORY_SAVE_PLAN_SCHEMA
 from app.config import settings
 from app.llm.completion_config import provider_completion
 from app.monitoring.provider_eval_support import (
@@ -79,7 +79,7 @@ class DefaultProviderQualityProbeClient:
                 ),
                 temperature=0.1,
                 max_tokens=case.max_tokens,
-                response_format=SAVE_TOOL_PLAN_SCHEMA,
+                response_format=MEMORY_SAVE_PLAN_SCHEMA,
                 extra_body={"enable_thinking": False},
             )
         except (AuthenticationError, PermissionDeniedError) as error:

@@ -34,18 +34,13 @@ public enum MemoryContentType {
         };
     }
 
-    public static MemoryContentType fromFamilyMemoryType(String value) {
+    public static MemoryContentType fromValue(String value) {
         String normalized = normalize(value);
-        return switch (normalized) {
-            case "NOTE" -> NOTE;
-            case "LEARNING", "KNOWLEDGE", "ELDER_ADVICE" -> KNOWLEDGE;
-            case "MISTAKE", "INSIGHT", "VALUE" -> INSIGHT;
-            case "EXPERIENCE", "FAMILY_STORY" -> EXPERIENCE;
-            case "OBSERVATION", "GROWTH_RISK" -> OBSERVATION;
-            case "PREFERENCE" -> PREFERENCE;
-            case "PLAN", "HEALTH_REMINDER" -> PLAN;
-            default -> null;
-        };
+        try {
+            return valueOf(normalized);
+        } catch (IllegalArgumentException error) {
+            return null;
+        }
     }
 
     private static String normalize(String value) {

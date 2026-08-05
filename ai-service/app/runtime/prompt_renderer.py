@@ -3,8 +3,8 @@
 from typing import TypedDict
 
 from app.llm.prompts.memory import (
-    SAVE_TOOL_PLAN_SYSTEM_PROMPT,
-    build_save_tool_plan_user_prompt,
+    MEMORY_SAVE_PLAN_SYSTEM_PROMPT,
+    build_memory_save_plan_user_prompt,
 )
 from app.utils.privacy_guard import redact_with_note
 
@@ -32,10 +32,10 @@ class SaveMemoryPromptRenderer:
             max_length=5000,
         ).text
         return [
-            {"role": "system", "content": SAVE_TOOL_PLAN_SYSTEM_PROMPT},
+            {"role": "system", "content": MEMORY_SAVE_PLAN_SYSTEM_PROMPT},
             {
                 "role": "user",
-                "content": build_save_tool_plan_user_prompt(
+                "content": build_memory_save_plan_user_prompt(
                     guarded_family_context,
                     target_member_name,
                     viewer_role,

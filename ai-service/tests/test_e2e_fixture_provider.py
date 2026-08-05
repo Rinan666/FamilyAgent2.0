@@ -19,7 +19,7 @@ async def test_e2e_fixture_provider_returns_save_plan_in_e2e(monkeypatch):
             "role": "user",
             "content": "<selected_content>保存这段 E2E 内容</selected_content>",
         }],
-        response_format={"json_schema": {"name": "agent_save_tool_plan"}},
+        response_format={"json_schema": {"name": "agent_memory_save_plan"}},
     )
 
     payload = json.loads(response.choices[0].message.content)
@@ -56,5 +56,5 @@ async def test_e2e_fixture_provider_is_rejected_outside_e2e(monkeypatch):
         await provider_completion(
             model="e2e-fixture/save-plan",
             messages=[],
-            response_format={"json_schema": {"name": "agent_save_tool_plan"}},
+            response_format={"json_schema": {"name": "agent_memory_save_plan"}},
         )

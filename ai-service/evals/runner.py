@@ -55,7 +55,7 @@ DEFAULT_ARTIFACTS = (
     ),
     EvalArtifactVersion(
         kind=EvalArtifactKind.SCHEMA,
-        name="save_tool_plan",
+        name="memory_save_plan",
         version=SAVE_MEMORY_PLAN_MANIFEST.schema_version,
     ),
     EvalArtifactVersion(

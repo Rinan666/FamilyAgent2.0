@@ -73,7 +73,7 @@ public class MemoryLibraryGrowthCommandService {
         if (CATEGORIES.contains(normalized)) {
             return normalized;
         }
-        return MemoryContentType.OBSERVATION == MemoryContentType.fromFamilyMemoryType(normalized)
+        return MemoryContentType.OBSERVATION == MemoryContentType.fromValue(normalized)
                 ? currentCategory
                 : MemoryLibraryCommandSupport.normalize(
                         normalized,

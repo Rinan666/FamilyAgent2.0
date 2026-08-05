@@ -71,7 +71,8 @@ class CreateFamilyMemoryToolTest {
         assertEquals(22L, request.getRelatedUserId());
         assertEquals(java.util.List.of("story"), request.getTags());
         assertEquals("MIRROR_AGENT_TOOL", request.getMetadata().getSource());
-        assertEquals("FAMILY_MEMORY", request.getMetadata().toMap().get("plannedTool"));
+        assertEquals("FAMILY", request.getMetadata().toMap().get("memoryLibrary"));
+        assertEquals("EXPERIENCE", request.getMetadata().toMap().get("memoryType"));
         assertEquals("FAMILY_EXPERIENCE", request.getMetadata().toMap().get("sourceType"));
         assertEquals(99L, output.memoryEntryId());
     }
@@ -80,7 +81,7 @@ class CreateFamilyMemoryToolTest {
     void execute_blankContent_rejectsBeforeFacadeCall() {
         CreateFamilyMemoryInput input = new CreateFamilyMemoryInput(
                 " ",
-                "FAMILY_STORY",
+                "EXPERIENCE",
                 "FAMILY_VISIBLE",
                 null,
                 null,
@@ -94,7 +95,8 @@ class CreateFamilyMemoryToolTest {
     private static AgentSaveMemoryMetadata metadata() {
         AgentSaveMemoryMetadata metadata = new AgentSaveMemoryMetadata();
         metadata.setSource("MIRROR_AGENT_TOOL");
-        metadata.setPlannedTool("FAMILY_MEMORY");
+        metadata.setMemoryLibrary("FAMILY");
+        metadata.setMemoryType("EXPERIENCE");
         metadata.setSourceType("FAMILY_EXPERIENCE");
         metadata.setScenario("Mirror save");
         metadata.setTarget("Child");

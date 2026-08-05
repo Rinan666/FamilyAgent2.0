@@ -95,7 +95,8 @@ class SavePlanExpectation:
     llm_calls: int
     success: bool
     should_save: bool
-    tool: str
+    memory_library: str
+    memory_type: str
     error_code: str | None = None
 
 
@@ -158,12 +159,13 @@ class OrganizeDraftEvalCase:
     case_id: str
     category: str
     protected_asset: ProtectedAsset
-    scene: str
+    memory_library: str
+    current_memory_type: str
     raw_output: str
     fallback_content: str
     expected_decision: EvalDecision
     expected_title: str
-    expected_entry_type: str
+    expected_memory_type: str
     expected_visibility: str
     forbidden_fragments: tuple[str, ...] = ()
 

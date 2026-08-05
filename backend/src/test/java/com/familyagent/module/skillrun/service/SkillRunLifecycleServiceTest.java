@@ -46,7 +46,8 @@ class SkillRunLifecycleServiceTest {
         request.setSaved(true);
         request.setOutputSummary("保存为经验沉淀");
         SkillRunMetadata metadata = new SkillRunMetadata();
-        metadata.setSavedRecordType("FAMILY_MEMORY");
+        metadata.setMemoryLibrary("FAMILY");
+        metadata.setMemoryType("EXPERIENCE");
         request.setMetadata(metadata);
 
         SkillRun result = lifecycleService.update(7L, request);
@@ -56,7 +57,8 @@ class SkillRunLifecycleServiceTest {
         assertEquals("SUCCEEDED", run.getStatus());
         assertTrue(run.getSaved());
         assertEquals("保存为经验沉淀", run.getOutputSummary());
-        assertEquals("FAMILY_MEMORY", run.getMetadata().getSavedRecordType());
+        assertEquals("FAMILY", run.getMetadata().getMemoryLibrary());
+        assertEquals("EXPERIENCE", run.getMetadata().getMemoryType());
     }
 
     @Test

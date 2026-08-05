@@ -329,7 +329,7 @@ class MirrorContextServiceTest {
         entry.setSummary(summary);
         entry.setContent(content);
         entry.setScope("FAMILY_VISIBLE");
-        entry.setType("ELDER_ADVICE");
+        entry.setType("KNOWLEDGE");
         entry.setStatus("ACTIVE");
         entry.setImportance(3);
         entry.setCreatedAt(LocalDateTime.now().minusDays(id));

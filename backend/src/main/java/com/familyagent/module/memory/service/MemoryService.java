@@ -5,7 +5,6 @@ import com.familyagent.common.constant.HeritageSource;
 import com.familyagent.common.constant.MemoryContentType;
 import com.familyagent.common.constant.MemoryScope;
 import com.familyagent.common.constant.MemoryLibraryKind;
-import com.familyagent.common.constant.MemoryType;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.response.PageResult;
@@ -155,10 +154,11 @@ public class MemoryService {
     }
 
     private static String normalizeFamilyMemoryType(String type) {
-        String requested = type == null ? MemoryType.DEFAULT.name() : type.trim().toUpperCase(Locale.ROOT);
-        MemoryContentType normalized = MemoryContentType.fromFamilyMemoryType(requested);
+        MemoryContentType normalized = MemoryContentType.fromValue(type == null
+                ? MemoryContentType.DEFAULT.name()
+                : type);
         if (normalized == null) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "家族经验类型不支持");
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "记忆类型不支持");
         }
         return normalized.name();
     }

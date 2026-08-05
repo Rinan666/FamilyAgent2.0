@@ -84,8 +84,8 @@ async def test_persona_material_invalid_output_is_structured(monkeypatch):
 
 def test_organize_draft_prompt_renderer_redacts_ai_bound_context():
     messages = OrganizeDraftPromptRenderer().render(
-        scene="DIARY",
-        current_type="DAILY",
+        memory_library="PERSONAL",
+        current_memory_type="NOTE",
         current_visibility="PRIVATE",
         target="孩子",
         family_context="联系电话 13812345678",
@@ -115,8 +115,9 @@ def test_persona_prompt_renderer_redacts_profile_and_content():
 
 def test_draft_output_parsers_apply_deterministic_bounds():
     organized = OrganizeDraftOutputParser().parse(
-        '{"title":"","content":"有效的家庭记录内容","diary_entry_type":"UNKNOWN"}',
-        scene="DIARY",
+        '{"title":"","content":"有效的家庭记录内容","memory_type":"UNKNOWN"}',
+        memory_library="PERSONAL",
+        current_memory_type="NOTE",
         fallback_content="家庭记录",
     )
     persona = PersonaMaterialOutputParser().parse(
@@ -126,7 +127,7 @@ def test_draft_output_parsers_apply_deterministic_bounds():
     )
 
     assert organized.title == "未命名记录"
-    assert organized.diary_entry_type == "DAILY"
+    assert organized.memory_type == "NOTE"
     assert persona.profile.name == "外公"
 
 
@@ -137,13 +138,8 @@ async def test_organize_draft_success_serializes_stable_typed_contract(monkeypat
             "title": "Family lesson",
             "content": "A concrete family experience worth preserving.",
             "tags": ["lesson"],
-            "diary_entry_type": "LESSON",
-            "diary_visibility": "PRIVATE",
-            "memory_type": "ELDER_ADVICE",
-            "memory_scope": "CARE_VISIBLE",
-            "growth_category": "OTHER",
-            "growth_severity": 2,
-            "scenario": "conversation",
+            "memory_type": "INSIGHT",
+            "visibility": "CARE_VISIBLE",
             "reason": "Reusable family experience",
         })
 
@@ -155,8 +151,8 @@ async def test_organize_draft_success_serializes_stable_typed_contract(monkeypat
 
     assert set(response) == {"success", "data"}
     assert response["success"] is True
-    assert response["data"]["diary_entry_type"] == "LESSON"
-    assert response["data"]["growth_severity"] == 2
+    assert response["data"]["memory_type"] == "INSIGHT"
+    assert response["data"]["visibility"] == "CARE_VISIBLE"
 
 
 @pytest.mark.asyncio

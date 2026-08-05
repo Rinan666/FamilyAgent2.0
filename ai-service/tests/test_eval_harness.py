@@ -39,7 +39,7 @@ async def test_default_eval_suite_passes_without_leaking_fixture_content(caplog)
     assert {(item.kind, item.name, item.version) for item in report.artifacts} == {
         ("SKILL", "save_memory", "1.0.0"),
         ("PROMPT", "memory.save_plan", "memory.save_plan.v1"),
-        ("SCHEMA", "save_tool_plan", "save_tool_plan.schema.v1"),
+        ("SCHEMA", "memory_save_plan", "memory_save_plan.schema.v1"),
         ("PROMPT", "family_chat.system", "family_chat.system.v1"),
         ("SCHEMA", "family_chat.stream", "family_chat.stream.schema.v1"),
         ("ALGORITHM", "memory_recall_ranking", "authorized-memory-recall.v1"),

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 
 E2E_FIXTURE_MODEL_PREFIX = "e2e-fixture/"
-_SAVE_PLAN_SCHEMA_NAME = "agent_save_tool_plan"
+_SAVE_PLAN_SCHEMA_NAME = "agent_memory_save_plan"
 _SELECTED_CONTENT_PATTERN = re.compile(
     r"<selected_content>\s*(.*?)\s*</selected_content>",
     re.DOTALL,
@@ -45,17 +45,12 @@ def build_e2e_fixture_completion(
     content = _selected_content(messages) or "E2E editable memory draft"
     payload = {
         "should_save": True,
-        "tool": "DIARY",
+        "memory_library": "PERSONAL",
         "content": content[:1200],
         "title": "E2E editable draft",
         "summary": content[:160],
         "visibility": "PRIVATE",
-        "entry_type": "DAILY",
         "memory_type": "NOTE",
-        "personal_memory_type": "NOTE",
-        "scope": "PRIVATE",
-        "category": "OTHER",
-        "severity": 1,
         "importance": 1,
         "tags": ["e2e"],
         "reason": "Deterministic browser test fixture.",

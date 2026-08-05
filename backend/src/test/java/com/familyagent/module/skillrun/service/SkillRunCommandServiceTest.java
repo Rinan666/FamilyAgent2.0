@@ -51,7 +51,8 @@ class SkillRunCommandServiceTest {
             source.setSourceId(1L);
             request.setUsedSources(List.of(source));
             SkillRunMetadata metadata = new SkillRunMetadata();
-            metadata.setPlannedTool("FAMILY_MEMORY");
+            metadata.setMemoryLibrary("FAMILY");
+            metadata.setMemoryType("EXPERIENCE");
             request.setMetadata(metadata);
 
             SkillRun result = commandService.create(request);
@@ -66,7 +67,8 @@ class SkillRunCommandServiceTest {
             assertEquals("PLANNED", inserted.getStatus());
             assertEquals("FAMILY_AGENT", inserted.getSource());
             assertFalse(inserted.getSaved());
-            assertEquals("FAMILY_MEMORY", inserted.getMetadata().getPlannedTool());
+            assertEquals("FAMILY", inserted.getMetadata().getMemoryLibrary());
+            assertEquals("EXPERIENCE", inserted.getMetadata().getMemoryType());
         }
     }
 }

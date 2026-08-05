@@ -83,7 +83,7 @@ public class MemoryLibraryMemoryCommandService {
 
     private static String normalizeType(String requestedType, String fallbackType) {
         String requested = MemoryLibrarySupport.blankToNull(requestedType);
-        MemoryContentType resolved = MemoryContentType.fromFamilyMemoryType(
+        MemoryContentType resolved = MemoryContentType.fromValue(
                 requested == null ? fallbackType : requested);
         if (resolved == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Memory type is not supported");

@@ -79,7 +79,7 @@ public class MemoryLibraryDiaryCommandService {
         if (ENTRY_TYPES.contains(normalized)) {
             return normalized;
         }
-        MemoryContentType contentType = MemoryContentType.fromFamilyMemoryType(normalized);
+        MemoryContentType contentType = MemoryContentType.fromValue(normalized);
         if (contentType == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Diary entry type is not supported");
         }

@@ -15,10 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
@@ -29,15 +26,14 @@ public class WriteMemoryCommandService {
 
     @Transactional
     public WriteMemoryResult write(WriteMemoryRequest request) {
-        WriteCategory category = WriteCategory.from(request.getWriteCategory());
+        MemoryContentType type = requireMemoryType(request.getMemoryType());
         if (personalMemoryRequested(request)) {
-            return savePersonalMemory(request, category);
+            return savePersonalMemory(request, type);
         }
-        return saveFamilyMemory(request, category);
+        return saveFamilyMemory(request, type);
     }
 
-    private WriteMemoryResult saveFamilyMemory(WriteMemoryRequest request, WriteCategory category) {
-        MemoryContentType type = resolveType(request, category);
+    private WriteMemoryResult saveFamilyMemory(WriteMemoryRequest request, MemoryContentType type) {
         CreateFamilyMemoryRequest memoryRequest = new CreateFamilyMemoryRequest();
         memoryRequest.setFamilyId(request.getFamilyId());
         memoryRequest.setContent(request.getContent().trim());
@@ -47,20 +43,20 @@ public class WriteMemoryCommandService {
         memoryRequest.setImportance(defaultImportance(type));
         memoryRequest.setRelatedUserId(request.getRelatedUserId());
         memoryRequest.setTags(normalizeTags(request.getTags()));
-        memoryRequest.setMetadata(metadata(request.getMetadata(), category));
+        memoryRequest.setMetadata(request.getMetadata());
         MemoryEntry entry = memoryService.createFamilyMemory(memoryRequest);
         return new WriteMemoryResult(
-                "FAMILY_MEMORY",
+                MemoryLibraryKind.FAMILY.name(),
                 entry.getId(),
-                category.name(),
+                type.name(),
                 entry.getScope(),
                 title(entry.getTitle(), entry.getSummary(), entry.getContent()));
     }
 
-    private WriteMemoryResult savePersonalMemory(WriteMemoryRequest request, WriteCategory category) {
+    private WriteMemoryResult savePersonalMemory(WriteMemoryRequest request, MemoryContentType type) {
         CreatePersonalMemoryRequest personalRequest = new CreatePersonalMemoryRequest();
         personalRequest.setContent(request.getContent().trim());
-        personalRequest.setType(blankToNull(request.getPersonalMemoryType()));
+        personalRequest.setType(type.name());
         personalRequest.setVisibility(blankToNull(request.getVisibility()));
         personalRequest.setSelectedFamilyIds(request.getSelectedFamilyIds());
         personalRequest.setSummary(summary(request.getTitle(), request.getContent()));
@@ -68,41 +64,24 @@ public class WriteMemoryCommandService {
         personalRequest.setMetadata(request.getMetadata());
         PersonalMemoryView saved = personalMemoryCommandService.create(personalRequest);
         return new WriteMemoryResult(
-                "PERSONAL_MEMORY",
+                MemoryLibraryKind.PERSONAL.name(),
                 saved.id(),
-                category.name(),
+                type.name(),
                 saved.visibility(),
                 title(null, saved.summary(), saved.content()));
-    }
-
-    private static MemoryContentType resolveType(WriteMemoryRequest request, WriteCategory category) {
-        if (category == WriteCategory.OBSERVATION) {
-            return MemoryContentType.OBSERVATION;
-        }
-        if (category == WriteCategory.RECORD) {
-            return MemoryContentType.fromDiaryEntryType(request.getDiaryEntryType());
-        }
-        String requested = blankToNull(request.getMemoryType());
-        if (requested != null) {
-            MemoryContentType resolved = MemoryContentType.fromFamilyMemoryType(requested);
-            if (resolved != null) {
-                return resolved;
-            }
-        }
-        return MemoryContentType.EXPERIENCE;
-    }
-
-    private static WriteMemoryMetadata metadata(WriteMemoryMetadata requested, WriteCategory category) {
-        Map<String, Object> values = requested == null
-                ? new HashMap<>()
-                : new HashMap<>(requested.toMap());
-        values.put("writeCategory", category.name());
-        return WriteMemoryMetadata.fromMap(values);
     }
 
     private static boolean personalMemoryRequested(WriteMemoryRequest request) {
         return MemoryLibraryKind.PERSONAL.name().equalsIgnoreCase(
                 blankToNull(request.getMemoryLibrary()));
+    }
+
+    private static MemoryContentType requireMemoryType(String value) {
+        MemoryContentType type = MemoryContentType.fromValue(value);
+        if (type == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Memory type is not supported");
+        }
+        return type;
     }
 
     private static int defaultImportance(MemoryContentType type) {
@@ -146,18 +125,4 @@ public class WriteMemoryCommandService {
         return value == null || value.isBlank() ? null : value.trim();
     }
 
-    private enum WriteCategory {
-        RECORD,
-        EXPERIENCE,
-        OBSERVATION;
-
-        private static WriteCategory from(String value) {
-            String normalized = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
-            try {
-                return valueOf(normalized);
-            } catch (IllegalArgumentException error) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST, "Memory write category is not supported");
-            }
-        }
-    }
 }

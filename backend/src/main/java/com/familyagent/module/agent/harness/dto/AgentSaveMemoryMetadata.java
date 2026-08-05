@@ -14,11 +14,11 @@ public class AgentSaveMemoryMetadata {
     private String familyName;
     private String viewerRole;
     private String savedFromMessageRole;
-    private String plannedTool;
+    private String memoryLibrary;
+    private String memoryType;
     private String plannedTitle;
     private String plannedReason;
     private String visibility;
-    private String scope;
     private String confirmationPolicy;
     private String savedAt;
     private Long relatedUserId;
@@ -38,11 +38,11 @@ public class AgentSaveMemoryMetadata {
         put(metadata, "familyName", familyName);
         put(metadata, "viewerRole", viewerRole);
         put(metadata, "savedFromMessageRole", savedFromMessageRole);
-        put(metadata, "plannedTool", plannedTool);
+        put(metadata, "memoryLibrary", memoryLibrary);
+        put(metadata, "memoryType", memoryType);
         put(metadata, "plannedTitle", plannedTitle);
         put(metadata, "plannedReason", plannedReason);
         put(metadata, "visibility", visibility);
-        put(metadata, "scope", scope);
         put(metadata, "confirmationPolicy", confirmationPolicy);
         put(metadata, "savedAt", savedAt);
         put(metadata, "relatedUserId", relatedUserId);

@@ -1,29 +1,20 @@
 """LLM response schemas for the family memory API."""
 
-VISIBILITY_VALUES = ["PRIVATE", "FAMILY_VISIBLE", "CARE_VISIBLE", "LEGACY_VISIBLE"]
 PERSONAL_MEMORY_VISIBILITIES = [
     "PRIVATE",
     "ALL_FAMILIES_VISIBLE",
     "SELECTED_FAMILIES_VISIBLE",
     "CARE_VISIBLE",
 ]
-SAVE_VISIBILITY_VALUES = list(dict.fromkeys([*VISIBILITY_VALUES, *PERSONAL_MEMORY_VISIBILITIES]))
-DIARY_ENTRY_TYPES = ["DAILY", "IMPORTANT_EVENT", "LESSON", "EMOTION", "MESSAGE_TO_FAMILY", "SELF_REFLECTION"]
-MEMORY_TYPES = ["NOTE", "KNOWLEDGE", "INSIGHT", "EXPERIENCE", "OBSERVATION", "PREFERENCE", "PLAN"]
-MEMORY_SCOPES = ["PRIVATE", "CARE_VISIBLE", "FAMILY_VISIBLE", "PARENT_VISIBLE"]
-SAVE_MEMORY_SCOPES = list(dict.fromkeys([*MEMORY_SCOPES, *PERSONAL_MEMORY_VISIBILITIES]))
-PERSONAL_MEMORY_TYPES = list(MEMORY_TYPES)
-GROWTH_CATEGORIES = [
-    "POSTURE",
-    "DENTAL",
-    "VISION",
-    "SLEEP",
-    "EXERCISE",
-    "SCREEN_TIME",
-    "EMOTION",
-    "COMMUNICATION",
-    "OTHER",
+SAVE_VISIBILITY_VALUES = [
+    "PRIVATE",
+    "FAMILY_VISIBLE",
+    "CARE_VISIBLE",
+    "ALL_FAMILIES_VISIBLE",
+    "SELECTED_FAMILIES_VISIBLE",
 ]
+MEMORY_TYPES = ["NOTE", "KNOWLEDGE", "INSIGHT", "EXPERIENCE", "OBSERVATION", "PREFERENCE", "PLAN"]
+MEMORY_LIBRARIES = ["PERSONAL", "FAMILY"]
 
 
 def _string_schema(max_length: int, min_length: int = 0) -> dict:
@@ -41,30 +32,22 @@ def _string_array_schema(max_items: int, item_max_length: int) -> dict:
     }
 
 
-SAVE_TOOL_PLAN_SCHEMA = {
+MEMORY_SAVE_PLAN_SCHEMA = {
     "type": "json_schema",
     "json_schema": {
-        "name": "agent_save_tool_plan",
+        "name": "agent_memory_save_plan",
         "strict": True,
         "schema": {
             "type": "object",
             "additionalProperties": False,
             "properties": {
                 "should_save": {"type": "boolean"},
-                "tool": {
-                    "type": "string",
-                    "enum": ["NONE", "DIARY", "PERSONAL_MEMORY", "FAMILY_MEMORY", "GROWTH_GUARD"],
-                },
+                "memory_library": {"type": "string", "enum": MEMORY_LIBRARIES},
                 "content": _string_schema(1200),
                 "title": _string_schema(48),
                 "summary": _string_schema(160),
                 "visibility": {"type": "string", "enum": SAVE_VISIBILITY_VALUES},
-                "entry_type": {"type": "string", "enum": DIARY_ENTRY_TYPES},
                 "memory_type": {"type": "string", "enum": MEMORY_TYPES},
-                "personal_memory_type": {"type": "string", "enum": PERSONAL_MEMORY_TYPES},
-                "scope": {"type": "string", "enum": SAVE_MEMORY_SCOPES},
-                "category": {"type": "string", "enum": GROWTH_CATEGORIES},
-                "severity": {"type": "integer", "minimum": 1, "maximum": 5},
                 "importance": {"type": "integer", "minimum": 1, "maximum": 5},
                 "tags": _string_array_schema(6, 18),
                 "reason": _string_schema(160),
@@ -72,17 +55,12 @@ SAVE_TOOL_PLAN_SCHEMA = {
             },
             "required": [
                 "should_save",
-                "tool",
+                "memory_library",
                 "content",
                 "title",
                 "summary",
                 "visibility",
-                "entry_type",
                 "memory_type",
-                "personal_memory_type",
-                "scope",
-                "category",
-                "severity",
                 "importance",
                 "tags",
                 "reason",
@@ -105,26 +83,16 @@ ORGANIZED_DRAFT_SCHEMA = {
                 "title": _string_schema(48, 1),
                 "content": _string_schema(3000, 1),
                 "tags": _string_array_schema(8, 18),
-                "diary_entry_type": {"type": "string", "enum": DIARY_ENTRY_TYPES},
-                "diary_visibility": {"type": "string", "enum": VISIBILITY_VALUES},
                 "memory_type": {"type": "string", "enum": MEMORY_TYPES},
-                "memory_scope": {"type": "string", "enum": MEMORY_SCOPES},
-                "growth_category": {"type": "string", "enum": GROWTH_CATEGORIES},
-                "growth_severity": {"type": "integer", "minimum": 1, "maximum": 5},
-                "scenario": _string_schema(48),
+                "visibility": {"type": "string", "enum": SAVE_VISIBILITY_VALUES},
                 "reason": _string_schema(160),
             },
             "required": [
                 "title",
                 "content",
                 "tags",
-                "diary_entry_type",
-                "diary_visibility",
                 "memory_type",
-                "memory_scope",
-                "growth_category",
-                "growth_severity",
-                "scenario",
+                "visibility",
                 "reason",
             ],
         },

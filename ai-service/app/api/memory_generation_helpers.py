@@ -3,7 +3,6 @@
 import re
 
 from .memory_helpers import (
-    _bounded_int,
     _choice,
     _compact_string_list,
     _normalize_memory_type,
@@ -32,68 +31,51 @@ def _sanitize_memory(item: dict) -> dict | None:
     }
 
 
-def _clean_heritage_form_traces(content: str) -> str:
-    lines: list[str] = []
-    for raw_line in str(content or "").splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-        if re.search(r"请把以上|请整理为|整理成|三句话经验原子", line):
-            continue
-        line = re.sub(r"^问题\d+[：:]\s*", "", line)
-        line = re.sub(r"^回答[：:]\s*", "", line)
-        line = re.sub(r"^(当时发生了什么|我当时怎么想的|如果重来我会怎么做)[：:]\s*", "", line)
-        if line and line != "未填写":
-            lines.append(line)
-    return " ".join(lines).strip()
-
-
-def _sanitize_organized_draft(data: dict, scene: str, fallback_content: str) -> dict:
-    content = str(data.get("content", "")).strip()[:3000] or fallback_content[:3000]
-    if scene == "HERITAGE":
-        content = _clean_heritage_form_traces(content) or _clean_heritage_form_traces(fallback_content) or fallback_content[:3000]
+def _sanitize_organized_draft(
+    data: dict,
+    memory_library: str,
+    current_memory_type: str,
+    fallback_content: str,
+) -> dict:
+    content = _clean_draft_content(data.get("content"))[:3000] or fallback_content[:3000]
+    memory_type = _normalize_memory_type(data.get("memory_type"), current_memory_type or "NOTE")
+    visibility = _choice(
+        data.get("visibility"),
+        {
+            "PRIVATE",
+            "FAMILY_VISIBLE",
+            "CARE_VISIBLE",
+            "ALL_FAMILIES_VISIBLE",
+            "SELECTED_FAMILIES_VISIBLE",
+        },
+        "PRIVATE" if memory_library == "PERSONAL" else "FAMILY_VISIBLE",
+    )
+    if memory_library == "PERSONAL" and visibility == "FAMILY_VISIBLE":
+        visibility = "PRIVATE"
+    if memory_library == "FAMILY" and visibility in {"ALL_FAMILIES_VISIBLE", "SELECTED_FAMILIES_VISIBLE"}:
+        visibility = "FAMILY_VISIBLE"
     return {
         "title": str(data.get("title", "未命名记录")).strip()[:30] or "未命名记录",
         "content": content,
         "tags": _compact_string_list(data.get("tags"), 8, 18),
-        "diary_entry_type": _choice(
-            data.get("diary_entry_type"),
-            {"DAILY", "IMPORTANT_EVENT", "LESSON", "EMOTION", "MESSAGE_TO_FAMILY", "SELF_REFLECTION"},
-            "LESSON" if scene == "HERITAGE" else "DAILY",
-        ),
-        "diary_visibility": _choice(
-            data.get("diary_visibility"),
-            {"PRIVATE", "FAMILY_VISIBLE", "CARE_VISIBLE", "LEGACY_VISIBLE"},
-            "CARE_VISIBLE" if scene == "GROWTH_GUARD" else "PRIVATE",
-        ),
-        "memory_type": _normalize_memory_type(
-            data.get("memory_type"),
-            "EXPERIENCE" if scene == "HERITAGE" else "OBSERVATION" if scene == "GROWTH_GUARD" else "NOTE",
-        ),
-        "memory_scope": _choice(
-            data.get("memory_scope"),
-            {"PRIVATE", "CARE_VISIBLE", "FAMILY_VISIBLE", "PARENT_VISIBLE"},
-            "FAMILY_VISIBLE" if scene == "HERITAGE" else "CARE_VISIBLE",
-        ),
-        "growth_category": _choice(
-            data.get("growth_category"),
-            {
-                "POSTURE",
-                "DENTAL",
-                "VISION",
-                "SLEEP",
-                "EXERCISE",
-                "SCREEN_TIME",
-                "EMOTION",
-                "COMMUNICATION",
-                "OTHER",
-            },
-            "OTHER",
-        ),
-        "growth_severity": _bounded_int(data.get("growth_severity"), 1, 5, 1),
-        "scenario": str(data.get("scenario", "")).strip()[:30],
+        "memory_type": memory_type,
+        "visibility": visibility,
         "reason": str(data.get("reason", "")).strip()[:120],
     }
+
+
+def _clean_draft_content(value: object) -> str:
+    lines: list[str] = []
+    for raw_line in str(value or "").splitlines():
+        line = raw_line.strip()
+        if not line or re.match(r"^请(?:整理|改写|总结|提炼)为", line):
+            continue
+        line = re.sub(r"^问题\d*\s*[：:]\s*", "", line)
+        line = re.sub(r"^回答\s*[：:]\s*", "", line)
+        line = re.sub(r"^(?:当时发生了什么|如果重来我会怎么做)\s*[：:]\s*", "", line)
+        if line:
+            lines.append(line)
+    return "\n".join(lines)
 
 
 def _sanitize_persona_material_draft(data: dict, fallback_profile: dict, fallback_content: str) -> dict:

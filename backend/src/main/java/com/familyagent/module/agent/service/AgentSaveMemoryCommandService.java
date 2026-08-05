@@ -4,7 +4,7 @@ import com.familyagent.common.constant.MemoryContentType;
 import com.familyagent.common.constant.MemoryLibraryKind;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
-import com.familyagent.module.agent.dto.AgentSaveMemoryToolRequest;
+import com.familyagent.module.agent.dto.AgentSaveMemoryRequest;
 import com.familyagent.module.agent.harness.AgentRunContext;
 import com.familyagent.module.agent.harness.AgentToolExecutor;
 import com.familyagent.module.agent.harness.constant.AgentToolName;
@@ -16,17 +16,16 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Locale;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class AgentSaveMemoryToolCommandService {
+public class AgentSaveMemoryCommandService {
 
     private final AgentToolExecutor toolExecutor;
 
-    public AgentToolCallResult<?> requestSave(AgentSaveMemoryToolRequest request, Long viewerUserId) {
-        SaveWriteCategory category = SaveWriteCategory.from(request.getWriteCategory());
+    public AgentToolCallResult<?> requestSave(AgentSaveMemoryRequest request, Long viewerUserId) {
+        MemoryContentType type = requireMemoryType(request.getMemoryType());
         AgentRunContext context = new AgentRunContext(
                 requestId(request.getRequestId()),
                 request.getFamilyId(),
@@ -38,14 +37,13 @@ public class AgentSaveMemoryToolCommandService {
         if (personalMemoryRequested(request)) {
             return savePersonal(request, context);
         }
-        return saveFamily(request, category, context);
+        return saveFamily(request, type, context);
     }
 
     private AgentToolCallResult<?> saveFamily(
-            AgentSaveMemoryToolRequest request,
-            SaveWriteCategory category,
+            AgentSaveMemoryRequest request,
+            MemoryContentType type,
             AgentRunContext context) {
-        MemoryContentType type = resolveType(request, category);
         return toolExecutor.execute(new AgentToolCallRequest<>(
                 AgentToolName.CREATE_FAMILY_MEMORY.value(),
                 context,
@@ -61,14 +59,14 @@ public class AgentSaveMemoryToolCommandService {
     }
 
     private AgentToolCallResult<?> savePersonal(
-            AgentSaveMemoryToolRequest request,
+            AgentSaveMemoryRequest request,
             AgentRunContext context) {
         return toolExecutor.execute(new AgentToolCallRequest<>(
                 AgentToolName.CREATE_PERSONAL_MEMORY.value(),
                 context,
                 new CreatePersonalMemoryInput(
                         request.getContent(),
-                        request.getPersonalMemoryType(),
+                        request.getMemoryType(),
                         request.getVisibility(),
                         summary(request.getTitle(), request.getContent()),
                         3,
@@ -76,21 +74,15 @@ public class AgentSaveMemoryToolCommandService {
                         request.getMetadata())));
     }
 
-    private static MemoryContentType resolveType(
-            AgentSaveMemoryToolRequest request,
-            SaveWriteCategory category) {
-        if (category == SaveWriteCategory.OBSERVATION) {
-            return MemoryContentType.OBSERVATION;
+    private static MemoryContentType requireMemoryType(String value) {
+        MemoryContentType type = MemoryContentType.fromValue(value);
+        if (type == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Memory type is not supported");
         }
-        if (category == SaveWriteCategory.RECORD) {
-            return MemoryContentType.fromDiaryEntryType(request.getDiaryEntryType());
-        }
-        String requested = defaultText(request.getMemoryType(), "");
-        MemoryContentType explicit = MemoryContentType.fromFamilyMemoryType(requested);
-        return explicit == null ? MemoryContentType.EXPERIENCE : explicit;
+        return type;
     }
 
-    private static boolean personalMemoryRequested(AgentSaveMemoryToolRequest request) {
+    private static boolean personalMemoryRequested(AgentSaveMemoryRequest request) {
         return MemoryLibraryKind.PERSONAL.name().equalsIgnoreCase(
                 defaultText(request.getMemoryLibrary(), MemoryLibraryKind.FAMILY.name()));
     }
@@ -128,18 +120,4 @@ public class AgentSaveMemoryToolCommandService {
         return text.length() <= 120 ? text : text.substring(0, 120);
     }
 
-    private enum SaveWriteCategory {
-        RECORD,
-        EXPERIENCE,
-        OBSERVATION;
-
-        static SaveWriteCategory from(String value) {
-            String normalized = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
-            try {
-                return valueOf(normalized);
-            } catch (IllegalArgumentException error) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST, "Memory write category is not supported");
-            }
-        }
-    }
 }

@@ -40,7 +40,7 @@ class MemoryVoteServiceTest {
         entry.setId(301L);
         entry.setFamilyId(1L);
         entry.setUserId(22L);
-        entry.setType("ELDER_ADVICE");
+        entry.setType("KNOWLEDGE");
         entry.setStatus("ACTIVE");
         entry.setMetadata(Map.of());
 

@@ -1,8 +1,7 @@
 package com.familyagent.module.agent.service;
 
-import com.familyagent.module.agent.constant.AgentSaveTool;
 import com.familyagent.module.agent.dto.AgentSaveMemoryPlanRequest;
-import com.familyagent.module.agent.dto.AgentSaveToolPlan;
+import com.familyagent.module.agent.dto.AgentMemorySavePlan;
 import com.familyagent.module.skillrun.dto.CreateSkillRunRequest;
 import com.familyagent.module.skillrun.dto.UpdateSkillRunRequest;
 import org.junit.jupiter.api.Test;
@@ -29,40 +28,43 @@ class AgentSaveMemoryPlanAssemblerTest {
         assertEquals(91L, run.getMetadata().getAgentRunId());
         assertEquals("1.0.0", run.getMetadata().getSkillVersion());
         assertEquals("memory.save_plan.v1", run.getMetadata().getPromptVersion());
-        assertEquals("save_tool_plan.schema.v1", run.getMetadata().getSchemaVersion());
+        assertEquals("memory_save_plan.schema.v1", run.getMetadata().getSchemaVersion());
     }
 
     @Test
     void completedRunWaitsWhenPlanRequiresPersistence() {
-        AgentSaveToolPlan plan = new AgentSaveToolPlan();
+        AgentMemorySavePlan plan = new AgentMemorySavePlan();
         plan.setShouldSave(true);
-        plan.setTool(AgentSaveTool.FAMILY_MEMORY);
+        plan.setMemoryLibrary("FAMILY");
+        plan.setMemoryType("KNOWLEDGE");
         plan.setReason("包含可复用学习策略");
 
         UpdateSkillRunRequest update = assembler.completedRunUpdate(plan, "request-2", 92L);
 
         assertEquals("PLANNED", update.getStatus());
-        assertEquals("FAMILY_MEMORY", update.getMetadata().getSavedRecordType());
-        assertEquals("FAMILY_MEMORY", update.getMetadata().getPlannedTool());
+        assertEquals("FAMILY", update.getMetadata().getMemoryLibrary());
+        assertEquals("KNOWLEDGE", update.getMetadata().getMemoryType());
     }
 
     @Test
-    void completedRunUsesCanonicalFamilyRecordTypeForLegacyDraftLabels() {
-        AgentSaveToolPlan plan = new AgentSaveToolPlan();
+    void completedRunKeepsObservationAsDatabaseMemoryType() {
+        AgentMemorySavePlan plan = new AgentMemorySavePlan();
         plan.setShouldSave(true);
-        plan.setTool(AgentSaveTool.GROWTH_GUARD);
+        plan.setMemoryLibrary("FAMILY");
+        plan.setMemoryType("OBSERVATION");
 
         UpdateSkillRunRequest update = assembler.completedRunUpdate(plan, "request-3", 93L);
 
-        assertEquals("FAMILY_MEMORY", update.getMetadata().getSavedRecordType());
-        assertEquals("GROWTH_GUARD", update.getMetadata().getPlannedTool());
+        assertEquals("FAMILY", update.getMetadata().getMemoryLibrary());
+        assertEquals("OBSERVATION", update.getMetadata().getMemoryType());
     }
 
     @Test
     void completedRunFinishesWhenNothingShouldBeSaved() {
-        AgentSaveToolPlan plan = new AgentSaveToolPlan();
+        AgentMemorySavePlan plan = new AgentMemorySavePlan();
         plan.setShouldSave(false);
-        plan.setTool(AgentSaveTool.NONE);
+        plan.setMemoryLibrary("PERSONAL");
+        plan.setMemoryType("NOTE");
         plan.setReason("没有找到原始内容");
 
         assertEquals("SUCCEEDED", assembler.completedRunUpdate(plan, "request-3", 93L).getStatus());

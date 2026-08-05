@@ -16,7 +16,7 @@ class MemoryLibraryIndexMetadataFacadeTest {
         Map<String, Object> diary = facade.enrichDiary(
                 Map.of(), "diary", "DAILY", null, new String[0]);
         Map<String, Object> memory = facade.enrichMemory(
-                Map.of(), "memory", "summary", "VALUE", 4);
+                Map.of(), "memory", "summary", "INSIGHT", 4);
         Map<String, Object> growth = facade.enrichGrowth(
                 Map.of(), "growth", "SLEEP", 3, LocalDate.of(2026, 7, 18));
 

@@ -1,17 +1,14 @@
 from app.api.memory_contracts import (
-    DIARY_ENTRY_TYPES,
-    GROWTH_CATEGORIES,
-    SAVE_MEMORY_SCOPES,
     MEMORY_TYPES,
+    MEMORY_SAVE_PLAN_SCHEMA,
     ORGANIZED_DRAFT_SCHEMA,
     PERSONA_MATERIAL_DRAFT_SCHEMA,
-    SAVE_TOOL_PLAN_SCHEMA,
     WEEKLY_REPORT_SCHEMA,
 )
 
 
 STRICT_SCHEMAS = [
-    SAVE_TOOL_PLAN_SCHEMA,
+    MEMORY_SAVE_PLAN_SCHEMA,
     ORGANIZED_DRAFT_SCHEMA,
     PERSONA_MATERIAL_DRAFT_SCHEMA,
     WEEKLY_REPORT_SCHEMA,
@@ -40,18 +37,12 @@ def test_memory_response_formats_are_strict_json_schema_contracts():
             assert set(object_schema["required"]) == set(object_schema["properties"])
 
 
-def test_save_tool_plan_schema_bounds_values_before_sanitizer():
-    properties = _inner_schema(SAVE_TOOL_PLAN_SCHEMA)["properties"]
+def test_memory_save_plan_schema_bounds_values_before_sanitizer():
+    properties = _inner_schema(MEMORY_SAVE_PLAN_SCHEMA)["properties"]
 
-    assert properties["tool"]["enum"] == [
-        "NONE", "DIARY", "PERSONAL_MEMORY", "FAMILY_MEMORY", "GROWTH_GUARD",
-    ]
+    assert properties["memory_library"]["enum"] == ["PERSONAL", "FAMILY"]
     assert "SELECTED_FAMILIES_VISIBLE" in properties["visibility"]["enum"]
-    assert properties["entry_type"]["enum"] == DIARY_ENTRY_TYPES
     assert properties["memory_type"]["enum"] == MEMORY_TYPES
-    assert properties["scope"]["enum"] == SAVE_MEMORY_SCOPES
-    assert properties["category"]["enum"] == GROWTH_CATEGORIES
-    assert properties["severity"] == {"type": "integer", "minimum": 1, "maximum": 5}
     assert properties["importance"] == {"type": "integer", "minimum": 1, "maximum": 5}
     assert properties["tags"]["maxItems"] == 6
     assert properties["tags"]["items"]["maxLength"] == 18

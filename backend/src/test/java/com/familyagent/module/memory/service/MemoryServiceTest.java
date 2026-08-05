@@ -99,7 +99,7 @@ class MemoryServiceTest {
     @Test
     void merge_setsSourceAsMergedHeritageAndCallsPersistence() {
         MemoryMergeService mergeService = new MemoryMergeService(memoryRepository, memoryEmbeddingService, memoryVoteService);
-        MemoryEntry existing = existingEntry(42L, "ELDER_ADVICE", "FAMILY_VISIBLE",
+        MemoryEntry existing = existingEntry(42L, "KNOWLEDGE", "FAMILY_VISIBLE",
                 "第一段经验内容", new java.util.HashMap<>(Map.of("mergedSourceCount", 0)));
 
         mergeService.merge(existing, requestWithMetadata(Map.of()),
@@ -117,7 +117,7 @@ class MemoryServiceTest {
     @Test
     void merge_incrementsMergedSourceCount() {
         MemoryMergeService mergeService = new MemoryMergeService(memoryRepository, memoryEmbeddingService, memoryVoteService);
-        MemoryEntry existing = existingEntry(43L, "ELDER_ADVICE", "FAMILY_VISIBLE",
+        MemoryEntry existing = existingEntry(43L, "KNOWLEDGE", "FAMILY_VISIBLE",
                 "原有内容", new java.util.HashMap<>(Map.of("mergedSourceCount", 2)));
 
         mergeService.merge(existing, requestWithMetadata(Map.of()), Map.<String, Object>of(), 99L);
@@ -130,7 +130,7 @@ class MemoryServiceTest {
     @Test
     void merge_takesHigherImportanceFromIncoming() {
         MemoryMergeService mergeService = new MemoryMergeService(memoryRepository, memoryEmbeddingService, memoryVoteService);
-        MemoryEntry existing = existingEntry(44L, "ELDER_ADVICE", "FAMILY_VISIBLE",
+        MemoryEntry existing = existingEntry(44L, "KNOWLEDGE", "FAMILY_VISIBLE",
                 "已有内容", new java.util.HashMap<>());
         existing.setImportance(2);
         CreateFamilyMemoryRequest request = requestWithMetadata(Map.of());
@@ -142,7 +142,7 @@ class MemoryServiceTest {
     @Test
     void merge_keepsHigherImportanceFromExisting() {
         MemoryMergeService mergeService = new MemoryMergeService(memoryRepository, memoryEmbeddingService, memoryVoteService);
-        MemoryEntry existing = existingEntry(45L, "ELDER_ADVICE", "FAMILY_VISIBLE",
+        MemoryEntry existing = existingEntry(45L, "KNOWLEDGE", "FAMILY_VISIBLE",
                 "已有内容", new java.util.HashMap<>());
         existing.setImportance(5);
         CreateFamilyMemoryRequest request = requestWithMetadata(Map.of());
@@ -168,7 +168,7 @@ class MemoryServiceTest {
         entry.setId(301L);
         entry.setFamilyId(1L);
         entry.setUserId(22L);
-        entry.setType("ELDER_ADVICE");
+        entry.setType("KNOWLEDGE");
         entry.setScope("FAMILY_VISIBLE");
         entry.setStatus("ACTIVE");
         entry.setContent("坚持晨读");
@@ -208,7 +208,7 @@ class MemoryServiceTest {
         CreateFamilyMemoryRequest request = new CreateFamilyMemoryRequest();
         request.setFamilyId(1L);
         request.setContent("爸爸当年选专业只看热门，后来转行代价很大，提醒后辈选择前先看长期适配。");
-        request.setType("ELDER_ADVICE");
+        request.setType("KNOWLEDGE");
         request.setScope("FAMILY_VISIBLE");
         request.setSummary("选择前先看长期适配");
         request.setMetadata(WriteMemoryMetadata.fromMap(metadata));

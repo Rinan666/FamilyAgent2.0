@@ -272,7 +272,7 @@ class MemoryLibraryServiceTest {
         entry.setFamilyId(10L);
         entry.setUserId(101L);
         entry.setStatus("ACTIVE");
-        entry.setType("ELDER_ADVICE");
+        entry.setType("KNOWLEDGE");
         entry.setScope("FAMILY_VISIBLE");
         entry.setImportance(3);
         entry.setContent("old content");
@@ -283,7 +283,7 @@ class MemoryLibraryServiceTest {
         request.setItemId("memory-88");
         request.setTitle("Updated title");
         request.setBody("Updated content");
-        request.setType("VALUE");
+        request.setType("INSIGHT");
         request.setVisibility("CARE_VISIBLE");
         request.setTags(List.of("family", "shared"));
 
@@ -336,7 +336,7 @@ class MemoryLibraryServiceTest {
         entry.setFamilyId(10L);
         entry.setUserId(101L);
         entry.setStatus("ACTIVE");
-        entry.setType("ELDER_ADVICE");
+        entry.setType("KNOWLEDGE");
         entry.setScope("FAMILY_VISIBLE");
         when(memoryEntryRepository.findById(88L)).thenReturn(entry);
 

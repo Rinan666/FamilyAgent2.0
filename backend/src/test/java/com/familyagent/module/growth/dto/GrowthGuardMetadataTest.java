@@ -21,21 +21,25 @@ class GrowthGuardMetadataTest {
                   "relatedUserId": 42,
                   "sourceType": "GROWTH_OBSERVATION",
                   "followUpStatus": "PENDING",
-                  "plannedTool": "GROWTH_GUARD"
+                  "memoryLibrary": "FAMILY",
+                  "memoryType": "OBSERVATION"
                 }
                 """, GrowthGuardMetadata.class);
 
         assertEquals(" MIRROR_AGENT_TOOL ", metadata.getSource());
         assertEquals(42L, metadata.getRelatedUserId());
         assertEquals("PENDING", metadata.getFollowUpStatus());
-        assertEquals("GROWTH_GUARD", metadata.extraProperties().get("plannedTool"));
+        assertEquals("FAMILY", metadata.extraProperties().get("memoryLibrary"));
+        assertEquals("OBSERVATION", metadata.extraProperties().get("memoryType"));
 
         Map<String, Object> persisted = metadata.toMap();
         assertEquals("MIRROR_AGENT_TOOL", persisted.get("source"));
-        assertEquals("GROWTH_GUARD", persisted.get("plannedTool"));
+        assertEquals("FAMILY", persisted.get("memoryLibrary"));
+        assertEquals("OBSERVATION", persisted.get("memoryType"));
 
         JsonNode serialized = objectMapper.readTree(objectMapper.writeValueAsString(metadata));
-        assertEquals("GROWTH_GUARD", serialized.get("plannedTool").textValue());
+        assertEquals("FAMILY", serialized.get("memoryLibrary").textValue());
+        assertEquals("OBSERVATION", serialized.get("memoryType").textValue());
         assertFalse(serialized.has("extra"));
     }
 }

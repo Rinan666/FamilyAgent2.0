@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from app.api.memory_models import SaveToolPlanData
+from app.api.memory_models import MemorySavePlanData
 from app.monitoring.provider_quality_eval import (
     DefaultProviderQualityProbeClient,
     ProviderQualityEval,
@@ -68,17 +68,20 @@ async def test_quality_eval_scores_all_synthetic_memory_value_cases(monkeypatch)
     model = "dashscope/qwen-flash"
     client = _QualityClient(plans={
         (model, "learning-strategy"): _plan(
-            "FAMILY_MEMORY",
+            "FAMILY",
+            "OBSERVATION",
             "孩子做应用题先复述题意，再画线段图后能更稳定地说出等量关系。",
             "CARE_VISIBLE",
         ),
         (model, "ordinary-personal-note"): _plan(
-            "DIARY",
+            "PERSONAL",
+            "INSIGHT",
             "我突然明白了，人要积极向前看，保持乐观，未来一定会越来越好。",
             "PRIVATE",
         ),
         (model, "sensitive-vision-follow-up"): _plan(
-            "GROWTH_GUARD",
+            "FAMILY",
+            "OBSERVATION",
             "孩子看黑板时会眯眼并说后排字看不清，周末安排视力检查并继续记录。",
             "CARE_VISIBLE",
         ),
@@ -112,22 +115,26 @@ async def test_quality_eval_compares_baseline_and_candidate(monkeypatch):
     _enable(monkeypatch, baseline=baseline, candidate=candidate)
     client = _QualityClient(plans={
         (baseline, "learning-strategy"): _plan(
-            "FAMILY_MEMORY",
+            "FAMILY",
+            "OBSERVATION",
             "孩子做应用题时需要调整方法。",
             "CARE_VISIBLE",
         ),
         (baseline, "ordinary-personal-note"): _plan(
-            "DIARY",
+            "PERSONAL",
+            "INSIGHT",
             "人要保持积极。",
             "PRIVATE",
         ),
         (candidate, "learning-strategy"): _plan(
-            "FAMILY_MEMORY",
+            "FAMILY",
+            "OBSERVATION",
             "孩子做应用题先复述题意，再画线段图后能更稳定地说出等量关系。",
             "CARE_VISIBLE",
         ),
         (candidate, "ordinary-personal-note"): _plan(
-            "DIARY",
+            "PERSONAL",
+            "INSIGHT",
             "我突然明白了，人要积极向前看，保持乐观，未来一定会越来越好。",
             "PRIVATE",
         ),
@@ -192,7 +199,8 @@ async def test_quality_eval_enforces_output_token_budget(monkeypatch):
     model = "dashscope/qwen-flash"
     client = _QualityClient(
         plans={(model, "learning-strategy"): _plan(
-            "FAMILY_MEMORY",
+            "FAMILY",
+            "OBSERVATION",
             "应用题先复述题意再画线段图。",
             "CARE_VISIBLE",
         )},
@@ -222,7 +230,8 @@ async def test_quality_eval_exposes_timeout_without_retry(monkeypatch):
 @pytest.mark.asyncio
 async def test_default_quality_client_uses_production_schema_and_hides_raw_output(monkeypatch):
     plan = _plan(
-        "FAMILY_MEMORY",
+        "FAMILY",
+        "OBSERVATION",
         "孩子做应用题先复述题意，再画线段图。",
         "CARE_VISIBLE",
     )
@@ -242,7 +251,7 @@ async def test_default_quality_client_uses_production_schema_and_hides_raw_outpu
         usage = _Usage()
 
     async def fake_completion(**kwargs):
-        assert kwargs["response_format"]["json_schema"]["name"] == "agent_save_tool_plan"
+        assert kwargs["response_format"]["json_schema"]["name"] == "agent_memory_save_plan"
         assert kwargs["extra_body"] == {"enable_thinking": False}
         assert "Synthetic evaluation family" in kwargs["messages"][1]["content"]
         return _Response()
@@ -257,7 +266,8 @@ async def test_default_quality_client_uses_production_schema_and_hides_raw_outpu
         SYNTHETIC_QUALITY_CASES[0],
     )
 
-    assert response.plan.tool == "FAMILY_MEMORY"
+    assert response.plan.memory_library == "FAMILY"
+    assert response.plan.memory_type == "OBSERVATION"
     assert response.input_tokens == 90
     assert response.output_tokens == 100
     assert response.cost_usd is None
@@ -288,20 +298,20 @@ def _enable(
     )
 
 
-def _plan(tool: str, content: str, scope: str) -> SaveToolPlanData:
-    should_save = tool != "NONE"
-    return SaveToolPlanData.model_validate({
-        "should_save": should_save,
-        "tool": tool,
+def _plan(
+    memory_library: str,
+    memory_type: str,
+    content: str,
+    visibility: str,
+) -> MemorySavePlanData:
+    return MemorySavePlanData.model_validate({
+        "should_save": True,
+        "memory_library": memory_library,
+        "memory_type": memory_type,
         "content": content,
-        "title": "Synthetic result" if should_save else "无需保存",
+        "title": "Synthetic result",
         "summary": content,
-        "visibility": scope if scope != "PARENT_VISIBLE" else "CARE_VISIBLE",
-        "entry_type": "DAILY",
-        "memory_type": "OBSERVATION" if tool == "GROWTH_GUARD" else "KNOWLEDGE",
-        "scope": scope,
-        "category": "VISION" if tool == "GROWTH_GUARD" else "OTHER",
-        "severity": 2,
+        "visibility": visibility,
         "importance": 3,
         "tags": [],
         "reason": "Synthetic evaluation",

@@ -12,13 +12,25 @@ from .output_parser import SkillOutputParseError
 
 
 class OrganizeDraftOutputParser:
-    def parse(self, raw: str, *, scene: str, fallback_content: str) -> OrganizedDraftData:
+    def parse(
+        self,
+        raw: str,
+        *,
+        memory_library: str,
+        current_memory_type: str,
+        fallback_content: str,
+    ) -> OrganizedDraftData:
         try:
             data = json.loads(raw)
             if not isinstance(data, dict):
                 raise TypeError("Draft output must be an object")
             return OrganizedDraftData.model_validate(
-                _sanitize_organized_draft(data, scene, fallback_content)
+                _sanitize_organized_draft(
+                    data,
+                    memory_library,
+                    current_memory_type,
+                    fallback_content,
+                )
             )
         except (json.JSONDecodeError, TypeError, ValueError) as exc:
             raise SkillOutputParseError("Invalid organize-draft output") from exc

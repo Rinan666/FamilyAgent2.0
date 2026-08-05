@@ -173,13 +173,14 @@ def _is_strict_schema(value: object) -> bool:
 def _evaluate_organize_draft(case: OrganizeDraftEvalCase) -> Evaluation:
     sanitized = _sanitize_organized_draft(
         json.loads(case.raw_output),
-        case.scene,
+        case.memory_library,
+        case.current_memory_type,
         case.fallback_content,
     )
     expected_values = (
         sanitized["title"] == case.expected_title,
-        sanitized["diary_entry_type"] == case.expected_entry_type,
-        sanitized["diary_visibility"] == case.expected_visibility,
+        sanitized["memory_type"] == case.expected_memory_type,
+        sanitized["visibility"] == case.expected_visibility,
         all(item not in sanitized["content"] for item in case.forbidden_fragments),
     )
     actual = EvalDecision.SANITIZED if all(expected_values) else EvalDecision.EVALUATOR_ERROR

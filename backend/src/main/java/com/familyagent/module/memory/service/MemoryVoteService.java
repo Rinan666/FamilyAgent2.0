@@ -2,7 +2,7 @@ package com.familyagent.module.memory.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.familyagent.common.constant.EntityStatus;
-import com.familyagent.common.constant.MemoryType;
+import com.familyagent.common.constant.MemoryContentType;
 import com.familyagent.common.exception.BusinessException;
 import com.familyagent.common.response.ErrorCode;
 import com.familyagent.common.security.CurrentUserGuard;
@@ -23,13 +23,13 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 家族经验投票逻辑，从 MemoryService 拆出。
+ * Family-memory voting logic extracted from MemoryService.
  */
 @Component
 @RequiredArgsConstructor
 public class MemoryVoteService {
 
-    private static final Set<String> FAMILY_MEMORY_TYPES = MemoryType.names();
+    private static final Set<String> FAMILY_MEMORY_TYPES = MemoryContentType.names();
 
     private final MemoryEntryRepository memoryRepository;
     private final MemoryEntryVoteRepository voteRepository;
@@ -44,12 +44,12 @@ public class MemoryVoteService {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         if (!FAMILY_MEMORY_TYPES.contains(entry.getType())) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "只有家族经验可以投票");
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "只有家庭记忆可以投票");
         }
         familyMembershipFacade.checkMembership(entry.getFamilyId());
         MemoryEntry visibleEntry = memoryRepository.findVisibleFamilyMemoryById(entry.getFamilyId(), memoryId, viewerUserId);
         if (visibleEntry == null) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "无权对不可见的家族经验投票");
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权对不可见的家庭记忆投票");
         }
 
         MemoryEntryVote existing = voteRepository.selectOne(new LambdaQueryWrapper<MemoryEntryVote>()

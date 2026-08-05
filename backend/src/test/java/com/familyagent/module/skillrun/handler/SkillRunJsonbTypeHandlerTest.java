@@ -27,15 +27,16 @@ class SkillRunJsonbTypeHandlerTest {
     @Mock private PreparedStatement statement;
 
     @Test
-    void metadataHandlerReadsLegacyFieldsIntoExtraAndWritesExplicitExtra() throws Exception {
+    void metadataHandlerReadsUnifiedMemoryFieldsAndWritesExplicitExtra() throws Exception {
         when(resultSet.getString("metadata")).thenReturn("""
-                {"savedRecordType":"FAMILY_MEMORY","confirmationId":12,"memoryId":88}
+                {"memoryLibrary":"FAMILY","memoryType":"EXPERIENCE","confirmationId":12,"extra":{"memoryId":88}}
                 """);
         SkillRunMetadataTypeHandler handler = new SkillRunMetadataTypeHandler();
 
         SkillRunMetadata metadata = handler.getNullableResult(resultSet, "metadata");
 
-        assertEquals("FAMILY_MEMORY", metadata.getSavedRecordType());
+        assertEquals("FAMILY", metadata.getMemoryLibrary());
+        assertEquals("EXPERIENCE", metadata.getMemoryType());
         assertEquals(12L, metadata.getConfirmationId());
         assertEquals(88, metadata.getExtra().get("memoryId"));
 

@@ -22,7 +22,8 @@ class DiaryEntryMetadataTest {
                   "relatedUserId": 42,
                   "eventAt": "2026-06-08T09:30:00Z",
                   "disableAutoMerge": true,
-                  "plannedTool": "DIARY"
+                  "memoryLibrary": "FAMILY",
+                  "memoryType": "NOTE"
                 }
                 """, DiaryEntryMetadata.class);
 
@@ -30,15 +31,18 @@ class DiaryEntryMetadataTest {
         assertEquals(42L, metadata.getRelatedUserId());
         assertEquals("2026-06-08T09:30:00Z", metadata.getEventAt());
         assertTrue(metadata.getDisableAutoMerge());
-        assertEquals("DIARY", metadata.extraProperties().get("plannedTool"));
+        assertEquals("FAMILY", metadata.extraProperties().get("memoryLibrary"));
+        assertEquals("NOTE", metadata.extraProperties().get("memoryType"));
 
         Map<String, Object> persisted = metadata.toMap();
         assertEquals("FAMILY_COMPANION_TOOL", persisted.get("source"));
         assertEquals(42L, persisted.get("relatedUserId"));
-        assertEquals("DIARY", persisted.get("plannedTool"));
+        assertEquals("FAMILY", persisted.get("memoryLibrary"));
+        assertEquals("NOTE", persisted.get("memoryType"));
 
         JsonNode serialized = objectMapper.readTree(objectMapper.writeValueAsString(metadata));
-        assertEquals("DIARY", serialized.get("plannedTool").textValue());
+        assertEquals("FAMILY", serialized.get("memoryLibrary").textValue());
+        assertEquals("NOTE", serialized.get("memoryType").textValue());
         assertFalse(serialized.has("extra"));
     }
 }

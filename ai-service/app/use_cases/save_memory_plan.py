@@ -3,12 +3,12 @@
 import logging
 
 from app.api.memory_archive_helpers import _compact_transcript
-from app.api.memory_contracts import SAVE_TOOL_PLAN_SCHEMA
+from app.api.memory_contracts import MEMORY_SAVE_PLAN_SCHEMA
 from app.api.memory_helpers import (
-    _blocked_save_tool_plan,
-    _unavailable_save_tool_plan,
+    _blocked_memory_save_plan,
+    _unavailable_memory_save_plan,
 )
-from app.api.memory_models import SaveToolPlanData, SaveToolPlanRequest
+from app.api.memory_models import MemorySavePlanData, MemorySavePlanRequest
 from app.api.memory_save_signals import _should_skip_save_planning
 from app.llm.client import LLMClient
 from app.runtime.output_parser import SaveMemoryOutputParser, SkillOutputParseError
@@ -34,20 +34,20 @@ class SaveMemoryPlanUseCase:
         self._prompt_renderer = prompt_renderer
         self._output_parser = output_parser
 
-    async def execute(self, request: SaveToolPlanRequest, llm_client: LLMClient) -> dict[str, object]:
+    async def execute(self, request: MemorySavePlanRequest, llm_client: LLMClient) -> dict[str, object]:
         try:
             return await self._skill_runtime.execute(lambda: self._plan(request, llm_client))
         except TimeoutError:
             logger.warning("Save memory skill timed out")
             return self._failure(SkillErrorCode.TIMEOUT)
 
-    async def _plan(self, request: SaveToolPlanRequest, llm_client: LLMClient) -> dict[str, object]:
+    async def _plan(self, request: MemorySavePlanRequest, llm_client: LLMClient) -> dict[str, object]:
         message = redact_with_note(request.message, max_length=3000).text
         compact_context = _compact_transcript(request.conversation_context)
         if _should_skip_save_planning(message, compact_context):
             return self._success(
-                SaveToolPlanData.model_validate(
-                    _blocked_save_tool_plan("只有保存指令，没有找到可保存的原始内容。")
+                MemorySavePlanData.model_validate(
+                    _blocked_memory_save_plan("只有保存指令，没有找到可保存的原始内容。")
                 )
             )
 
@@ -62,7 +62,7 @@ class SaveMemoryPlanUseCase:
                 ),
                 temperature=0.1,
                 max_tokens=900,
-                response_format=SAVE_TOOL_PLAN_SCHEMA,
+                response_format=MEMORY_SAVE_PLAN_SCHEMA,
             )
         except Exception as error:
             logger.error(
@@ -81,13 +81,13 @@ class SaveMemoryPlanUseCase:
             return self._failure(SkillErrorCode.INVALID_RESPONSE)
 
     @staticmethod
-    def _success(data: SaveToolPlanData) -> dict[str, object]:
+    def _success(data: MemorySavePlanData) -> dict[str, object]:
         return skill_success(data)
 
     @staticmethod
     def _failure(error_code: SkillErrorCode) -> dict[str, object]:
         return skill_data_failure(
-            SaveToolPlanData.model_validate(_unavailable_save_tool_plan()),
+            MemorySavePlanData.model_validate(_unavailable_memory_save_plan()),
             error_code,
             "Save-memory planning unavailable",
         )

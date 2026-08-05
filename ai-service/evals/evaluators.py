@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.api.memory_models import SaveToolPlanRequest
+from app.api.memory_models import MemorySavePlanRequest
 from app.runtime.family_skill_runtime import save_memory_skill_runtime
 from app.runtime.output_parser import SaveMemoryOutputParser
 from app.runtime.prompt_renderer import SaveMemoryPromptRenderer
@@ -89,7 +89,7 @@ async def _evaluate_save_plan(case: SavePlanEvalCase) -> Evaluation:
         SaveMemoryOutputParser(),
     )
     response = await use_case.execute(
-        SaveToolPlanRequest(
+        MemorySavePlanRequest(
             message=case.message,
             conversation_context=list(case.conversation_context),
         ),
@@ -106,7 +106,8 @@ async def _evaluate_save_plan(case: SavePlanEvalCase) -> Evaluation:
             llm.call_count == expected.llm_calls,
             success == expected.success,
             should_save == expected.should_save,
-            data.get("tool") == expected.tool,
+            data.get("memory_library") == expected.memory_library,
+            data.get("memory_type") == expected.memory_type,
             response.get("errorCode") == expected.error_code,
         )
     )

@@ -1,6 +1,5 @@
 package com.familyagent.module.skillrun.dto;
 
-import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Data;
 
@@ -11,8 +10,8 @@ import java.util.Map;
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class SkillRunMetadata {
 
-    private String savedRecordType;
-    private String plannedTool;
+    private String memoryLibrary;
+    private String memoryType;
     private String plannedReason;
     private String requestId;
     private Long agentRunId;
@@ -28,8 +27,4 @@ public class SkillRunMetadata {
         this.extra = extra == null ? new LinkedHashMap<>() : new LinkedHashMap<>(extra);
     }
 
-    @JsonAnySetter
-    public void captureLegacyField(String key, Object value) {
-        extra.put(key, value);
-    }
 }

@@ -16,20 +16,22 @@ from .models import (
 )
 
 
-def _save_plan_json(*, should_save: bool, tool: str, content: str) -> str:
+def _save_plan_json(
+    *,
+    should_save: bool,
+    memory_library: str,
+    memory_type: str,
+    content: str,
+) -> str:
     return json.dumps(
         {
             "should_save": should_save,
-            "tool": tool,
+            "memory_library": memory_library,
+            "memory_type": memory_type,
             "content": content,
             "title": "评测记录",
             "summary": content[:60],
             "visibility": "PRIVATE",
-            "entry_type": "DAILY",
-            "memory_type": "ELDER_ADVICE",
-            "scope": "PRIVATE",
-            "category": "OTHER",
-            "severity": 1,
             "importance": 3,
             "tags": [],
             "reason": "Mock evaluation decision",
@@ -180,11 +182,12 @@ def _save_plan_cases() -> list[GoldenCase]:
             (),
             _save_plan_json(
                 should_save=True,
-                tool="DIARY",
+                memory_library="PERSONAL",
+                memory_type="INSIGHT",
                 content="我突然明白了，人要向前看，保持积极，未来会更好。",
             ),
             False,
-            SavePlanExpectation(EvalDecision.SAVE, 1, True, True, "DIARY"),
+            SavePlanExpectation(EvalDecision.SAVE, 1, True, True, "PERSONAL", "INSIGHT"),
         ),
         SavePlanEvalCase(
             "bare-save-command-skips-without-context",
@@ -194,7 +197,7 @@ def _save_plan_cases() -> list[GoldenCase]:
             (),
             None,
             False,
-            SavePlanExpectation(EvalDecision.SKIP_SAVE, 0, True, False, "NONE"),
+            SavePlanExpectation(EvalDecision.SKIP_SAVE, 0, True, False, "PERSONAL", "NOTE"),
         ),
         SavePlanEvalCase(
             "ambiguous-family-signal-reaches-model",
@@ -202,9 +205,14 @@ def _save_plan_cases() -> list[GoldenCase]:
             ProtectedAsset.MEMORY_QUALITY,
             "孩子最近聊作业的时候会突然沉默，我说不上来哪里不对，但想先记一下。",
             (),
-            _save_plan_json(should_save=True, tool="DIARY", content=ambiguous),
+            _save_plan_json(
+                should_save=True,
+                memory_library="FAMILY",
+                memory_type="OBSERVATION",
+                content=ambiguous,
+            ),
             False,
-            SavePlanExpectation(EvalDecision.SAVE, 1, True, True, "DIARY"),
+            SavePlanExpectation(EvalDecision.SAVE, 1, True, True, "FAMILY", "OBSERVATION"),
         ),
         SavePlanEvalCase(
             "user-selected-content-survives-conservative-model",
@@ -212,9 +220,14 @@ def _save_plan_cases() -> list[GoldenCase]:
             ProtectedAsset.MEMORY_QUALITY,
             learning,
             (),
-            _save_plan_json(should_save=False, tool="NONE", content=learning),
+            _save_plan_json(
+                should_save=False,
+                memory_library="FAMILY",
+                memory_type="KNOWLEDGE",
+                content=learning,
+            ),
             False,
-            SavePlanExpectation(EvalDecision.SAVE, 1, True, True, "DIARY"),
+            SavePlanExpectation(EvalDecision.SAVE, 1, True, True, "FAMILY", "KNOWLEDGE"),
         ),
         SavePlanEvalCase(
             "save-plan-provider-failure-structured",
@@ -229,7 +242,8 @@ def _save_plan_cases() -> list[GoldenCase]:
                 1,
                 False,
                 False,
-                "NONE",
+                "PERSONAL",
+                "NOTE",
                 "AI_PROVIDER_ERROR",
             ),
         ),
@@ -246,7 +260,8 @@ def _save_plan_cases() -> list[GoldenCase]:
                 1,
                 False,
                 False,
-                "NONE",
+                "PERSONAL",
+                "NOTE",
                 "AI_INVALID_RESPONSE",
             ),
         ),

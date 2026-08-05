@@ -15,8 +15,8 @@ class OrganizeDraftPromptRenderer:
     def render(
         self,
         *,
-        scene: str,
-        current_type: str,
+        memory_library: str,
+        current_memory_type: str,
         current_visibility: str,
         target: str,
         family_context: str,
@@ -29,8 +29,8 @@ class OrganizeDraftPromptRenderer:
             {
                 "role": "user",
                 "content": build_organize_draft_user_prompt(
-                    scene,
-                    current_type,
+                    memory_library,
+                    current_memory_type,
                     current_visibility,
                     target,
                     guarded_context,

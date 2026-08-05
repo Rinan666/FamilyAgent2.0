@@ -1,8 +1,6 @@
 package com.familyagent.module.agent.dto;
 
 import com.familyagent.module.agent.harness.dto.AgentSaveMemoryMetadata;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -10,13 +8,16 @@ import lombok.Data;
 import java.util.List;
 
 @Data
-public class AgentSaveMemoryToolRequest {
+public class AgentSaveMemoryRequest {
 
     @NotNull
     private Long familyId;
 
     @NotBlank
-    private String writeCategory;
+    private String memoryLibrary;
+
+    @NotBlank
+    private String memoryType;
 
     @NotBlank
     private String content;
@@ -25,16 +26,7 @@ public class AgentSaveMemoryToolRequest {
     private List<String> tags;
     private String visibility;
     private Long relatedUserId;
-    private String diaryEntryType;
-    private String memoryType;
-    private String personalMemoryType;
-    private String memoryLibrary;
     private List<Long> selectedFamilyIds;
-    private String growthCategory;
-
-    @Min(1)
-    @Max(5)
-    private Integer growthSeverity;
 
     private String requestId;
     private Long sessionId;

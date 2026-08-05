@@ -23,10 +23,15 @@ def evaluate_response(
     response: ProviderQualityProbeResponse,
 ) -> ProviderQualityCaseResult:
     plan = response.plan
-    expected_should_save = case.expected_tool != "NONE"
-    tool_match = plan.tool == case.expected_tool
+    expected_should_save = True
+    memory_library_match = plan.memory_library == case.expected_memory_library
+    memory_type_match = plan.memory_type == case.expected_memory_type
     should_save_match = plan.should_save == expected_should_save
-    scope_match = plan.scope == case.expected_scope if case.expected_scope else None
+    visibility_match = (
+        plan.visibility == case.expected_visibility
+        if case.expected_visibility
+        else None
+    )
     content = plan.content.strip()
     matched_anchors = sum(
         any(anchor in content for anchor in group)
@@ -38,11 +43,14 @@ def evaluate_response(
         else 1.0
     )
     forbidden_term_count = sum(term in content for term in case.forbidden_terms)
-    criteria = [tool_match, should_save_match, forbidden_term_count == 0]
-    if scope_match is not None:
-        criteria.append(scope_match)
-    if case.expected_tool == "NONE":
-        criteria.append(not content)
+    criteria = [
+        memory_library_match,
+        memory_type_match,
+        should_save_match,
+        forbidden_term_count == 0,
+    ]
+    if visibility_match is not None:
+        criteria.append(visibility_match)
     criteria.extend(
         any(anchor in content for anchor in group)
         for group in case.anchor_groups
@@ -53,9 +61,10 @@ def evaluate_response(
         and response.output_tokens > case.max_tokens
     )
     required_match = (
-        tool_match
+        memory_library_match
+        and memory_type_match
         and should_save_match
-        and scope_match is not False
+        and visibility_match is not False
         and forbidden_term_count == 0
     )
     passed = required_match and quality_score >= MIN_QUALITY_SCORE and not token_budget_exceeded
@@ -69,11 +78,13 @@ def evaluate_response(
         passed=passed,
         quality_score=quality_score,
         structured=True,
-        actual_tool=plan.tool,
-        actual_scope=plan.scope,
-        tool_match=tool_match,
+        actual_memory_library=plan.memory_library,
+        actual_memory_type=plan.memory_type,
+        actual_visibility=plan.visibility,
+        memory_library_match=memory_library_match,
+        memory_type_match=memory_type_match,
         should_save_match=should_save_match,
-        scope_match=scope_match,
+        visibility_match=visibility_match,
         anchor_coverage=anchor_coverage,
         forbidden_term_count=forbidden_term_count,
         latency_ms=response.latency_ms,
@@ -95,11 +106,13 @@ def failed_result(
         passed=False,
         quality_score=0.0,
         structured=False,
-        actual_tool=None,
-        actual_scope=None,
-        tool_match=False,
+        actual_memory_library=None,
+        actual_memory_type=None,
+        actual_visibility=None,
+        memory_library_match=False,
+        memory_type_match=False,
         should_save_match=False,
-        scope_match=None,
+        visibility_match=None,
         anchor_coverage=0.0,
         forbidden_term_count=0,
         latency_ms=latency_ms,

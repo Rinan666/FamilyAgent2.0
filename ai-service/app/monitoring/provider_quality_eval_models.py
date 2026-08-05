@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from enum import StrEnum
 from typing import Protocol
 
-from app.api.memory_models import SaveToolPlanData
+from app.api.memory_models import MemorySavePlanData
 
 MAX_QUALITY_CASES = 3
 MAX_QUALITY_CASE_TOKENS = 360
@@ -50,8 +50,9 @@ class ProviderQualityStructuredOutputError(RuntimeError):
 class ProviderQualityCase:
     case_id: str
     message: str
-    expected_tool: str
-    expected_scope: str | None
+    expected_memory_library: str
+    expected_memory_type: str
+    expected_visibility: str | None
     anchor_groups: tuple[tuple[str, ...], ...]
     forbidden_terms: tuple[str, ...]
     max_tokens: int = MAX_QUALITY_CASE_TOKENS
@@ -65,16 +66,18 @@ SYNTHETIC_QUALITY_CASES = (
             "我让他先复述题意，再画一张简单线段图；今天他能更稳定地说出等量关系，"
             "后面遇到应用题准备继续先拆题意再计算。"
         ),
-        expected_tool="FAMILY_MEMORY",
-        expected_scope="CARE_VISIBLE",
+        expected_memory_library="FAMILY",
+        expected_memory_type="OBSERVATION",
+        expected_visibility="CARE_VISIBLE",
         anchor_groups=(("应用题",), ("复述题意", "复述"), ("线段图", "画图")),
         forbidden_terms=("注意力缺陷", "智力问题", "确诊"),
     ),
     ProviderQualityCase(
         case_id="ordinary-personal-note",
         message="我突然明白了，人要积极向前看，保持乐观，未来一定会越来越好。",
-        expected_tool="DIARY",
-        expected_scope="PRIVATE",
+        expected_memory_library="PERSONAL",
+        expected_memory_type="INSIGHT",
+        expected_visibility="PRIVATE",
         anchor_groups=(("积极向前看",), ("保持乐观", "乐观")),
         forbidden_terms=("毫无价值", "不值得保存"),
     ),
@@ -84,8 +87,9 @@ SYNTHETIC_QUALITY_CASES = (
             "孩子最近上课看黑板时会眯眼，有两次说后排字有点看不清。"
             "我准备周末带他做一次视力检查，之后继续记录变化。"
         ),
-        expected_tool="GROWTH_GUARD",
-        expected_scope="CARE_VISIBLE",
+        expected_memory_library="FAMILY",
+        expected_memory_type="OBSERVATION",
+        expected_visibility="CARE_VISIBLE",
         anchor_groups=(("眯眼",), ("看不清", "黑板"), ("视力检查", "检查")),
         forbidden_terms=("已经近视", "确诊近视", "医学诊断"),
     ),
@@ -94,7 +98,7 @@ SYNTHETIC_QUALITY_CASES = (
 
 @dataclass(frozen=True)
 class ProviderQualityProbeResponse:
-    plan: SaveToolPlanData
+    plan: MemorySavePlanData
     provider: str
     model: str
     latency_ms: int
@@ -117,11 +121,13 @@ class ProviderQualityCaseResult:
     passed: bool
     quality_score: float
     structured: bool
-    actual_tool: str | None
-    actual_scope: str | None
-    tool_match: bool
+    actual_memory_library: str | None
+    actual_memory_type: str | None
+    actual_visibility: str | None
+    memory_library_match: bool
+    memory_type_match: bool
     should_save_match: bool
-    scope_match: bool | None
+    visibility_match: bool | None
     anchor_coverage: float
     forbidden_term_count: int
     latency_ms: int

@@ -1,6 +1,6 @@
 package com.familyagent.infra.ai.dto;
 
-import com.familyagent.module.agent.dto.AgentSaveToolPlan;
+import com.familyagent.module.agent.dto.AgentMemorySavePlan;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Data;
@@ -10,7 +10,7 @@ import lombok.Data;
 public class SaveMemoryPlanResponse {
 
     private boolean success;
-    private AgentSaveToolPlan data;
+    private AgentMemorySavePlan data;
 
     @JsonAlias({"errorCode", "error_code"})
     private String errorCode;

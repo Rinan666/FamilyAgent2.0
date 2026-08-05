@@ -7,13 +7,13 @@ from app.agents.family_skill_registry import family_skill_registry, get_family_s
 from app.api.memory_models import (
     OrganizeDraftRequest,
     PersonaMaterialDraftRequest,
-    SaveToolPlanRequest,
+    MemorySavePlanRequest,
 )
 from app.api.memory_generation_helpers import (  # noqa: F401
     _sanitize_organized_draft,
     _sanitize_persona_material_draft,
 )
-from app.api.memory_helpers import _choice, _sanitize_save_tool_plan  # noqa: F401
+from app.api.memory_helpers import _choice, _sanitize_memory_save_plan  # noqa: F401
 from app.llm.client import llm_client
 from app.middleware.auth import require_internal_service, verify_token_or_internal_service
 from app.runtime.draft_output_parser import OrganizeDraftOutputParser, PersonaMaterialOutputParser
@@ -72,7 +72,7 @@ def get_family_skill_registry_item(name: str):
 
 
 @router.post("/save-plan", dependencies=[Depends(require_internal_service)])
-async def plan_agent_save_tool(request: SaveToolPlanRequest):
+async def plan_agent_memory_save(request: MemorySavePlanRequest):
     return await save_memory_plan_use_case.execute(request, llm_client)
 
 

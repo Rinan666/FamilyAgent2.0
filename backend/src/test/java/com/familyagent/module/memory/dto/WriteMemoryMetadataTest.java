@@ -56,11 +56,13 @@ class WriteMemoryMetadataTest {
         WriteMemoryMetadata metadata = WriteMemoryMetadata.fromMap(Map.of(
                 "source", "DIARY_PROMOTION",
                 "sourceDiaryId", "99",
-                "plannedTool", "FAMILY_MEMORY"));
+                "memoryLibrary", "FAMILY",
+                "memoryType", "EXPERIENCE"));
 
         assertEquals("DIARY_PROMOTION", metadata.getSource());
         assertEquals(99L, metadata.getSourceDiaryId());
-        assertEquals("FAMILY_MEMORY", metadata.toMap().get("plannedTool"));
+        assertEquals("FAMILY", metadata.toMap().get("memoryLibrary"));
+        assertEquals("EXPERIENCE", metadata.toMap().get("memoryType"));
     }
 
     @Test

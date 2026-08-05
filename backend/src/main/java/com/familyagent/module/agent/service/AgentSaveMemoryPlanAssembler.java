@@ -2,9 +2,8 @@ package com.familyagent.module.agent.service;
 
 import com.familyagent.common.constant.SkillRunStatus;
 import com.familyagent.module.agent.constant.AgentSaveMemorySkillContract;
-import com.familyagent.module.agent.constant.AgentSaveTool;
 import com.familyagent.module.agent.dto.AgentSaveMemoryPlanRequest;
-import com.familyagent.module.agent.dto.AgentSaveToolPlan;
+import com.familyagent.module.agent.dto.AgentMemorySavePlan;
 import com.familyagent.module.skillrun.dto.CreateSkillRunRequest;
 import com.familyagent.module.skillrun.dto.SkillRunMetadata;
 import com.familyagent.module.skillrun.dto.UpdateSkillRunRequest;
@@ -29,18 +28,17 @@ public class AgentSaveMemoryPlanAssembler {
     }
 
     public UpdateSkillRunRequest completedRunUpdate(
-            AgentSaveToolPlan plan,
+            AgentMemorySavePlan plan,
             String requestId,
             Long agentRunId) {
-        AgentSaveTool tool = plan.getTool() == null ? AgentSaveTool.NONE : plan.getTool();
-        boolean awaitingPersistence = plan.isShouldSave() && tool.requiresPersistence();
+        boolean awaitingPersistence = plan.isShouldSave();
         UpdateSkillRunRequest update = new UpdateSkillRunRequest();
         update.setStatus((awaitingPersistence ? SkillRunStatus.PLANNED : SkillRunStatus.SUCCEEDED).name());
         update.setOutputSummary(plan.getReason());
         update.setSaved(false);
         SkillRunMetadata metadata = metadata(requestId, agentRunId);
-        metadata.setSavedRecordType(tool.savedRecordType());
-        metadata.setPlannedTool(tool.name());
+        metadata.setMemoryLibrary(plan.getMemoryLibrary());
+        metadata.setMemoryType(plan.getMemoryType());
         metadata.setPlannedReason(plan.getReason());
         update.setMetadata(metadata);
         return update;

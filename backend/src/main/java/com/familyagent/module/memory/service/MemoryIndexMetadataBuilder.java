@@ -1,6 +1,6 @@
 package com.familyagent.module.memory.service;
 
-import com.familyagent.common.constant.MemoryType;
+import com.familyagent.common.constant.MemoryContentType;
 
 import java.time.Duration;
 import java.time.LocalDate;
@@ -21,7 +21,7 @@ public final class MemoryIndexMetadataBuilder {
     private static final Map<String, List<String>> TOPIC_KEYWORDS = Map.of(
             "HEALTH", List.of("牙", "视力", "体态", "睡眠", "运动", "健康", "就医", "屏幕", "近视", "刷牙"),
             "EMOTION", List.of("难过", "开心", "焦虑", "压力", "委屈", "生气", "失落", "担心", "烦躁", "释然"),
-            "FAMILY_STORY", List.of("爷爷", "奶奶", "外公", "外婆", "长辈", "以前", "小时候", "故事", "当年"),
+            "FAMILY_HISTORY", List.of("爷爷", "奶奶", "外公", "外婆", "长辈", "以前", "小时候", "故事", "当年"),
             "CHOICE", List.of("选择", "决定", "志愿", "升学", "专业", "工作", "考研", "取舍"),
             "COMMUNICATION", List.of("沟通", "争吵", "理解", "说话", "关系", "家人", "亲子"));
 
@@ -83,7 +83,7 @@ public final class MemoryIndexMetadataBuilder {
         Map<String, Object> next = mutable(metadata);
         String text = join(content, summary, asText(next.get("scenario")));
         Map<String, Object> index = baseIndex(sourceKind, text);
-        index.put("memoryType", safeUpper(memoryType, MemoryType.DEFAULT.name()));
+        index.put("memoryType", safeUpper(memoryType, MemoryContentType.DEFAULT.name()));
         index.put("importance", clamp(importance, 1, 5));
         attachRetention(index);
         index.put("temporalLayer", inferTemporalLayer(null, sourceKind, index));
@@ -229,13 +229,13 @@ public final class MemoryIndexMetadataBuilder {
                         "核心记忆和价值观类内容基本不按短期事实衰退。");
             }
             return switch (memoryType) {
-                case "VALUE", "ELDER_ADVICE", "FAMILY_STORY" -> new Retention(
+                case "KNOWLEDGE", "INSIGHT", "EXPERIENCE", "PREFERENCE" -> new Retention(
                         "LEGACY",
                         "长期传承",
                         1460,
                         0.68,
                         "家族故事、价值观和长者经验衰退较慢，主要作为判断背景。");
-                case "HEALTH_REMINDER", "GROWTH_RISK" -> new Retention(
+                case "OBSERVATION", "PLAN" -> new Retention(
                         "PRACTICAL_REMINDER",
                         "实践提醒",
                         365,

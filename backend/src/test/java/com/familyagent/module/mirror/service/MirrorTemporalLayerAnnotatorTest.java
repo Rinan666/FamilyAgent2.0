@@ -22,7 +22,7 @@ class MirrorTemporalLayerAnnotatorTest {
         diary.setCreatedAt(LocalDateTime.now().minusDays(5));
 
         MemoryEntry memory = new MemoryEntry();
-        memory.setType("VALUE");
+        memory.setType("INSIGHT");
         memory.setImportance(4);
         memory.setCreatedAt(LocalDateTime.now().minusYears(3));
 

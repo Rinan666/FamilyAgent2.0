@@ -114,7 +114,8 @@ class CreateGrowthGuardRecordToolTest {
     private static AgentSaveMemoryMetadata metadata() {
         AgentSaveMemoryMetadata metadata = new AgentSaveMemoryMetadata();
         metadata.setSource("MIRROR_AGENT_TOOL");
-        metadata.setPlannedTool("GROWTH_GUARD");
+        metadata.setMemoryLibrary("FAMILY");
+        metadata.setMemoryType("OBSERVATION");
         metadata.setRelatedUserId(202L);
         metadata.setSourceType("GROWTH_OBSERVATION");
         metadata.setFollowUpStatus("PENDING");

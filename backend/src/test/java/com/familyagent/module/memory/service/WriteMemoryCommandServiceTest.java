@@ -26,8 +26,10 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class WriteMemoryCommandServiceTest {
 
-    @Mock private MemoryService memoryService;
-    @Mock private PersonalMemoryCommandService personalMemoryCommandService;
+    @Mock
+    private MemoryService memoryService;
+    @Mock
+    private PersonalMemoryCommandService personalMemoryCommandService;
 
     private WriteMemoryCommandService service;
 
@@ -37,13 +39,11 @@ class WriteMemoryCommandServiceTest {
     }
 
     @Test
-    void writeRecord_createsCanonicalFamilyMemoryInsteadOfDiaryRoot() {
-        WriteMemoryRequest request = request("RECORD");
-        request.setDiaryEntryType("SELF_REFLECTION");
+    void writeFamilyMemory_usesDatabaseMemoryTypeDirectly() {
+        WriteMemoryRequest request = request("FAMILY", "INSIGHT");
         request.setRelatedUserId(34L);
         request.setTags(List.of("family", "reflection"));
-        MemoryEntry saved = savedFamilyMemory(123L, "INSIGHT");
-        when(memoryService.createFamilyMemory(any())).thenReturn(saved);
+        when(memoryService.createFamilyMemory(any())).thenReturn(savedFamilyMemory(123L, "INSIGHT"));
 
         WriteMemoryResult result = service.write(request);
 
@@ -52,19 +52,16 @@ class WriteMemoryCommandServiceTest {
         assertEquals("INSIGHT", captor.getValue().getType());
         assertEquals(34L, captor.getValue().getRelatedUserId());
         assertEquals(List.of("family", "reflection"), captor.getValue().getTags());
-        assertEquals("RECORD", captor.getValue().getMetadata().toMap().get("writeCategory"));
-        assertEquals("FAMILY_MEMORY", result.getSavedRecordType());
-        assertEquals(123L, result.getSavedRecordId());
+        assertEquals("FAMILY", result.getMemoryLibrary());
+        assertEquals("INSIGHT", result.getMemoryType());
+        assertEquals(123L, result.getMemoryId());
         verifyNoInteractions(personalMemoryCommandService);
     }
 
     @Test
-    void writeObservation_usesSimpleObservationTypeWithoutGrowthFields() {
-        WriteMemoryRequest request = request("OBSERVATION");
+    void writeObservation_usesObservationAsDatabaseType() {
+        WriteMemoryRequest request = request("FAMILY", "OBSERVATION");
         request.setRelatedUserId(22L);
-        request.setMemoryType("PLAN");
-        request.setGrowthCategory("VISION");
-        request.setGrowthSeverity(5);
         when(memoryService.createFamilyMemory(any())).thenReturn(savedFamilyMemory(124L, "OBSERVATION"));
 
         service.write(request);
@@ -77,10 +74,8 @@ class WriteMemoryCommandServiceTest {
     }
 
     @Test
-    void writePersonalMemory_keepsPersonalOwnershipPath() {
-        WriteMemoryRequest request = request("EXPERIENCE");
-        request.setMemoryLibrary("PERSONAL");
-        request.setPersonalMemoryType("KNOWLEDGE");
+    void writePersonalMemory_usesPersonalOwnershipPath() {
+        WriteMemoryRequest request = request("PERSONAL", "KNOWLEDGE");
         PersonalMemoryView saved = new PersonalMemoryView(
                 77L,
                 10L,
@@ -100,18 +95,20 @@ class WriteMemoryCommandServiceTest {
 
         WriteMemoryResult result = service.write(request);
 
-        assertEquals("PERSONAL_MEMORY", result.getSavedRecordType());
+        assertEquals("PERSONAL", result.getMemoryLibrary());
+        assertEquals("KNOWLEDGE", result.getMemoryType());
         verify(personalMemoryCommandService).create(any());
         verifyNoInteractions(memoryService);
     }
 
-    private static WriteMemoryRequest request(String category) {
+    private static WriteMemoryRequest request(String memoryLibrary, String memoryType) {
         WriteMemoryRequest request = new WriteMemoryRequest();
         request.setFamilyId(11L);
-        request.setWriteCategory(category);
+        request.setMemoryLibrary(memoryLibrary);
+        request.setMemoryType(memoryType);
         request.setContent("A family memory");
         request.setTitle("Title");
-        request.setVisibility("FAMILY_VISIBLE");
+        request.setVisibility(memoryLibrary.equals("PERSONAL") ? "PRIVATE" : "FAMILY_VISIBLE");
         request.setMetadata(WriteMemoryMetadata.fromMap(Map.of("source", "WRITE_MEMORY_SIMPLIFIED")));
         return request;
     }
