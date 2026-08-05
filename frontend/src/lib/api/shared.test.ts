@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AI_PROXY_ROUTES } from './aiProxyBoundary';
-import { aiRequest, ApiError, sseStreamRequest } from './shared';
+import {
+  aiRequest,
+  ApiError,
+  sessionMessageItemToChatMessage,
+  sseStreamRequest,
+  toSessionMessagePayload,
+} from './shared';
 
 function streamFromChunks(chunks: string[]) {
   const encoder = new TextEncoder();
@@ -123,6 +129,45 @@ describe('sseStreamRequest', () => {
       'chunk:partial answer',
       'error:AI stream ended before a completion event. Please retry.',
     ]);
+  });
+});
+
+describe('session message evidence metadata', () => {
+  it('round-trips answer evidence and response identity through session persistence', () => {
+    const message = sessionMessageItemToChatMessage({
+      seq: 2,
+      id: 'assistant-2',
+      role: 'assistant',
+      content: 'answer',
+      createdAt: '2026-08-05T10:00:00Z',
+      metadata: {
+        agentMode: 'mirror',
+        targetUserId: 202,
+        targetMemberName: '大儿子',
+        rag: {
+          diaryCount: 0,
+          memoryCount: 1,
+          totalReferenceCount: 1,
+          sources: [{
+            id: 'personal-9',
+            sourceType: 'PERSONAL_MEMORY',
+            title: 'Shared note',
+            snippet: 'detail',
+            author: {
+              userId: 303,
+              name: '哥哥',
+              relationshipToViewer: '哥哥',
+              currentViewer: false,
+              currentTarget: false,
+            },
+          }],
+        },
+      },
+    });
+
+    expect(toSessionMessagePayload(message).metadata).toEqual(message.metadata);
+    expect(message.metadata?.rag?.sources[0].author?.relationshipToViewer).toBe('哥哥');
+    expect(message.metadata?.targetMemberName).toBe('大儿子');
   });
 });
 

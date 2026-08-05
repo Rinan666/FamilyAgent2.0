@@ -1,10 +1,11 @@
 'use client';
 
-import type { ChatMessage, DiaryEntry, GrowthGuardRecord, MemoryEntry, MemoryLibraryItem } from '@/types';
+import type { ChatMessage, DiaryEntry, GrowthGuardRecord, MemoryContentType, MemoryEntry, MemoryLibraryItem, MemoryLibraryKind } from '@/types';
 
 export type SessionSavedMemory = {
   id: string;
-  tool: 'DIARY' | 'PERSONAL_MEMORY' | 'FAMILY_MEMORY' | 'GROWTH_GUARD';
+  memoryLibrary: MemoryLibraryKind;
+  memoryType: MemoryContentType;
   label: string;
   title: string;
   content: string;
@@ -125,7 +126,7 @@ export function formatMemoryContext({
   const recentSavedMemories = sessionSavedMemories
     .filter((item) => item.content.trim())
     .slice(-5)
-    .map((item, index) => `${index + 1}. [${item.tool}] author=current_conversation_user ${item.title}: ${item.content.slice(0, 220)}`);
+    .map((item, index) => `${index + 1}. [${item.memoryLibrary}/${item.memoryType}] author=current_conversation_user ${item.title}: ${item.content.slice(0, 220)}`);
   if (recentSavedMemories.length > 0) {
     sections.push(`recent_saved_memories:\n${recentSavedMemories.join('\n')}`);
   }
@@ -189,7 +190,14 @@ export function normalizeAssistantMetadata(metadata: Record<string, unknown>): N
   const targetUserId = positiveNumberValue(metadata.targetUserId, metadata.target_user_id);
   const targetPersonaId = positiveNumberValue(metadata.targetPersonaId, metadata.target_persona_id);
   const targetLabel = stringValue(metadata.targetLabel) || stringValue(metadata.target_label);
+  const contextChanged = typeof metadata.contextChanged === 'boolean'
+    ? metadata.contextChanged
+    : metadata.context_changed === true;
+  const contextSwitchAcknowledged = typeof metadata.contextSwitchAcknowledged === 'boolean'
+    ? metadata.contextSwitchAcknowledged
+    : metadata.context_switch_acknowledged === true;
   const baseMetadata: NonNullable<ChatMessage['metadata']> = {
+    ...metadata,
     ...(responseMode === 'quick' || responseMode === 'think'
       ? { responseMode }
       : {}),
@@ -223,18 +231,50 @@ export function normalizeAssistantMetadata(metadata: Record<string, unknown>): N
       : typeof metadata.intent_degraded === 'boolean'
         ? { intentDegraded: metadata.intent_degraded }
         : {}),
-    ...(typeof metadata.contextChanged === 'boolean'
-      ? { contextChanged: metadata.contextChanged }
-      : typeof metadata.context_changed === 'boolean'
-        ? { contextChanged: metadata.context_changed }
-        : {}),
+    ...(typeof metadata.contextChanged === 'boolean' || typeof metadata.context_changed === 'boolean'
+      ? { contextChanged }
+      : {}),
+    ...(typeof metadata.contextSwitchAcknowledged === 'boolean'
+      || typeof metadata.context_switch_acknowledged === 'boolean'
+      ? { contextSwitchAcknowledged }
+      : {}),
     ...(sourceCount ? { sourceCount } : {}),
     ...(targetUserId ? { targetUserId } : {}),
     ...(targetPersonaId ? { targetPersonaId } : {}),
     ...(targetLabel
       ? effectiveContext === 'PERSONA'
-        ? { targetPersonaName: targetLabel, targetMemberName: targetLabel }
+        ? { targetPersonaName: targetLabel }
         : { targetMemberName: targetLabel }
+      : {}),
+    ...(effectiveContext === 'FAMILY'
+      ? { agentMode: 'family' as const }
+      : effectiveContext === 'MIRROR'
+        ? { agentMode: 'mirror' as const }
+        : effectiveContext === 'PERSONA'
+          ? { agentMode: 'persona' as const }
+          : {}),
+    ...(contextChanged
+      ? {
+          hasTargetSwitches: true,
+          sessionContextPatch: {
+            entry: 'agent',
+            contextLabel: effectiveContext === 'MIRROR'
+              ? 'mirror_agent'
+              : effectiveContext === 'PERSONA'
+                ? 'persona_member'
+                : 'family_memory',
+            agentMode: effectiveContext === 'MIRROR'
+              ? 'mirror'
+              : effectiveContext === 'PERSONA'
+                ? 'persona'
+                : 'family',
+            targetUserId: effectiveContext === 'MIRROR' ? targetUserId || null : null,
+            targetPersonaId: effectiveContext === 'PERSONA' ? targetPersonaId || null : null,
+            targetMemberName: effectiveContext === 'MIRROR' ? targetLabel || null : null,
+            targetPersonaName: effectiveContext === 'PERSONA' ? targetLabel || null : null,
+            hasTargetSwitches: true,
+          },
+        }
       : {}),
     ...(typeof metadata.insufficientSources === 'boolean'
       ? { insufficientSources: metadata.insufficientSources }
@@ -290,8 +330,30 @@ function normalizeRagMetadata(value: unknown): NonNullable<NonNullable<ChatMessa
         temporalLayer: stringValue(item.temporalLayer) || stringValue(item.temporal_layer) || undefined,
         topics: stringList(item.topics),
         scenes: stringList(item.scenes),
+        author: normalizeRecallParticipant(item.author),
+        observer: normalizeRecallParticipant(item.observer),
+        subject: normalizeRecallParticipant(item.subject),
       }))
       .slice(0, 8),
+  };
+}
+
+function normalizeRecallParticipant(value: unknown) {
+  if (!value || typeof value !== 'object') return undefined;
+  const data = value as Record<string, unknown>;
+  const name = stringValue(data.name);
+  const relationshipToViewer = stringValue(data.relationshipToViewer)
+    || stringValue(data.relationship_to_viewer);
+  if (!name && !relationshipToViewer) return undefined;
+  return {
+    userId: positiveNumberValue(data.userId, data.user_id) || undefined,
+    name: name || relationshipToViewer,
+    relationshipToViewer,
+    relationshipToTarget: stringValue(data.relationshipToTarget)
+      || stringValue(data.relationship_to_target)
+      || undefined,
+    currentViewer: booleanValue(data.currentViewer, data.current_viewer),
+    currentTarget: booleanValue(data.currentTarget, data.current_target),
   };
 }
 
@@ -314,6 +376,11 @@ function stringList(value: unknown) {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
     : [];
+}
+
+function booleanValue(...values: unknown[]) {
+  const value = values.find((item) => typeof item === 'boolean');
+  return value === true;
 }
 
 export function currentTimeContext() {

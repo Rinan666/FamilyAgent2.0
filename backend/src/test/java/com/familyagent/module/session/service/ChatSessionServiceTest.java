@@ -268,6 +268,71 @@ class ChatSessionServiceTest {
     }
 
     @Test
+    void appendMessagesInternal_persistsAnswerEvidenceMetadata() {
+        ChatSession session = sessionHeader(100L, 10L, "ACTIVE");
+        session.setStartedAt(LocalDateTime.of(2026, 6, 9, 10, 0));
+        session.setLastMessageAt(session.getStartedAt());
+        session.setMetadata(Map.of("entry", "agent", "storageVersion", 2));
+        ChatSessionMessage stored = message(1, "assistant", "answer");
+
+        when(sessionRepository.selectById(100L)).thenReturn(session);
+        when(messageRepository.findMaxSeqBySessionId(100L)).thenReturn(0);
+        when(messageRepository.findBySessionId(100L)).thenReturn(List.of(stored));
+        when(sessionRepository.updateById(any(ChatSession.class))).thenReturn(1);
+
+        ChatSessionMessagePayload payload = payload("assistant-1", "assistant", "answer");
+        payload.setMetadata(Map.of(
+                "agentMode", "mirror",
+                "targetUserId", 202,
+                "targetMemberName", "大儿子",
+                "rag", Map.of(
+                        "memoryCount", 1,
+                        "totalReferenceCount", 1,
+                        "sources", List.of(Map.of(
+                                "id", "personal-9",
+                                "sourceType", "PERSONAL_MEMORY",
+                                "author", Map.of(
+                                        "userId", 303,
+                                        "relationshipToViewer", "哥哥",
+                                        "currentViewer", false))))));
+
+        ChatSessionMessagePersistenceSupport support =
+                new ChatSessionMessagePersistenceSupport(sessionRepository, messageRepository, new ObjectMapper());
+        support.appendMessagesInternal(100L, List.of(payload));
+
+        ArgumentCaptor<ChatSessionMessage> captor = ArgumentCaptor.forClass(ChatSessionMessage.class);
+        verify(messageRepository).insert(captor.capture());
+        Map<String, Object> persisted = ChatSessionSupportUtils.castMap(captor.getValue().getMetadata());
+        assertEquals("大儿子", persisted.get("targetMemberName"));
+        Map<String, Object> rag = ChatSessionSupportUtils.castMap(persisted.get("rag"));
+        assertEquals(1, rag.get("totalReferenceCount"));
+        assertEquals(1, ((List<?>) rag.get("sources")).size());
+    }
+
+    @Test
+    void applySessionContextPatch_copiesCompletePersonaIdentity() {
+        ChatSessionMessagePayload marker = payload("switch-1", "system", "switched");
+        marker.setMetadata(Map.of("sessionContextPatch", Map.of(
+                "contextLabel", "persona_member",
+                "agentMode", "persona",
+                "targetUserId", 0,
+                "targetPersonaId", 303,
+                "targetMemberName", "",
+                "targetPersonaName", "外公",
+                "hasTargetSwitches", true)));
+
+        Map<String, Object> updated = ChatSessionSupportUtils.applySessionContextPatch(
+                new java.util.LinkedHashMap<>(),
+                List.of(marker));
+
+        assertEquals("persona_member", updated.get("contextLabel"));
+        assertEquals("persona", updated.get("agentMode"));
+        assertEquals(303, updated.get("targetPersonaId"));
+        assertEquals("外公", updated.get("targetPersonaName"));
+        assertEquals(true, updated.get("hasTargetSwitches"));
+    }
+
+    @Test
     void deleteSession_deletesArchiveObjectsBeforeSessionRow() {
         ChatSession session = sessionHeader(100L, 10L, "ACTIVE");
         ChatSessionArchive firstArchive = archive(1000L, 1, 4, "archive-1");

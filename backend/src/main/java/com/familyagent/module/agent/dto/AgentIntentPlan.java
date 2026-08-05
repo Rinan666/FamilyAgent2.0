@@ -30,4 +30,8 @@ public record AgentIntentPlan(
     public boolean hasDirectResponse() {
         return directResponseMessage != null;
     }
+
+    public boolean hasContextSwitchAcknowledgement() {
+        return contextScope == AgentContextScope.SESSION && hasDirectResponse();
+    }
 }

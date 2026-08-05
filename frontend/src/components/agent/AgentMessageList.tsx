@@ -1,19 +1,21 @@
 'use client';
 
+import { useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { CheckCircle, Loader2, Sparkles } from 'lucide-react';
 import MathRenderer from '@/components/agent/MathRenderer';
 import AnswerEvidenceDisclosure from '@/components/agent/AnswerEvidenceDisclosure';
 import SaveDraftCard from '@/components/agent/SaveDraftCard';
 import { type SaveFeedback } from '@/components/agent/agentDisplay';
-import type { AgentSaveToolPlan, ChatMessage, Family } from '@/types';
+import { assistantContextLabel } from '@/components/agent/agentResponseContext';
+import type { AgentMemorySavePlan, ChatMessage, Family } from '@/types';
 
 interface AgentMessageListProps {
   messages: ChatMessage[];
   isLoadingMessages: boolean;
   isStreaming: boolean;
   saveFeedback: Record<string, SaveFeedback>;
-  onConfirmSaveDraft: (message: ChatMessage, plan: AgentSaveToolPlan) => void;
+  onConfirmSaveDraft: (message: ChatMessage, plan: AgentMemorySavePlan) => void;
   onCancelSaveDraft: (message: ChatMessage) => void;
   onOpenContext?: () => void;
   families: Family[];
@@ -43,6 +45,23 @@ export default function AgentMessageList({
   families,
   activeFamilyId,
 }: AgentMessageListProps) {
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const lastMessageLength = messages.at(-1)?.content.length || 0;
+  const feedbackVersion = useMemo(
+    () => Object.entries(saveFeedback)
+      .map(([id, feedback]) => `${id}:${feedback.status}:${feedback.detail}`)
+      .join('|'),
+    [saveFeedback],
+  );
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const container = scrollContainerRef.current;
+      if (container) container.scrollTop = container.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [feedbackVersion, isLoadingMessages, lastMessageLength, messages.length]);
+
   if (!isLoadingMessages && messages.length === 0) {
     return (
       <div className="mx-auto flex w-full max-w-5xl min-h-0 flex-1 items-center justify-center overflow-y-auto px-4 py-8">
@@ -67,7 +86,7 @@ export default function AgentMessageList({
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+    <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
       <div className="mx-auto max-w-4xl space-y-7">
         {isLoadingMessages && (
           <div className="rounded-md border border-stone-200 bg-white px-4 py-3 text-center text-sm text-stone-500">
@@ -105,8 +124,9 @@ export default function AgentMessageList({
               >
                 {isAssistant && !showThinkingIndicator && (
                   <div className="mb-2 inline-flex items-center gap-1.5 text-xs font-medium text-stone-400">
+                    <span>{assistantContextLabel(message.metadata)}</span>
+                    <span aria-hidden>·</span>
                     <span>已思考</span>
-                    <span aria-hidden>›</span>
                   </div>
                 )}
 

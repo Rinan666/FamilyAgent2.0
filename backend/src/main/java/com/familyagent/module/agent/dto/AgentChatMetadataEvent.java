@@ -19,6 +19,7 @@ public record AgentChatMetadataEvent(
         Boolean decisionSupport,
         Boolean intentDegraded,
         Boolean contextChanged,
+        Boolean contextSwitchAcknowledged,
         Integer sourceCount,
         String requestId,
         Long runId) {
@@ -36,6 +37,7 @@ public record AgentChatMetadataEvent(
                 EVENT_TYPE,
                 safeMetadata.rag(),
                 safeMetadata.retrievalQuery(),
+                null,
                 null,
                 null,
                 null,
@@ -73,6 +75,7 @@ public record AgentChatMetadataEvent(
                 intentPlan.responsePlan().decisionSupport(),
                 intentPlan.responsePlan().degraded(),
                 intentPlan.contextChanged(),
+                intentPlan.hasContextSwitchAcknowledgement(),
                 safeMetadata.rag() == null ? 0 : safeMetadata.rag().totalReferenceCount(),
                 requestId,
                 runId);

@@ -50,11 +50,24 @@ class AgentChatIntentResolverTest {
         assertEquals(202L, plan.targetUserId());
         assertTrue(plan.contextChanged());
         assertTrue(plan.hasDirectResponse());
+        assertEquals("已切换为“爸爸”镜像参考", plan.directResponseMessage());
         verify(sessionFacade).updateOwnedContext(
                 org.mockito.ArgumentMatchers.eq(88L),
                 org.mockito.ArgumentMatchers.eq(101L),
                 org.mockito.ArgumentMatchers.eq(10L),
                 any(AgentSessionContext.class));
+    }
+
+    @Test
+    void explicitPersonaSwitch_usesTheSameSessionSwitchContract() {
+        AgentIntentPlan plan = resolver.resolve(request("切换到苏轼"), 101L);
+
+        assertEquals(AgentContextType.PERSONA, plan.contextType());
+        assertEquals(AgentContextScope.SESSION, plan.contextScope());
+        assertEquals(303L, plan.targetPersonaId());
+        assertTrue(plan.contextChanged());
+        assertTrue(plan.hasContextSwitchAcknowledgement());
+        assertEquals("已切换为精神成员“苏轼”", plan.directResponseMessage());
     }
 
     @Test
@@ -74,6 +87,17 @@ class AgentChatIntentResolverTest {
                 org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.anyLong(),
                 any(AgentSessionContext.class));
+    }
+
+    @Test
+    void switchWithQuestion_changesSessionAndContinuesWithAnAnswer() {
+        AgentIntentPlan plan = resolver.resolve(request("切换到爸爸，帮我分析工作选择"), 101L);
+
+        assertEquals(AgentContextType.MIRROR, plan.contextType());
+        assertTrue(plan.contextChanged());
+        assertFalse(plan.hasDirectResponse());
+        assertFalse(plan.hasContextSwitchAcknowledgement());
+        assertEquals("帮我分析工作选择", plan.effectiveMessage());
     }
 
     @Test

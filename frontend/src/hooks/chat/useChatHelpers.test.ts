@@ -8,7 +8,7 @@ describe('formatMemoryContext', () => {
       libraryItems: [],
       familyMemories: [{
         userId: 202,
-        type: 'ELDER_ADVICE',
+        type: 'KNOWLEDGE',
         content: 'Keep promises made to children.',
         status: 'ACTIVE',
       } as MemoryEntry],
@@ -48,19 +48,31 @@ describe('normalizeAssistantMetadata', () => {
         total_reference_count: 4,
         sources: [
           {
-            id: 'memory-9',
-            source_type: 'FAMILY_EXPERIENCE',
+            id: 'personal-memory-9',
+            source_type: 'PERSONAL_MEMORY',
             title: 'Bedtime routine',
             snippet: 'Earlier family memory summary',
             temporal_layer: 'STABLE',
             topics: ['HEALTH'],
             scenes: ['health'],
+            author: {
+              user_id: 202,
+              name: '哥哥',
+              relationship_to_viewer: '哥哥',
+              current_viewer: false,
+              current_target: false,
+            },
           },
         ],
       },
       retrievalQuery: 'bedtime health',
       requestId: 'chat-request-1',
       runId: 91,
+      effectiveContext: 'MIRROR',
+      targetUserId: 202,
+      targetLabel: '哥哥',
+      contextChanged: true,
+      contextSwitchAcknowledged: true,
     });
 
     expect(metadata.rag).toMatchObject({
@@ -72,16 +84,59 @@ describe('normalizeAssistantMetadata', () => {
       totalReferenceCount: 4,
     });
     expect(metadata.rag?.sources[0]).toMatchObject({
-      id: 'memory-9',
-      sourceType: 'FAMILY_EXPERIENCE',
+      id: 'personal-memory-9',
+      sourceType: 'PERSONAL_MEMORY',
       title: 'Bedtime routine',
       snippet: 'Earlier family memory summary',
       temporalLayer: 'STABLE',
       topics: ['HEALTH'],
       scenes: ['health'],
+      author: {
+        userId: 202,
+        name: '哥哥',
+        relationshipToViewer: '哥哥',
+        currentViewer: false,
+        currentTarget: false,
+      },
     });
     expect(metadata.retrievalQuery).toBe('bedtime health');
     expect(metadata.requestId).toBe('chat-request-1');
     expect(metadata.runId).toBe(91);
+    expect(metadata.contextSwitchAcknowledged).toBe(true);
+    expect(metadata.sessionContextPatch).toMatchObject({
+      agentMode: 'mirror',
+      targetUserId: 202,
+      targetMemberName: '哥哥',
+      hasTargetSwitches: true,
+    });
+  });
+
+  it('keeps persisted camel-case evidence and identity metadata after refresh', () => {
+    const metadata = normalizeAssistantMetadata({
+      agentMode: 'mirror',
+      targetUserId: 202,
+      targetMemberName: '大儿子',
+      sourceRefs: [{
+        code: 'D1',
+        title: '周末打球',
+        sourceLabel: '本人记录',
+        temporalLabel: '近期',
+        toneClass: 'bg-sky-50 text-sky-700',
+      }],
+      rag: {
+        diaryCount: 1,
+        memoryCount: 0,
+        totalReferenceCount: 1,
+        sources: [],
+      },
+    });
+
+    expect(metadata).toMatchObject({
+      agentMode: 'mirror',
+      targetUserId: 202,
+      targetMemberName: '大儿子',
+      sourceRefs: [{ code: 'D1', title: '周末打球' }],
+    });
+    expect(metadata.rag?.totalReferenceCount).toBe(1);
   });
 });

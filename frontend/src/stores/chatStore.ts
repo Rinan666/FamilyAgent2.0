@@ -14,6 +14,7 @@ interface ChatState {
   removeMessageById: (id: string) => void;
   appendToLastMessage: (content: string) => void;
   mergeLastAssistantMetadata: (metadata: NonNullable<ChatMessage['metadata']>) => void;
+  patchMessageById: (id: string, patch: Partial<ChatMessage>) => void;
   setStreaming: (streaming: boolean) => void;
   reset: () => void;
 }
@@ -79,6 +80,20 @@ export const useChatStore = create<ChatState>((set) => ({
       };
       return { messages };
     });
+  },
+
+  patchMessageById: (id, patch) => {
+    set((state) => ({
+      messages: state.messages.map((message) => message.id === id
+        ? {
+            ...message,
+            ...patch,
+            metadata: patch.metadata
+              ? { ...(message.metadata || {}), ...patch.metadata }
+              : message.metadata,
+          }
+        : message),
+    }));
   },
 
   setStreaming: (isStreaming) => set({ isStreaming }),

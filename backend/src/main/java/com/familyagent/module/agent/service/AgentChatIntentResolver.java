@@ -68,7 +68,7 @@ public class AgentChatIntentResolver {
                     removeMatchedPhrase(message, FAMILY_RESET_TERMS),
                     responsePlan,
                     current.type() != AgentContextType.FAMILY,
-                    responseTextWhenEmpty(message, removeMatchedPhrase(message, FAMILY_RESET_TERMS), "已切回家庭 Agent。"));
+                    responseTextWhenEmpty(message, removeMatchedPhrase(message, FAMILY_RESET_TERMS), "已切换为家庭 Agent"));
             persistSessionContext(request, userId, plan);
             return plan;
         }
@@ -156,8 +156,8 @@ public class AgentChatIntentResolver {
                 request.getMemberMessage(),
                 effectiveMessage,
                 match.type() == AgentContextType.MIRROR
-                        ? "已切换到“" + match.target().displayName() + "”镜像参考。"
-                        : "已切换到精神成员“" + match.target().displayName() + "”。");
+                        ? "已切换为“" + match.target().displayName() + "”镜像参考"
+                        : "已切换为精神成员“" + match.target().displayName() + "”");
         return new AgentIntentPlan(
                 match.type(),
                 scope,

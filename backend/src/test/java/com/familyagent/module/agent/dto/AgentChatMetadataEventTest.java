@@ -1,5 +1,7 @@
 package com.familyagent.module.agent.dto;
 
+import com.familyagent.common.constant.AgentContextScope;
+import com.familyagent.common.constant.AgentContextType;
 import com.familyagent.module.memory.facade.AgentMemoryContextMetadata;
 import com.familyagent.module.memory.facade.AgentMemoryRagMetadata;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -10,6 +12,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AgentChatMetadataEventTest {
 
@@ -53,5 +56,27 @@ class AgentChatMetadataEventTest {
         assertFalse(payload.has("rag"));
         assertFalse(payload.has("retrievalQuery"));
         assertFalse(payload.has("runId"));
+    }
+
+    @Test
+    void eventShouldMarkDirectSessionSwitchAcknowledgement() {
+        AgentIntentPlan plan = new AgentIntentPlan(
+                AgentContextType.MIRROR,
+                AgentContextScope.SESSION,
+                202L,
+                null,
+                "爸爸",
+                "",
+                new AgentResponsePlan(null, null, null, false, false),
+                true,
+                "已切换为“爸爸”镜像参考");
+
+        JsonNode payload = objectMapper.valueToTree(AgentChatMetadataEvent.create(
+                AgentMemoryContextMetadata.empty(),
+                plan,
+                "chat-request-3",
+                92L));
+
+        assertTrue(payload.path("contextSwitchAcknowledged").asBoolean());
     }
 }

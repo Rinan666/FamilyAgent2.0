@@ -81,6 +81,7 @@ export function useChat(options: UseChatOptions = {}) {
     removeMessageById,
     appendToLastMessage,
     mergeLastAssistantMetadata,
+    patchMessageById,
     setStreaming,
     reset,
   } = useChatStore();
@@ -107,6 +108,7 @@ export function useChat(options: UseChatOptions = {}) {
   const finalizedRunsRef = useRef<Set<number>>(new Set());
   const stoppedRunsRef = useRef<Set<number>>(new Set());
   const persistenceQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const contextSwitchMetadataRef = useRef<Map<number, NonNullable<ChatMessage['metadata']>>>(new Map());
 
   const enqueuePersist = useCallback((items: ChatMessage[]) => {
     const { task, nextQueue } = enqueuePersistMessages({
@@ -131,7 +133,9 @@ export function useChat(options: UseChatOptions = {}) {
     finalizedRunsRef.current.add(runId);
     const targetAssistant = useChatStore.getState().messages
       .find((message) => message.id === assistantMessageId);
-    if (targetAssistant?.role === 'assistant' && targetAssistant.content.trim()) {
+    const shouldPersist = targetAssistant?.role === 'assistant'
+      || targetAssistant?.metadata?.switchMarker === true;
+    if (targetAssistant && shouldPersist && targetAssistant.content.trim()) {
       try {
         await enqueuePersist([targetAssistant]);
       } catch {
@@ -144,6 +148,7 @@ export function useChat(options: UseChatOptions = {}) {
     const runId = streamRunIdRef.current;
     if (runId > 0) {
       stoppedRunsRef.current.add(runId);
+      contextSwitchMetadataRef.current.delete(runId);
     }
     activeStreamControl?.abort(false);
     activeStreamControl = null;
@@ -159,6 +164,7 @@ export function useChat(options: UseChatOptions = {}) {
       stoppedRunsRef.current.delete(runId);
       streamRunIdRef.current += 1;
     }
+    contextSwitchMetadataRef.current.clear();
     activeStreamControl?.abort(true);
     activeStreamControl = null;
     activeStreamRef.current?.abort();
@@ -318,6 +324,21 @@ export function useChat(options: UseChatOptions = {}) {
       },
       () => {
         if (!isRunActive(runId)) return;
+        const switchMetadata = contextSwitchMetadataRef.current.get(runId);
+        if (switchMetadata) {
+          const switchMessage = typeof switchMetadata.switchMessage === 'string'
+            ? switchMetadata.switchMessage
+            : '';
+          patchMessageById(assistantMessage.id, {
+            role: 'system',
+            ...(switchMessage ? { content: switchMessage } : {}),
+            metadata: {
+              ...switchMetadata,
+              switchMarker: true,
+            },
+          });
+          contextSwitchMetadataRef.current.delete(runId);
+        }
         stoppedRunsRef.current.delete(runId);
         clearActiveStream(runId);
         setStreaming(false);
@@ -326,6 +347,7 @@ export function useChat(options: UseChatOptions = {}) {
       },
       (error) => {
         if (!isRunActive(runId)) return;
+        contextSwitchMetadataRef.current.delete(runId);
         stoppedRunsRef.current.delete(runId);
         clearActiveStream(runId);
         appendToLastMessage(`\n\n[Error] ${error}`);
@@ -334,7 +356,11 @@ export function useChat(options: UseChatOptions = {}) {
       },
       (metadata) => {
         if (!isRunActive(runId)) return;
-        mergeLastAssistantMetadata((normalizeStreamMetadata || normalizeAssistantMetadata)(metadata));
+        const normalized = (normalizeStreamMetadata || normalizeAssistantMetadata)(metadata);
+        if (normalized.contextSwitchAcknowledged) {
+          contextSwitchMetadataRef.current.set(runId, normalized);
+        }
+        mergeLastAssistantMetadata(normalized);
       },
       () => {
         const isCurrentRun = isRunActive(runId);
@@ -392,6 +418,7 @@ export function useChat(options: UseChatOptions = {}) {
     enqueuePersist,
     memoryContextResolver,
     normalizeStreamMetadata,
+    patchMessageById,
     prepareRequest,
     recallMemoryContext,
     removeMessageById,

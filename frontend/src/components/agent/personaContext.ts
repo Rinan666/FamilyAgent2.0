@@ -33,7 +33,3 @@ export function buildPersonaProfileContext(
     personaMaterialLines(materials),
   ].join('\n\n');
 }
-
-export function personaSwitchMessage(targetLabel: string) {
-  return `已切换到精神成员“${targetLabel}”`;
-}

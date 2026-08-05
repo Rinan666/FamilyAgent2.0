@@ -7,7 +7,7 @@ import { Bot, Loader2, Menu, Plus, Send, Sparkles, Square } from 'lucide-react';
 import AgentContextPanel from '@/components/agent/AgentContextPanel';
 import AgentMessageList from '@/components/agent/AgentMessageList';
 import AgentSessionDrawer from '@/components/agent/AgentSessionDrawer';
-import { personaSwitchMessage } from '@/components/agent/personaContext';
+import { contextSwitchMessage } from '@/components/agent/agentResponseContext';
 import {
   normalizeTargetSelection,
   selectionFromRequestedTargetUserId,
@@ -26,6 +26,7 @@ import {
   diaryTitle,
   getSessionTitle,
   memberName,
+  normalizeAgentSessionMetadata,
   parsePositiveNumber,
   readinessLevel,
   temporalLayerClass,
@@ -43,10 +44,10 @@ import { cn, generateId } from '@/lib/utils';
 import { familyApi, mirrorApi, sessionApi } from '@/lib/api';
 import { isPlainEnter } from '@/lib/formKeyboard';
 import { loadSessionMessagesChronologically } from '@/lib/sessionHistory';
-import { routeAgentSubmission, todayString, toolLabel } from '@/lib/savePlan';
+import { memoryLibraryLabel, routeAgentSubmission, todayString } from '@/lib/savePlan';
 import type {
   AgentMode,
-  AgentSaveToolPlan,
+  AgentMemorySavePlan,
   AgentSessionMetadata,
   ChatMessage,
   ChatSessionDetail,
@@ -77,15 +78,16 @@ function buildSessionMetadata(
   };
 }
 
-function savedMemoryFromPlan(plan: AgentSaveToolPlan, savedAt: string): SessionSavedMemory | null {
-  if (!plan.should_save || plan.tool === 'NONE' || !plan.content.trim()) return null;
+function savedMemoryFromPlan(plan: AgentMemorySavePlan, savedAt: string): SessionSavedMemory | null {
+  if (!plan.should_save || !plan.content.trim()) return null;
   return {
-    id: `saved-${plan.tool}-${savedAt}`,
-    tool: plan.tool,
-    label: toolLabel(plan.tool),
-    title: plan.title || toolLabel(plan.tool),
+    id: `saved-${plan.memory_library}-${plan.memory_type}-${savedAt}`,
+    memoryLibrary: plan.memory_library,
+    memoryType: plan.memory_type,
+    label: memoryLibraryLabel(plan.memory_library),
+    title: plan.title || memoryLibraryLabel(plan.memory_library),
     content: plan.content.trim(),
-    visibility: String(plan.visibility || plan.scope || 'PRIVATE'),
+    visibility: String(plan.visibility || 'PRIVATE'),
     savedAt,
     reason: plan.reason,
   };
@@ -162,12 +164,7 @@ function buildTargetSwitchMessage(
   nextTarget: FamilyMember | null,
   nextPersona: PersonaMember | null,
 ): ChatMessage {
-  const targetLabel =
-    nextMode === 'mirror'
-      ? `已切换到“${nextTargetLabel}”镜像参考`
-      : nextMode === 'persona'
-        ? personaSwitchMessage(nextTargetLabel)
-        : '已切回家庭 Agent';
+  const targetLabel = contextSwitchMessage(nextMode, nextTargetLabel);
   const sessionContextPatch = buildSessionMetadata(
     nextMode,
     nextTargetLabel,
@@ -192,6 +189,13 @@ function selectionFromSessionContext(
   session: ChatSessionDetail,
   selfUserId: number | null,
 ): AgentTargetSelection {
+  const metadata = normalizeAgentSessionMetadata(session.metadata);
+  if (metadata.agentMode === 'mirror' && metadata.targetUserId) {
+    return normalizeTargetSelection(metadata.targetUserId, selfUserId);
+  }
+  if (metadata.agentMode === 'persona' && metadata.targetPersonaId) {
+    return `PERSONA:${metadata.targetPersonaId}`;
+  }
   if (session.agentContextType === 'MIRROR' && session.targetUserId) {
     return normalizeTargetSelection(session.targetUserId, selfUserId);
   }
@@ -325,7 +329,7 @@ export default function AgentPage() {
       : mode === 'persona'
         ? targetPersona?.name || targetLabel
         : activeMembership?.relationshipLabel || '';
-  const handleDraftSaved = useCallback((plan: AgentSaveToolPlan, savedAt: string) => {
+  const handleDraftSaved = useCallback((plan: AgentMemorySavePlan, savedAt: string) => {
     const savedMemory = savedMemoryFromPlan(plan, savedAt);
     if (savedMemory) {
       sessionSavedMemoriesRef.current = [...sessionSavedMemoriesRef.current, savedMemory].slice(
@@ -551,7 +555,6 @@ export default function AgentPage() {
       mirrorTargetUserId,
       mode,
       refreshMirrorContext,
-      targetLabel,
       targetMember,
       targetPersona,
     ],
@@ -608,12 +611,25 @@ export default function AgentPage() {
           setTargetSelection(`PERSONA:${normalized.targetPersonaId}`);
         }
       }
+      const effectiveMode: AgentMode = normalized.effectiveContext === 'MIRROR'
+        ? 'mirror'
+        : normalized.effectiveContext === 'PERSONA'
+          ? 'persona'
+          : normalized.effectiveContext === 'FAMILY'
+            ? 'family'
+            : mode;
+      const effectiveTargetLabel = normalized.targetPersonaName
+        || normalized.targetMemberName
+        || targetLabel;
       return {
         ...getInitialAssistantMetadata(),
         ...normalized,
+        ...(normalized.contextSwitchAcknowledged
+          ? { switchMessage: contextSwitchMessage(effectiveMode, effectiveTargetLabel) }
+          : {}),
       };
     },
-    [getInitialAssistantMetadata, mode],
+    [getInitialAssistantMetadata, mode, targetLabel],
   );
 
   const ensureSessionHeader = useCallback(async () => {
@@ -839,7 +855,11 @@ export default function AgentPage() {
       setSessionError('');
       try {
         const detail = await sessionApi.getSession(targetSessionId);
-        const restoredMessages = await loadAllSessionMessages(targetSessionId);
+        const restoredMessages = (await loadAllSessionMessages(targetSessionId)).map((message) =>
+          message.role === 'assistant' && message.metadata
+            ? { ...message, metadata: normalizeAssistantMetadata(message.metadata) }
+            : message,
+        );
         if (sessionGenerationRef.current !== generation) {
           return;
         }
@@ -1037,7 +1057,12 @@ export default function AgentPage() {
       const userMessage = useChatStore.getState().addMessage('user', submission.content);
       const persistenceTask = appendSessionMessages([userMessage]).catch(() => undefined);
       try {
-        await prepareSaveDraft(userMessage, submission.conversationContext);
+        await prepareSaveDraft(
+          userMessage,
+          submission.conversationContext,
+          submission.requestedSave,
+          submission.saveContent,
+        );
       } finally {
         setIsProcessingSaveCommand(false);
         void persistenceTask;

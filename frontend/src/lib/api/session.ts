@@ -42,6 +42,7 @@ export const sessionApi = {
   appendMessages: (id: number, messages: ChatMessage[]) =>
     request<ChatSessionDetail>(`/sessions/${id}/messages`, {
       method: 'POST',
+      keepalive: true,
       body: JSON.stringify({ messages: messages.map(toSessionMessagePayload) }),
     }).then(normalizeSessionDetail),
   updateMessages: (id: number, messages: ChatMessage[]) =>

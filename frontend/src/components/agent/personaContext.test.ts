@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PersonaMember } from '@/types';
-import { buildPersonaProfileContext, personaSwitchMessage } from './personaContext';
+import { buildPersonaProfileContext } from './personaContext';
 
 function persona(overrides: Partial<PersonaMember> = {}): PersonaMember {
   return {
@@ -39,10 +39,5 @@ describe('personaContext', () => {
     expect(context).toContain('即兴发挥');
     expect(context).toContain('做事风格');
     expect(context).not.toContain('不代表真实成员本人');
-  });
-
-  it('uses role voice in persona switch copy', () => {
-    expect(personaSwitchMessage('外公')).toBe('已切换到精神成员“外公”');
-    expect(personaSwitchMessage('外公')).not.toContain('真实成员');
   });
 });

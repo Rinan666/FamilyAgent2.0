@@ -19,9 +19,12 @@ import java.util.Map;
 final class ChatSessionSupportUtils {
 
     private static final String SESSION_CONTEXT_PATCH_KEY = "sessionContextPatch";
+    private static final String CONTEXT_LABEL_KEY = "contextLabel";
     private static final String AGENT_MODE_KEY = "agentMode";
     private static final String TARGET_USER_ID_KEY = "targetUserId";
+    private static final String TARGET_PERSONA_ID_KEY = "targetPersonaId";
     private static final String TARGET_MEMBER_NAME_KEY = "targetMemberName";
+    private static final String TARGET_PERSONA_NAME_KEY = "targetPersonaName";
     private static final String HAS_TARGET_SWITCHES_KEY = "hasTargetSwitches";
 
     private ChatSessionSupportUtils() {
@@ -139,9 +142,12 @@ final class ChatSessionSupportUtils {
             if (patch.isEmpty()) {
                 continue;
             }
+            copyPatchedValue(patch, sessionMetadata, CONTEXT_LABEL_KEY);
             copyPatchedValue(patch, sessionMetadata, AGENT_MODE_KEY);
             copyPatchedValue(patch, sessionMetadata, TARGET_USER_ID_KEY);
+            copyPatchedValue(patch, sessionMetadata, TARGET_PERSONA_ID_KEY);
             copyPatchedValue(patch, sessionMetadata, TARGET_MEMBER_NAME_KEY);
+            copyPatchedValue(patch, sessionMetadata, TARGET_PERSONA_NAME_KEY);
             copyPatchedValue(patch, sessionMetadata, HAS_TARGET_SWITCHES_KEY);
         }
         return sessionMetadata;

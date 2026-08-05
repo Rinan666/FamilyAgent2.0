@@ -2,6 +2,7 @@
 
 import { ExternalLink } from 'lucide-react';
 import type { ChatMessage, MirrorSourceRef, RagRecallSource } from '@/types';
+import { personalMemoryEvidenceLabel } from '@/components/agent/answerEvidence';
 
 export default function AnswerEvidenceDisclosure({ message }: { message: ChatMessage }) {
   const sections = evidenceSections(message);
@@ -117,7 +118,7 @@ function ragSections(sources: RagRecallSource[]): EvidenceSection[] {
   if (!sources.length) return [];
   const groups = new Map<string, EvidenceItemModel[]>();
   sources.slice(0, 8).forEach((source) => {
-    const title = ragSectionTitle(source.sourceType);
+    const title = ragSectionTitle(source);
     const items = groups.get(title) || [];
     items.push({
       key: `rag-${source.id}`,
@@ -125,6 +126,7 @@ function ragSections(sources: RagRecallSource[]): EvidenceSection[] {
       snippet: source.snippet,
       badges: [
         sourceTypeLabel(source.sourceType),
+        personalMemoryBadge(source),
         participantBadge(source),
         source.temporalLayer ? temporalLabel(source.temporalLayer) : '',
         ...(source.scenes || []).slice(0, 1),
@@ -141,6 +143,10 @@ function participantBadge(source: RagRecallSource) {
   if (!participant) return '';
   if (participant.currentViewer) return '我记录的';
   return participant.relationshipToViewer || participant.name;
+}
+
+function personalMemoryBadge(source: RagRecallSource) {
+  return personalMemoryEvidenceLabel(source);
 }
 
 function webSearchSection(sources: WebSearchSource[] = []): EvidenceSection | null {
@@ -234,8 +240,11 @@ function safeHttpUrl(value: string): string | null {
   }
 }
 
-function ragSectionTitle(type: string) {
-  if (type === 'PERSONAL_MEMORY') return '个人记忆';
+function ragSectionTitle(source: RagRecallSource) {
+  const type = source.sourceType;
+  if (type === 'PERSONAL_MEMORY') {
+    return personalMemoryEvidenceLabel(source);
+  }
   if (type === 'LIFE_RECORD') return '日记';
   if (type === 'GROWTH_OBSERVATION') return '成长观察';
   if (type === 'FAMILY_EXPERIENCE') return '家族经验';
@@ -261,7 +270,7 @@ function temporalLabel(value: string) {
 function topicLabel(value: string) {
   if (value === 'HEALTH') return '健康';
   if (value === 'EMOTION') return '情绪';
-  if (value === 'FAMILY_STORY') return '家庭故事';
+  if (value === 'FAMILY_HISTORY') return '家庭故事';
   if (value === 'CHOICE') return '选择';
   if (value === 'COMMUNICATION') return '沟通';
   return value;
