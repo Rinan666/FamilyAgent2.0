@@ -9,56 +9,40 @@ import { familyApi, memoryApi, memoryLibraryApi, writeMemoryApi } from '@/lib/ap
 import { useViewerRole } from '@/hooks/useViewerRole';
 import { useAuthStore } from '@/stores/authStore';
 import VoiceInputButton from '@/components/voice/VoiceInputButton';
-import {
-  WorkbenchEmptyState,
-  WorkbenchPage,
-  WorkbenchSurface,
-} from '@/components/layout/Workbench';
+import { WorkbenchEmptyState, WorkbenchPage, WorkbenchSurface } from '@/components/layout/Workbench';
 import { submitFormOnEnter } from '@/lib/formKeyboard';
 import type {
-  DiaryEntryType,
-  DiaryVisibility,
   FamilyMember,
-  GrowthGuardCategory,
+  MemoryContentType,
   MemoryLibraryItem,
-  MemoryEntryType,
   MemoryScope,
-  WriteCategory,
 } from '@/types';
 
-interface WriteDraft {
-  category: WriteCategory;
+interface UnifiedMemoryDraft {
   content: string;
   title: string;
   tagText: string;
-  visibility: DiaryVisibility;
+  visibility: MemoryScope;
   relatedUserId?: number;
-  diaryEntryType: DiaryEntryType;
-  memoryType: MemoryEntryType;
-  growthCategory: GrowthGuardCategory;
-  growthSeverity: number;
+  memoryType: MemoryContentType;
   updatedAt: string;
 }
 
 interface StarterTemplate {
   id: string;
   label: string;
-  category: WriteCategory;
+  memoryType: MemoryContentType;
   content: string;
   tags?: string;
 }
 
-const DRAFT_VERSION = 'v2';
-const visibilityOptions: { value: DiaryVisibility; label: string; note: string }[] = [
-  { value: 'PRIVATE', label: '仅自己可见', note: '只自己回看和继续补充。' },
-  { value: 'FAMILY_VISIBLE', label: '全家可见', note: '家族成员可查看和继续整理。' },
-  { value: 'CARE_VISIBLE', label: '照护可见', note: '照护相关成员可查看和跟进。' },
-];
+interface DiaryComposerProps {
+  editItem?: MemoryLibraryItem | null;
+  onSaved?: () => void;
+}
 
-const memoryTypeOptions: {
-  value: MemoryEntryType;
-  label: string;
-}[] = [
+const DRAFT_VERSION = 'v3';
+const MEMORY_TYPES: { value: MemoryContentType; label: string }[] = [
   { value: 'NOTE', label: '笔记' },
   { value: 'KNOWLEDGE', label: '新知' },
   { value: 'INSIGHT', label: '感悟' },
@@ -67,828 +51,289 @@ const memoryTypeOptions: {
   { value: 'PREFERENCE', label: '偏好' },
   { value: 'PLAN', label: '计划' },
 ];
-
-const starterTemplates: StarterTemplate[] = [
+const MEMORY_TYPE_VALUES = new Set(MEMORY_TYPES.map((item) => item.value));
+const VISIBILITY_OPTIONS: { value: MemoryScope; label: string }[] = [
+  { value: 'PRIVATE', label: '仅自己可见' },
+  { value: 'FAMILY_VISIBLE', label: '全家可见' },
+  { value: 'CARE_VISIBLE', label: '照护可见' },
+];
+const STARTER_TEMPLATES: StarterTemplate[] = [
   {
-    id: 'record-daily',
+    id: 'note-daily',
     label: '今天发生了什么',
-    category: 'RECORD',
+    memoryType: 'NOTE',
     content: '今天发生了：\n\n我当时最在意的是：\n\n以后再回看，我想记住的是：',
     tags: '日常 片段',
   },
   {
-    id: 'record-message',
-    label: '留一句话',
-    category: 'RECORD',
-    content: '我想留给家人的一句话是：\n\n我为什么想说这句话：\n\n希望以后看到时能想起：',
-    tags: '家人 留言',
+    id: 'knowledge-learning',
+    label: '记下一条新知',
+    memoryType: 'KNOWLEDGE',
+    content: '我今天学到的是：\n\n它适合用在：\n\n下次我会这样实践：',
+    tags: '新知 学习',
   },
   {
-    id: 'experience-lesson',
-    label: '沉淀一个经验',
-    category: 'EXPERIENCE',
-    content: '这件事发生在：\n\n我踩过的坑或学到的经验是：\n\n如果以后再遇到类似情况，我建议：',
-    tags: '经验 提醒',
+    id: 'insight-lesson',
+    label: '留下一次感悟',
+    memoryType: 'INSIGHT',
+    content: '这件事让我意识到：\n\n我过去忽略了：\n\n以后我想提醒自己：',
+    tags: '感悟 复盘',
   },
   {
-    id: 'experience-health',
-    label: '留一个提醒',
-    category: 'EXPERIENCE',
-    content: '我想留下的提醒是：\n\n这个提醒来自什么经历：\n\n以后最适合在什么场景用上：',
-    tags: '提醒 家庭',
+    id: 'experience-story',
+    label: '记录一段经历',
+    memoryType: 'EXPERIENCE',
+    content: '这件事发生在：\n\n事情的经过是：\n\n我想保留下来的细节是：',
+    tags: '经历 故事',
   },
   {
-    id: 'observation-signal',
+    id: 'observation-follow-up',
     label: '记录一条观察',
-    category: 'OBSERVATION',
+    memoryType: 'OBSERVATION',
     content: '我观察到的具体情况是：\n\n我想继续留意的是：\n\n下次复核时想确认：',
     tags: '观察 跟进',
   },
   {
-    id: 'observation-care',
-    label: '照护跟进',
-    category: 'OBSERVATION',
-    content: '今天注意到的照护线索：\n\n可能相关的原因：\n\n这周可以轻量跟进的是：',
-    tags: '照护 复核',
+    id: 'plan-reminder',
+    label: '制定一个计划',
+    memoryType: 'PLAN',
+    content: '我准备做的是：\n\n开始时间或触发条件：\n\n完成后我想复盘：',
+    tags: '计划 提醒',
   },
 ];
-
-const validMemoryTypes = new Set<MemoryEntryType>([
-  'NOTE',
-  'KNOWLEDGE',
-  'INSIGHT',
-  'EXPERIENCE',
-  'OBSERVATION',
-  'PREFERENCE',
-  'PLAN',
-]);
-
-const validGrowthCategories = new Set<GrowthGuardCategory>([
-  'POSTURE',
-  'DENTAL',
-  'VISION',
-  'SLEEP',
-  'EXERCISE',
-  'SCREEN_TIME',
-  'EMOTION',
-  'COMMUNICATION',
-  'OTHER',
-]);
-
-function draftKey(userId?: number, familyId?: number | null, relatedUserId?: number | null) {
-  if (!userId || !familyId) return '';
-  return `familyagent:write-memory-draft:${DRAFT_VERSION}:${userId}:${familyId}:${relatedUserId || 'self'}`;
-}
-
-function formatTags(raw: string) {
-  return raw
-    .split(/[,，\s]+/)
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, 8);
-}
-
-function memberDisplayName(member?: FamilyMember | null) {
-  if (!member) return '';
-  return (
-    member.relationshipLabel?.trim() ||
-    member.nickname?.trim() ||
-    member.username?.trim() ||
-    `用户 ${member.userId}`
-  );
-}
-
-function normalizeVisibility(value?: string): DiaryVisibility | null {
-  if (
-    value === 'PRIVATE' ||
-    value === 'FAMILY_VISIBLE' ||
-    value === 'CARE_VISIBLE' ||
-    value === 'LEGACY_VISIBLE'
-  )
-    return value;
-  return null;
-}
-
-function defaultVisibilityForCategory(category: WriteCategory): DiaryVisibility {
-  return category === 'OBSERVATION' ? 'CARE_VISIBLE' : 'FAMILY_VISIBLE';
-}
-
-function defaultMemoryTypeForQuery(type?: string): MemoryEntryType {
-  const normalized = type?.trim().toUpperCase();
-  if (normalized && validMemoryTypes.has(normalized)) return normalized;
-  if (normalized === 'LEARNING' || normalized === 'ELDER_ADVICE') return 'KNOWLEDGE';
-  if (normalized === 'MISTAKE' || normalized === 'VALUE') return 'INSIGHT';
-  if (normalized === 'FAMILY_STORY') return 'EXPERIENCE';
-  if (normalized === 'GROWTH_RISK') return 'OBSERVATION';
-  if (normalized === 'HEALTH_REMINDER') return 'PLAN';
-  return 'NOTE';
-}
-
-function categoryForMemoryType(type: MemoryEntryType): WriteCategory {
-  if (type === 'OBSERVATION') return 'OBSERVATION';
-  if (type === 'NOTE' || type === 'INSIGHT') return 'RECORD';
-  return 'EXPERIENCE';
-}
-
-function memoryTypeForDiaryEntry(type?: string): MemoryEntryType {
-  if (type === 'LESSON') return 'KNOWLEDGE';
-  if (type === 'EMOTION' || type === 'SELF_REFLECTION') return 'INSIGHT';
-  return 'NOTE';
-}
-
-function defaultGrowthCategoryForQuery(category?: string): GrowthGuardCategory {
-  if (category && validGrowthCategories.has(category as GrowthGuardCategory)) {
-    return category as GrowthGuardCategory;
-  }
-  return 'OTHER';
-}
-
-function organizeScene(category: WriteCategory) {
-  if (category === 'EXPERIENCE') return 'HERITAGE' as const;
-  if (category === 'OBSERVATION') return 'GROWTH_GUARD' as const;
-  return 'DIARY' as const;
-}
-
-function primaryActionLabel(category: WriteCategory) {
-  if (category === 'EXPERIENCE') return '保存经验';
-  if (category === 'OBSERVATION') return '保存观察';
-  return '保存记录';
-}
-
-function successLabel(category: WriteCategory) {
-  if (category === 'EXPERIENCE') return '经验已保存到记忆库';
-  if (category === 'OBSERVATION') return '观察已保存到记忆库';
-  return '记录已保存到记忆库';
-}
-
-function updatedSuccessLabel(category: WriteCategory) {
-  if (category === 'EXPERIENCE') return '经验已更新';
-  if (category === 'OBSERVATION') return '观察已更新';
-  return '记录已更新';
-}
-
-function categoryFromLibraryItem(item?: MemoryLibraryItem | null): WriteCategory {
-  if (item?.sourceType === 'FAMILY_EXPERIENCE') return 'EXPERIENCE';
-  if (item?.sourceType === 'GROWTH_OBSERVATION') return 'OBSERVATION';
-  return 'RECORD';
-}
-
-function editTypeFromState(memoryType: MemoryEntryType) {
-  return memoryType;
-}
-
-function titleFromFirstLine(value: string) {
-  return (
-    value
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .find(Boolean)
-      ?.slice(0, 120) || ''
-  );
-}
-
-function splitFirstLineTitle(value: string) {
-  const lines = value.trim().replace(/\r\n/g, '\n').split('\n');
-  const titleIndex = lines.findIndex((line) => line.trim());
-  if (titleIndex < 0) return { title: '', body: '' };
-
-  const firstLineTitle = lines[titleIndex].trim().slice(0, 120);
-  const body = lines
-    .slice(titleIndex + 1)
-    .join('\n')
-    .trim();
-  return {
-    title: firstLineTitle,
-    body: body || value.trim(),
-  };
-}
-
-function resolveEditorContent(content: string, title: string) {
-  const body = content.trim();
-  const explicitTitle = title.trim();
-  if (explicitTitle) {
-    return { title: explicitTitle.slice(0, 120), body };
-  }
-  return splitFirstLineTitle(body);
-}
-
-interface DiaryComposerProps {
-  editItem?: MemoryLibraryItem | null;
-  onSaved?: () => void;
-}
 
 export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps) {
   const searchParams = useSearchParams();
   const user = useAuthStore((state) => state.user);
-  const {
-    families,
-    activeFamilyId,
-    setActiveFamilyId,
-    isLoading: loadingFamilies,
-  } = useViewerRole();
-
+  const { families, activeFamilyId, setActiveFamilyId, isLoading } = useViewerRole();
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [selectedFamilyId, setSelectedFamilyId] = useState<number | null>(null);
-  const [category, setCategory] = useState<WriteCategory>('RECORD');
   const [content, setContent] = useState('');
   const [title, setTitle] = useState('');
   const [tagText, setTagText] = useState('');
-  const [visibility, setVisibility] = useState<DiaryVisibility>('FAMILY_VISIBLE');
-  const [relatedUserId, setRelatedUserId] = useState<number | undefined>(undefined);
-  const [diaryEntryType, setDiaryEntryType] = useState<DiaryEntryType>('DAILY');
-  const [memoryType, setMemoryType] = useState<MemoryEntryType>('NOTE');
-  const [growthCategory, setGrowthCategory] = useState<GrowthGuardCategory>('OTHER');
-  const [growthSeverity, setGrowthSeverity] = useState(3);
+  const [visibility, setVisibility] = useState<MemoryScope>('FAMILY_VISIBLE');
+  const [relatedUserId, setRelatedUserId] = useState<number | undefined>();
+  const [memoryType, setMemoryType] = useState<MemoryContentType>('NOTE');
   const [showTemplates, setShowTemplates] = useState(false);
   const [draftStatus, setDraftStatus] = useState('');
   const [saving, setSaving] = useState(false);
   const [organizing, setOrganizing] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-
-  const isEditingExisting = Boolean(editItem);
   const hydratedDraftKeyRef = useRef('');
-  const suppressDraftSaveRef = useRef(false);
-  const writeCategoryAppliedKeyRef = useRef('');
-  const prefillAppliedKeyRef = useRef('');
   const successTimerRef = useRef<number | null>(null);
 
-  const requestedFamilyId = useMemo(() => {
-    const value = Number(searchParams.get('familyId'));
-    return Number.isFinite(value) && value > 0 ? value : null;
-  }, [searchParams]);
-
-  const requestedTargetUserId = useMemo(() => {
-    const raw = searchParams.get('targetUserId') || searchParams.get('relatedUserId');
-    const value = Number(raw);
-    return Number.isFinite(value) && value > 0 ? value : null;
-  }, [searchParams]);
-
-  const requestedTargetMemberName = useMemo(
-    () => searchParams.get('relatedMemberName')?.trim() || '',
-    [searchParams],
+  const requestedFamilyId = positiveNumber(searchParams.get('familyId'));
+  const requestedTargetUserId = positiveNumber(
+    searchParams.get('targetUserId') || searchParams.get('relatedUserId'),
   );
-
-  const requestedMemoryType = useMemo(
-    () => searchParams.get('memoryType')?.trim() || searchParams.get('type')?.trim() || '',
-    [searchParams],
+  const requestedMemoryType = normalizeMemoryType(
+    searchParams.get('memoryType') || searchParams.get('type'),
   );
-
-  const requestedWriteCategory = useMemo(
-    () => searchParams.get('writeCategory')?.trim().toUpperCase() || '',
-    [searchParams],
-  );
-
-  const requestedGrowthCategory = useMemo(
-    () => searchParams.get('growthCategory')?.trim() || searchParams.get('category')?.trim() || '',
-    [searchParams],
-  );
-
-  const requestedPrefill = useMemo(
-    () => ({
-      title: searchParams.get('prefillTitle')?.trim() || '',
-      content: searchParams.get('prefillContent')?.trim() || '',
-      tags: searchParams.get('prefillTags')?.trim() || '',
-      visibility: normalizeVisibility(searchParams.get('prefillVisibility')?.trim() || ''),
-    }),
-    [searchParams],
-  );
-
   const selectedFamily = useMemo(
     () => families.find((family) => family.id === selectedFamilyId) || null,
     [families, selectedFamilyId],
   );
-
-  const selectedMember = useMemo(
+  const relatedMember = useMemo(
     () => members.find((member) => member.userId === relatedUserId) || null,
     [members, relatedUserId],
   );
-
-  const relatedMemberLabel = useMemo(() => {
-    if (selectedMember) return memberDisplayName(selectedMember);
-    if (requestedTargetMemberName) return requestedTargetMemberName;
-    if (requestedTargetUserId) return `用户 ${requestedTargetUserId}`;
-    return '';
-  }, [requestedTargetMemberName, requestedTargetUserId, selectedMember]);
-
   const visibleTemplates = useMemo(
-    () => starterTemplates.filter((item) => item.category === category),
-    [category],
+    () => STARTER_TEMPLATES.filter((item) => item.memoryType === memoryType),
+    [memoryType],
   );
-
-  const hasDraftContent = Boolean(content.trim() || title.trim() || tagText.trim());
-
-  const clearForm = useCallback(
-    (nextCategory?: WriteCategory) => {
-      const categoryToUse = nextCategory || category;
-      setContent('');
-      setTitle('');
-      setTagText('');
-      setVisibility(defaultVisibilityForCategory(categoryToUse));
-      setDiaryEntryType('DAILY');
-      setMemoryType(
-        categoryToUse === 'OBSERVATION'
-          ? 'OBSERVATION'
-          : categoryToUse === 'EXPERIENCE'
-            ? 'EXPERIENCE'
-            : 'NOTE',
-      );
-      setGrowthCategory('OTHER');
-      setGrowthSeverity(3);
-      if (categoryToUse !== 'OBSERVATION') {
-        setRelatedUserId(requestedTargetUserId || undefined);
-      }
-      setDraftStatus('');
-    },
-    [category, requestedTargetUserId],
-  );
-
-  const flashSuccess = useCallback((message: string) => {
-    if (successTimerRef.current !== null) window.clearTimeout(successTimerRef.current);
-    setSuccess(message);
-    successTimerRef.current = window.setTimeout(() => setSuccess(''), 2500);
-  }, []);
-
-  const persistDraftNow = useCallback(
-    (message?: string) => {
-      const key = draftKey(
-        user?.id,
-        selectedFamilyId,
-        requestedTargetUserId || relatedUserId || null,
-      );
-      if (!key || typeof window === 'undefined') return;
-      if (!hasDraftContent) {
-        localStorage.removeItem(key);
-        if (message) setDraftStatus(message);
-        return;
-      }
-      const payload: WriteDraft = {
-        category,
-        content,
-        title,
-        tagText,
-        visibility,
-        relatedUserId,
-        diaryEntryType,
-        memoryType,
-        growthCategory,
-        growthSeverity,
-        updatedAt: new Date().toISOString(),
-      };
-      localStorage.setItem(key, JSON.stringify(payload));
-      if (message) setDraftStatus(message);
-    },
-    [
-      category,
-      content,
-      diaryEntryType,
-      growthCategory,
-      growthSeverity,
-      hasDraftContent,
-      memoryType,
-      relatedUserId,
-      requestedTargetUserId,
-      selectedFamilyId,
-      tagText,
-      title,
-      user?.id,
-      visibility,
-    ],
-  );
+  const draftStorageKey = draftKey(user?.id, selectedFamilyId, relatedUserId);
 
   useEffect(() => {
-    const nextFamilyId =
-      (editItem?.familyId && families.some((family) => family.id === editItem.familyId)
-        ? editItem.familyId
-        : requestedFamilyId && families.some((family) => family.id === requestedFamilyId)
-          ? requestedFamilyId
-          : activeFamilyId && families.some((family) => family.id === activeFamilyId)
-            ? activeFamilyId
-            : families[0]?.id) || null;
+    if (families.length === 0) return;
+    const nextFamilyId = requestedFamilyId || activeFamilyId || families[0].id;
     setSelectedFamilyId(nextFamilyId);
-    if (nextFamilyId && activeFamilyId !== nextFamilyId) {
-      setActiveFamilyId(nextFamilyId);
-    }
-  }, [activeFamilyId, editItem?.familyId, families, requestedFamilyId, setActiveFamilyId]);
+    if (activeFamilyId !== nextFamilyId) setActiveFamilyId(nextFamilyId);
+  }, [activeFamilyId, families, requestedFamilyId, setActiveFamilyId]);
 
   useEffect(() => {
     if (!selectedFamilyId) {
       setMembers([]);
       return;
     }
-    let cancelled = false;
-    familyApi
-      .getMembers(selectedFamilyId)
-      .then((result) => {
-        if (!cancelled) setMembers(Array.isArray(result) ? result : []);
-      })
-      .catch(() => {
-        if (!cancelled) setMembers([]);
-      });
-    return () => {
-      cancelled = true;
-    };
+    let active = true;
+    familyApi.getMembers(selectedFamilyId)
+      .then((items) => active && setMembers(items))
+      .catch(() => active && setMembers([]));
+    return () => { active = false; };
   }, [selectedFamilyId]);
 
   useEffect(() => {
-    if (isEditingExisting) return;
-    const requestedType = defaultMemoryTypeForQuery(requestedMemoryType);
-    const initialCategory =
-      requestedWriteCategory === 'OBSERVATION' || requestedGrowthCategory
-        ? 'OBSERVATION'
-        : requestedWriteCategory === 'EXPERIENCE'
-          ? 'EXPERIENCE'
-          : requestedMemoryType
-            ? categoryForMemoryType(requestedType)
-            : 'RECORD';
-    const key = `${requestedWriteCategory}:${requestedMemoryType}:${requestedGrowthCategory}:${requestedTargetUserId || ''}`;
-    if (writeCategoryAppliedKeyRef.current === key) return;
-    writeCategoryAppliedKeyRef.current = key;
-
-    setCategory(initialCategory);
-    setVisibility(defaultVisibilityForCategory(initialCategory));
-    setMemoryType(
-      requestedMemoryType
-        ? requestedType
-        : initialCategory === 'OBSERVATION'
-          ? 'OBSERVATION'
-          : initialCategory === 'EXPERIENCE'
-            ? 'EXPERIENCE'
-            : 'NOTE',
-    );
-    setGrowthCategory(defaultGrowthCategoryForQuery(requestedGrowthCategory));
+    if (editItem) {
+      setSelectedFamilyId(editItem.familyId);
+      setTitle(editItem.title || '');
+      setContent(editItem.body || '');
+      setTagText((editItem.tags || []).join(' '));
+      setVisibility(normalizeVisibility(editItem.visibility) || 'FAMILY_VISIBLE');
+      setMemoryType(normalizeMemoryType(editItem.type) || 'NOTE');
+      setRelatedUserId(editItem.memberUserId);
+      return;
+    }
+    if (requestedMemoryType) setMemoryType(requestedMemoryType);
     if (requestedTargetUserId) setRelatedUserId(requestedTargetUserId);
-  }, [
-    isEditingExisting,
-    requestedGrowthCategory,
-    requestedMemoryType,
-    requestedTargetUserId,
-    requestedWriteCategory,
-  ]);
+    const prefillTitle = searchParams.get('prefillTitle')?.trim();
+    const prefillContent = searchParams.get('prefillContent')?.trim();
+    const prefillTags = searchParams.get('prefillTags')?.trim();
+    const prefillVisibility = normalizeVisibility(searchParams.get('prefillVisibility') || '');
+    if (prefillTitle) setTitle(prefillTitle);
+    if (prefillContent) setContent(prefillContent);
+    if (prefillTags) setTagText(prefillTags);
+    if (prefillVisibility) setVisibility(prefillVisibility);
+  }, [editItem, requestedMemoryType, requestedTargetUserId, searchParams]);
 
   useEffect(() => {
-    if (!editItem) return;
-    const nextCategory = categoryFromLibraryItem(editItem);
-    setCategory(nextCategory);
-    setSelectedFamilyId(editItem.familyId);
-    if (activeFamilyId !== editItem.familyId) {
-      setActiveFamilyId(editItem.familyId);
-    }
-    setContent(editItem.body || '');
-    setTitle(editItem.title || titleFromFirstLine(editItem.body || ''));
-    setTagText((editItem.tags || []).join(' '));
-    setVisibility(
-      (normalizeVisibility(editItem.visibility) ||
-        defaultVisibilityForCategory(nextCategory)) as DiaryVisibility,
-    );
-    setRelatedUserId(editItem.memberUserId || undefined);
-    setDiaryEntryType('DAILY');
-    setMemoryType(defaultMemoryTypeForQuery(editItem.type));
-    setGrowthCategory(
-      nextCategory === 'OBSERVATION' ? defaultGrowthCategoryForQuery(editItem.type) : 'OTHER',
-    );
-    setGrowthSeverity(3);
-    setDraftStatus('正在编辑已有内容');
-    setError('');
-    setSuccess('');
-  }, [activeFamilyId, editItem, setActiveFamilyId]);
+    if (editItem || !draftStorageKey || hydratedDraftKeyRef.current === draftStorageKey) return;
+    hydratedDraftKeyRef.current = draftStorageKey;
+    const stored = readDraft(draftStorageKey);
+    if (!stored) return;
+    setContent(stored.content);
+    setTitle(stored.title);
+    setTagText(stored.tagText);
+    setVisibility(stored.visibility);
+    setRelatedUserId(stored.relatedUserId);
+    setMemoryType(stored.memoryType);
+    setDraftStatus('已恢复本地草稿');
+  }, [draftStorageKey, editItem]);
 
   useEffect(() => {
-    if (isEditingExisting) return;
-    const key = draftKey(user?.id, selectedFamilyId, requestedTargetUserId || null);
-    hydratedDraftKeyRef.current = key;
-    suppressDraftSaveRef.current = true;
-    setDraftStatus('');
-
-    if (!key || typeof window === 'undefined') return;
-
-    const raw = localStorage.getItem(key);
-    if (!raw) {
-      // No draft for this family/user — clear any content left from the previous family.
-      setContent('');
-      setTitle('');
-      setTagText('');
-      setVisibility(defaultVisibilityForCategory('RECORD'));
-      setDiaryEntryType('DAILY');
-      setMemoryType('NOTE');
-      setGrowthCategory('OTHER');
-      setGrowthSeverity(3);
-      setRelatedUserId(requestedTargetUserId || undefined);
-      suppressDraftSaveRef.current = false;
-      return;
-    }
-
-    try {
-      const saved = JSON.parse(raw) as Partial<WriteDraft>;
-      setCategory(saved.category || 'RECORD');
-      setContent(saved.content || '');
-      setTitle(saved.title || '');
-      setTagText(saved.tagText || '');
-      setVisibility(
-        normalizeVisibility(saved.visibility) ||
-          defaultVisibilityForCategory(saved.category || 'RECORD'),
-      );
-      setRelatedUserId(saved.relatedUserId || requestedTargetUserId || undefined);
-      setDiaryEntryType(saved.diaryEntryType || 'DAILY');
-      setMemoryType(defaultMemoryTypeForQuery(saved.memoryType));
-      setGrowthCategory(
-        saved.growthCategory && validGrowthCategories.has(saved.growthCategory)
-          ? saved.growthCategory
-          : defaultGrowthCategoryForQuery(requestedGrowthCategory),
-      );
-      setGrowthSeverity(
-        saved.growthSeverity && saved.growthSeverity >= 1 && saved.growthSeverity <= 5
-          ? saved.growthSeverity
-          : 3,
-      );
-      setDraftStatus('已恢复上次未提交的草稿');
-    } catch {
-      localStorage.removeItem(key);
-    } finally {
-      suppressDraftSaveRef.current = false;
-    }
-  }, [
-    isEditingExisting,
-    requestedGrowthCategory,
-    requestedTargetUserId,
-    selectedFamilyId,
-    user?.id,
-  ]);
-
-  useEffect(() => {
-    if (isEditingExisting) return;
-    if (!selectedFamilyId) return;
-    if (
-      !requestedPrefill.title &&
-      !requestedPrefill.content &&
-      !requestedPrefill.tags &&
-      !requestedPrefill.visibility
-    )
-      return;
-    const key = `${selectedFamilyId}:${requestedPrefill.title}:${requestedPrefill.content}:${requestedPrefill.tags}:${requestedPrefill.visibility || ''}`;
-    if (prefillAppliedKeyRef.current === `prefill:${key}`) return;
-    prefillAppliedKeyRef.current = `prefill:${key}`;
-
-    setCategory('RECORD');
-    setContent(requestedPrefill.content);
-    setTitle(requestedPrefill.title);
-    setTagText(requestedPrefill.tags);
-    setVisibility(requestedPrefill.visibility || 'FAMILY_VISIBLE');
-    setDraftStatus('已根据上下文填入内容，可继续修改后保存');
-  }, [isEditingExisting, requestedPrefill, selectedFamilyId]);
-
-  useEffect(() => {
-    if (isEditingExisting) return;
-    const key = draftKey(
-      user?.id,
-      selectedFamilyId,
-      requestedTargetUserId || relatedUserId || null,
-    );
-    if (!key || typeof window === 'undefined' || hydratedDraftKeyRef.current !== key) return;
-    if (suppressDraftSaveRef.current) {
-      suppressDraftSaveRef.current = false;
-      return;
-    }
-
+    if (editItem || !draftStorageKey || !content.trim()) return;
     const timer = window.setTimeout(() => {
-      persistDraftNow(hasDraftContent ? '草稿已自动保存在本地' : '');
+      const draft: UnifiedMemoryDraft = {
+        content,
+        title,
+        tagText,
+        visibility,
+        relatedUserId,
+        memoryType,
+        updatedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(draftStorageKey, JSON.stringify(draft));
+      setDraftStatus('草稿已自动保存');
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [
-    hasDraftContent,
-    isEditingExisting,
-    persistDraftNow,
-    relatedUserId,
-    requestedTargetUserId,
-    selectedFamilyId,
-    user?.id,
-  ]);
+  }, [content, draftStorageKey, editItem, memoryType, relatedUserId, tagText, title, visibility]);
 
-  const applyTemplate = useCallback((template: StarterTemplate) => {
-    setCategory(template.category);
-    setMemoryType(
-      template.category === 'OBSERVATION'
-        ? 'OBSERVATION'
-        : template.category === 'EXPERIENCE'
-          ? 'EXPERIENCE'
-          : 'NOTE',
-    );
-    setContent(template.content);
-    setTagText(template.tags || '');
-    setVisibility(defaultVisibilityForCategory(template.category));
-    setShowTemplates(false);
-    setDraftStatus(`已填入“${template.label}”开头`);
+  useEffect(() => () => {
+    if (successTimerRef.current) window.clearTimeout(successTimerRef.current);
   }, []);
 
-  const clearDraft = useCallback(() => {
-    const key = draftKey(
-      user?.id,
-      selectedFamilyId,
-      requestedTargetUserId || relatedUserId || null,
-    );
-    if (key && typeof window !== 'undefined') {
-      localStorage.removeItem(key);
-    }
-    clearForm(category);
-  }, [category, clearForm, relatedUserId, requestedTargetUserId, selectedFamilyId, user?.id]);
+  const flashSuccess = useCallback((message: string) => {
+    setSuccess(message);
+    if (successTimerRef.current) window.clearTimeout(successTimerRef.current);
+    successTimerRef.current = window.setTimeout(() => setSuccess(''), 2600);
+  }, []);
 
-  const handleMemoryTypeChange = useCallback(
-    (nextType: MemoryEntryType) => {
-      const nextCategory = categoryForMemoryType(nextType);
-      setMemoryType(nextType);
-      setCategory(nextCategory);
-      setVisibility((current) => {
-        if (nextCategory === 'OBSERVATION') return current === 'PRIVATE' ? 'CARE_VISIBLE' : current;
-        return current;
-      });
-      if (nextCategory !== 'OBSERVATION') {
-        setRelatedUserId(requestedTargetUserId || undefined);
-      }
-    },
-    [requestedTargetUserId],
-  );
+  const handleMemoryTypeChange = useCallback((nextType: MemoryContentType) => {
+    setMemoryType(nextType);
+    if (nextType === 'OBSERVATION' && visibility === 'FAMILY_VISIBLE') {
+      setVisibility('CARE_VISIBLE');
+    }
+    if (nextType !== 'OBSERVATION') setRelatedUserId(undefined);
+  }, [visibility]);
+
+  const applyTemplate = useCallback((template: StarterTemplate) => {
+    setMemoryType(template.memoryType);
+    setContent(template.content);
+    setTagText(template.tags || '');
+    if (template.memoryType === 'OBSERVATION') setVisibility('CARE_VISIBLE');
+    setShowTemplates(false);
+  }, []);
 
   const handleOrganize = useCallback(async () => {
-    if (!content.trim() || !selectedFamilyId) return;
+    if (!selectedFamilyId || !content.trim()) return;
     setOrganizing(true);
     setError('');
     try {
       const result = await memoryApi.organizeDraft({
         familyId: selectedFamilyId,
-        content,
-        scene: organizeScene(category),
-        familyContext: selectedFamily?.description || selectedFamily?.name || '',
-        currentType:
-          category === 'RECORD'
-            ? diaryEntryType
-            : category === 'EXPERIENCE'
-              ? memoryType
-              : growthCategory,
+        content: content.trim(),
+        memoryLibrary: 'FAMILY',
+        familyContext: selectedFamily?.name || '',
+        currentMemoryType: memoryType,
         currentVisibility: visibility,
-        target: relatedMemberLabel,
+        target: relatedMember ? memberDisplayName(relatedMember) : '',
+        requestId: `organize-memory-${Date.now()}`,
       });
-      const draft = result.data;
-      const organizedContent = (draft.content || content).trim();
-      const organizedTitle =
-        draft.title?.trim() || title.trim() || titleFromFirstLine(organizedContent);
-      setTitle(organizedTitle);
-      setContent(organizedContent);
-      if (draft.tags?.length) setTagText(draft.tags.join(' '));
-      if (category === 'RECORD') {
-        setDiaryEntryType(
-          draft.diaryEntryType &&
-            [
-              'DAILY',
-              'IMPORTANT_EVENT',
-              'LESSON',
-              'EMOTION',
-              'MESSAGE_TO_FAMILY',
-              'SELF_REFLECTION',
-            ].includes(draft.diaryEntryType)
-            ? (draft.diaryEntryType as DiaryEntryType)
-            : diaryEntryType,
-        );
-        setMemoryType(memoryTypeForDiaryEntry(draft.diaryEntryType));
-        setVisibility(normalizeVisibility(draft.diaryVisibility) || visibility);
-      } else if (category === 'EXPERIENCE') {
-        setMemoryType(defaultMemoryTypeForQuery(draft.memoryType || memoryType));
-        setVisibility(normalizeVisibility(draft.memoryScope) || visibility);
-      } else {
-        setMemoryType('OBSERVATION');
-        setGrowthCategory(
-          draft.growthCategory &&
-            validGrowthCategories.has(draft.growthCategory as GrowthGuardCategory)
-            ? (draft.growthCategory as GrowthGuardCategory)
-            : growthCategory,
-        );
-        setGrowthSeverity(
-          draft.growthSeverity && draft.growthSeverity >= 1 && draft.growthSeverity <= 5
-            ? draft.growthSeverity
-            : growthSeverity,
-        );
-        setVisibility(normalizeVisibility(draft.memoryScope) || visibility);
-      }
-      setDraftStatus(`已整理${draft.reason ? `：${draft.reason}` : ''}`);
-      flashSuccess('已整理到可直接保存的版本');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '整理失败，请稍后再试');
+      setTitle(result.data.title || title);
+      setContent(result.data.content || content);
+      setTagText((result.data.tags || []).join(' '));
+      setMemoryType(result.data.memoryType);
+      setVisibility(normalizeVisibility(result.data.visibility) || visibility);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '整理失败，请稍后重试。');
     } finally {
       setOrganizing(false);
     }
-  }, [
-    category,
-    content,
-    diaryEntryType,
-    flashSuccess,
-    growthCategory,
-    growthSeverity,
-    memoryType,
-    relatedMemberLabel,
-    selectedFamily,
-    selectedFamilyId,
-    title,
-    visibility,
-  ]);
+  }, [content, memoryType, relatedMember, selectedFamily, selectedFamilyId, title, visibility]);
 
   const handleSave = useCallback(async () => {
-    if (saving) return;
-    if (!selectedFamilyId) {
-      setError('请先选择一个家族空间。');
-      return;
-    }
-    if (!content.trim()) {
-      setError('先写一点内容再保存。');
-      return;
-    }
-    persistDraftNow('正在保存，已先保留本地草稿');
+    if (!selectedFamilyId || !content.trim()) return;
     setSaving(true);
     setError('');
-
     try {
-      const tags = formatTags(tagText);
-      const contentText = content.trim();
-      const editorContent = resolveEditorContent(contentText, title);
-      const resolvedTitle = editorContent.title || titleFromFirstLine(contentText);
-      const bodyText = editorContent.body || contentText;
+      const resolvedTitle = title.trim() || titleFromFirstLine(content);
       if (editItem) {
         await memoryLibraryApi.updateItem({
-          familyId: selectedFamilyId,
+          familyId: editItem.familyId,
           itemId: editItem.id,
-          title: resolvedTitle || undefined,
-          body: bodyText,
-          type: editTypeFromState(memoryType),
+          title: resolvedTitle,
+          body: content.trim(),
+          type: memoryType,
           visibility,
-          tags,
+          tags: formatTags(tagText),
         });
-        flashSuccess(updatedSuccessLabel(category));
-        onSaved?.();
-        return;
+        flashSuccess('记忆已更新');
+      } else {
+        await writeMemoryApi.create({
+          familyId: selectedFamilyId,
+          memoryLibrary: 'FAMILY',
+          memoryType,
+          content: content.trim(),
+          title: resolvedTitle,
+          tags: formatTags(tagText),
+          visibility,
+          relatedUserId: memoryType === 'OBSERVATION' ? relatedUserId : undefined,
+          metadata: {
+            source: 'MEMORY_LIBRARY_COMPOSER',
+            authorName: user?.nickname || user?.username || '',
+            relatedMemberName: relatedMember ? memberDisplayName(relatedMember) : null,
+          },
+        });
+        if (draftStorageKey) localStorage.removeItem(draftStorageKey);
+        setContent('');
+        setTitle('');
+        setTagText('');
+        setRelatedUserId(undefined);
+        setMemoryType('NOTE');
+        setVisibility('FAMILY_VISIBLE');
+        setDraftStatus('');
+        flashSuccess('记忆已保存到家庭记忆库');
       }
-
-      await writeMemoryApi.create({
-        familyId: selectedFamilyId,
-        writeCategory: category,
-        content: bodyText,
-        title: resolvedTitle || undefined,
-        tags,
-        visibility: category === 'OBSERVATION' ? (visibility as MemoryScope) : visibility,
-        relatedUserId: relatedUserId || undefined,
-        diaryEntryType,
-        memoryType,
-        growthCategory,
-        growthSeverity,
-        metadata: {
-          source: 'WRITE_MEMORY_SIMPLIFIED',
-          authorName: user?.nickname || user?.username,
-          relatedMemberName: relatedMemberLabel || undefined,
-          observerPerspective: category === 'OBSERVATION' ? 'FAMILY_MEMBER' : undefined,
-          evidenceType: category === 'OBSERVATION' ? 'OBSERVED_FACT' : undefined,
-        },
-      });
-
-      const key = draftKey(
-        user?.id,
-        selectedFamilyId,
-        requestedTargetUserId || relatedUserId || null,
-      );
-      if (key && typeof window !== 'undefined') {
-        localStorage.removeItem(key);
-      }
-      clearForm(category);
-      flashSuccess(successLabel(category));
       onSaved?.();
-    } catch (err) {
-      persistDraftNow('保存失败，草稿已保留');
-      setError(err instanceof Error ? err.message : '保存失败，请稍后再试');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '保存失败，请稍后重试。');
     } finally {
       setSaving(false);
     }
-  }, [
-    category,
-    clearForm,
-    content,
-    diaryEntryType,
-    editItem,
-    flashSuccess,
-    growthCategory,
-    growthSeverity,
-    memoryType,
-    onSaved,
-    persistDraftNow,
-    relatedMemberLabel,
-    relatedUserId,
-    requestedTargetUserId,
-    saving,
-    selectedFamilyId,
-    tagText,
-    title,
-    user?.id,
-    user?.nickname,
-    user?.username,
-    visibility,
-  ]);
+  }, [content, draftStorageKey, editItem, flashSuccess, memoryType, onSaved, relatedMember, relatedUserId, selectedFamilyId, tagText, title, user, visibility]);
 
-  if (loadingFamilies) {
+  const clearDraft = useCallback(() => {
+    if (draftStorageKey) localStorage.removeItem(draftStorageKey);
+    setContent('');
+    setTitle('');
+    setTagText('');
+    setRelatedUserId(undefined);
+    setMemoryType('NOTE');
+    setVisibility('FAMILY_VISIBLE');
+    setDraftStatus('');
+  }, [draftStorageKey]);
+
+  if (isLoading) {
     return (
       <WorkbenchSurface className="flex h-60 items-center justify-center text-stone-500">
         <RefreshCw className="mr-2 h-5 w-5 animate-spin text-sky-700" />
@@ -902,26 +347,21 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
       <WorkbenchEmptyState
         icon={<Users className="h-6 w-6" />}
         title="先创建一个家族空间"
-        action={
+        action={(
           <Link
             href="/dashboard/family"
-            className="inline-flex h-10 items-center justify-center rounded-2xl bg-stone-950 px-4 text-sm font-medium text-white shadow-[0_16px_36px_rgba(24,39,32,0.14)] transition hover:bg-stone-800"
+            className="inline-flex h-10 items-center justify-center rounded-2xl bg-stone-950 px-4 text-sm font-medium text-white"
           >
             前往家族空间
           </Link>
-        }
+        )}
       />
     );
   }
 
   return (
     <WorkbenchPage className="max-w-[1500px]">
-      {error && (
-        <div className="rounded-md border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
+      {error && <div className="rounded-md border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
       {success && (
         <div className="flex items-center gap-2 rounded-md border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-800">
           <CheckCircle className="h-4 w-4 text-sky-700" />
@@ -930,73 +370,40 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
       )}
 
       <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          void handleSave();
-        }}
+        onSubmit={(event) => { event.preventDefault(); void handleSave(); }}
         onKeyDown={submitFormOnEnter}
         className="space-y-3"
       >
-        <div className="overflow-hidden rounded-[1.35rem] border border-sky-400 bg-white shadow-sm transition focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-100">
-          <label className="sr-only" htmlFor="memory-title-input">
-            记忆标题
-          </label>
+        <div className="overflow-hidden rounded-[1.35rem] border border-sky-400 bg-white shadow-sm focus-within:ring-2 focus-within:ring-sky-100">
           <input
-            id="memory-title-input"
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             maxLength={120}
             placeholder="给这条记忆写一个标题"
-            className="h-14 w-full border-0 border-b border-stone-100 bg-white px-5 text-lg font-semibold text-stone-950 outline-none placeholder:text-stone-300 focus:border-sky-200 sm:px-7"
+            aria-label="记忆标题"
+            className="h-14 w-full border-0 border-b border-stone-100 px-5 text-lg font-semibold outline-none placeholder:text-stone-300 sm:px-7"
           />
           <textarea
             value={content}
             onChange={(event) => setContent(event.target.value)}
             rows={14}
-            placeholder={
-              category === 'EXPERIENCE'
-                ? '把这次经历里值得以后再用上的经验写下来。'
-                : category === 'OBSERVATION'
-                  ? '写下你观察到的情况、想继续留意的点和下次复核方向。'
-                  : '直接写下此刻发生的事、感受、判断或想留给家人的一句话。'
-            }
-            className="min-h-[28rem] w-full resize-none border-0 bg-white px-5 py-5 text-base leading-8 text-stone-800 outline-none placeholder:text-stone-400 sm:px-7 sm:py-6"
+            placeholder="直接写下想长期保留的内容。"
+            className="min-h-[28rem] w-full resize-none border-0 px-5 py-5 text-base leading-8 text-stone-800 outline-none placeholder:text-stone-400 sm:px-7 sm:py-6"
           />
-
-          <div className="flex flex-col gap-3 px-3 pb-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-4">
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="flex flex-col gap-3 px-3 pb-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+            <div className="flex flex-wrap items-center gap-2">
               <DropdownMenu.Root open={showTemplates} onOpenChange={setShowTemplates}>
                 <DropdownMenu.Trigger asChild>
-                  <button
-                    type="button"
-                    className="inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-3 text-sm font-medium text-stone-500 transition hover:bg-stone-100 hover:text-stone-900"
-                  >
-                    不会开头
-                    <ChevronDown
-                      className={`h-3.5 w-3.5 transition-transform ${showTemplates ? 'rotate-180' : ''}`}
-                    />
+                  <button type="button" className="inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm text-stone-500 hover:bg-stone-100">
+                    不会开头 <ChevronDown className="h-3.5 w-3.5" />
                   </button>
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Portal>
-                  <DropdownMenu.Content
-                    align="start"
-                    side="top"
-                    sideOffset={8}
-                    avoidCollisions={false}
-                    collisionPadding={12}
-                    className="z-[70] w-72 max-w-[calc(100vw-3rem)] rounded-md border border-sky-100 bg-sky-50 p-3 shadow-xl"
-                  >
-                    <p className="mb-2 text-xs font-medium text-sky-800">
-                      {'\u4ece\u4e00\u53e5\u5f00\u5934\u5f00\u59cb'}
-                    </p>
-                    <div className="grid grid-cols-1 gap-2">
-                      {visibleTemplates.map((template) => (
+                  <DropdownMenu.Content className="z-[70] w-72 rounded-md border border-sky-100 bg-sky-50 p-3 shadow-xl" side="top" sideOffset={8}>
+                    <div className="grid gap-2">
+                      {(visibleTemplates.length > 0 ? visibleTemplates : STARTER_TEMPLATES).map((template) => (
                         <DropdownMenu.Item key={template.id} asChild>
-                          <button
-                            type="button"
-                            onClick={() => applyTemplate(template)}
-                            className="w-full rounded-md border border-sky-100 bg-white px-3 py-2 text-left text-xs font-medium text-sky-800 outline-none transition hover:bg-sky-100 focus:bg-sky-100"
-                          >
+                          <button type="button" onClick={() => applyTemplate(template)} className="rounded-md bg-white px-3 py-2 text-left text-xs text-sky-800 hover:bg-sky-100">
                             {template.label}
                           </button>
                         </DropdownMenu.Item>
@@ -1006,152 +413,131 @@ export default function DiaryComposer({ editItem, onSaved }: DiaryComposerProps)
                 </DropdownMenu.Portal>
               </DropdownMenu.Root>
               <VoiceInputButton
-                onTranscript={(text) => {
-                  setContent((current) => (current.trim() ? `${current.trim()}\n${text}` : text));
-                }}
+                onTranscript={(text) => setContent((current) => current.trim() ? `${current.trim()}\n${text}` : text)}
                 disabled={saving || organizing}
-                className="shrink-0"
               />
               <button
                 type="button"
                 onClick={() => void handleOrganize()}
                 disabled={!content.trim() || saving || organizing}
-                className="inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-3 text-sm font-medium text-sky-700 transition hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm text-sky-700 hover:bg-sky-50 disabled:opacity-50"
               >
-                {organizing ? (
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Sparkles className="h-4 w-4" />
-                )}
+                {organizing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                 帮我整理
               </button>
             </div>
-
-            <div className="flex min-w-0 flex-wrap items-center gap-3 sm:flex-1 sm:justify-end">
-              <span className="min-w-0 max-w-full truncate text-xs text-stone-400 sm:flex-1 sm:text-right">
-                {draftStatus || '草稿会自动保存在本地'}
-              </span>
-              {hasDraftContent && !isEditingExisting && (
-                <button
-                  type="button"
-                  onClick={clearDraft}
-                  className="shrink-0 whitespace-nowrap text-xs font-medium text-stone-400 transition hover:text-red-600"
-                >
-                  清空草稿
-                </button>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-stone-400">{draftStatus || '草稿会自动保存在本地'}</span>
+              {!editItem && content.trim() && (
+                <button type="button" onClick={clearDraft} className="text-xs text-stone-400 hover:text-red-600">清空草稿</button>
               )}
               <button
                 type="submit"
                 disabled={!selectedFamilyId || !content.trim() || saving}
-                className="inline-flex h-10 min-w-10 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-300"
-                aria-label={primaryActionLabel(category)}
+                className="inline-flex h-10 items-center gap-2 rounded-md bg-stone-950 px-4 text-sm text-white disabled:bg-stone-300"
               >
-                {saving ? (
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}
-                <span className="hidden sm:inline">
-                  {saving
-                    ? '正在保存...'
-                    : isEditingExisting
-                      ? '保存修改'
-                      : primaryActionLabel(category)}
-                </span>
+                {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {editItem ? '保存修改' : '保存记忆'}
               </button>
             </div>
           </div>
         </div>
 
-        {relatedMemberLabel && (
+        {relatedMember && (
           <div className="rounded-md border border-sky-100 bg-sky-50 px-3 py-2 text-sm text-sky-800">
-            当前内容会关联到 {relatedMemberLabel}。
+            当前内容会关联到 {memberDisplayName(relatedMember)}。
           </div>
         )}
 
         <div className="grid gap-3 rounded-md bg-stone-50 p-3 md:grid-cols-2 xl:grid-cols-4">
-          <label className="text-xs font-medium text-stone-500">
-            家族空间
-            <select
-              value={selectedFamilyId || ''}
-              onChange={(event) => {
-                const value = Number(event.target.value);
-                const nextFamilyId = Number.isFinite(value) && value > 0 ? value : null;
-                setSelectedFamilyId(nextFamilyId);
-                if (nextFamilyId) setActiveFamilyId(nextFamilyId);
-              }}
-              className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-800 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-            >
-              {families.map((family) => (
-                <option key={family.id} value={family.id}>
-                  {family.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="text-xs font-medium text-stone-500">
-            类型
-            <select
-              value={memoryType}
-              onChange={(event) => handleMemoryTypeChange(event.target.value as MemoryEntryType)}
-              className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-            >
-              {memoryTypeOptions.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="text-xs font-medium text-stone-500">
-            可见范围
-            <select
-              value={visibility}
-              onChange={(event) => setVisibility(event.target.value as DiaryVisibility)}
-              className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-            >
-              {visibilityOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
+          <SelectField label="家族空间" value={selectedFamilyId || ''} onChange={(value) => {
+            const nextFamilyId = positiveNumber(value);
+            setSelectedFamilyId(nextFamilyId);
+            if (nextFamilyId) setActiveFamilyId(nextFamilyId);
+          }} options={families.map((family) => ({ value: family.id, label: family.name }))} />
+          <SelectField label="类型" value={memoryType} onChange={(value) => handleMemoryTypeChange(value as MemoryContentType)} options={MEMORY_TYPES} />
+          <SelectField label="可见范围" value={visibility} onChange={(value) => setVisibility(value as MemoryScope)} options={VISIBILITY_OPTIONS} />
           <label className="text-xs font-medium text-stone-500">
             标签
-            <input
-              value={tagText}
-              onChange={(event) => setTagText(event.target.value)}
-              placeholder="例如：日常 经验 观察 照护"
-              className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-            />
+            <input value={tagText} onChange={(event) => setTagText(event.target.value)} placeholder="例如：日常 学习 照护" className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm outline-none" />
           </label>
-
           {memoryType === 'OBSERVATION' && (
-            <label className="text-xs font-medium text-stone-500">
-              关联成员（可选）
-              <select
-                value={relatedUserId || ''}
-                onChange={(event) => {
-                  const value = Number(event.target.value);
-                  setRelatedUserId(Number.isFinite(value) && value > 0 ? value : undefined);
-                }}
-                className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-              >
-                <option value="">不关联具体成员</option>
-                {members.map((member) => (
-                  <option key={member.userId} value={member.userId}>
-                    {memberDisplayName(member)}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <SelectField
+              label="关联成员（可选）"
+              value={relatedUserId || ''}
+              onChange={(value) => setRelatedUserId(positiveNumber(value) || undefined)}
+              options={[{ value: '', label: '不关联具体成员' }, ...members.map((member) => ({ value: member.userId, label: memberDisplayName(member) }))]}
+            />
           )}
         </div>
       </form>
     </WorkbenchPage>
   );
+}
+
+function SelectField({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string | number;
+  onChange: (value: string) => void;
+  options: { value: string | number; label: string }[];
+}) {
+  return (
+    <label className="text-xs font-medium text-stone-500">
+      {label}
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="mt-1 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm outline-none">
+        {options.map((option) => <option key={String(option.value)} value={option.value}>{option.label}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function normalizeMemoryType(value?: string | null): MemoryContentType | null {
+  const normalized = value?.trim().toUpperCase() as MemoryContentType | undefined;
+  return normalized && MEMORY_TYPE_VALUES.has(normalized) ? normalized : null;
+}
+
+function normalizeVisibility(value?: string | null): MemoryScope | null {
+  return value === 'PRIVATE' || value === 'FAMILY_VISIBLE' || value === 'CARE_VISIBLE' ? value : null;
+}
+
+function positiveNumber(value?: string | null) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : null;
+}
+
+function draftKey(userId?: number, familyId?: number | null, relatedUserId?: number | null) {
+  if (!userId || !familyId) return '';
+  return `familyagent:write-memory-draft:${DRAFT_VERSION}:${userId}:${familyId}:${relatedUserId || 'self'}`;
+}
+
+function readDraft(key: string): UnifiedMemoryDraft | null {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || '') as UnifiedMemoryDraft;
+    const memoryType = normalizeMemoryType(parsed.memoryType);
+    const visibility = normalizeVisibility(parsed.visibility);
+    if (!parsed.content || !memoryType || !visibility) return null;
+    return { ...parsed, memoryType, visibility };
+  } catch {
+    return null;
+  }
+}
+
+function formatTags(raw: string) {
+  return raw.split(/[,，\s]+/).map((item) => item.trim()).filter(Boolean).slice(0, 8);
+}
+
+function memberDisplayName(member?: FamilyMember | null) {
+  return member?.relationshipLabel?.trim()
+    || member?.nickname?.trim()
+    || member?.username?.trim()
+    || (member ? `用户 ${member.userId}` : '');
+}
+
+function titleFromFirstLine(value: string) {
+  return value.split(/\r?\n/).map((line) => line.trim()).find(Boolean)?.slice(0, 120) || '未命名记忆';
 }

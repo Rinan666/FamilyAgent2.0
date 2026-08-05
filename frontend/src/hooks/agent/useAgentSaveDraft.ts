@@ -4,13 +4,14 @@ import { useCallback, useState } from 'react';
 import type { SaveFeedback } from '@/components/agent/agentDisplay';
 import { agentApi, memoryApi, skillRunApi } from '@/lib/api';
 import {
-  buildAgentSaveMemoryToolRequest,
-  buildFallbackSaveToolPlan,
+  applyRequestedMemorySave,
+  buildAgentSaveMemoryRequest,
+  buildFallbackSavePlan,
   savePlanDetail,
   savePlanPersistenceDecision,
-  savedRecordType,
 } from '@/lib/savePlan';
-import type { AgentMode, AgentSaveToolPlan, ChatMessage } from '@/types';
+import type { AgentMemorySavePlan, AgentMode, ChatMessage } from '@/types';
+import type { RequestedMemorySave } from '@/lib/savePlan';
 
 interface UseAgentSaveDraftOptions {
   activeFamilyId?: number | null;
@@ -22,7 +23,7 @@ interface UseAgentSaveDraftOptions {
   targetPersonaId?: number | null;
   targetPersonaName?: string;
   sessionId: () => number | null;
-  onSaved: (plan: AgentSaveToolPlan, savedAt: string) => void;
+  onSaved: (plan: AgentMemorySavePlan, savedAt: string) => void;
 }
 
 export function useAgentSaveDraft(options: UseAgentSaveDraftOptions) {
@@ -30,63 +31,11 @@ export function useAgentSaveDraft(options: UseAgentSaveDraftOptions) {
 
   const resetSaveDrafts = useCallback(() => setSaveFeedback({}), []);
 
-  const prepareSaveDraft = useCallback(async (
+  const persistSavePlan = useCallback(async (
     message: ChatMessage,
-    conversationContext: ChatMessage[],
+    editedPlan: AgentMemorySavePlan,
+    skillRunId: number | null,
   ) => {
-    if (!options.activeFamilyId) {
-      setFeedback(message.id, { status: 'error', detail: '请先选择一个家庭再保存。' });
-      return;
-    }
-    if (!message.content.trim()) return;
-
-    setFeedback(message.id, { status: 'saving', detail: '正在生成可编辑草稿...' });
-    let skillRunId: number | null = null;
-    try {
-      const planResult = await memoryApi.planSaveTool({
-        familyId: options.activeFamilyId,
-        message: message.content.trim(),
-        familyContext: options.familyName || '',
-        conversationContext,
-        targetMemberName: options.targetName || '',
-        viewerRole: options.viewerRole || '',
-        source: skillSource(options.mode),
-        requestId: `save-plan-${message.id}`,
-      });
-      skillRunId = planResult.skillRunId;
-      const decision = savePlanPersistenceDecision(planResult.plan);
-      if (!decision.shouldPersist) {
-        setFeedback(message.id, { status: 'skipped', detail: decision.skippedDetail });
-        return;
-      }
-
-      setFeedback(message.id, {
-        status: 'draft',
-        detail: decision.plan.confirmation_message || '草稿已准备，请修改或确认后保存。',
-        skillRunId,
-        draft: decision.plan,
-      });
-    } catch (error) {
-      await markSkillRunFailed(skillRunId, error);
-      const fallbackDraft = buildFallbackSaveToolPlan(message.content, conversationContext);
-      if (fallbackDraft) {
-        setFeedback(message.id, {
-          status: 'draft',
-          detail: 'AI 整理暂时不可用，已保留原文草稿，请检查后保存。',
-          draft: fallbackDraft,
-        });
-        return;
-      }
-      setFeedback(message.id, {
-        status: 'error',
-        detail: error instanceof Error ? error.message : '草稿生成失败，请稍后重试。',
-      });
-    }
-  }, [options]);
-
-  const confirmSaveDraft = useCallback(async (message: ChatMessage, editedPlan: AgentSaveToolPlan) => {
-    const feedback = saveFeedback[message.id];
-    const skillRunId = feedback?.skillRunId ?? null;
     const decision = savePlanPersistenceDecision(editedPlan);
     if (!options.activeFamilyId || !decision.shouldPersist) {
       setFeedback(message.id, {
@@ -106,7 +55,7 @@ export function useAgentSaveDraft(options: UseAgentSaveDraftOptions) {
     });
 
     try {
-      const initialResult = await agentApi.requestSaveMemoryTool(buildAgentSaveMemoryToolRequest(
+      const initialResult = await agentApi.saveMemory(buildAgentSaveMemoryRequest(
         options.activeFamilyId,
         plan,
         {
@@ -143,7 +92,7 @@ export function useAgentSaveDraft(options: UseAgentSaveDraftOptions) {
         }
       }
       if (!toolResult.success) {
-        throw new Error(toolResult.message || '保存工具执行失败，请稍后重试。');
+        throw new Error(toolResult.message || '记忆保存失败，请稍后重试。');
       }
 
       if (skillRunId) {
@@ -153,8 +102,8 @@ export function useAgentSaveDraft(options: UseAgentSaveDraftOptions) {
           outputSummary: savePlanDetail(plan),
           metadata: {
             confirmationId,
-            savedRecordType: savedRecordType(plan.tool),
-            plannedTool: plan.tool,
+            memoryLibrary: plan.memory_library,
+            memoryType: plan.memory_type,
             plannedReason: plan.reason,
           },
         });
@@ -175,7 +124,80 @@ export function useAgentSaveDraft(options: UseAgentSaveDraftOptions) {
         draft: plan,
       });
     }
-  }, [options, saveFeedback]);
+  }, [options]);
+
+  const prepareSaveDraft = useCallback(async (
+    message: ChatMessage,
+    conversationContext: ChatMessage[],
+    requestedSave?: RequestedMemorySave,
+    explicitContent?: string,
+  ) => {
+    if (!options.activeFamilyId) {
+      setFeedback(message.id, { status: 'error', detail: '请先选择一个家庭再保存。' });
+      return;
+    }
+    if (!message.content.trim()) return;
+
+    setFeedback(message.id, {
+      status: 'saving',
+      detail: requestedSave ? '正在整理并保存...' : '正在生成可编辑草稿...',
+    });
+    let skillRunId: number | null = null;
+    try {
+      const planResult = await memoryApi.planMemorySave({
+        familyId: options.activeFamilyId,
+        message: message.content.trim(),
+        familyContext: options.familyName || '',
+        conversationContext,
+        targetMemberName: options.targetName || '',
+        viewerRole: options.viewerRole || '',
+        source: skillSource(options.mode),
+        requestId: `save-plan-${message.id}`,
+      });
+      skillRunId = planResult.skillRunId;
+      const planned = applyRequestedMemorySave(planResult.plan, requestedSave, explicitContent);
+      const decision = savePlanPersistenceDecision(planned);
+      if (!decision.shouldPersist) {
+        setFeedback(message.id, { status: 'skipped', detail: decision.skippedDetail });
+        return;
+      }
+      if (requestedSave) {
+        await persistSavePlan(message, decision.plan, skillRunId);
+        return;
+      }
+
+      setFeedback(message.id, {
+        status: 'draft',
+        detail: decision.plan.confirmation_message || '草稿已准备，请修改或确认后保存。',
+        skillRunId,
+        draft: decision.plan,
+      });
+    } catch (error) {
+      await markSkillRunFailed(skillRunId, error);
+      const fallback = buildFallbackSavePlan(message.content, conversationContext);
+      if (fallback) {
+        const fallbackDraft = applyRequestedMemorySave(fallback, requestedSave, explicitContent);
+        if (requestedSave) {
+          await persistSavePlan(message, fallbackDraft, null);
+          return;
+        }
+        setFeedback(message.id, {
+          status: 'draft',
+          detail: 'AI 整理暂时不可用，已保留原文草稿，请检查后保存。',
+          draft: fallbackDraft,
+        });
+        return;
+      }
+      setFeedback(message.id, {
+        status: 'error',
+        detail: error instanceof Error ? error.message : '草稿生成失败，请稍后重试。',
+      });
+    }
+  }, [options, persistSavePlan]);
+
+  const confirmSaveDraft = useCallback(async (message: ChatMessage, editedPlan: AgentMemorySavePlan) => {
+    await persistSavePlan(message, editedPlan, saveFeedback[message.id]?.skillRunId ?? null);
+  }, [persistSavePlan, saveFeedback]);
 
   const cancelSaveDraft = useCallback(async (message: ChatMessage) => {
     const skillRunId = saveFeedback[message.id]?.skillRunId;
@@ -225,7 +247,7 @@ function skillSource(mode: AgentMode) {
   return 'FAMILY_AGENT_CHAT';
 }
 
-function savedMemoryHref(familyId: number, plan: AgentSaveToolPlan) {
-  if (plan.tool === 'PERSONAL_MEMORY') return '/dashboard/memory-library?library=personal';
+function savedMemoryHref(familyId: number, plan: AgentMemorySavePlan) {
+  if (plan.memory_library === 'PERSONAL') return '/dashboard/memory-library?library=personal';
   return `/dashboard/memory-library?familyId=${familyId}&library=family`;
 }

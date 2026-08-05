@@ -59,7 +59,6 @@ export type AgentAnswerDepth = 'BRIEF' | 'STANDARD' | 'DEEP';
 export type MemoryRecallDepth = 'NONE' | 'BRIEF' | 'STANDARD' | 'DEEP';
 export type AgentWebSearchPolicy = 'NONE' | 'AUTO' | 'REQUIRED';
 export type AgentContextType = 'FAMILY' | 'MIRROR' | 'PERSONA';
-export type WriteCategory = 'RECORD' | 'EXPERIENCE' | 'OBSERVATION';
 export type MediaRecordType = 'DIARY' | 'GROWTH' | 'MEMORY';
 
 export interface MediaAttachment {
@@ -304,6 +303,7 @@ export interface ChatMessage {
     decisionSupport?: boolean;
     intentDegraded?: boolean;
     contextChanged?: boolean;
+    contextSwitchAcknowledged?: boolean;
     sourceCount?: number;
     rag?: {
       retrievalMode?: string;
@@ -475,15 +475,16 @@ export interface RebuildMemoryIndexResult {
   indexedCount?: number;
 }
 
-export type MemoryEntryType =
+export type MemoryContentType =
   | 'NOTE'
   | 'KNOWLEDGE'
   | 'INSIGHT'
   | 'EXPERIENCE'
   | 'OBSERVATION'
   | 'PREFERENCE'
-  | 'PLAN'
-  | string;
+  | 'PLAN';
+
+export type MemoryEntryType = MemoryContentType;
 
 export type MemoryScope = 'PRIVATE' | 'CARE_VISIBLE' | 'FAMILY_VISIBLE';
 
@@ -493,14 +494,14 @@ export type PersonalMemoryVisibility =
   | 'ALL_FAMILIES_VISIBLE'
   | 'SELECTED_FAMILIES_VISIBLE'
   | 'CARE_VISIBLE';
-export type PersonalMemoryType = 'NOTE' | 'KNOWLEDGE' | 'INSIGHT' | 'EXPERIENCE' | 'OBSERVATION' | 'PREFERENCE' | 'PLAN';
-export type SaveMemoryVisibility = DiaryVisibility | MemoryScope | PersonalMemoryVisibility;
+export type PersonalMemoryType = MemoryContentType;
+export type SaveMemoryVisibility = MemoryScope | PersonalMemoryVisibility;
 
 export interface PersonalMemoryView {
   id: number;
   userId: number;
   libraryKind: 'PERSONAL';
-  type: PersonalMemoryType | string;
+  type: PersonalMemoryType;
   visibility: PersonalMemoryVisibility | string;
   content: string;
   summary?: string;
@@ -589,26 +590,21 @@ export interface WriteMemoryMetadata {
 
 export interface WriteMemoryRequest {
   familyId: number;
-  writeCategory: WriteCategory;
+  memoryLibrary: MemoryLibraryKind;
+  memoryType: MemoryContentType;
   content: string;
   title?: string;
   tags?: string[];
   visibility?: SaveMemoryVisibility;
   relatedUserId?: number;
-  diaryEntryType?: DiaryEntryType;
-  memoryType?: MemoryEntryType;
-  personalMemoryType?: PersonalMemoryType;
-  memoryLibrary?: MemoryLibraryKind;
   selectedFamilyIds?: number[];
-  growthCategory?: GrowthGuardCategory;
-  growthSeverity?: number;
   metadata?: WriteMemoryMetadata;
 }
 
 export interface WriteMemoryResult {
-  savedRecordType: 'DIARY_ENTRY' | 'FAMILY_MEMORY' | 'GROWTH_GUARD' | string;
-  savedRecordId: number;
-  writeCategory: WriteCategory | string;
+  memoryLibrary: MemoryLibraryKind;
+  memoryId: number;
+  memoryType: MemoryContentType;
   visibility: string;
   title: string;
 }
@@ -620,11 +616,11 @@ export interface AgentSaveMemoryMetadata {
   familyName?: string;
   viewerRole?: string;
   savedFromMessageRole?: ChatMessage['role'] | string;
-  plannedTool?: AgentSaveTool;
+  memoryLibrary?: MemoryLibraryKind;
+  memoryType?: MemoryContentType;
   plannedTitle?: string;
   plannedReason?: string;
   visibility?: string;
-  scope?: string;
   confirmationPolicy?: string;
   savedAt?: string;
   relatedUserId?: number | null;
@@ -637,21 +633,16 @@ export interface AgentSaveMemoryMetadata {
   followUpStatus?: GrowthFollowUpStatus;
 }
 
-export interface AgentSaveMemoryToolRequest {
+export interface AgentSaveMemoryRequest {
   familyId: number;
-  writeCategory: WriteCategory;
+  memoryLibrary: MemoryLibraryKind;
+  memoryType: MemoryContentType;
   content: string;
   title?: string;
   tags?: string[];
   visibility?: SaveMemoryVisibility;
   relatedUserId?: number;
-  diaryEntryType?: DiaryEntryType;
-  memoryType?: MemoryEntryType;
-  personalMemoryType?: PersonalMemoryType;
-  memoryLibrary?: MemoryLibraryKind;
   selectedFamilyIds?: number[];
-  growthCategory?: GrowthGuardCategory;
-  growthSeverity?: number;
   requestId?: string;
   sessionId?: number | null;
   agentMode?: AgentMode;
@@ -660,22 +651,15 @@ export interface AgentSaveMemoryToolRequest {
   metadata?: AgentSaveMemoryMetadata;
 }
 
-export type AgentSaveTool = 'NONE' | 'DIARY' | 'PERSONAL_MEMORY' | 'FAMILY_MEMORY' | 'GROWTH_GUARD';
-
-export interface AgentSaveToolPlan {
+export interface AgentMemorySavePlan {
   should_save: boolean;
-  tool: AgentSaveTool;
+  memory_library: MemoryLibraryKind;
+  memory_type: MemoryContentType;
   content: string;
   title: string;
   summary: string;
   visibility: SaveMemoryVisibility | string;
-  entry_type: DiaryEntryType | string;
-  memory_type: MemoryEntryType;
-  personal_memory_type?: PersonalMemoryType;
   selected_family_ids?: number[];
-  scope: SaveMemoryVisibility | string;
-  category: GrowthGuardCategory | string;
-  severity: number;
   importance: number;
   tags: string[];
   reason: string;
@@ -684,7 +668,7 @@ export interface AgentSaveToolPlan {
 
 export interface AgentSaveMemoryPlanResult {
   skillRunId: number;
-  plan: AgentSaveToolPlan;
+  plan: AgentMemorySavePlan;
 }
 
 export interface AgentDraftResult<T> {
@@ -692,19 +676,12 @@ export interface AgentDraftResult<T> {
   data: T;
 }
 
-export type AgentDraftScene = 'DIARY' | 'HERITAGE' | 'GROWTH_GUARD';
-
 export interface AgentOrganizedDraft {
   title: string;
   content: string;
   tags: string[];
-  diaryEntryType: DiaryEntryType | string;
-  diaryVisibility: DiaryVisibility | string;
-  memoryType: MemoryEntryType;
-  memoryScope: MemoryScope | string;
-  growthCategory: GrowthGuardCategory | string;
-  growthSeverity: number;
-  scenario: string;
+  memoryType: MemoryContentType;
+  visibility: SaveMemoryVisibility;
   reason: string;
 }
 
@@ -858,8 +835,8 @@ export interface SkillRunSourceRef {
 }
 
 export interface SkillRunMetadata {
-  savedRecordType?: string;
-  plannedTool?: AgentSaveTool;
+  memoryLibrary?: MemoryLibraryKind;
+  memoryType?: MemoryContentType;
   plannedReason?: string;
   requestId?: string;
   agentRunId?: number;

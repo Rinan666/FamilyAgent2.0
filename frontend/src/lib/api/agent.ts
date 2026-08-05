@@ -2,14 +2,14 @@ import { request, sseStreamRequest } from './shared';
 import type { ViewerRole } from '@/lib/roles';
 import type {
   AgentConfirmationDecision,
-  AgentSaveMemoryToolRequest,
+  AgentSaveMemoryRequest,
   AgentToolExecutionResult,
   AgentToolConfirmationDecisionResult,
 } from '@/types';
 
 export const agentApi = {
-  requestSaveMemoryTool: (data: AgentSaveMemoryToolRequest) =>
-    request<AgentToolExecutionResult>('/agent/save-memory-tool', {
+  saveMemory: (data: AgentSaveMemoryRequest) =>
+    request<AgentToolExecutionResult>('/agent/memories', {
       method: 'POST',
       body: JSON.stringify(data),
     }),

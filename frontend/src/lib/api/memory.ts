@@ -1,7 +1,6 @@
 import { request } from './shared';
 import type {
   AgentDraftResult,
-  AgentDraftScene,
   AgentSaveMemoryPlanResult,
   AgentOrganizedDraft,
   AuthorizedMemoryRecallResult,
@@ -57,7 +56,7 @@ export const memoryApi = {
       method: 'POST',
       body: JSON.stringify({ voteType }),
     }),
-  planSaveTool: (body: {
+  planMemorySave: (body: {
     familyId: number;
     message: string;
     familyContext?: string;
@@ -83,9 +82,9 @@ export const memoryApi = {
   organizeDraft: (body: {
     familyId: number;
     content: string;
-    scene: AgentDraftScene;
+    memoryLibrary: 'PERSONAL' | 'FAMILY';
     familyContext?: string;
-    currentType?: string;
+    currentMemoryType?: string;
     currentVisibility?: string;
     target?: string;
     requestId?: string;
@@ -95,9 +94,9 @@ export const memoryApi = {
       body: JSON.stringify({
         familyId: body.familyId,
         content: body.content,
-        scene: body.scene,
+        memoryLibrary: body.memoryLibrary,
         familyContext: body.familyContext || '',
-        currentType: body.currentType || '',
+        currentMemoryType: body.currentMemoryType || '',
         currentVisibility: body.currentVisibility || '',
         target: body.target || '',
         requestId: body.requestId,

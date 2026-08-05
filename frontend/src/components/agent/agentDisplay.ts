@@ -1,5 +1,5 @@
 import type {
-  AgentSaveToolPlan,
+  AgentMemorySavePlan,
   AgentSessionMetadata,
   ChatSessionSummary,
   DiaryEntry,
@@ -14,7 +14,7 @@ export type SaveFeedback = {
   detail: string;
   href?: string;
   skillRunId?: number;
-  draft?: AgentSaveToolPlan;
+  draft?: AgentMemorySavePlan;
 };
 
 export type ModeReadinessTone = 'gray' | 'green' | 'blue' | 'yellow';
