@@ -48,7 +48,6 @@ class CreateFamilyMemoryToolTest {
                 "EXPERIENCE",
                 "FAMILY_VISIBLE",
                 "Repair before replacing.",
-                4,
                 22L,
                 java.util.List.of("story"),
                 metadata());
@@ -67,7 +66,6 @@ class CreateFamilyMemoryToolTest {
         assertEquals("EXPERIENCE", request.getType());
         assertEquals("FAMILY_VISIBLE", request.getScope());
         assertEquals("Repair before replacing.", request.getSummary());
-        assertEquals(4, request.getImportance());
         assertEquals(22L, request.getRelatedUserId());
         assertEquals(java.util.List.of("story"), request.getTags());
         assertEquals("MIRROR_AGENT_TOOL", request.getMetadata().getSource());
@@ -83,7 +81,6 @@ class CreateFamilyMemoryToolTest {
                 " ",
                 "EXPERIENCE",
                 "FAMILY_VISIBLE",
-                null,
                 null,
                 null,
                 java.util.List.of(),

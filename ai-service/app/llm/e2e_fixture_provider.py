@@ -51,7 +51,6 @@ def build_e2e_fixture_completion(
         "summary": content[:160],
         "visibility": "PRIVATE",
         "memory_type": "NOTE",
-        "importance": 1,
         "tags": ["e2e"],
         "reason": "Deterministic browser test fixture.",
         "confirmation_message": "Draft ready for editing and confirmation.",

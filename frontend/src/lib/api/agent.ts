@@ -2,12 +2,16 @@ import { request, sseStreamRequest } from './shared';
 import type { ViewerRole } from '@/lib/roles';
 import type {
   AgentConfirmationDecision,
+  AgentRunView,
+  AgentRunSummaryView,
   AgentSaveMemoryRequest,
   AgentToolExecutionResult,
   AgentToolConfirmationDecisionResult,
 } from '@/types';
 
 export const agentApi = {
+  getRun: (runId: number) => request<AgentRunView>(`/agent/runs/${runId}`),
+  listSessionRuns: (sessionId: number) => request<AgentRunSummaryView[]>(`/agent/sessions/${sessionId}/runs`),
   saveMemory: (data: AgentSaveMemoryRequest) =>
     request<AgentToolExecutionResult>('/agent/memories', {
       method: 'POST',

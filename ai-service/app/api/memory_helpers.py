@@ -38,7 +38,6 @@ def _sanitize_memory_save_plan(data: dict) -> dict:
         "title": str(data.get("title", "")).strip()[:24] or _default_save_title(memory_library),
         "summary": str(data.get("summary", content)).strip()[:80],
         "visibility": visibility,
-        "importance": _bounded_int(data.get("importance"), 1, 5, 3),
         "tags": _compact_string_list(data.get("tags"), 6, 18),
         "reason": _save_plan_reason(data.get("reason"), memory_library),
         "confirmation_message": _default_save_confirmation(memory_library),
@@ -59,7 +58,6 @@ def _blocked_memory_save_plan(reason: str) -> dict:
         "title": "无需保存",
         "summary": "",
         "visibility": "PRIVATE",
-        "importance": 1,
         "tags": [],
         "reason": reason,
         "confirmation_message": "没有找到可保存的内容，请补充内容后重试。",
@@ -74,7 +72,6 @@ def _unavailable_memory_save_plan() -> dict:
         "title": "暂未保存",
         "summary": "",
         "visibility": "PRIVATE",
-        "importance": 1,
         "tags": [],
         "reason": "保存规划暂时不可用，已跳过自动保存。",
         "confirmation_message": "这次没有自动保存，你可以稍后手动重试。",
@@ -116,13 +113,6 @@ def _required_choice(value: object, allowed: set[str]) -> str:
     if text not in allowed:
         raise ValueError("Unsupported memory save contract value")
     return text
-
-def _bounded_int(value: object, minimum: int, maximum: int, fallback: int) -> int:
-    try:
-        number = int(value)
-    except (TypeError, ValueError):
-        number = fallback
-    return max(minimum, min(maximum, number))
 
 def _default_save_title(memory_library: str) -> str:
     return "对话保存的个人记忆" if memory_library == "PERSONAL" else "对话保存的家庭记忆"

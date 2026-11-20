@@ -90,12 +90,6 @@ function choice<T extends string>(value: unknown, allowed: Set<T>, fallback: T):
   return allowed.has(normalized as T) ? normalized as T : fallback;
 }
 
-function boundedInt(value: unknown, fallback: number) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return fallback;
-  return Math.max(1, Math.min(5, Math.round(number)));
-}
-
 export function isExplicitSaveMemoryCommand(value: string) {
   const trimmed = value.trim();
   if (!trimmed || trimmed.length > MAX_EXPLICIT_SAVE_COMMAND_LENGTH) return false;
@@ -200,7 +194,6 @@ export function buildFallbackSavePlan(
     summary: content.slice(0, 80),
     visibility: 'PRIVATE',
     selected_family_ids: [],
-    importance: 1,
     tags: [],
     reason: 'AI 整理暂时不可用，已保留用户选择的原文草稿。',
     confirmation_message: '原文草稿已准备，请修改或确认后保存。',
@@ -232,7 +225,6 @@ export function normalizeMemorySavePlan(plan: AgentMemorySavePlan): AgentMemoryS
     summary: String(plan.summary || content).trim().slice(0, 80),
     visibility: normalizeVisibility(memoryLibrary, plan.visibility),
     selected_family_ids: normalizeFamilyIds(plan.selected_family_ids),
-    importance: boundedInt(plan.importance, 3),
     tags: Array.isArray(plan.tags)
       ? plan.tags.map((tag) => String(tag).trim()).filter(Boolean).slice(0, 6)
       : [],

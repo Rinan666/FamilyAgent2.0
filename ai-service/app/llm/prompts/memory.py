@@ -23,7 +23,7 @@ MEMORY_SAVE_PLAN_SYSTEM_PROMPT = """你是 FamilyAgent 的保存草稿整理器�
 - 关联成员是可选项，AI 不猜测成员身份或关系。
 - 个人记忆 visibility 只能是 PRIVATE、ALL_FAMILIES_VISIBLE、SELECTED_FAMILIES_VISIBLE、CARE_VISIBLE；选择哪些家族由用户在草稿中确认，AI 不猜测家族 ID。
 - 家庭记忆 visibility 只能是 PRIVATE、FAMILY_VISIBLE、CARE_VISIBLE。
-- title 不超过 24 字，summary 不超过 80 字，importance 为 1-5。
+- title 不超过 24 字，summary 不超过 80 字。
 - reason 简要说明草稿的整理方式和建议分类，不评价用户内容有没有价值。
 - confirmation_message 必须说明“草稿已准备，请修改或确认后保存”；规划器不执行持久化，禁止声称“已保存”“已归档”或“已写入”。
 

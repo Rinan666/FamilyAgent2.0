@@ -1,10 +1,8 @@
 package com.familyagent.module.agent.harness.provenance;
 
-import com.familyagent.common.constant.MemoryOriginType;
 import com.familyagent.module.agent.harness.AgentRunContext;
 import com.familyagent.module.agent.harness.AgentToolDescriptor;
 import com.familyagent.module.agent.harness.entity.AgentToolCallRecord;
-import com.familyagent.module.memory.facade.UnifiedMemoryIdentityFacade;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -13,7 +11,6 @@ import org.springframework.stereotype.Component;
 public class AgentRecordProvenanceWriter {
 
     private final AgentRecordProvenanceRepository repository;
-    private final UnifiedMemoryIdentityFacade memoryIdentityFacade;
 
     public void recordCreatedOutput(
             AgentRunContext context,
@@ -36,15 +33,7 @@ public class AgentRecordProvenanceWriter {
         provenance.setToolName(descriptor.name());
         provenance.setToolVersion(descriptor.version());
         provenance.setRecordType(created.recordType().name());
-        provenance.setMemoryEntryId(resolveMemoryEntryId(created.recordType(), created.recordId()));
+        provenance.setMemoryEntryId(created.recordId());
         repository.insert(provenance);
-    }
-
-    private Long resolveMemoryEntryId(AgentCreatedRecordType type, Long recordId) {
-        return switch (type) {
-            case MEMORY_ENTRY -> recordId;
-            case DIARY_ENTRY -> memoryIdentityFacade.requireMemoryEntryId(MemoryOriginType.DIARY, recordId);
-            case GROWTH_GUARD_RECORD -> memoryIdentityFacade.requireMemoryEntryId(MemoryOriginType.GROWTH, recordId);
-        };
     }
 }

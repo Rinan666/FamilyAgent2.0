@@ -105,7 +105,6 @@ class MemorySavePlanData(BaseModel):
     summary: str
     visibility: SaveVisibility
     memory_type: MemoryType
-    importance: int = Field(ge=1, le=5)
     tags: list[str]
     reason: str
     confirmation_message: str

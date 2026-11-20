@@ -21,7 +21,6 @@ public class AgentMemorySavePlan {
     private String title;
     private String summary;
     private String visibility;
-    private Integer importance;
     private List<String> tags;
     private String reason;
 

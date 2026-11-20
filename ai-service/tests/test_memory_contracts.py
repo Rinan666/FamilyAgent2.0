@@ -43,7 +43,6 @@ def test_memory_save_plan_schema_bounds_values_before_sanitizer():
     assert properties["memory_library"]["enum"] == ["PERSONAL", "FAMILY"]
     assert "SELECTED_FAMILIES_VISIBLE" in properties["visibility"]["enum"]
     assert properties["memory_type"]["enum"] == MEMORY_TYPES
-    assert properties["importance"] == {"type": "integer", "minimum": 1, "maximum": 5}
     assert properties["tags"]["maxItems"] == 6
     assert properties["tags"]["items"]["maxLength"] == 18
 

@@ -41,13 +41,14 @@ import { normalizeAssistantMetadata } from '@/hooks/chat/useChatHelpers';
 import { useAuthStore } from '@/stores/authStore';
 import { useChatStore } from '@/stores/chatStore';
 import { cn, generateId } from '@/lib/utils';
-import { familyApi, mirrorApi, sessionApi } from '@/lib/api';
+import { agentApi, familyApi, mirrorApi, sessionApi } from '@/lib/api';
 import { isPlainEnter } from '@/lib/formKeyboard';
 import { loadSessionMessagesChronologically } from '@/lib/sessionHistory';
 import { memoryLibraryLabel, routeAgentSubmission, todayString } from '@/lib/savePlan';
 import type {
   AgentMode,
   AgentMemorySavePlan,
+  AgentRunSummaryView,
   AgentSessionMetadata,
   ChatMessage,
   ChatSessionDetail,
@@ -238,6 +239,7 @@ export default function AgentPage() {
   const [mirrorContext, setMirrorContext] = useState<MirrorContextResponse | null>(null);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
+  const [runSummaries, setRunSummaries] = useState<AgentRunSummaryView[]>([]);
   const [activeSessionDetail, setActiveSessionDetail] = useState<ChatSessionDetail | null>(null);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [isClearingSessions, setIsClearingSessions] = useState(false);
@@ -267,6 +269,21 @@ export default function AgentPage() {
 
   useEffect(() => {
     sessionIdRef.current = sessionId;
+    if (!sessionId) {
+      setRunSummaries([]);
+      return;
+    }
+    let active = true;
+    void agentApi.listSessionRuns(sessionId)
+      .then((result) => {
+        if (active) setRunSummaries(result || []);
+      })
+      .catch(() => {
+        if (active) setRunSummaries([]);
+      });
+    return () => {
+      active = false;
+    };
   }, [sessionId]);
 
   useEffect(() => {
@@ -1187,6 +1204,10 @@ export default function AgentPage() {
             activeFamilyId={activeFamilyId}
             onConfirmSaveDraft={(message, plan) => void confirmSaveDraft(message, plan)}
             onCancelSaveDraft={(message) => void cancelSaveDraft(message)}
+            onRetryAgentRun={(message) => {
+              setInput(message.content);
+              window.requestAnimationFrame(() => inputTextareaRef.current?.focus());
+            }}
             onOpenContext={() => setIsContextOpen(true)}
           />
 
@@ -1279,6 +1300,7 @@ export default function AgentPage() {
         isLoadingSessions={isLoadingSessions}
         sessionError={sessionError}
         isClearingSessions={isClearingSessions}
+        runSummaries={runSummaries}
         onClose={() => setIsSessionsOpen(false)}
         onRefresh={() => {
           if (!activeFamilyId) return;

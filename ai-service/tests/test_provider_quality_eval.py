@@ -312,7 +312,6 @@ def _plan(
         "title": "Synthetic result",
         "summary": content,
         "visibility": visibility,
-        "importance": 3,
         "tags": [],
         "reason": "Synthetic evaluation",
         "confirmation_message": "Synthetic evaluation",

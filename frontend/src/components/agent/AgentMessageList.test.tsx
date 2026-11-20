@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+import type { ChatMessage } from '@/types';
 import AgentMessageList from './AgentMessageList';
 
 const message = {
@@ -9,10 +10,10 @@ const message = {
   timestamp: '2026-07-19T00:00:00+08:00',
 };
 
-function renderMessageList(saveFeedback = {}) {
+function renderMessageList(saveFeedback = {}, messages: ChatMessage[] = [message]) {
   return renderToStaticMarkup(
     <AgentMessageList
-      messages={[message]}
+      messages={messages}
       isLoadingMessages={false}
       isStreaming={false}
       saveFeedback={saveFeedback}
@@ -45,7 +46,6 @@ describe('AgentMessageList save controls', () => {
           summary: '先复述题意后列式更稳定。',
           visibility: 'CARE_VISIBLE',
           selected_family_ids: [],
-          importance: 3,
           tags: ['应用题'],
           reason: '按用户要求整理为草稿。',
           confirmation_message: '草稿已准备。',
@@ -77,5 +77,19 @@ describe('AgentMessageList save controls', () => {
     expect(successMarkup).toContain('个人记忆');
     expect(successMarkup).toContain('打开');
     expect(errorMarkup).toContain('保存失败，请稍后重试。');
+  });
+
+  it('shows the user-visible run status for assistant messages with a run id', () => {
+    const assistant: ChatMessage = {
+      id: 'assistant-run',
+      role: 'assistant',
+      content: '这是执行结果。',
+      timestamp: '2026-11-20T00:00:01+08:00',
+      metadata: { runId: 91 },
+    };
+
+    const markup = renderMessageList({}, [message, assistant]);
+
+    expect(markup).toContain('正在读取执行状态');
   });
 });

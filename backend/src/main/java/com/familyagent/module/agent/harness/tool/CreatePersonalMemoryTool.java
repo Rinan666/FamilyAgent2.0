@@ -53,7 +53,6 @@ class CreatePersonalMemoryTool implements AgentTool<CreatePersonalMemoryInput, C
         request.setType(input.type());
         request.setVisibility(input.visibility());
         request.setSummary(input.summary());
-        request.setImportance(input.importance());
         request.setSelectedFamilyIds(input.selectedFamilyIds());
         if (input.metadata() != null) {
             request.setMetadata(WriteMemoryMetadata.fromMap(input.metadata().toMap()));

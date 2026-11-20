@@ -34,7 +34,7 @@ class CreatePersonalMemoryToolTest {
                 List.of(10L), LocalDateTime.now(), LocalDateTime.now()));
         CreatePersonalMemoryInput input = new CreatePersonalMemoryInput(
                 "A useful idea", "KNOWLEDGE", "SELECTED_FAMILIES_VISIBLE",
-                "Useful idea", 3, List.of(10L), null);
+                "Useful idea", List.of(10L), null);
 
         CreatePersonalMemoryOutput output = tool.execute(
                 new AgentRunContext("req", 10L, 101L, null, "family", "FamilyAgent", "save"),

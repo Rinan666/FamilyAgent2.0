@@ -24,7 +24,6 @@ function plan(overrides: Partial<AgentMemorySavePlan> = {}): AgentMemorySavePlan
     summary: '今天发生了一件值得记录的事情。',
     visibility: 'PRIVATE',
     selected_family_ids: [],
-    importance: 3,
     tags: ['记录'],
     reason: '按用户要求整理。',
     confirmation_message: '草稿已准备，请确认后保存。',

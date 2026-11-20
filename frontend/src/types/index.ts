@@ -660,7 +660,6 @@ export interface AgentMemorySavePlan {
   summary: string;
   visibility: SaveMemoryVisibility | string;
   selected_family_ids?: number[];
-  importance: number;
   tags: string[];
   reason: string;
   confirmation_message: string;
@@ -759,6 +758,44 @@ export interface WeeklyGrowthReport {
 export type SkillRunStatus = 'PLANNED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELED' | string;
 export type AgentConfirmationDecision = 'APPROVE' | 'REJECT';
 export type AgentConfirmationStatus = 'NOT_REQUIRED' | 'REQUIRED' | 'APPROVED' | 'REJECTED' | 'EXPIRED' | string;
+export type AgentRunStatus = 'RUNNING' | 'WAITING_CONFIRMATION' | 'SUCCEEDED' | 'FAILED' | 'CANCELED';
+export type AgentRunEventType = 'STEP' | 'TOOL';
+
+export interface AgentRunEventView {
+  id: number;
+  eventType: AgentRunEventType;
+  stepType?: string;
+  operation: string;
+  status: string;
+  errorCode?: string;
+  latencyMs?: number;
+  degraded: boolean;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+export interface AgentRunView {
+  runId: number;
+  sessionId?: number;
+  contextLabel?: string;
+  status: AgentRunStatus;
+  errorCode?: string;
+  retryable: boolean;
+  startedAt?: string;
+  completedAt?: string;
+  events: AgentRunEventView[];
+}
+
+export interface AgentRunSummaryView {
+  runId: number;
+  sessionId?: number;
+  contextLabel?: string;
+  status: AgentRunStatus;
+  errorCode?: string;
+  retryable: boolean;
+  startedAt?: string;
+  completedAt?: string;
+}
 
 export interface AgentToolConfirmation {
   id: number;

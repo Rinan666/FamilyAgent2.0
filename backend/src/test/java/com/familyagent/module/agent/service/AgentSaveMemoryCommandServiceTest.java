@@ -102,7 +102,6 @@ class AgentSaveMemoryCommandServiceTest {
                 captor.getValue().input());
         assertEquals(202L, input.relatedUserId());
         assertEquals("OBSERVATION", input.type());
-        assertEquals(4, input.importance());
     }
 
     @Test

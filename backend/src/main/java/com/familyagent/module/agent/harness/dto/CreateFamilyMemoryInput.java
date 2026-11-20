@@ -7,7 +7,6 @@ public record CreateFamilyMemoryInput(
         String type,
         String scope,
         String summary,
-        Integer importance,
         Long relatedUserId,
         List<String> tags,
         AgentSaveMemoryMetadata metadata

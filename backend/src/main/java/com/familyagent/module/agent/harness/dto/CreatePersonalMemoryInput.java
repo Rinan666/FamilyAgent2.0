@@ -7,7 +7,6 @@ public record CreatePersonalMemoryInput(
         String type,
         String visibility,
         String summary,
-        Integer importance,
         List<Long> selectedFamilyIds,
         AgentSaveMemoryMetadata metadata) {
 

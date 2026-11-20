@@ -52,7 +52,6 @@ public class AgentSaveMemoryCommandService {
                         type.name(),
                         request.getVisibility(),
                         summary(request.getTitle(), request.getContent()),
-                        type == MemoryContentType.OBSERVATION ? 4 : 3,
                         request.getRelatedUserId(),
                         tags(request.getTags()),
                         request.getMetadata())));
@@ -69,7 +68,6 @@ public class AgentSaveMemoryCommandService {
                         request.getMemoryType(),
                         request.getVisibility(),
                         summary(request.getTitle(), request.getContent()),
-                        3,
                         request.getSelectedFamilyIds(),
                         request.getMetadata())));
     }

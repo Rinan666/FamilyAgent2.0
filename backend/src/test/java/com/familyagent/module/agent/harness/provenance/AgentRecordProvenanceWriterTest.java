@@ -7,7 +7,6 @@ import com.familyagent.module.agent.harness.constant.AgentToolPrivacyLevel;
 import com.familyagent.module.agent.harness.constant.AgentToolSideEffect;
 import com.familyagent.module.agent.harness.dto.CreateFamilyMemoryOutput;
 import com.familyagent.module.agent.harness.entity.AgentToolCallRecord;
-import com.familyagent.module.memory.facade.UnifiedMemoryIdentityFacade;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -19,10 +18,7 @@ import static org.mockito.Mockito.verify;
 class AgentRecordProvenanceWriterTest {
 
     private final AgentRecordProvenanceRepository repository = mock(AgentRecordProvenanceRepository.class);
-    private final UnifiedMemoryIdentityFacade memoryIdentityFacade = mock(UnifiedMemoryIdentityFacade.class);
-    private final AgentRecordProvenanceWriter writer = new AgentRecordProvenanceWriter(
-            repository,
-            memoryIdentityFacade);
+    private final AgentRecordProvenanceWriter writer = new AgentRecordProvenanceWriter(repository);
 
     @Test
     void recordCreatedOutputLinksFinalRecordToRunAndToolCall() {

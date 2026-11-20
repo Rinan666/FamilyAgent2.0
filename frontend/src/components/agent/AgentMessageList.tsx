@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { CheckCircle, Loader2, Sparkles } from 'lucide-react';
 import MathRenderer from '@/components/agent/MathRenderer';
 import AnswerEvidenceDisclosure from '@/components/agent/AnswerEvidenceDisclosure';
+import AgentRunStatusCard from '@/components/agent/AgentRunStatusCard';
 import SaveDraftCard from '@/components/agent/SaveDraftCard';
 import { type SaveFeedback } from '@/components/agent/agentDisplay';
 import { assistantContextLabel } from '@/components/agent/agentResponseContext';
@@ -17,6 +18,7 @@ interface AgentMessageListProps {
   saveFeedback: Record<string, SaveFeedback>;
   onConfirmSaveDraft: (message: ChatMessage, plan: AgentMemorySavePlan) => void;
   onCancelSaveDraft: (message: ChatMessage) => void;
+  onRetryAgentRun?: (message: ChatMessage) => void;
   onOpenContext?: () => void;
   families: Family[];
   activeFamilyId?: number | null;
@@ -41,6 +43,7 @@ export default function AgentMessageList({
   saveFeedback,
   onConfirmSaveDraft,
   onCancelSaveDraft,
+  onRetryAgentRun,
   onOpenContext,
   families,
   activeFamilyId,
@@ -95,7 +98,7 @@ export default function AgentMessageList({
           </div>
         )}
 
-        {messages.map((message) => {
+        {messages.map((message, messageIndex) => {
           const feedback = saveFeedback[message.id];
           if (message.role === 'system') {
             return (
@@ -108,6 +111,9 @@ export default function AgentMessageList({
           }
 
           const isAssistant = message.role === 'assistant';
+          const retrySource = isAssistant
+            ? messages.slice(0, messageIndex).reverse().find((item) => item.role === 'user')
+            : undefined;
           const showThinkingIndicator = isAssistant && isStreaming && !message.content.trim();
 
           return (
@@ -154,6 +160,14 @@ export default function AgentMessageList({
                 )}
 
                 {isAssistant && <AnswerEvidenceDisclosure message={message} />}
+                {isAssistant && message.metadata?.runId && (
+                  <AgentRunStatusCard
+                    runId={message.metadata.runId}
+                    onRetry={retrySource && onRetryAgentRun
+                      ? () => onRetryAgentRun(retrySource)
+                      : undefined}
+                  />
+                )}
 
                 {feedback && (
                   <div

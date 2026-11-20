@@ -2,7 +2,7 @@
 
 import { History, Loader2, RefreshCw, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { ChatSessionSummary } from '@/types';
+import type { AgentRunSummaryView, ChatSessionSummary } from '@/types';
 import {
   formatSessionTime,
   getSessionTitle,
@@ -23,6 +23,7 @@ interface AgentSessionDrawerProps {
   onLoadSession: (sessionId: number) => void;
   onDeleteSession: (sessionId: number) => void;
   onClearSessions: () => void;
+  runSummaries?: AgentRunSummaryView[];
 }
 
 export default function AgentSessionDrawer({
@@ -38,6 +39,7 @@ export default function AgentSessionDrawer({
   onLoadSession,
   onDeleteSession,
   onClearSessions,
+  runSummaries = [],
 }: AgentSessionDrawerProps) {
   if (!open) return null;
 
@@ -174,6 +176,21 @@ export default function AgentSessionDrawer({
                         <span>{formatSessionTime(session.lastMessageAt || session.startedAt)}</span>
                         <span>{session.messageCount || 0} 条消息</span>
                       </div>
+                      {sessionId === session.id && runSummaries.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {runSummaries.slice(0, 4).map((run) => (
+                            <span
+                              key={run.runId}
+                              className={cn(
+                                'rounded-full px-2 py-0.5 text-[10px] font-medium',
+                                run.status === 'FAILED' ? 'bg-rose-50 text-rose-700' : 'bg-sky-50 text-sky-700',
+                              )}
+                            >
+                              Agent {run.status.toLowerCase()}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </button>
 
                     <div className="mt-2 flex justify-end">
